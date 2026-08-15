@@ -334,6 +334,16 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 	// cross-origin-isolation requirement we can't meet on Pages, because
 	// SharedArrayBuffer needs COOP/COEP headers this app doesn't send.
 	ort.env.wasm.numThreads = 1;
+	// Run the session in a worker.
+	//
+	// Building a session is synchronous wasm work, and on the main thread it
+	// blocks everything: no repaint, no timers, so the elapsed clock freezes,
+	// Cancel stops responding and the watchdog can't fire--the tab just looks
+	// dead. That is exactly how this fails on a machine where the GPU backend
+	// isn't really available and ORT drops to the CPU. Measured with a 100ms
+	// heartbeat across a build-plus-inference: 25 of 26 expected ticks still
+	// arrived, and the timings were unchanged.
+	ort.env.wasm.proxy = true;
 
 	onProgress?.({stage: 'download', progress: 0});
 
