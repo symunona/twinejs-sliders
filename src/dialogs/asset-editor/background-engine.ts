@@ -1,4 +1,9 @@
-import {maskBounds, refineMask, upsampleMask} from './alpha-refine';
+import {
+	applyEdgeContrast,
+	maskBounds,
+	refineMask,
+	upsampleMask
+} from './alpha-refine';
 import {
 	BackgroundMask,
 	checkAborted,
@@ -173,7 +178,60 @@ export async function backgroundSupport(): Promise<BackgroundSupport> {
 	};
 }
 
+/**
+ * The two knobs worth exposing.
+ *
+ * A confident mask doesn't need them, but a dark, cluttered subject comes back
+ * uncertain in its own interior, and a fixed curve then punches holes straight
+ * through it. Both are applied to a cached alpha channel, so dragging either
+ * costs a composite and not another two model passes.
+ */
+export interface CutoutTuning {
+	/**
+	 * Where the line between keep and drop sits, 0 to 1. Lower keeps more of a
+	 * hesitant mask; higher cuts more aggressively.
+	 */
+	threshold: number;
+	/**
+	 * How wide the transition around that line is. Near zero is a hard, jagged
+	 * edge; wide leaves the model's own soft alpha almost untouched, which is
+	 * what saves translucency and interiors.
+	 */
+	softness: number;
+}
+
+export const DEFAULT_TUNING: CutoutTuning = {softness: 0.3, threshold: 0.5};
+
+/** A finished cutout, plus the alpha it came from so it can be re-tuned. */
+export interface Cutout {
+	alpha: Float32Array;
+	canvas: HTMLCanvasElement;
+}
+
+/**
+ * Re-applies the tuning to an already-computed alpha channel. Milliseconds,
+ * because the model and the edge refinement have both already happened.
+ */
+export function applyTuning(
+	source: HTMLCanvasElement,
+	alpha: Float32Array,
+	tuning: CutoutTuning = DEFAULT_TUNING
+): HTMLCanvasElement {
+	const half = Math.max(0.001, tuning.softness) / 2;
+
+	return composite(
+		source,
+		applyEdgeContrast(
+			alpha,
+			tuning.threshold - half,
+			tuning.threshold + half
+		)
+	);
+}
+
 export interface RemoveBackgroundOptions extends MaskOptions {
+	/** Applied to the result; the alpha comes back so it can be redone cheaply. */
+	tuning?: CutoutTuning;
 	/**
 	 * Run a second pass framed on the subject. Roughly doubles the time and
 	 * buys real mask resolution when the subject doesn't fill the frame.
@@ -306,7 +364,7 @@ function composite(
 export async function removeBackground(
 	source: HTMLCanvasElement,
 	options: RemoveBackgroundOptions = {}
-): Promise<HTMLCanvasElement> {
+): Promise<Cutout> {
 	const {engine, support} = await backgroundSupport();
 
 	if (!engine) {
@@ -315,10 +373,10 @@ export async function removeBackground(
 		);
 	}
 
-	const {detail, onProgress, signal} = options;
+	const {detail, onProgress, signal, tuning} = options;
 
 	return await withStageWatchdog(report =>
-		cutOut(source, engine, {detail, onProgress, report, signal})
+		cutOut(source, engine, {detail, onProgress, report, signal, tuning})
 	);
 }
 
@@ -330,7 +388,7 @@ async function cutOut(
 	source: HTMLCanvasElement,
 	engine: EngineDescriptor,
 	options: CutOutOptions
-): Promise<HTMLCanvasElement> {
+): Promise<Cutout> {
 	const {detail, report, signal} = options;
 	// Every progress event both reaches the UI and resets the watchdog.
 	const onProgress = (event: EngineProgress) => {
@@ -368,5 +426,7 @@ async function cutOut(
 	// before it starts.
 	await new Promise(resolve => setTimeout(resolve, 0));
 
-	return composite(source, refineMask(flat, mask));
+	const alpha = refineMask(flat, mask);
+
+	return {alpha, canvas: applyTuning(source, alpha, options.tuning)};
 }

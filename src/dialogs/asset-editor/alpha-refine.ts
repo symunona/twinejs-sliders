@@ -310,6 +310,10 @@ export function refineMask(
 		return upsampleMask(mask, source.width, source.height);
 	}
 
+	// Note that the contrast curve is NOT applied here. It's the one part of
+	// this the author can feel, so it belongs downstream where it can be
+	// re-run on a slider without paying for the model again.
+
 	const guide = lumaFrom(context.getImageData(0, 0, width, height).data);
 	const enlarged = upsampleMask(mask, width, height);
 	// The window has to be wider than the mask is wrong. A mask off by one of
@@ -319,9 +323,7 @@ export function refineMask(
 	// Capped, because a very wide window starts averaging across separate
 	// objects and trades a soft edge for a halo.
 	const radius = Math.min(32, Math.max(4, Math.round(factor * 3)));
-	const refined = applyEdgeContrast(
-		guidedFilter(guide, enlarged, width, height, radius, 1e-4)
-	);
+	const refined = guidedFilter(guide, enlarged, width, height, radius, 1e-4);
 
 	if (width === source.width && height === source.height) {
 		return refined;

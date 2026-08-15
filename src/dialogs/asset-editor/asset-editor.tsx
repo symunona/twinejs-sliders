@@ -22,10 +22,13 @@ import {
 } from '../sliders-assets/asset-store-context';
 import {AdjustSlider} from './adjust-slider';
 import {
+	applyTuning,
 	BackgroundSupport,
 	backgroundSupport,
 	BackgroundTimeoutError,
 	BackgroundUnsupportedError,
+	CutoutTuning,
+	DEFAULT_TUNING,
 	removeBackground
 } from './background-engine';
 import {
@@ -94,6 +97,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [name, setName] = React.useState('');
 	/** Kept so removing the background can be undone. */
 	const [original, setOriginal] = React.useState<HTMLCanvasElement>();
+	/** The cutout's alpha, kept so the tuning sliders don't re-run the model. */
+	const [alpha, setAlpha] = React.useState<Float32Array>();
+	const [tuning, setTuning] = React.useState<CutoutTuning>(DEFAULT_TUNING);
 	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
 	const [saving, setSaving] = React.useState(false);
@@ -340,6 +346,18 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 	}
 
+	/**
+	 * Re-applies the tuning without touching the model: the alpha is already
+	 * computed, so this is one composite over the original pixels.
+	 */
+	function retune(next: CutoutTuning) {
+		setTuning(next);
+
+		if (alpha && original) {
+			setSource(applyTuning(original, alpha, next));
+		}
+	}
+
 	async function handleRemoveBackground() {
 		if (!source) {
 			return;
@@ -352,12 +370,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setProgress({stage: 'download'});
 
 		try {
-			setSource(
-				await removeBackground(source, {
-					onProgress: setProgress,
-					signal: controller.signal
-				})
-			);
+			const cutout = await removeBackground(source, {
+				onProgress: setProgress,
+				signal: controller.signal,
+				tuning
+			});
+
+			setAlpha(cutout.alpha);
+			setSource(cutout.canvas);
 		} catch (removeError) {
 			const failure = removeError as Error;
 
@@ -587,10 +607,40 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										disabled={busy}
 										icon={<IconEraser />}
 										label={t('dialogs.assetEditor.restoreBackground')}
-										onClick={() => setSource(original)}
+										onClick={() => {
+											setAlpha(undefined);
+											setSource(original);
+										}}
 									/>
 								)}
 							</ButtonBar>
+							{alpha && !progress && (
+								<>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.threshold')}
+										max={0.95}
+										min={0.05}
+										onChange={threshold => retune({...tuning, threshold})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={DEFAULT_TUNING.threshold}
+										step={0.01}
+										value={tuning.threshold}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.softness')}
+										max={1}
+										min={0.02}
+										onChange={softness => retune({...tuning, softness})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={DEFAULT_TUNING.softness}
+										step={0.02}
+										value={tuning.softness}
+									/>
+									<p className="asset-editor-detail">
+										{t('dialogs.assetEditor.tuningNote')}
+									</p>
+								</>
+							)}
 							{progress ? (
 								<div className="asset-editor-progress" aria-busy>
 									<div

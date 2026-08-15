@@ -225,6 +225,7 @@
 			"saveNote": "Saves a new {{width}}×{{height}} asset. Edits are baked into its pixels and cannot be undone later; the original stays in your library.",
 			"size": "Size",
 			"slowNote": "The first cutout is the slow one: your GPU has to compile the model, and it runs twice. Later ones take a second or two.",
+			"softness": "Edge softness",
 			"stage": {
 				"download": "Downloading the model, {{percent}}%",
 				"refine": "Tidying the edges against your full-size image…",
@@ -233,8 +234,10 @@
 				"start": "Setting the model up on your GPU…"
 			},
 			"step": "Step {{step}}/{{steps}}",
+			"threshold": "Keep ↔ cut",
 			"timeoutError": "Gave up after {{seconds}} seconds, stuck at “{{stage}}”. This usually means the model ended up running on the CPU instead of the GPU, where it is too slow to ever finish. Your browser reports its GPU as: {{gpu}}. Try a recent Chrome or Edge with hardware acceleration switched on.",
 			"title": "Edit {{name}}",
+			"tuningNote": "Drag these if too much or too little was cut—they re-use the cutout the model already made, so they apply instantly. Lower “keep ↔ cut” rescues a subject that came out full of holes; higher softness keeps the model’s own soft edges instead of forcing them to solid or clear.",
 			"unknownGpu": "not reported",
 			"width": "Width"
 		},
