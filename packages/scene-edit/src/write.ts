@@ -40,8 +40,43 @@ import type {EntityTarget, TextEdit} from './types';
 // Splice primitives
 // ---------------------------------------------------------------------------
 
+/**
+ * Fold disjoint splices into one, spanning from the first to the last.
+ *
+ * The text between two edits is re-inserted unchanged, so a gesture that touches three
+ * entries is still ONE edit — which is what the editor needs (one gesture, one undo, one
+ * `replaceRange`) and what `removeEntities` needs to answer "was that the last entry?" once
+ * instead of once per id.
+ *
+ * Returns undefined if the edits overlap, rather than splicing garbage.
+ */
+export function mergeEdits(
+	text: string,
+	edits: TextEdit[]
+): TextEdit | undefined {
+	const sorted = [...edits].sort((a, b) => a.from - b.from);
+
+	if (sorted.length === 0) {
+		return undefined;
+	}
+
+	let at = sorted[0].from;
+	let insert = '';
+
+	for (const edit of sorted) {
+		if (edit.from < at) {
+			return undefined;
+		}
+
+		insert += text.slice(at, edit.from) + edit.insert;
+		at = edit.to;
+	}
+
+	return {from: sorted[0].from, insert, to: at};
+}
+
 /** `key:` is written but the value is still being typed — put it after the colon. */
-function insertValueAfterKey(
+export function insertValueAfterKey(
 	text: string,
 	pair: Pair<unknown, unknown>,
 	formatted: string
@@ -123,7 +158,7 @@ function insertIntoMap(
 }
 
 /** Delete one pair from a map, taking its separator (flow) or its whole line (block). */
-function removePairEdit(
+export function removePairEdit(
 	parsed: Parsed,
 	map: YAMLMap,
 	pair: Pair<unknown, unknown>
@@ -351,7 +386,7 @@ function detectIndent(parsed: Parsed): string {
  * it after the last key that sorts before it. Appending blindly gives `beats:` … `props:`,
  * which parses fine and reads like the file was generated.
  */
-function insertTopLevelKey(
+export function insertTopLevelKey(
 	parsed: Parsed,
 	key: string,
 	block: string
@@ -390,7 +425,7 @@ function insertTopLevelKey(
 	return {from: at, insert: `${block}\n`, to: at};
 }
 
-function appendAtEnd(text: string, block: string): TextEdit {
+export function appendAtEnd(text: string, block: string): TextEdit {
 	const prefix = text.length === 0 || text.endsWith('\n') ? '' : '\n';
 
 	return {from: text.length, insert: `${prefix}${block}\n`, to: text.length};
@@ -440,54 +475,46 @@ export function addEntity(
 	);
 }
 
-/** Remove an entity entry, or rewrite it as `id: ~` when the scene is a patch scene. */
-export function removeEntity(
-	text: string,
+/**
+ * `mira: {…}` -> `mira: ~`.
+ *
+ * With `from:`, an absent key means INHERITED (spec 02) — deleting the entry would put the
+ * character straight back on stage. `id: ~` is the only way to say "gone".
+ */
+function tombstoneEdit(pair: Pair<unknown, unknown>): TextEdit | undefined {
+	const keyRange = rangeOf(pair.key);
+
+	if (!keyRange) {
+		return undefined;
+	}
+
+	const end = pairEnd(pair) ?? keyRange[1];
+
+	return {from: keyRange[1], insert: ': ~', to: Math.max(keyRange[1], end)};
+}
+
+/**
+ * Delete the `cast:` / `props:` key along with the entries under it.
+ *
+ * A bare `cast:` parses as null, so it is harmless — and that is exactly the problem: the
+ * next author to read the file cannot tell it from a half-finished edit. `last` is the final
+ * entry in the map, because the deleted span runs from the map key to the end of its line.
+ */
+function removeMapEdit(
+	parsed: Parsed,
 	kind: EntityKind,
-	id: EntityId,
-	isPatchScene: boolean
+	last: Pair<unknown, unknown>
 ): TextEdit | undefined {
-	const parsed = parseBlock(text);
-
-	if (!parsed) {
-		return undefined;
-	}
-
-	const map = entityMapOf(parsed, kind);
-	const pair = map && findPair(map, id);
-	const keyRange = pair && rangeOf(pair.key);
-
-	if (!map || !pair || !keyRange) {
-		return undefined;
-	}
-
-	if (isPatchScene) {
-		// With `from:`, an absent key means INHERITED (spec 02) — deleting the entry would
-		// put the character straight back on stage. `id: ~` is the only way to say "gone".
-		const end = pairEnd(pair) ?? keyRange[1];
-
-		return {
-			from: keyRange[1],
-			insert: ': ~',
-			to: Math.max(keyRange[1], end)
-		};
-	}
-
-	if (map.items.length > 1) {
-		return removePairEdit(parsed, map, pair);
-	}
-
 	const owner = findPair(parsed.root, mapKeyFor(kind));
 	const ownerKey = owner && rangeOf(owner.key);
+	const keyRange = rangeOf(last.key);
 
-	if (!owner || !ownerKey) {
-		return removePairEdit(parsed, map, pair);
+	if (!ownerKey || !keyRange) {
+		return undefined;
 	}
 
-	// Last entry out takes the map with it: a bare `cast:` parses as null, and the next
-	// author to read the file cannot tell it from a half-finished edit.
 	const source = parsed.text;
-	const end = pairEnd(pair) ?? keyRange[1];
+	const end = pairEnd(last) ?? keyRange[1];
 	let to = Math.min(
 		source.length,
 		lineEndAt(source, trimEnd(source, end, keyRange[0])) + 1
@@ -495,9 +522,85 @@ export function removeEntity(
 
 	// A whole section carries the blank line that separated it. Leaving it behind stacks up
 	// two blank lines where there was one, which is exactly the "a machine was here" tell.
-	while (source[to] === '\n') {
+	// Exactly ONE, though: an author who put two blank lines between sections meant them, and
+	// eating the lot closes a gap they will have to type back in.
+	if (source[to] === '\n') {
 		to++;
 	}
 
 	return {from: lineStartAt(source, ownerKey[0]), insert: '', to};
+}
+
+function definedEdits(edits: (TextEdit | undefined)[]): TextEdit[] {
+	return edits.filter((edit): edit is TextEdit => edit !== undefined);
+}
+
+/**
+ * Remove several entries from one map, as ONE edit.
+ *
+ * The plural form exists because "was that the last entry?" cannot be answered one id at a
+ * time. Two removals computed against the same original text each see a map that still has
+ * two members, so each leaves the map behind, and merging them yields a dangling `cast:`
+ * above a `props:` that still has content. With every id in hand the question is asked once.
+ *
+ * Ids not present in the map are ignored rather than refused: a selection can legitimately
+ * hold an entity this scene only inherits.
+ */
+export function removeEntities(
+	text: string,
+	kind: EntityKind,
+	ids: EntityId[],
+	isPatchScene: boolean
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+	const map = parsed && entityMapOf(parsed, kind);
+
+	if (!parsed || !map) {
+		return undefined;
+	}
+
+	const wanted = new Set<string>(ids);
+	// Map order, not caller order — the splices have to run left to right, and a duplicate id
+	// in the selection must not splice the same span twice.
+	const pairs = (map.items as Pair<unknown, unknown>[]).filter(pair => {
+		const name = keyName(pair);
+
+		return name !== undefined && wanted.has(name);
+	});
+
+	if (pairs.length === 0) {
+		return undefined;
+	}
+
+	if (isPatchScene) {
+		// The map obviously stays: every entry it loses is replaced by a tombstone.
+		return mergeEdits(parsed.text, definedEdits(pairs.map(tombstoneEdit)));
+	}
+
+	if (pairs.length >= map.items.length) {
+		const edit = removeMapEdit(parsed, kind, pairs[pairs.length - 1]);
+
+		if (edit) {
+			return edit;
+		}
+	}
+
+	return mergeEdits(
+		parsed.text,
+		definedEdits(pairs.map(pair => removePairEdit(parsed, map, pair)))
+	);
+}
+
+/**
+ * Remove one entity entry, or rewrite it as `id: ~` when the scene is a patch scene.
+ *
+ * The common case, and a plain pass-through: one id is just the shortest list.
+ */
+export function removeEntity(
+	text: string,
+	kind: EntityKind,
+	id: EntityId,
+	isPatchScene: boolean
+): TextEdit | undefined {
+	return removeEntities(text, kind, [id], isPatchScene);
 }

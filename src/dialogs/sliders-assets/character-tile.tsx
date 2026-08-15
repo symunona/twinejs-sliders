@@ -7,6 +7,7 @@ import {Badge} from '../../components/badge/badge';
 import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
+import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import {AssetPreview} from './asset-preview';
 import {CopyFragmentButton} from './copy-fragment-button';
 
@@ -26,7 +27,21 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 	const {t} = useTranslation();
 
 	return (
-		<div className="sliders-tile" data-character-id={character.id}>
+		<div
+			className="sliders-tile"
+			data-character-id={character.id}
+			draggable
+			// A cast entry is addressed by the character's ID, which is what `ref` resolves
+			// through — unlike a prop, whose ref is an asset name.
+			onDragStart={event =>
+				setAssetDragData(
+					event.dataTransfer,
+					{label: character.name, ref: character.id, target: 'cast'},
+					characterFragment(character)
+				)
+			}
+			title={t('dialogs.slidersAssets.dragToStage')}
+		>
 			<button
 				className="sliders-tile-open"
 				onClick={onEdit}

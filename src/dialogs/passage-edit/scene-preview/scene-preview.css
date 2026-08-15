@@ -49,6 +49,17 @@
 	background: #f3c8c8;
 }
 
+/* Only visible with something selected. The keyboard is the fast path; this row is how the
+   gestures are found in the first place. */
+.scene-preview-selection {
+	align-items: center;
+	border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 2px 4px;
+}
+
 .scene-preview-badge svg {
 	height: 1em;
 	width: 1em;
@@ -65,19 +76,15 @@
 	width: 100%;
 }
 
-.scene-preview-stage-click {
-	cursor: zoom-in;
-	display: flex;
-	min-height: 0;
+/* Lines the selected entity occupies, marked in the passage text. Selecting a sprite and
+   seeing its beats light up IS the connection between the stage and the timeline — beats
+   themselves are never editable visually (spec 07). */
+.CodeMirror .sliders-selected-entity {
+	background: rgba(74, 212, 255, 0.22);
 }
 
-.scene-preview.full-screen .scene-preview-stage-click {
-	cursor: zoom-out;
-	flex-grow: 1;
-}
-
-.scene-preview-stage-click > .scene-stage {
-	flex-grow: 1;
+.CodeMirror .sliders-selected-beat {
+	background: rgba(74, 212, 255, 0.12);
 }
 
 .scene-preview.full-screen .scene-stage {

@@ -11,7 +11,13 @@
 import {parse} from 'yaml';
 import {LAYER_BASELINE} from '@sliders/scene-types';
 import {FIXTURE, untouchedOutside} from '../__fixtures__/fixture';
-import {applyEdit, setEntityKey, type TextEdit} from '../index';
+import {
+	applyEdit,
+	removeEntities,
+	setEntityKey,
+	setSceneKey,
+	type TextEdit
+} from '../index';
 
 function expectMinimalSplice(
 	before: string,
@@ -109,6 +115,46 @@ describe('round-trip on a comment-heavy fixture', () => {
 		);
 		// The cast entry is NOT the thing that moved.
 		expect(castOf(after).mira.at).toBe(-0.4);
+	});
+
+	it('splices only the value of an existing top-level key', () => {
+		const edit = setSceneKey(FIXTURE, 'bg', 'tavern/dawn');
+
+		expect(FIXTURE.slice(edit.from, edit.to)).toBe('tavern/night');
+
+		const after = expectMinimalSplice(FIXTURE, edit);
+
+		// The column-aligned trailing comment is not the value, so it does not move.
+		expect(after).toContain(
+			'bg: tavern/dawn               # asset id, never a path'
+		);
+	});
+
+	it('lands a new top-level key in spec 02 order, not at the end', () => {
+		const before = FIXTURE.replace('camera: {at: [0, 0], zoom: 1}\n', '');
+		const after = expectMinimalSplice(
+			before,
+			setSceneKey(before, 'camera', '{zoom: 1.5}')
+		);
+
+		// After `bg:`, above the blank line and `cast:` — never after `beats:`.
+		expect(after).toContain(
+			'bg: tavern/night               # asset id, never a path\ncamera: {zoom: 1.5}\n\ncast:'
+		);
+	});
+
+	it('deletes a whole map without disturbing the sections around it', () => {
+		const edit = removeEntities(FIXTURE, 'cast', ['mira', 'joren'], false);
+		const after = expectMinimalSplice(FIXTURE, edit);
+
+		// Everything the deleted span did not cover is byte-identical, and the section's
+		// blank line went with it rather than stacking up two.
+		expect(after).toContain('camera: {at: [0, 0], zoom: 1}\n\nfx: [rain@0.6]');
+		expect(after).toContain('# The tavern, at night.');
+		expect(after).toContain(
+			'  - mira: {frame: angry, at: -0.25, say: "Get out."}'
+		);
+		expect(parse(after).beats).toHaveLength(5);
 	});
 
 	it('leaves comments, blank lines and quote styles byte-identical', () => {

@@ -216,6 +216,59 @@ the drag.
 
 All registered in `command-catalog.ts` and `default-keymap.ts`, in the `scene-preview` scope.
 
+## Shipped — the bindings as built
+
+All in the `scene-preview` hotkey scope. Selection-scoped commands are
+`enabled: selection.length > 0`; the beat-scrubber arrows are `enabled: selection.length === 0`,
+so exactly one of the two owns the arrow keys and Escape hands them back.
+
+| Key | Does |
+|---|---|
+| `p` | show/hide preview |
+| `k` | play / pause beats |
+| `shift+f` | full screen — **moved off `f`**, which flip now owns |
+| `←` `→` | previous / next beat, when nothing is selected |
+| arrows | nudge 0.01, when something is selected. Shift ×10 |
+| `escape` | deselect (a second Escape leaves full screen) |
+| `f` | flip |
+| `backspace` / `delete` | remove the entity, or `~` in a `from:` scene |
+| `[` `]` | nudge `z:` within the layer |
+| `mod+[` `mod+]` | step the layer back / front |
+
+`shift+[` and `shift+]` are **not usable** as bindings: the browser reports `event.key` as
+`{` and `}`, so a shift-bracket binding can never match. That is why the layer step is on
+`mod`, not shift.
+
+| Pointer | Does |
+|---|---|
+| drag a sprite | move it |
+| drag a corner handle | uniform `scale:` about the origin |
+| drag empty stage, or middle-drag | pan the camera |
+| `ctrl`/`cmd` + wheel | zoom the camera about the pointer, 0.2–8 |
+| drag an asset tile onto the stage | new `cast:` / `props:` entry, or `bg:` for a backdrop |
+| double-click | full screen |
+
+A bare wheel is deliberately left alone — the preview sits mid-column in a scrolling dialog
+and the pointer crosses it on the way elsewhere; a stage that swallowed plain scroll would
+read as broken. `ctrl`+wheel is also what a trackpad pinch reports, so pinch-to-zoom is free.
+
+### Two rules that look inconsistent and are not
+
+- **`flip: false` and `scale: 1` are deleted; `layer: mid` is written out.** In a `from:`
+  scene an absent key means *inherited*, so dropping `layer:` would hand the entity back the
+  base scene's layer instead of the mid layer the author just asked for. `flip` and `scale`
+  have no such ambiguity.
+- **`camera:` collapses to flow style on the first pan.** It is rewritten as a whole value,
+  which the two-tier rule permits for structural writes. `bg:` is always a scalar splice and
+  never reformats.
+
+### Known gaps
+
+- A dropped entity is not auto-selected — resolving its caret line needs the parse to catch
+  up first, and faking it would mean a parallel model.
+- `fx` assets are not draggable: `fx:` is a stage-wide list with no position to drop onto.
+- Transparent PNG areas hit the whole sprite rect.
+
 ## Tests
 
 | Level | Covers |

@@ -1,4 +1,8 @@
-import {catalogKeymapMismatches, commandCatalog} from '../command-catalog';
+import {
+	catalogKeymapMismatches,
+	commandCatalog,
+	exclusivelyEnabled
+} from '../command-catalog';
 import {
 	bindingLockedByAppMenu,
 	defaultBindings,
@@ -75,7 +79,15 @@ describe('the default keymap', () => {
 					)}`;
 					const existing = seen.get(key);
 
-					if (existing && existing !== id) {
+					// Commands with mutually exclusive `enabledGroup`s are allowed to
+					// share: only one of them is ever enabled, so the dispatcher's
+					// answer is decided by state, not by registration order.
+
+					if (
+						existing &&
+						existing !== id &&
+						!exclusivelyEnabled(commandCatalog, [existing, id])
+					) {
 						clashes.push(`${key} is used by both ${existing} and ${id}`);
 					} else {
 						seen.set(key, id);

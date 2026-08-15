@@ -31,6 +31,10 @@ export const PassageEditContents: React.FC<
 		React.useState(true);
 	const [editorCrashed, setEditorCrashed] = React.useState(false);
 	const [cmEditor, setCmEditor] = React.useState<CodeMirror.Editor>();
+	// The store's copy of the text is a debounced second behind on purpose (see
+	// `PassageText`), which is fine for the story map and useless for the scene preview:
+	// a drag has to read the document the author is looking at.
+	const [liveText, setLiveText] = React.useState<string>();
 	const {ErrorBoundary, error, reset: resetError} = useErrorBoundary();
 	const {prefs} = usePrefsContext();
 	const {dispatch, stories} = useUndoableStoriesContext();
@@ -64,6 +68,11 @@ export const PassageEditContents: React.FC<
 			resetError();
 		}
 	}, [error, resetError, storyFormatExtensionsEnabled]);
+
+	// The store catching up drops the local override rather than trying to merge with it:
+	// after the debounced commit the two agree, and when the text changed from somewhere
+	// else entirely — find and replace, undo — the store is the one that is right.
+	React.useEffect(() => setLiveText(undefined), [passage.text]);
 
 	const handlePassageTextChange = React.useCallback(
 		(text: string) => {
@@ -119,6 +128,7 @@ export const PassageEditContents: React.FC<
 					disabled={disabled}
 					onChange={handlePassageTextChange}
 					onEditorChange={setCmEditor}
+					onLiveChange={setLiveText}
 					passage={passage}
 					story={story}
 					storyFormat={storyFormat}
@@ -127,9 +137,10 @@ export const PassageEditContents: React.FC<
 			</ErrorBoundary>
 			<ScenePreview
 				assets={previewAssets}
+				editor={cmEditor}
 				onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
 				passages={story.passages}
-				text={passage.text}
+				text={liveText ?? passage.text}
 			/>
 		</div>
 	);

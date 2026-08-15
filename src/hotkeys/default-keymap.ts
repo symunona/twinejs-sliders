@@ -68,7 +68,31 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'scene.previousBeat': {bindings: ['left']},
 	'scene.nextBeat': {bindings: ['right']},
 	'scene.play': {bindings: ['k']},
-	'scene.fullScreen': {bindings: ['f']},
+	// `f` belongs to flip (spec 07's gesture table), so full screen took the shifted key.
+	'scene.fullScreen': {bindings: ['shift+f']},
+
+	// Visual editor. The nudges take the arrow keys back off the scrubber while something
+	// is selected, and Escape hands them over again. Both variants of each arrow are bound
+	// to one command; how far it moves is read off the shift key at dispatch time, because
+	// eight nudge commands in the shortcuts dialog would say nothing four cannot.
+
+	'scene.deselect': {bindings: ['escape']},
+	'scene.nudgeLeft': {bindings: ['left', 'shift+left']},
+	'scene.nudgeRight': {bindings: ['right', 'shift+right']},
+	'scene.nudgeUp': {bindings: ['up', 'shift+up']},
+	'scene.nudgeDown': {bindings: ['down', 'shift+down']},
+	'scene.flip': {bindings: ['f']},
+	'scene.delete': {bindings: ['backspace', 'delete']},
+
+	// Brackets move an entity WITHIN its layer; the same keys with mod move it between
+	// layers, which is the arrangement every drawing app has trained people on. Shift is
+	// not available here: `shift+[` reports the key as `{`, so the binding would never
+	// match what the keyboard actually sends.
+
+	'scene.zBack': {bindings: ['[']},
+	'scene.zFront': {bindings: [']']},
+	'scene.layerBack': {bindings: ['mod+[']},
+	'scene.layerFront': {bindings: ['mod+]']},
 
 	// Asset manager.
 

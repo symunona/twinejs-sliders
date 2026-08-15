@@ -11,8 +11,16 @@
  */
 
 export {formatAt, formatNumber, formatValue} from './format';
+export {removeSceneKey, setSceneKey} from './scene-key';
 export {entityAtLine, entityLines} from './select';
-export {addEntity, removeEntity, removeEntityKey, setEntityKey} from './write';
+export {
+	addEntity,
+	mergeEdits,
+	removeEntities,
+	removeEntity,
+	removeEntityKey,
+	setEntityKey
+} from './write';
 export type {EntityTarget, LineSpan, TextEdit} from './types';
 
 /** Apply an edit. Here so tests and callers cannot disagree about what an edit means. */

@@ -8,6 +8,8 @@ import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
+import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
+import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
 import {AssetPreview} from './asset-preview';
 import {CopyFragmentButton} from './copy-fragment-button';
 
@@ -35,8 +37,26 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 	const [tagText, setTagText] = React.useState(meta.tags.join(', '));
 	const {t} = useTranslation();
 
+	// Backgrounds replace `bg:`, objects become an entry under `props:`. Only the NAME
+	// travels — scene YAML addresses assets by name, and `a_8f21` is unwritable. An `fx`
+	// asset is not draggable: `fx:` is a list of effects on the whole stage, not something
+	// with a position, so there is nowhere on the stage for it to land.
+	const dragPayload: AssetDragPayload | undefined =
+		meta.kind === 'bg' || meta.kind === 'object'
+			? {label: meta.name, ref: meta.name, target: meta.kind === 'bg' ? 'bg' : 'prop'}
+			: undefined;
+
 	return (
-		<div className="sliders-tile" data-asset-id={meta.id}>
+		<div
+			className="sliders-tile"
+			data-asset-id={meta.id}
+			draggable={!!dragPayload}
+			onDragStart={event =>
+				dragPayload &&
+				setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta))
+			}
+			title={dragPayload ? t('dialogs.slidersAssets.dragToStage') : undefined}
+		>
 			<AssetPreview alt={meta.name} assetId={meta.id} />
 			<div className="sliders-tile-name">{meta.name}</div>
 			<div className="sliders-tile-detail">

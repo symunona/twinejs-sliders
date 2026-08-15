@@ -9,6 +9,7 @@ import {ENTITY_KEY_ORDER} from '../locate';
 import {
 	addEntity,
 	applyEdit,
+	removeEntities,
 	removeEntity,
 	removeEntityKey,
 	setEntityKey,
@@ -338,9 +339,7 @@ describe('removeEntity', () => {
 		);
 
 		expect(after).not.toContain('props:');
-		expect(after).toContain(
-			'  mira: {frame: angry}     # delta only\n\nbeats:'
-		);
+		expect(after).toContain('  joren: {at: 0.5}\n\nbeats:');
 	});
 
 	it('writes id: ~ in a patch scene, because absent means inherited', () => {
@@ -365,6 +364,92 @@ describe('removeEntity', () => {
 	it('returns undefined for an entity that is not there', () => {
 		expect(removeEntity(FIXTURE, 'cast', 'nobody', false)).toBeUndefined();
 		expect(removeEntity(FIXTURE, 'prop', 'candle', false)).toBeUndefined();
+	});
+});
+
+/**
+ * The bug this exists for: two removals decided one at a time both see a map that still has
+ * two members, so both leave it behind and the merge produces a dangling `cast:`.
+ */
+describe('removeEntities', () => {
+	it('takes the map with them when the ids cover every entry', () => {
+		const after = write(
+			FIXTURE,
+			removeEntities(FIXTURE, 'cast', ['mira', 'joren'], false)
+		);
+
+		expect(after).not.toContain('cast:');
+		expect(parse(after).cast).toBeUndefined();
+		// The section's own blank line goes too, and exactly one of them.
+		expect(after).toContain('camera: {at: [0, 0], zoom: 1}\n\nfx: [rain@0.6]');
+	});
+
+	it('keeps the map when one entry survives', () => {
+		const after = write(
+			FIXTURE,
+			removeEntities(FIXTURE, 'cast', ['mira'], false)
+		);
+
+		expect(after).toContain('cast:');
+		expect(after).not.toContain('arms-crossed');
+		expect(parse(after).cast).toEqual({
+			joren: {at: 0.35, flip: true, frame: 'idle', layer: 'back'}
+		});
+	});
+
+	it('is ONE edit spanning both entries, not one per id', () => {
+		const edit = removeEntities(FIXTURE, 'cast', ['mira', 'joren'], false);
+
+		expect(edit).toBeDefined();
+		expect(FIXTURE.slice(edit!.from, edit!.to)).toContain('arms-crossed');
+		expect(FIXTURE.slice(edit!.from, edit!.to)).toContain('layer: back');
+	});
+
+	it('deletes several entries out of a bigger map in one splice', () => {
+		const before = 'cast:\n  a: {at: 0}\n  b: {at: 0.1}\n  c: {at: 0.2}\n';
+		const after = write(
+			before,
+			removeEntities(before, 'cast', ['a', 'c'], false)
+		);
+
+		expect(after).toBe('cast:\n  b: {at: 0.1}\n');
+	});
+
+	it('keeps the map in a patch scene, where every entry becomes a tombstone', () => {
+		const after = write(
+			PATCH_FIXTURE,
+			removeEntities(PATCH_FIXTURE, 'cast', ['mira', 'joren'], true)
+		);
+
+		expect(after).toContain('  mira: ~     # delta only\n  joren: ~\n');
+		expect(parse(after).cast).toEqual({joren: null, mira: null});
+	});
+
+	it('ignores ids the map does not have, rather than refusing the lot', () => {
+		const after = write(
+			FIXTURE,
+			removeEntities(FIXTURE, 'cast', ['mira', 'nobody'], false)
+		);
+
+		expect(after).toContain('  joren:');
+		expect(after).not.toContain('arms-crossed');
+	});
+
+	it('splices a duplicated id once', () => {
+		const after = write(
+			FIXTURE,
+			removeEntities(FIXTURE, 'cast', ['mira', 'mira'], false)
+		);
+
+		expect(after).toContain('cast:\n  # Mira is already inside');
+	});
+
+	it('returns undefined when none of the ids are there', () => {
+		expect(removeEntities(FIXTURE, 'cast', [], false)).toBeUndefined();
+		expect(
+			removeEntities(FIXTURE, 'cast', ['nobody', 'nothing'], false)
+		).toBeUndefined();
+		expect(removeEntities(FIXTURE, 'prop', ['candle'], false)).toBeUndefined();
 	});
 });
 

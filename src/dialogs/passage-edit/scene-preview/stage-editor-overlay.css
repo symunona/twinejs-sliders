@@ -1,0 +1,134 @@
+/* The frame and the renderer's mount element have to be the SAME rectangle: the overlay
+   measures pointers against this box and the renderer reports rects against its mount, so
+   any gap between the two shows up as handles floating off the sprite. */
+.stage-editor {
+	display: flex;
+	flex-grow: 1;
+	min-height: 0;
+	position: relative;
+}
+
+.stage-editor:focus {
+	outline: none;
+}
+
+/* The stage takes focus on click so the arrow keys nudge. Say so, but quietly. */
+.stage-editor:focus-visible {
+	outline: 2px solid var(--accent-color, #4a90d9);
+	outline-offset: -2px;
+}
+
+.stage-editor > .scene-stage {
+	flex-grow: 1;
+}
+
+/* Empty ground pans the camera, so the ground advertises itself as grabbable. Over a
+   sprite the cursor becomes a move cross instead, which is the same signal in reverse. */
+.stage-editor {
+	cursor: grab;
+}
+
+.stage-editor.over-entity {
+	cursor: move;
+}
+
+.stage-editor.dragging {
+	cursor: grabbing;
+}
+
+/* An asset tile is over the stage and will land where it is dropped. */
+.stage-editor.drop-active::after {
+	border: 2px dashed #4ad4ff;
+	content: '';
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+}
+
+/* Markers never take the pointer: a click has to reach the hit test on the frame, and a
+   bubble link underneath has to stay clickable. Handles opt back in individually. */
+.stage-editor-markers {
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+}
+
+.stage-editor-selection {
+	border: 1px solid #4ad4ff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+	position: absolute;
+}
+
+/* The origin — a character's feet. Read-only: anchors are global to the character. */
+.stage-editor-origin,
+.stage-editor-anchor {
+	height: 11px;
+	margin-left: -5px;
+	margin-top: -5px;
+	position: absolute;
+	width: 11px;
+}
+
+.stage-editor-origin::before,
+.stage-editor-origin::after {
+	background: #4ad4ff;
+	content: '';
+	position: absolute;
+}
+
+.stage-editor-origin::before {
+	height: 11px;
+	left: 5px;
+	top: 0;
+	width: 1px;
+}
+
+.stage-editor-origin::after {
+	height: 1px;
+	left: 0;
+	top: 5px;
+	width: 11px;
+}
+
+.stage-editor-anchor {
+	border: 1px solid #ffd84a;
+	border-radius: 50%;
+}
+
+.stage-editor-guide {
+	background: #ff5ea8;
+	position: absolute;
+}
+
+.stage-editor-guide.vertical {
+	bottom: 0;
+	top: 0;
+	width: 1px;
+}
+
+.stage-editor-guide.horizontal {
+	height: 1px;
+	left: 0;
+	right: 0;
+}
+
+.stage-editor-handle {
+	background: #fff;
+	border: 1px solid #4ad4ff;
+	height: 9px;
+	margin-left: -5px;
+	margin-top: -5px;
+	pointer-events: auto;
+	position: absolute;
+	width: 9px;
+}
+
+.stage-editor-handle.nw,
+.stage-editor-handle.se {
+	cursor: nwse-resize;
+}
+
+.stage-editor-handle.ne,
+.stage-editor-handle.sw {
+	cursor: nesw-resize;
+}

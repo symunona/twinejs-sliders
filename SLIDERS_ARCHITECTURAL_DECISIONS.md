@@ -52,10 +52,38 @@ Full reasoning is in each package; the ones that could surprise you:
 - **`measure()` returns the target position, not the animating one** — deterministic and testable; bubbles glide via their own CSS transition.
 - **Anchors fall back to defaults** when a character manifest is missing, so a bubble on an unresolved speaker is still placed rather than dropped.
 
+## Visual editor (spec 07) — built
+
+Drag, resize, flip, layer, delete, frame, asset-drop and camera, all writing back to the
+YAML. Plan and the shipped key bindings: [`docs/sliders/09-visual-editor-plan.md`](docs/sliders/09-visual-editor-plan.md).
+
+| # | Question | Chose | Why |
+|---|---|---|---|
+| 12 | How does a gesture edit the text without wrecking it? | New editor-only `packages/scene-edit`: splice the node's range for an existing scalar, rewrite only the affected map for a structural change | Naive `parse → mutate → stringify` destroys comments, key order and flow-vs-block style. The gate was a byte-level round-trip on a deliberately awkward fixture, green before any drag handle existed |
+| 13 | Resize needs a size key; the format had none | `scale:`, uniform, about the entity origin | A character's origin is its feet, so it grows without leaving the floor. Non-uniform stretch is not what VN sprites want, and it would double the parser and differ surface |
+| 14 | Which `at:` does a drag write when the scrubber is on beat 3? | The beat's, if that beat already patches the entity; otherwise the `cast:`/`props:` entry | "Write what the eye is looking at." The beat patch is what put the sprite there |
+| 15 | Where does the editor's inverse geometry live? | `src/.../stage-geometry.ts`, importing the renderer's forward functions and inverting them | In `packages/` it would ship to play mode; inside a component it would be untestable. Importing rather than copying is what keeps handles on top of sprites under zoom |
+| 16 | How is an entity hit-tested? | By rect, from `DomRenderer.rectOf()` | `.sliders-entity` is `pointer-events: none`, and rects survive the camera transform that DOM hit-testing would fight |
+
+### The bug integration caught
+
+**A drag computed a correct splice, called `replaceRange`, and the document silently
+reverted.** `PassageText.handleLocalChangeText` called `setLocalText` before
+`scheduleCommit()`. The scene editor writes from a native `pointerup` listener, which React
+16 does not batch, so `setLocalText` rendered synchronously and the following
+`onLiveChange` — a second setState, in the parent — made React flush the pending passive
+effect early. That effect uses "is a commit pending?" to tell typing from an external edit,
+found none scheduled yet, and put the old text back. Scheduling the commit first fixes it
+in both batching modes.
+
+Worth remembering because the unit test written for it *passed against the bug*: `useEffect`
+is passive and never flushes mid-handler in jsdom unless a second parent setState forces it.
+
 ## Not built
 
-- **Visual editor (spec 07)** — drag-on-preview write-back. Everything it needs is in place (`yaml` round-trip, `measure()`, stable DOM hooks); it's the next piece. Build plan: [`docs/sliders/09-visual-editor-plan.md`](docs/sliders/09-visual-editor-plan.md).
 - **Electron asset backend** — interface + stub only. Web (OPFS/IndexedDB) is live.
+- **Auto-select a dropped entity** — resolving its caret line needs the parse to catch up first.
+- **`fx` drag** — `fx:` is a stage-wide list with no position to drop onto.
 
 ## How to run it
 

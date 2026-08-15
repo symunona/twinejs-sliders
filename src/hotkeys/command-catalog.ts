@@ -3,6 +3,39 @@ import {defaultKeymap} from './default-keymap';
 export interface CatalogEntry {
 	id: string;
 	scope: string;
+	/**
+	 * Marks a command whose `enabled` state is tied to a condition it shares with the
+	 * other members of the group--and which is FALSE for every other group at the same
+	 * time.
+	 *
+	 * Two commands in different groups may therefore share a key without being
+	 * ambiguous: the dispatcher skips disabled commands before it looks at bindings, so
+	 * exactly one of them can ever fire. The scene preview's arrow keys are the case
+	 * this exists for--they scrub beats with nothing selected and nudge the selection
+	 * otherwise, and there is no third key that means "move this thing".
+	 *
+	 * Commands in the SAME group are still checked against each other, because they are
+	 * enabled together.
+	 */
+	enabledGroup?: string;
+}
+
+/**
+ * May these two commands share a key? Only when a condition guarantees that at most one
+ * of them is enabled at a time.
+ */
+export function exclusivelyEnabled(
+	catalog: CatalogEntry[],
+	commandIds: string[]
+): boolean {
+	const groups = commandIds.map(
+		id => catalog.find(entry => entry.id === id)?.enabledGroup
+	);
+
+	return (
+		groups.every(group => group !== undefined) &&
+		new Set(groups).size === groups.length
+	);
 }
 
 /**
@@ -61,10 +94,54 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'passage.rename', scope: 'dialog'},
 
 	{id: 'scene.togglePreview', scope: 'scene-preview'},
-	{id: 'scene.previousBeat', scope: 'scene-preview'},
-	{id: 'scene.nextBeat', scope: 'scene-preview'},
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},
+	{id: 'scene.deselect', scope: 'scene-preview'},
+
+	// The scrubber and the nudges share the arrow keys. Nudging requires a selection and
+	// scrubbing requires none, so exactly one group is live at any moment--see
+	// `enabledGroup` and the `enabled` guards in `scene-preview.tsx`.
+
+	{
+		enabledGroup: 'scene-no-selection',
+		id: 'scene.previousBeat',
+		scope: 'scene-preview'
+	},
+	{
+		enabledGroup: 'scene-no-selection',
+		id: 'scene.nextBeat',
+		scope: 'scene-preview'
+	},
+	{
+		enabledGroup: 'scene-selection',
+		id: 'scene.nudgeLeft',
+		scope: 'scene-preview'
+	},
+	{
+		enabledGroup: 'scene-selection',
+		id: 'scene.nudgeRight',
+		scope: 'scene-preview'
+	},
+	{
+		enabledGroup: 'scene-selection',
+		id: 'scene.nudgeUp',
+		scope: 'scene-preview'
+	},
+	{
+		enabledGroup: 'scene-selection',
+		id: 'scene.nudgeDown',
+		scope: 'scene-preview'
+	},
+
+	// The rest of the visual editor (spec 07's gesture table). All need a selection, and
+	// none of them shares a key with anything else in the scope, so no group is needed.
+
+	{id: 'scene.flip', scope: 'scene-preview'},
+	{id: 'scene.delete', scope: 'scene-preview'},
+	{id: 'scene.layerBack', scope: 'scene-preview'},
+	{id: 'scene.layerFront', scope: 'scene-preview'},
+	{id: 'scene.zBack', scope: 'scene-preview'},
+	{id: 'scene.zFront', scope: 'scene-preview'},
 
 	{id: 'slidersAssets.upload', scope: 'sliders-assets'},
 	{id: 'slidersAssets.newCharacter', scope: 'sliders-assets'},

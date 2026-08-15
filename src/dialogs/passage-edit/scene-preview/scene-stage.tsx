@@ -11,6 +11,14 @@ export interface SceneStageProps {
 	/** When true, play the derived transitions. When false, snap. */
 	animate?: boolean;
 	onLink?: (name: string, target?: string) => void;
+	/**
+	 * Hands the renderer out once it is mounted, and `undefined` on teardown.
+	 *
+	 * The visual editor overlay needs `rectOf()` and `stageBox()` to hit test and to draw
+	 * handles on the sprite. Held in a ref like `assets` and `onLink` so that a caller
+	 * passing an inline arrow function cannot cause a remount — see above.
+	 */
+	onRenderer?: (renderer: DomRenderer | undefined) => void;
 }
 
 /**
@@ -24,6 +32,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	assets,
 	beat,
 	onLink,
+	onRenderer,
 	stage
 }) => {
 	const hostRef = React.useRef<HTMLDivElement>(null);
@@ -33,10 +42,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	// Held in refs so remounting never depends on their identity.
 	const assetsRef = React.useRef(assets);
 	const onLinkRef = React.useRef(onLink);
+	const onRendererRef = React.useRef(onRenderer);
 	const [ready, setReady] = React.useState(false);
 
 	assetsRef.current = assets;
 	onLinkRef.current = onLink;
+	onRendererRef.current = onRenderer;
 
 	React.useEffect(() => {
 		const host = hostRef.current;
@@ -63,6 +74,10 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			// Bubbles ask the renderer where anchors landed, so they mount after it.
 			dialogue.mount(host, renderer);
 			setReady(true);
+
+			// Announced only once the mount resolved: before that `stageBox()` is a zero
+			// box and every rect the overlay asked for would be nonsense.
+			onRendererRef.current?.(renderer);
 		});
 
 		return () => {
@@ -72,6 +87,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			rendererRef.current = undefined;
 			dialogueRef.current = undefined;
 			prevStageRef.current = undefined;
+			onRendererRef.current?.(undefined);
 		};
 	}, []);
 

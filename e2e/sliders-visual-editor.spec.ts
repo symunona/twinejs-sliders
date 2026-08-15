@@ -136,4 +136,46 @@ test.describe('visual scene editor', () => {
 
 		expect(await cmText(page)).toEqual(beforeResize);
 	});
+
+	test('keyboard gestures on the selection write their own keys', async ({
+		page
+	}) => {
+		test.setTimeout(180000);
+		await openSceneEditor(page, 'Visual Editor Keys ' + Date.now());
+
+		const mira = page.locator('[data-entity-id="mira"]');
+
+		await mira.waitFor({timeout: 20000});
+
+		const box = (await mira.boundingBox())!;
+
+		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+		await page.waitForTimeout(300);
+
+		// f flips. Full screen had to move to shift+f to free this key up.
+		await page.keyboard.press('f');
+		await page.waitForTimeout(600);
+		expect(await cmText(page)).toContain('flip: true');
+
+		// ...and flipping back removes the key rather than writing the default out.
+		await page.keyboard.press('f');
+		await page.waitForTimeout(600);
+		expect(await cmText(page)).not.toContain('flip:');
+
+		// mod+] steps the layer. Shift+bracket is unbindable: the browser reports it as }.
+		await page.keyboard.press('ControlOrMeta+]');
+		await page.waitForTimeout(600);
+		expect(await cmText(page)).toMatch(/mira:.*layer: (mid|front)/);
+
+		// Delete removes the entry. This scene has no from:, so it goes entirely.
+		await page.keyboard.press('Delete');
+		await page.waitForTimeout(700);
+
+		const afterDelete = await cmText(page);
+
+		expect(afterDelete).not.toContain('mira:  {');
+		// The other cast member and the beats are untouched.
+		expect(afterDelete).toContain('  joren:\n    at: 0.35\n    layer: back');
+		expect(afterDelete).toContain('- mira: "Hello."');
+	});
 });

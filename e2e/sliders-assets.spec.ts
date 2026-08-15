@@ -112,7 +112,10 @@ test.describe('Sliders asset manager', () => {
 		const tile = page.locator('.sliders-tile', {hasText: 'candle-flicker'});
 
 		await expect(tile).toBeVisible({timeout: 15000});
-		await expect(tile.getByText('Animated')).toBeVisible();
+		// `exact` matters: the tile also holds a disabled Edit button whose accessible name
+		// begins "Animated images can't be edited", so a loose match is ambiguous and fails
+		// strict mode rather than the assertion.
+		await expect(tile.getByText('Animated', {exact: true})).toBeVisible();
 
 		// Stored as-is: still a GIF, never re-encoded.
 		await expect(tile.locator('.sliders-tile-detail')).toContainText('gif');

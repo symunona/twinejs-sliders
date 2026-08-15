@@ -266,7 +266,21 @@
 				"previousBeat": "Previous beat",
 				"nextBeat": "Next beat",
 				"play": "Play beats",
-				"fullScreen": "Full screen"
+				"fullScreen": "Full screen",
+				"deselect": "Deselect",
+				"nudgeLeft": "Nudge left",
+				"nudgeRight": "Nudge right",
+				"nudgeUp": "Nudge up",
+				"nudgeDown": "Nudge down",
+				"flip": "Flip horizontally",
+				"remove": "Remove from scene",
+				"layer": "Layer",
+				"layerMixed": "Mixed",
+				"layer_back": "Back",
+				"layer_mid": "Middle",
+				"layer_front": "Front",
+				"frame": "Frame",
+				"frameAuto": "Automatic"
 			}
 		},
 		"passageTags": {
@@ -302,7 +316,8 @@
 			"newCharacter": "New Character",
 			"newCharacterPrompt": "What should this character be called?",
 			"editImage": "Edit Image",
-			"editImageAnimated": "Animated images can't be edited"
+			"editImageAnimated": "Animated images can't be edited",
+			"dragToStage": "Drag onto the scene preview to place it"
 		},
 		"slidersCharacters": {
 			"addAnchor": "Add Anchor",
@@ -726,7 +741,18 @@
 				"previousBeat": "Previous Beat",
 				"nextBeat": "Next Beat",
 				"play": "Play or Pause Scene",
-				"fullScreen": "Full Screen Scene"
+				"fullScreen": "Full Screen Scene",
+				"deselect": "Deselect Entity",
+				"nudgeLeft": "Nudge Entity Left",
+				"nudgeRight": "Nudge Entity Right",
+				"nudgeUp": "Nudge Entity Up",
+				"nudgeDown": "Nudge Entity Down",
+				"flip": "Flip Entity",
+				"delete": "Remove Entity From Scene",
+				"layerBack": "Send Entity a Layer Back",
+				"layerFront": "Bring Entity a Layer Forward",
+				"zBack": "Send Entity Backward Within Layer",
+				"zFront": "Bring Entity Forward Within Layer"
 			},
 			"slidersAssets": {
 				"upload": "Add Files",

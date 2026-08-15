@@ -106,6 +106,16 @@
 	margin-top: auto;
 }
 
+/* A draggable tile can be dropped onto the scene preview to place it. The cursor is the
+   only affordance a drag source gets, so it has to be the grab hand. */
+.sliders-tile[draggable='true'] {
+	cursor: grab;
+}
+
+.sliders-tile[draggable='true']:active {
+	cursor: grabbing;
+}
+
 .sliders-tile-open {
 	background: none;
 	border: none;

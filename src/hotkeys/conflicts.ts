@@ -1,5 +1,5 @@
 import {Platform} from '../util/platform';
-import {CatalogEntry} from './command-catalog';
+import {CatalogEntry, exclusivelyEnabled} from './command-catalog';
 import {normalizeKeyString} from './key-string';
 import {ResolvedKeymap} from './resolve-keymap';
 import {GLOBAL_SCOPE} from './scope';
@@ -31,6 +31,11 @@ export interface Shadow {
  * Two commands in the same scope bound to the same key. Which one runs depends
  * on registration order, which is effectively arbitrary--so this is a real
  * problem, and the shortcuts dialog flags it.
+ *
+ * Commands that declare mutually exclusive `enabledGroup`s are left out: at most
+ * one of them is ever enabled, and the dispatcher skips disabled commands before
+ * it looks at bindings, so which one runs is decided by state rather than by
+ * registration order.
  */
 export function findConflicts(
 	catalog: CatalogEntry[],
@@ -68,7 +73,11 @@ export function findConflicts(
 
 	return [...groups.values()]
 		.map(group => group.conflict)
-		.filter(conflict => conflict.commandIds.length > 1);
+		.filter(
+			conflict =>
+				conflict.commandIds.length > 1 &&
+				!exclusivelyEnabled(catalog, conflict.commandIds)
+		);
 }
 
 /**
