@@ -8,3 +8,38 @@
 .story-import-dialog .card-content p:first-child {
 	margin-top: 0;
 }
+
+.story-import-dialog .bundle-report {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.story-import-dialog .bundle-report h2 {
+	font-size: inherit;
+	font-weight: bold;
+	margin: 0 0 0.5em;
+}
+
+.story-import-dialog .bundle-report ul {
+	margin: 0 0 1em;
+	padding-left: 1.5em;
+}
+
+/* Clashes and hash mismatches are the reason this step exists, so they don't get to read
+   as incidental detail next to the counts. Same treatment the asset editor gives errors;
+   both tokens flip with the dark theme. */
+
+.story-import-dialog .bundle-warnings,
+.story-import-dialog .bundle-error {
+	background: var(--faint-red);
+	border-left: 4px solid var(--red);
+	border-radius: var(--corner-round);
+	margin: 0 0 1em;
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.story-import-dialog .bundle-warnings {
+	padding-left: 2em;
+}

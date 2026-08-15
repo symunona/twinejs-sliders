@@ -4,14 +4,19 @@ import {IconButton} from '../../components/control/icon-button';
 import {useCommand} from '../../hotkeys';
 
 export interface UploadButtonProps {
+	/** Defaults to images. Bundle import passes `.zip`. */
+	accept?: string;
 	/**
 	 * Command this button publishes, if any. The button owns the hidden file
 	 * input, so opening the picker has to happen in here.
 	 */
 	commandId?: string;
 	commandScope?: string;
+	icon?: React.ReactNode;
 	label: string;
+	multiple?: boolean;
 	onUpload: (files: File[]) => void;
+	variant?: 'create' | 'primary';
 }
 
 /**
@@ -19,7 +24,16 @@ export interface UploadButtonProps {
  * a plain file input instead, so the button still looks like every other one.
  */
 export const UploadButton: React.FC<UploadButtonProps> = props => {
-	const {commandId, commandScope, label, onUpload} = props;
+	const {
+		accept = 'image/*',
+		commandId,
+		commandScope,
+		icon,
+		label,
+		multiple = true,
+		onUpload,
+		variant = 'create'
+	} = props;
 	const input = React.useRef<HTMLInputElement>(null);
 
 	const openPicker = React.useCallback(() => input.current?.click(), []);
@@ -46,15 +60,15 @@ export const UploadButton: React.FC<UploadButtonProps> = props => {
 	return (
 		<span className="upload-button">
 			<IconButton
-				icon={<IconUpload />}
+				icon={icon ?? <IconUpload />}
 				label={label}
 				onClick={openPicker}
-				variant="create"
+				variant={variant}
 			/>
 			<input
-				accept="image/*"
+				accept={accept}
 				aria-label={label}
-				multiple
+				multiple={multiple}
 				onChange={handleChange}
 				ref={input}
 				type="file"

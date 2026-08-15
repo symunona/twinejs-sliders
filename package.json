@@ -21,6 +21,7 @@
 		"codemirror": "^5.65.1",
 		"detect-it": "^4.0.1",
 		"eases": "^1.0.8",
+		"fflate": "^0.8.3",
 		"file-saver": "^2.0.5",
 		"focus-trap-react": "^8.9.2",
 		"focus-visible": "^5.2.0",

@@ -1,11 +1,14 @@
+import type {AssetMeta} from '@sliders/scene-types';
 import {MemoryBackend} from '../backends/memory-backend';
+import {blobBytes} from '../blob-bytes';
 import {assetFragment, characterFragment} from '../fragment';
 import {BackedAssetStore, defaultCharacter} from '../store';
 import {
 	animatedWebpBytes,
 	gifBytes,
 	jpegBytes,
-	pngBytes
+	pngBytes,
+	webpBytes
 } from '../test-fixtures';
 
 // jsdom ships getRandomValues but not SubtleCrypto.
@@ -27,6 +30,24 @@ function file(bytes: Uint8Array, name: string, type: string) {
 
 function newStore() {
 	return new BackedAssetStore(new MemoryBackend());
+}
+
+/** An AssetMeta as it arrives from a bundle manifest — already complete, already hashed. */
+function bundled(overrides: Partial<AssetMeta> = {}): AssetMeta {
+	return {
+		id: 'a_8f21',
+		name: 'tavern/night',
+		kind: 'bg',
+		tags: ['interior', 'night'],
+		animated: false,
+		w: 640,
+		h: 360,
+		bytes: 1234,
+		hash: 'a'.repeat(64),
+		mime: 'image/webp',
+		sourceAsset: 'a_0001',
+		...overrides
+	};
 }
 
 describe('BackedAssetStore', () => {
@@ -274,5 +295,106 @@ describe('YAML fragments', () => {
 		await expect(
 			store.replace('a_beef', file(pngBytes(), 'a.png', 'image/png'))
 		).rejects.toThrow(/no asset with ID/);
+	});
+});
+
+describe('importAsset', () => {
+	it('keeps the bundled id when it is free and restores the meta whole', async () => {
+		const store = newStore();
+		const meta = bundled({ownerCharacter: 'mira'});
+		const stored = await store.importAsset(
+			meta,
+			new Blob([webpBytes()], {type: 'image/webp'})
+		);
+
+		expect(stored.id).toBe('a_8f21');
+		expect(stored).toEqual(meta);
+		expect(await store.meta('a_8f21')).toEqual(meta);
+	});
+
+	it('stores a copy rather than the caller object', async () => {
+		const store = newStore();
+		const meta = bundled();
+
+		await store.importAsset(meta, new Blob([webpBytes()]));
+		meta.name = 'renamed-after-the-fact';
+		meta.tags.push('mutated');
+
+		const stored = await store.meta('a_8f21');
+
+		expect(stored?.name).toBe('tavern/night');
+		expect(stored?.tags).toEqual(['interior', 'night']);
+	});
+
+	it('mints a fresh id when the bundled one is taken, leaving the sitting tenant alone', async () => {
+		const store = newStore();
+		const taken = await store.put(
+			file(pngBytes(), 'already-here.png', 'image/png'),
+			{kind: 'bg'}
+		);
+		const before = await store.meta(taken);
+		const stored = await store.importAsset(
+			bundled({id: taken}),
+			new Blob([webpBytes()], {type: 'image/webp'})
+		);
+
+		expect(stored.id).not.toBe(taken);
+		expect(stored.id).toMatch(/^a_[0-9a-f]{4}$/);
+		expect(stored.name).toBe('tavern/night');
+
+		// The asset that owned the id is untouched, meta and bytes alike.
+		expect(await store.meta(taken)).toEqual(before);
+		expect((await store.get(taken))?.size).toBe(pngBytes().byteLength);
+		expect(await store.list({kind: 'bg'})).toHaveLength(2);
+	});
+
+	it('stores the bytes untouched', async () => {
+		const store = newStore();
+		const source = webpBytes(640, 360);
+		const stored = await store.importAsset(
+			bundled(),
+			new Blob([source], {type: 'image/webp'})
+		);
+		const blob = await store.get(stored.id);
+		const readBack = new Uint8Array(await blobBytes(blob!));
+
+		expect(readBack.byteLength).toBe(source.byteLength);
+		expect(Array.from(readBack)).toEqual(Array.from(source));
+	});
+
+	it('imports an animated file without deriving anything from it', async () => {
+		const store = newStore();
+		// A GIF carrying WebP metadata: nonsense, but it proves nothing sniffed the
+		// bytes. What the bundle said is what the library gets.
+		const stored = await store.importAsset(
+			bundled({animated: true, w: 42, h: 7}),
+			new Blob([gifBytes({frames: 5})], {type: 'image/gif'})
+		);
+
+		expect(stored.mime).toBe('image/webp');
+		expect(stored.w).toBe(42);
+		expect(stored.h).toBe(7);
+		expect(stored.hash).toBe('a'.repeat(64));
+	});
+
+	it('shows up in the library list', async () => {
+		const store = newStore();
+		const stored = await store.importAsset(bundled(), new Blob([webpBytes()]));
+
+		expect(await store.list()).toEqual([stored]);
+		expect(await store.list({kind: 'bg', tags: ['night']})).toHaveLength(1);
+	});
+
+	it('keeps an imported character frame out of the flat list', async () => {
+		const store = newStore();
+
+		await store.importAsset(
+			bundled({id: 'a_1111', kind: 'frame', ownerCharacter: 'mira'}),
+			new Blob([webpBytes()])
+		);
+
+		expect(await store.list()).toHaveLength(0);
+		expect(await store.list({includeFrames: true})).toHaveLength(1);
+		expect((await store.meta('a_1111'))?.ownerCharacter).toBe('mira');
 	});
 });

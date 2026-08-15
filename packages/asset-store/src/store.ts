@@ -134,6 +134,26 @@ export class BackedAssetStore implements AssetStore {
 		});
 	}
 
+	async importAsset(meta: AssetMeta, blob: Blob): Promise<AssetMeta> {
+		return await this.mutate(async manifest => {
+			// No prepareUpload, no re-hash: these bytes came out of a library and the
+			// importer already checked them against the bundle manifest. Deduping and
+			// name clashes are its calls too, so both are deliberately absent here.
+			const id = manifest.assets[meta.id]
+				? uniqueAssetId(Object.keys(manifest.assets))
+				: meta.id;
+			const copy = JSON.parse(JSON.stringify(meta)) as AssetMeta;
+			const stored: AssetMeta = {...copy, id};
+
+			await this.storage.writeBlob(id, blob);
+			manifest.assets[id] = stored;
+
+			// No revoke(): the id is either fresh or was free, so nothing can be
+			// cached under it.
+			return stored;
+		});
+	}
+
 	async put(file: File, options?: PutAssetOptions): Promise<AssetId> {
 		return (await this.putAsset(file, options)).id;
 	}

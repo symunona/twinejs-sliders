@@ -19,3 +19,11 @@ export function saveTwee(source: string, filename: string) {
 
 	saveAs(data, filename);
 }
+
+/**
+ * Saves bytes that were already assembled into a blob, e.g. a `.sliders.zip`
+ * bundle. Here so that file-saver stays imported in exactly one place.
+ */
+export function saveBlob(data: Blob, filename: string) {
+	saveAs(data, filename);
+}

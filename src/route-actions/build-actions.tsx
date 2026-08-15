@@ -19,6 +19,7 @@ import {usePublishing} from '../store/use-publishing';
 import {useStoryLaunch} from '../store/use-story-launch';
 import {saveHtml, saveTwee} from '../util/save-file';
 import {storyToTwee} from '../util/twee';
+import {ExportBundleButton} from './export-bundle-button';
 
 export interface BuildActionsProps {
 	story?: Story;
@@ -229,6 +230,7 @@ export const BuildActions: React.FC<BuildActionsProps> = ({story}) => {
 				label={t('routeActions.build.exportAsTwee')}
 				onClick={handleExportAsTwee}
 			/>
+			<ExportBundleButton story={story} />
 		</ButtonBar>
 	);
 };

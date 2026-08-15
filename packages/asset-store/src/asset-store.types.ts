@@ -55,6 +55,24 @@ export interface AssetStore extends AssetResolver {
 	put(file: File, options?: PutAssetOptions): Promise<AssetId>;
 	/** Same upload, with the duplicate/transcode report the UI needs. */
 	putAsset(file: File, options?: PutAssetOptions): Promise<PutAssetResult>;
+	/**
+	 * Writes bytes and metadata into the library verbatim — the bundle import path
+	 * (spec 08). It skips `prepareUpload`, because a `.sliders.zip` carries what the
+	 * library already stored: re-encoding a still to WebP would change the bytes,
+	 * invalidate the `hash` the manifest travelled with, and cost time on data that
+	 * is usually WebP already. The hash is not recomputed either — the importer has
+	 * already checked it against the bundle manifest.
+	 *
+	 * Unlike `putAsset` this does **not** dedupe by content hash and does not enforce
+	 * unique names. Which of a bundle's assets are duplicates of library ones, and what
+	 * a name clash means, are the importer's decisions; by the time it calls here it
+	 * has decided and wants this asset stored.
+	 *
+	 * `meta.id` is kept when it is free, so bundle references need no remapping. When
+	 * it is taken a fresh id is minted, which is why the stored meta comes back: the
+	 * caller must repoint its references at the id actually used.
+	 */
+	importAsset(meta: AssetMeta, blob: Blob): Promise<AssetMeta>;
 	get(id: AssetId): Promise<Blob | undefined>;
 	url(id: AssetId): Promise<string | undefined>;
 	meta(id: AssetId): Promise<AssetMeta | undefined>;
