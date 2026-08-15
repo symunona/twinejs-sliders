@@ -20,6 +20,15 @@ export const CodeArea: React.FC<CodeAreaProps> = props => {
 			data-font-scale={props.fontScale}
 			data-options={JSON.stringify(props.options)}
 			data-use-code-mirror={props.useCodeMirror}
+			// Lets a test write text the way the scene editor does — from a NATIVE
+			// listener rather than a React synthetic event. React 16 does not batch those,
+			// so state updates flush synchronously mid-handler, which is a materially
+			// different code path from `fireEvent.change` and has had a real bug in it.
+			ref={node => {
+				if (node) {
+					(node as any).mockWriteText = props.onChangeText;
+				}
+			}}
 		>
 			<label>
 				{props.label}

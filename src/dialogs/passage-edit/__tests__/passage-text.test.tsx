@@ -275,6 +275,77 @@ describe('<PassageText>', () => {
 		);
 	});
 
+	// The scene editor writes to the document from a pointerup listener it added itself.
+	// React 16 only batches inside its own synthetic events, so that write re-renders and
+	// flushes effects SYNCHRONOUSLY, part-way through the change handler. The effect that
+	// watches for external text changes reads the pending-commit timeout to tell "the
+	// author is typing" from "someone replaced the text underneath us" — so if the timeout
+	// is scheduled after the state update rather than before, that effect fires while it is
+	// still unset and reverts the write. The drag then appears to do nothing at all.
+	describe('when text is written from outside React batching', () => {
+		/**
+		 * Stands in for PassageEditContents, which holds the live text so the scene
+		 * preview can read it. The parent state update is not incidental — it is the
+		 * second setState that makes React flush the pending passive effect early.
+		 */
+		const LiveTextParent: React.FC<Partial<PassageTextProps>> = props => {
+			const [live, setLive] = React.useState<string>();
+
+			return (
+				<>
+					<div data-testid="live-text">{live}</div>
+					<TestPassageText {...props} onLiveChange={setLive} />
+				</>
+			);
+		};
+
+		function renderWithLiveText(props?: Partial<PassageTextProps>) {
+			return render(
+				<FakeStateProvider>
+					<LiveTextParent {...props} />
+				</FakeStateProvider>
+			);
+		}
+
+		function writeNatively(text: string) {
+			const node = screen.getByTestId('mock-code-area') as HTMLElement & {
+				mockWriteText: (value: string) => void;
+			};
+
+			// Deliberately NOT wrapped in act(): act() batches, and batching is exactly
+			// what hides this.
+			node.mockWriteText(text);
+		}
+
+		it('keeps the written text instead of reverting to the stored passage', () => {
+			renderWithLiveText({passage: fakePassage({text: 'original'})});
+
+			writeNatively('written-by-drag');
+
+			expect(screen.getByRole('textbox')).toHaveValue('written-by-drag');
+		});
+
+		it('still commits it upward once the debounce elapses', () => {
+			const onChange = jest.fn();
+
+			renderWithLiveText({onChange, passage: fakePassage({text: 'original'})});
+			writeNatively('written-by-drag');
+			jest.advanceTimersByTime(1000);
+
+			expect(onChange).toHaveBeenCalledWith('written-by-drag');
+		});
+
+		it('reports it live, undebounced', () => {
+			renderWithLiveText({passage: fakePassage({text: 'original'})});
+
+			writeNatively('written-by-drag');
+
+			expect(screen.getByTestId('live-text')).toHaveTextContent(
+				'written-by-drag'
+			);
+		});
+	});
+
 	it('is accessible', async () => {
 		jest.useRealTimers();
 

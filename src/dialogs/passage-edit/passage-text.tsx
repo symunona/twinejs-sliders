@@ -13,6 +13,12 @@ export interface PassageTextProps {
 	disabled?: boolean;
 	onChange: (value: string) => void;
 	onEditorChange: (value: CodeMirror.Editor) => void;
+	/**
+	 * Every keystroke, undebounced. `onChange` is a full second stale by design (see
+	 * below), which is fine for the story map and useless for the scene preview: a drag
+	 * has to read the document the author is looking at, not the one from a second ago.
+	 */
+	onLiveChange?: (value: string) => void;
 	passage: Passage;
 	story: Story;
 	storyFormat: StoryFormat;
@@ -24,6 +30,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		disabled,
 		onChange,
 		onEditorChange,
+		onLiveChange,
 		passage,
 		story,
 		storyFormat,
@@ -77,24 +84,34 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 
 	const handleLocalChangeText = React.useCallback(
 		(text: string) => {
-			// Set local state because the CodeMirror instance is controlled, and
-			// updates there should be immediate.
-
-			setLocalText(text);
-
-			// If there was a pending update, cancel it.
+			// ORDER MATTERS, and not for style. The pending-commit timeout is what the
+			// effect above uses to tell "the author is typing" from "the text changed
+			// underneath us"; with no timeout set it treats the new text as external and
+			// resets it. Typing goes through a React synthetic event, so those updates are
+			// batched and the timeout is always set by the time effects run — but a write
+			// from a native listener (the scene editor's pointerup) is NOT batched, so
+			// `setLocalText` re-renders and flushes effects synchronously, mid-function.
+			// Schedule first and the guard holds either way.
 
 			if (onChangeTimeout.current) {
 				window.clearTimeout(onChangeTimeout.current);
 			}
 
-			// Save the text value in case we need to reset the timeout in the next
-			// effect.
-
 			onChangeText.current = text;
 			scheduleCommit();
+
+			// Set local state because the CodeMirror instance is controlled, and
+			// updates there should be immediate.
+
+			setLocalText(text);
+
+			// Synchronous, alongside the debounced path and never instead of it: the
+			// preview needs the text now, the story map does not, and committing to the
+			// store on every keystroke is what the debounce exists to avoid.
+
+			onLiveChange?.(text);
 		},
-		[onEditorChange, scheduleCommit]
+		[onEditorChange, onLiveChange, scheduleCommit]
 	);
 
 	// If the onChange prop changes while an onChange call is pending, reset the
