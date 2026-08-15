@@ -13,7 +13,11 @@ before phase 3 so ids and keys land together.
 
 1. **Twine's users are writers.** Most of their time is spent inside a textarea/CodeMirror. Any
    bare letter that can fire while typing is a bug, not a shortcut. Bare letters are allowed
-   **only** in canvas-like scopes (`story-map`, `story-list`) where no text entry exists.
+   **only** in browse-first scopes — the routes' canvases (`story-map`, `story-list`), the
+   sliders browsers (`sliders-assets`, `sliders-characters`, `asset-editor`) and the scene
+   preview (`scene-preview`). What those have in common is that the work is picking things,
+   not writing; where they do hold a field, the dispatcher's text-entry rule (§2.3 of the
+   registry plan) already keeps a bare key from firing into it.
 2. **The story map is a canvas.** There, single letters are the right call — Figma, Blender and
    Photoshop all work this way, and Twine already ships bare `p`, `-`, `=`. Keep that precedent.
 3. **Bind what you do many times per session.** Create/edit/rename/delete/navigate/zoom/play.

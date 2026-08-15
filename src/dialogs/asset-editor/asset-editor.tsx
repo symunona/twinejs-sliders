@@ -17,6 +17,7 @@ import {CheckboxButton} from '../../components/control/checkbox-button';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
 import {TextInput} from '../../components/control/text-input';
+import {useCommand} from '../../hotkeys';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
@@ -104,6 +105,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [tuning, setTuning] = React.useState<CutoutTuning>(DEFAULT_TUNING);
 	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
+	const [replaceOpen, setReplaceOpen] = React.useState(false);
 	const [saving, setSaving] = React.useState(false);
 	/** Every asset's id and name, to spot a name clash before saving. */
 	const [library, setLibrary] = React.useState<{id: string; name: string}[]>([]);
@@ -516,11 +518,69 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		edits !== undefined &&
 		(edits.crop.w !== source.width || edits.crop.h !== source.height);
 
+	// Nothing to write yet if the image is untouched, which is the same test
+	// the two save buttons make.
+	const saveDisabled =
+		busy ||
+		!source ||
+		!edits ||
+		(!backgroundRemoved && isUnedited(edits, source.width, source.height));
+
+	useCommand({
+		enabled: !busy && !backgroundRemoved && !!background?.engine,
+		id: 'assetEditor.removeBackground',
+		label: t('hotkeys.commands.assetEditor.removeBackground'),
+		run: handleRemoveBackground,
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		enabled: backgroundRemoved && !progress,
+		id: 'assetEditor.restoreBackground',
+		label: t('hotkeys.commands.assetEditor.restoreBackground'),
+		run: () => {
+			setAlpha(undefined);
+			setSource(original);
+		},
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		enabled: cropped,
+		id: 'assetEditor.resetCrop',
+		label: t('hotkeys.commands.assetEditor.resetCrop'),
+		run: resetCrop,
+		scope: 'asset-editor'
+	});
+
+	// Both saves are chords, and allowed in inputs, because the name field is
+	// where focus normally is by the time either is wanted.
+
+	useCommand({
+		allowInInput: true,
+		enabled: !saveDisabled,
+		id: 'assetEditor.saveAsNew',
+		label: t('hotkeys.commands.assetEditor.saveAsNew'),
+		run: handleSave,
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		allowInInput: true,
+		enabled: !saveDisabled,
+		id: 'assetEditor.replace',
+		label: t('hotkeys.commands.assetEditor.replace'),
+		run: () => setReplaceOpen(true),
+		scope: 'asset-editor'
+	});
+
 	return (
 		<DialogCard
 			{...props}
 			className="asset-editor-dialog"
+			focusOnOpen
 			headerLabel={t('dialogs.assetEditor.title', {name: meta?.name ?? ''})}
+			hotkeyScope="asset-editor"
 			maximizable
 		>
 			{error && (
@@ -777,11 +837,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 							)}
 							<ButtonBar>
 								<IconButton
-									disabled={
-										busy ||
-										(!backgroundRemoved &&
-											isUnedited(edits, source.width, source.height))
-									}
+									disabled={saveDisabled}
 									icon={<IconDeviceFloppy />}
 									label={t('dialogs.assetEditor.saveAsNew')}
 									onClick={handleSave}
@@ -789,14 +845,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								/>
 								<ConfirmButton
 									confirmVariant="danger"
-									disabled={
-										busy ||
-										(!backgroundRemoved &&
-											isUnedited(edits, source.width, source.height))
-									}
+									disabled={saveDisabled}
 									icon={<IconArrowsExchange />}
 									label={t('dialogs.assetEditor.replace')}
+									onChangeOpen={setReplaceOpen}
 									onConfirm={handleReplace}
+									open={replaceOpen}
 									prompt={t('dialogs.assetEditor.replacePrompt', {
 										name: meta?.name ?? ''
 									})}

@@ -9,6 +9,7 @@ import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
 import {TextSelect} from '../../components/control/text-select';
+import {useCommand} from '../../hotkeys';
 import {FrameList} from './frame-list';
 import {SpritePreview} from './sprite-preview';
 
@@ -31,6 +32,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	const {assets, character, onChange, onCommit, onUploadFrames} = props;
 	const frameNames = Object.keys(character.frames);
 	const [newAnchor, setNewAnchor] = React.useState('');
+	const [newAnchorOpen, setNewAnchorOpen] = React.useState(false);
 	const [onion, setOnion] = React.useState('');
 	const [selectedFrame, setSelectedFrame] = React.useState<string | undefined>(
 		frameNames[0]
@@ -45,6 +47,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	}, [character.frames, frameNames, selectedFrame]);
 
 	const activeFrame = selectedFrame ? character.frames[selectedFrame] : undefined;
+
+	useCommand({
+		id: 'slidersCharacters.addAnchor',
+		label: t('hotkeys.commands.slidersCharacters.addAnchor'),
+		run: () => setNewAnchorOpen(true),
+		scope: 'sliders-characters'
+	});
 
 	function handleChangeAnchor(name: string, value: Frac2) {
 		onChange({...character, anchors: {...character.anchors, [name]: value}});
@@ -140,7 +149,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 							icon={<IconCrosshair />}
 							label={t('dialogs.slidersCharacters.addAnchor')}
 							onChange={event => setNewAnchor(event.target.value)}
+							onChangeOpen={setNewAnchorOpen}
 							onSubmit={handleAddAnchor}
+							open={newAnchorOpen}
 							prompt={t('dialogs.slidersCharacters.addAnchorPrompt')}
 							value={newAnchor}
 						/>

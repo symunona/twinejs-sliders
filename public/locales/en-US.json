@@ -696,6 +696,35 @@
 				"previous": "Previous Result",
 				"next": "Next Result",
 				"close": "Close Search"
+			},
+			"sliders": {
+				"assets": "Asset Manager",
+				"characters": "Character Editor"
+			},
+			"scene": {
+				"togglePreview": "Show or Hide Scene Preview",
+				"previousBeat": "Previous Beat",
+				"nextBeat": "Next Beat",
+				"play": "Play or Pause Scene",
+				"fullScreen": "Full Screen Scene"
+			},
+			"slidersAssets": {
+				"upload": "Add Files",
+				"newCharacter": "New Character",
+				"search": "Search Assets"
+			},
+			"assetEditor": {
+				"removeBackground": "Remove Background",
+				"restoreBackground": "Restore Background",
+				"resetCrop": "Reset Crop",
+				"saveAsNew": "Save As New Asset",
+				"replace": "Overwrite Original"
+			},
+			"slidersCharacters": {
+				"create": "New Character",
+				"delete": "Delete Character",
+				"addFrames": "Add Frames",
+				"addAnchor": "Add Anchor"
 			}
 		},
 		"scopes": {
@@ -707,7 +736,11 @@
 			"dialog": "Dialogs",
 			"passage-editor": "Passage Text",
 			"fuzzy-finder": "Search Box",
-			"keybindings": "Keyboard Shortcuts"
+			"keybindings": "Keyboard Shortcuts",
+			"scene-preview": "Scene Preview",
+			"sliders-assets": "Asset Manager",
+			"asset-editor": "Image Editor",
+			"sliders-characters": "Character Editor"
 		}
 	}
 }

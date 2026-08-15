@@ -55,7 +55,31 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'build.publishToFile', scope: 'story-map'},
 	{id: 'build.exportAsTwee', scope: 'story-map'},
 
+	{id: 'sliders.assets', scope: 'story-map'},
+	{id: 'sliders.characters', scope: 'story-map'},
+
 	{id: 'passage.rename', scope: 'dialog'},
+
+	{id: 'scene.togglePreview', scope: 'scene-preview'},
+	{id: 'scene.previousBeat', scope: 'scene-preview'},
+	{id: 'scene.nextBeat', scope: 'scene-preview'},
+	{id: 'scene.play', scope: 'scene-preview'},
+	{id: 'scene.fullScreen', scope: 'scene-preview'},
+
+	{id: 'slidersAssets.upload', scope: 'sliders-assets'},
+	{id: 'slidersAssets.newCharacter', scope: 'sliders-assets'},
+	{id: 'slidersAssets.search', scope: 'sliders-assets'},
+
+	{id: 'assetEditor.removeBackground', scope: 'asset-editor'},
+	{id: 'assetEditor.restoreBackground', scope: 'asset-editor'},
+	{id: 'assetEditor.resetCrop', scope: 'asset-editor'},
+	{id: 'assetEditor.saveAsNew', scope: 'asset-editor'},
+	{id: 'assetEditor.replace', scope: 'asset-editor'},
+
+	{id: 'slidersCharacters.create', scope: 'sliders-characters'},
+	{id: 'slidersCharacters.delete', scope: 'sliders-characters'},
+	{id: 'slidersCharacters.addFrames', scope: 'sliders-characters'},
+	{id: 'slidersCharacters.addAnchor', scope: 'sliders-characters'},
 
 	{id: 'finder.select', scope: 'fuzzy-finder'},
 	{id: 'finder.previous', scope: 'fuzzy-finder'},

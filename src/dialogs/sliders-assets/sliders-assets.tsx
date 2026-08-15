@@ -9,6 +9,7 @@ import {DialogCard} from '../../components/container/dialog-card';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
 import {TextSelect} from '../../components/control/text-select';
+import {useCommand} from '../../hotkeys';
 import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
@@ -34,9 +35,11 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const {dispatch} = useDialogsContext();
 	const library = useAssetLibrary();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
+	const [newCharacterOpen, setNewCharacterOpen] = React.useState(false);
 	const [search, setSearch] = React.useState('');
 	const [tabIndex, setTabIndex] = React.useState(0);
 	const [tagFilter, setTagFilter] = React.useState('');
+	const searchField = React.useRef<HTMLInputElement>(null);
 	const {t} = useTranslation();
 
 	const {kind} = TABS[tabIndex];
@@ -87,6 +90,26 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		openCharacterEditor(id);
 	}
 
+	// New Character only exists on the characters tab, so its shortcut only
+	// works there. Search is a chord so that it can steal focus back from the
+	// field it just filled.
+
+	useCommand({
+		enabled: !kind,
+		id: 'slidersAssets.newCharacter',
+		label: t('hotkeys.commands.slidersAssets.newCharacter'),
+		run: () => setNewCharacterOpen(true),
+		scope: 'sliders-assets'
+	});
+
+	useCommand({
+		allowInInput: true,
+		id: 'slidersAssets.search',
+		label: t('hotkeys.commands.slidersAssets.search'),
+		run: () => searchField.current?.select(),
+		scope: 'sliders-assets'
+	});
+
 	async function handleDeleteAsset(id: string) {
 		await library.store.remove(id);
 		library.refresh();
@@ -113,11 +136,15 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		<DialogCard
 			{...props}
 			className="sliders-assets-dialog"
+			focusOnOpen
 			headerLabel={t('dialogs.slidersAssets.title')}
+			hotkeyScope="sliders-assets"
 			maximizable
 		>
 			<ButtonBar>
 				<UploadButton
+					commandId="slidersAssets.upload"
+					commandScope="sliders-assets"
 					label={t('dialogs.slidersAssets.upload')}
 					onUpload={handleUpload}
 				/>
@@ -126,7 +153,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						icon={<IconUserPlus />}
 						label={t('dialogs.slidersAssets.newCharacter')}
 						onChange={event => setNewCharacterName(event.target.value)}
+						onChangeOpen={setNewCharacterOpen}
 						onSubmit={handleCreateCharacter}
+						open={newCharacterOpen}
 						prompt={t('dialogs.slidersAssets.newCharacterPrompt')}
 						value={newCharacterName}
 						variant="create"
@@ -134,6 +163,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 				)}
 				<TextInput
 					onChange={event => setSearch(event.target.value)}
+					ref={searchField}
 					type="search"
 					value={search}
 				>

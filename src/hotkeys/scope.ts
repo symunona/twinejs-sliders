@@ -27,6 +27,10 @@ export const scopes = [
 	'passage-card',
 	'dialog',
 	'passage-editor',
+	'scene-preview',
+	'sliders-assets',
+	'asset-editor',
+	'sliders-characters',
 	'fuzzy-finder',
 	KEYBINDINGS_SCOPE
 ] as const;

@@ -9,6 +9,7 @@ import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {PromptButton} from '../../components/control/prompt-button';
+import {useCommand} from '../../hotkeys';
 import {DialogComponentProps} from '../dialogs.types';
 import {useAssetLibrary} from '../sliders-assets/asset-store-context';
 import {CharacterEditor} from './character-editor';
@@ -42,6 +43,8 @@ export interface SlidersCharactersDialogProps extends DialogComponentProps {
 export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = props => {
 	const {characterId, ...other} = props;
 	const library = useAssetLibrary();
+	const [createOpen, setCreateOpen] = React.useState(false);
+	const [deleteOpen, setDeleteOpen] = React.useState(false);
 	const [draft, setDraft] = React.useState<Character>();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
 	const [newId, setNewId] = React.useState('');
@@ -197,11 +200,28 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		characters.findIndex(character => character.id === activeId)
 	);
 
+	useCommand({
+		id: 'slidersCharacters.create',
+		label: t('hotkeys.commands.slidersCharacters.create'),
+		run: () => setCreateOpen(true),
+		scope: 'sliders-characters'
+	});
+
+	useCommand({
+		enabled: !!draft,
+		id: 'slidersCharacters.delete',
+		label: t('hotkeys.commands.slidersCharacters.delete'),
+		run: () => setDeleteOpen(true),
+		scope: 'sliders-characters'
+	});
+
 	return (
 		<DialogCard
 			{...other}
 			className="sliders-characters-dialog"
+			focusOnOpen
 			headerLabel={t('dialogs.slidersCharacters.title')}
+			hotkeyScope="sliders-characters"
 			maximizable
 		>
 			<ButtonBar>
@@ -209,7 +229,9 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 					icon={<IconUserPlus />}
 					label={t('dialogs.slidersCharacters.newCharacter')}
 					onChange={event => setNewCharacterName(event.target.value)}
+					onChangeOpen={setCreateOpen}
 					onSubmit={handleCreate}
+					open={createOpen}
 					prompt={t('dialogs.slidersCharacters.newCharacterPrompt')}
 					value={newCharacterName}
 					variant="create"
@@ -228,7 +250,9 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 							confirmVariant="danger"
 							icon={<IconTrash />}
 							label={t('common.delete')}
+							onChangeOpen={setDeleteOpen}
 							onConfirm={handleDelete}
+							open={deleteOpen}
 							prompt={t('dialogs.slidersCharacters.deletePrompt', {
 								name: draft.name
 							})}

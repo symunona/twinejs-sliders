@@ -40,6 +40,8 @@ export const FrameList: React.FC<FrameListProps> = props => {
 		<div className="frame-list">
 			<h3>{t('dialogs.slidersCharacters.frames')}</h3>
 			<UploadButton
+				commandId="slidersCharacters.addFrames"
+				commandScope="sliders-characters"
 				label={t('dialogs.slidersCharacters.addFrames')}
 				onUpload={onAddFiles}
 			/>

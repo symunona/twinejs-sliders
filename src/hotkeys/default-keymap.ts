@@ -58,6 +58,37 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'view.zoomReset': {bindings: ['0']},
 	'build.play': {bindings: ['mod+enter']},
 	'build.test': {bindings: ['mod+shift+enter']},
+	'sliders.assets': {bindings: ['a']},
+	'sliders.characters': {bindings: ['c']},
+
+	// Scene preview. Viewer keys, so they only fire once focus is inside the
+	// preview--pressing left in the passage text still moves the cursor.
+
+	'scene.togglePreview': {bindings: ['p']},
+	'scene.previousBeat': {bindings: ['left']},
+	'scene.nextBeat': {bindings: ['right']},
+	'scene.play': {bindings: ['k']},
+	'scene.fullScreen': {bindings: ['f']},
+
+	// Asset manager.
+
+	'slidersAssets.upload': {bindings: ['u']},
+	'slidersAssets.newCharacter': {bindings: ['n']},
+	'slidersAssets.search': {bindings: ['mod+f']},
+
+	// Image editor. Saving is a chord because the name field has focus most of
+	// the time it's wanted.
+
+	'assetEditor.removeBackground': {bindings: ['b']},
+	'assetEditor.saveAsNew': {bindings: ['mod+s']},
+	'assetEditor.replace': {bindings: ['mod+shift+s']},
+
+	// Character editor.
+
+	'slidersCharacters.create': {bindings: ['n']},
+	'slidersCharacters.delete': {bindings: ['backspace', 'delete']},
+	'slidersCharacters.addFrames': {bindings: ['u']},
+	'slidersCharacters.addAnchor': {bindings: ['a']},
 
 	// Registered but unbound by default: once-a-session actions, and ones that
 	// write files. They still appear in the shortcuts dialog, where a user can
@@ -73,6 +104,8 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'story.javascript': {bindings: []},
 	'story.passageTags': {bindings: []},
 	'story.stylesheet': {bindings: []},
+	'assetEditor.resetCrop': {bindings: []},
+	'assetEditor.restoreBackground': {bindings: []},
 
 	// Fuzzy finder. These are the keys the finder has always used; they're here
 	// so that they show up in the shortcuts dialog like everything else.

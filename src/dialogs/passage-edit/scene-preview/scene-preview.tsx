@@ -13,6 +13,7 @@ import * as React from 'react';
 import {createPortal} from 'react-dom';
 import {useTranslation} from 'react-i18next';
 import {IconButton} from '../../../components/control/icon-button';
+import {useCommand} from '../../../hotkeys';
 import {IndexedPassage} from '@sliders/scene-index';
 import {AssetResolver} from '@sliders/scene-types';
 import {SceneStage} from './scene-stage';
@@ -66,6 +67,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		}
 	}
 
+	function goToPreviousBeat() {
+		setPlaying(false);
+		setBeat(b => Math.max(0, b - 1));
+	}
+
+	function goToNextBeat() {
+		setPlaying(false);
+		setBeat(b => Math.min(lastBeat, b + 1));
+	}
+
+	function togglePlaying() {
+		if (!playing && beat >= lastBeat) {
+			setBeat(0);
+		}
+
+		setPlaying(p => !p);
+	}
+
 	/** Clicking the stage itself goes full screen, unless a link was clicked. */
 	function handleStageClick(event: React.MouseEvent) {
 		if ((event.target as HTMLElement).closest('a')) {
@@ -116,6 +135,51 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		return () => window.removeEventListener('keydown', onKey);
 	}, [fullScreen]);
 
+	// Viewer keys, unmodified, in the preview's own scope: they only fire once
+	// focus is inside the preview, so left and right still move the cursor
+	// while the author is writing the scene above.
+
+	useCommand({
+		id: 'scene.togglePreview',
+		label: t('hotkeys.commands.scene.togglePreview'),
+		run: handleToggle,
+		scope: 'scene-preview'
+	});
+
+	useCommand({
+		allowRepeat: true,
+		enabled: open && beat > 0,
+		id: 'scene.previousBeat',
+		label: t('hotkeys.commands.scene.previousBeat'),
+		run: goToPreviousBeat,
+		scope: 'scene-preview'
+	});
+
+	useCommand({
+		allowRepeat: true,
+		enabled: open && beat < lastBeat,
+		id: 'scene.nextBeat',
+		label: t('hotkeys.commands.scene.nextBeat'),
+		run: goToNextBeat,
+		scope: 'scene-preview'
+	});
+
+	useCommand({
+		enabled: open,
+		id: 'scene.play',
+		label: t('hotkeys.commands.scene.play'),
+		run: togglePlaying,
+		scope: 'scene-preview'
+	});
+
+	useCommand({
+		enabled: open,
+		id: 'scene.fullScreen',
+		label: t('hotkeys.commands.scene.fullScreen'),
+		run: () => setFullScreen(f => !f),
+		scope: 'scene-preview'
+	});
+
 	if (!parse.hasScene) {
 		return null;
 	}
@@ -129,6 +193,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				open,
 				'full-screen': fullScreen
 			})}
+			data-hotkey-scope="scene-preview"
 			data-testid="scene-preview"
 		>
 			<div className="scene-preview-bar">
@@ -170,10 +235,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							icon={<IconChevronLeft />}
 							iconOnly
 							label={t('dialogs.passageEdit.scenePreview.previousBeat')}
-							onClick={() => {
-								setPlaying(false);
-								setBeat(b => Math.max(0, b - 1));
-							}}
+							onClick={goToPreviousBeat}
 						/>
 						<span className="scene-preview-beat" data-testid="scene-preview-beat">
 							{beat} / {lastBeat}
@@ -183,22 +245,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							icon={<IconChevronRight />}
 							iconOnly
 							label={t('dialogs.passageEdit.scenePreview.nextBeat')}
-							onClick={() => {
-								setPlaying(false);
-								setBeat(b => Math.min(lastBeat, b + 1));
-							}}
+							onClick={goToNextBeat}
 						/>
 						<IconButton
 							icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
 							iconOnly
 							label={t('dialogs.passageEdit.scenePreview.play')}
-							onClick={() => {
-								if (!playing && beat >= lastBeat) {
-									setBeat(0);
-								}
-
-								setPlaying(p => !p);
-							}}
+							onClick={togglePlaying}
 						/>
 						<IconButton
 							icon={fullScreen ? <IconMinimize /> : <IconMaximize />}

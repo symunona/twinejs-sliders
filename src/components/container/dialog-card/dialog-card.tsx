@@ -21,6 +21,19 @@ export interface DialogCardProps {
 	headerLabel: string;
 	headerDisplayLabel?: React.ReactNode;
 	highlighted?: boolean;
+	/**
+	 * Hotkey scope commands inside this dialog register in. Dialogs with
+	 * shortcuts of their own--the asset manager, say--pass their own so that
+	 * their keys can't fire while a different dialog has focus.
+	 */
+	hotkeyScope?: string;
+	/**
+	 * Move focus into the card when it opens. Dialogs with their own hotkey
+	 * scope need this: scopes are resolved from where focus is, so a dialog
+	 * opened by a shortcut would otherwise leave focus on the button that
+	 * opened it and none of its keys would work.
+	 */
+	focusOnOpen?: boolean;
 	maximizable?: boolean;
 	maximized?: boolean;
 	onChangeCollapsed: (value: boolean) => void;
@@ -35,9 +48,11 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 		className,
 		collapsed,
 		fixedSize,
+		focusOnOpen,
 		headerDisplayLabel,
 		headerLabel,
 		highlighted,
+		hotkeyScope = 'dialog',
 		maximizable,
 		maximized,
 		onChangeCollapsed,
@@ -46,7 +61,16 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 		onClose
 	} = props;
 	const {didCatch, ErrorBoundary, error} = useErrorBoundary();
+	const container = React.useRef<HTMLDivElement>(null);
 	const {t} = useTranslation();
+
+	React.useEffect(() => {
+		if (focusOnOpen) {
+			container.current?.focus();
+		}
+		// Deliberately only when the card first appears: re-focusing on every
+		// render would yank focus out of whatever the user is using inside it.
+	}, []);
 
 	React.useEffect(() => {
 		if (error) {
@@ -80,8 +104,10 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 			aria-label={headerLabel}
 			role="dialog"
 			className={calcdClassName}
-			data-hotkey-scope="dialog"
+			data-hotkey-scope={hotkeyScope}
 			onKeyDown={handleKeyDown}
+			ref={container}
+			tabIndex={focusOnOpen ? -1 : undefined}
 		>
 			<Card floating>
 				<h2>

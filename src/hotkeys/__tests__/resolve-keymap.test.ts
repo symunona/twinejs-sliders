@@ -87,13 +87,26 @@ describe('the default keymap', () => {
 		expect(clashes).toEqual([]);
 	});
 
-	it('never binds a bare letter outside a scope with no text entry', () => {
-		const canvasScopes = ['story-list', 'story-map'];
+	it('never binds a bare letter outside a browse-first scope', () => {
+		// Scopes where the work is picking things, not typing: the routes'
+		// canvases, the sliders browsers, and the scene preview. Everything
+		// else has to use a chord. The dispatcher never fires a bare-key
+		// command while a field has focus, so the fields these scopes do
+		// contain stay usable either way.
+
+		const browseScopes = [
+			'story-list',
+			'story-map',
+			'scene-preview',
+			'sliders-assets',
+			'sliders-characters',
+			'asset-editor'
+		];
 		const problems: string[] = [];
 
 		for (const {id, scope} of commandCatalog) {
 			for (const binding of defaultKeymap[id]?.bindings ?? []) {
-				if (/^[a-z0-9]$/.test(binding) && !canvasScopes.includes(scope)) {
+				if (/^[a-z0-9]$/.test(binding) && !browseScopes.includes(scope)) {
 					problems.push(`${id} binds bare "${binding}" in scope ${scope}`);
 				}
 			}
