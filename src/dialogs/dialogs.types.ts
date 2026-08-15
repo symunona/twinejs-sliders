@@ -37,7 +37,9 @@ export type DialogsAction =
 	| {
 			type: 'addDialog';
 			component: React.ComponentType<any>;
-			/** Opens the dialog maximized, for ones that need the whole window. */
+			/**
+			 * Should the dialog open maximized? Defaults to false.
+			 */
 			maximized?: boolean;
 			props?: Record<string, any>;
 	  }
