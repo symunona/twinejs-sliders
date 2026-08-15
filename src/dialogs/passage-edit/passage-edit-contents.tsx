@@ -11,6 +11,7 @@ import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
 import {ScenePreview} from './scene-preview/scene-preview';
+import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePreviewResolver} from './scene-preview/use-preview-resolver';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
@@ -43,6 +44,10 @@ export const PassageEditContents: React.FC<
 		story.storyFormatVersion
 	);
 	const {t} = useTranslation();
+
+	// Keeps the story format's "Insert Last Scene" toolbar item pointed at
+	// whatever scene this author last worked on.
+	useLastSceneTracker(passageId, passage.name, passage.text);
 
 	React.useEffect(() => {
 		if (error) {

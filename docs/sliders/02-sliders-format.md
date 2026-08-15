@@ -183,6 +183,11 @@ beats:
   - mira: "Then draw."
 ```
 
+The editor writes this for you: **Scene ▸ Overlay on '…'** inserts a patch pointing at the
+last scene you named, pre-filled with the cast it inherits. **Scene ▸ Insert Last Scene**
+inserts a copy of it instead, minus the `id:` — ids are global, so a verbatim copy would
+collide.
+
 ### ⚠️ `from:` flips the merge semantics — the one rule to memorise
 
 | | no `from:` (snapshot) | with `from:` (patch) |

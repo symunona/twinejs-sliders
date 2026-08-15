@@ -14,6 +14,7 @@ Questions I'd have asked. Went with the recommended option; here's the log.
 | 8 | Save granularity (open Q from spec) | Passage-level, per your "simplest" | Reload replays the passage's beats from the top |
 | 9 | Default story format for new stories | **Sliders 0.1.0** (was Harlowe) | This fork exists for Sliders; makes it testable with no setup. Pinned Harlowe explicitly in the pre-existing smoke test, which had silently depended on the default |
 | 10 | What `y` means when the author writes only `at: -0.4` | New shared `LAYER_BASELINE = -0.85` | See below — this was a real cross-agent mismatch, not a preference |
+| 11 | How does the format's toolbar know the last scene the author edited? | `localStorage['sliders-last-scene']`, written by the editor, read by the toolbar | A format extension is handed a CodeMirror instance and nothing else — no story, no passages, no stores. The two sides run in the same page, so a documented key is the whole bridge. Writer: `src/dialogs/passage-edit/scene-preview/use-last-scene.ts`; reader: `sliders-format/src/twine-extensions/last-scene.ts` |
 
 ## Three bugs integration caught
 
