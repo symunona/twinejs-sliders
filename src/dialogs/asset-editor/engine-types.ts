@@ -22,6 +22,11 @@ export interface EngineProgress {
 	stage: 'download' | 'start' | 'run' | 'refine';
 	/** 0 to 1. Only meaningful while downloading. */
 	progress?: number;
+	/**
+	 * Set on the second, closer look at the subject. The model runs twice on
+	 * most images, and two identical status lines in a row read like a hang.
+	 */
+	pass?: number;
 }
 
 export interface MaskOptions {
@@ -35,11 +40,32 @@ export type MaskFunction = (
 	options?: MaskOptions
 ) => Promise<BackgroundMask>;
 
+interface GpuAdapter {
+	features?: {has(name: string): boolean};
+	info?: {
+		architecture?: string;
+		description?: string;
+		device?: string;
+		vendor?: string;
+	};
+	limits?: Record<string, number>;
+}
+
 interface NavigatorGpu {
-	gpu?: {requestAdapter(): Promise<unknown>};
+	gpu?: {requestAdapter(options?: unknown): Promise<GpuAdapter | null>};
 }
 
 let webGpuProbe: Promise<boolean> | undefined;
+let adapterSummary: string | undefined;
+
+/**
+ * What the browser says it's about to run on, for error messages. Worth
+ * printing: "WebGPU is present" and "WebGPU works" are different claims, and
+ * when a cutout goes wrong this is the first thing anyone needs to know.
+ */
+export function webGpuDescription(): string | undefined {
+	return adapterSummary;
+}
 
 /**
  * WebGPU is a hard requirement for the models worth running. There's no CPU
@@ -61,7 +87,22 @@ export function hasWebGpu(): Promise<boolean> {
 			}
 
 			try {
-				return (await gpu.requestAdapter()) !== null;
+				const adapter = await gpu.requestAdapter({
+					powerPreference: 'high-performance'
+				});
+
+				if (!adapter) {
+					return false;
+				}
+
+				const {architecture, description, device, vendor} = adapter.info ?? {};
+
+				adapterSummary =
+					[vendor, architecture, device, description]
+						.filter(Boolean)
+						.join(' ')
+						.trim() || 'an unnamed adapter';
+				return true;
 			} catch (error) {
 				return false;
 			}

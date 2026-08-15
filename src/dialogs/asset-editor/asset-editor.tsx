@@ -1,4 +1,5 @@
 import {AssetId, AssetMeta} from '@sliders/scene-types';
+import classNames from 'classnames';
 import {
 	IconCrop,
 	IconDeviceFloppy,
@@ -23,10 +24,11 @@ import {AdjustSlider} from './adjust-slider';
 import {
 	BackgroundSupport,
 	backgroundSupport,
+	BackgroundTimeoutError,
 	BackgroundUnsupportedError,
 	removeBackground
 } from './background-engine';
-import {EngineProgress} from './engine-types';
+import {EngineProgress, webGpuDescription} from './engine-types';
 import {
 	canvasBlob,
 	CropRect,
@@ -52,6 +54,27 @@ function megabytes(bytes: number): string {
 	return `${Math.round(bytes / 1024 / 102.4) / 10} MB`;
 }
 
+/** Which of the four steps a stage is, so the wait has a shape. */
+const STAGE_STEPS: Record<EngineProgress['stage'], number> = {
+	download: 1,
+	refine: 4,
+	run: 3,
+	start: 2
+};
+
+const STAGE_COUNT = 4;
+
+/** Past this, a wait needs explaining rather than just spinning. */
+const SLOW_SECONDS = 12;
+
+function elapsedLabel(seconds: number): string {
+	if (seconds < 60) {
+		return `${seconds}s`;
+	}
+
+	return `${Math.floor(seconds / 60)}m ${`${seconds % 60}`.padStart(2, '0')}s`;
+}
+
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId} = props;
 	const store = React.useMemo(() => slidersAssetStore(), []);
@@ -66,10 +89,33 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [name, setName] = React.useState('');
 	/** Kept so removing the background can be undone. */
 	const [original, setOriginal] = React.useState<HTMLCanvasElement>();
+	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
 	const [saving, setSaving] = React.useState(false);
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	const {t} = useTranslation();
+
+	// A cutout can take a while--first run compiles shaders, and the model runs
+	// twice. A ticking clock is the difference between "working" and "hung".
+
+	const running = progress !== undefined;
+
+	React.useEffect(() => {
+		if (!running) {
+			setElapsed(0);
+			return;
+		}
+
+		const startedAt = Date.now();
+		const timer = window.setInterval(
+			() => setElapsed(Math.round((Date.now() - startedAt) / 1000)),
+			500
+		);
+
+		return () => window.clearInterval(timer);
+		// Keyed off whether a run is happening at all, not off the stage:
+		// restarting the clock at every stage change would defeat the point.
+	}, [running]);
 
 	// Whether this machine can cut backgrounds out at all. Asking costs a GPU
 	// adapter request, so it happens once, here.
@@ -302,13 +348,40 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				})
 			);
 		} catch (removeError) {
-			if ((removeError as Error)?.name === 'AbortError') {
+			const failure = removeError as Error;
+
+			// Anything that isn't a deliberate cancel gets logged with the
+			// adapter, because "which GPU" is the first question every one of
+			// these raises.
+			if (failure?.name !== 'AbortError') {
+				console.error(
+					`Could not remove the background (WebGPU: ${
+						webGpuDescription() ?? 'unknown'
+					})`,
+					removeError
+				);
+			}
+
+			if (failure?.name === 'AbortError') {
 				// The author asked for this; nothing to report.
 			} else if (removeError instanceof BackgroundUnsupportedError) {
 				setError(t(removeError.reasonKey));
+			} else if (removeError instanceof BackgroundTimeoutError) {
+				setError(
+					t('dialogs.assetEditor.timeoutError', {
+						gpu: webGpuDescription() ?? t('dialogs.assetEditor.unknownGpu'),
+						seconds: removeError.seconds,
+						stage: t(`dialogs.assetEditor.stage.${removeError.stage}`, {
+							percent: 100
+						})
+					})
+				);
 			} else {
-				console.error('Could not remove the background', removeError);
-				setError(t('dialogs.assetEditor.backgroundError'));
+				setError(
+					t('dialogs.assetEditor.backgroundError', {
+						message: failure?.message ?? String(removeError)
+					})
+				);
 			}
 		} finally {
 			cancel.current = undefined;
@@ -501,11 +574,44 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								)}
 							</ButtonBar>
 							{progress ? (
-								<p className="asset-editor-detail" role="status">
-									{t(`dialogs.assetEditor.stage.${progress.stage}`, {
-										percent: Math.round((progress.progress ?? 0) * 100)
-									})}
-								</p>
+								<div className="asset-editor-progress" aria-busy>
+									<div
+										className={classNames('asset-editor-progress-track', {
+											indeterminate: progress.progress === undefined
+										})}
+									>
+										<div
+											className="asset-editor-progress-bar"
+											style={
+												progress.progress === undefined
+													? undefined
+													: {width: `${Math.round(progress.progress * 100)}%`}
+											}
+										/>
+									</div>
+									<p className="asset-editor-detail" role="status">
+										<span className="asset-editor-step">
+											{t('dialogs.assetEditor.step', {
+												step: STAGE_STEPS[progress.stage],
+												steps: STAGE_COUNT
+											})}
+										</span>{' '}
+										{t(
+											progress.pass === 2 && progress.stage === 'run'
+												? 'dialogs.assetEditor.stage.runCloser'
+												: `dialogs.assetEditor.stage.${progress.stage}`,
+											{percent: Math.round((progress.progress ?? 0) * 100)}
+										)}{' '}
+										<span className="asset-editor-elapsed">
+											{elapsedLabel(elapsed)}
+										</span>
+									</p>
+									{elapsed >= SLOW_SECONDS && (
+										<p className="asset-editor-detail">
+											{t('dialogs.assetEditor.slowNote')}
+										</p>
+									)}
+								</div>
 							) : (
 								<p className="asset-editor-detail">
 									{background?.engine

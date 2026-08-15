@@ -115,6 +115,60 @@
 	width: 100%;
 }
 
+.asset-editor-progress {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+}
+
+.asset-editor-progress-track {
+	background: var(--light-gray);
+	border-radius: var(--corner-round);
+	height: 6px;
+	overflow: hidden;
+}
+
+.asset-editor-progress-bar {
+	background: var(--blue);
+	height: 100%;
+	transition: width 200ms linear;
+	width: 100%;
+}
+
+/* Nothing to count, so show that work is happening rather than fake a share
+   of it. */
+
+.asset-editor-progress-track.indeterminate .asset-editor-progress-bar {
+	animation: asset-editor-progress-slide 1.4s ease-in-out infinite;
+	width: 40%;
+}
+
+@keyframes asset-editor-progress-slide {
+	from {
+		transform: translateX(-100%);
+	}
+
+	to {
+		transform: translateX(250%);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.asset-editor-progress-track.indeterminate .asset-editor-progress-bar {
+		animation: none;
+		width: 100%;
+	}
+}
+
+.asset-editor-step,
+.asset-editor-elapsed {
+	font-family: var(--font-monospaced, monospace);
+}
+
+.asset-editor-elapsed {
+	float: right;
+}
+
 .asset-editor-size {
 	display: flex;
 	gap: var(--control-inner-padding);
