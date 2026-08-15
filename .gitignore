@@ -13,3 +13,9 @@ docs/en/book/*
 # Nested package caches (the render-dom harness runs its own vite).
 **/node_modules/
 **/.vite/
+
+# Safety net for credential files. The real deploy token lives outside the repo
+# in ~/.config/cloudflare.env; this just stops a stray copy from
+# being committed. The tracked .env (build vars only) is unaffected -- git does
+# not apply ignore rules to files already in the index.
+*.env

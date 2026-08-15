@@ -128,6 +128,8 @@
 		"build:electron-main": "tsc --project tsconfig.electron.json",
 		"build:electron-bundle": "electron-builder --config electron-builder.config.js --linux --mac --windows --publish=never",
 		"clean": "rimraf dist electron-build",
+		"deploy-cloudflare": "bash scripts/deploy-cloudflare.sh",
+		"deploy-tunnel-dev": "bash scripts/tunnel-dev.sh",
 		"e2e": "playwright test",
 		"lint": "eslint src",
 		"start": "vite",
