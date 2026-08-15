@@ -11,6 +11,7 @@ function entity(id: string, partial: Partial<StageEntity> = {}): StageEntity {
 		layer: 'mid',
 		opacity: 1,
 		ref: id,
+		scale: 1,
 		...partial
 	};
 }
@@ -187,6 +188,33 @@ describe('diffStages', () => {
 					to: true
 				}
 			]);
+		});
+
+		it('reports a scale change', () => {
+			const transitions = diffStages(
+				stageWith(entity('mira', {scale: 1})),
+				stageWith(entity('mira', {scale: 1.15}))
+			);
+
+			expect(transitions).toEqual([
+				{
+					duration: DEFAULT_DURATIONS.scale,
+					entityId: 'mira',
+					from: 1,
+					kind: 'scale',
+					to: 1.15
+				}
+			]);
+		});
+
+		it('keeps scale out of move, so a resize can be timed on its own', () => {
+			const transitions = diffStages(
+				stageWith(entity('mira', {at: {x: -0.4, y: 0}, scale: 1})),
+				stageWith(entity('mira', {at: {x: 0.1, y: 0}, scale: 2}))
+			);
+
+			expect(kinds(transitions)).toEqual(['move', 'scale']);
+			expect(only(transitions, 'move')[0].to).not.toHaveProperty('scale');
 		});
 
 		it('reports move, frame and flip together for one entity', () => {

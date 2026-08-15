@@ -29,6 +29,7 @@ function entity(patch: Partial<StageEntity> & {id: string}): StageEntity {
 		flip: false,
 		layer: 'mid',
 		opacity: 1,
+		scale: 1,
 		...patch
 	};
 }
@@ -203,6 +204,28 @@ describe('measure', () => {
 		expect(renderer.measure('mira', 'origin')).toEqual({x: 600, y: 225});
 	});
 
+	it('follows a scaled entity — the feet stay put, the bubble rides up', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(stage([entity({id: 'mira', at: {x: 0, y: 0}})]), []);
+
+		const bubble = renderer.measure('mira', 'bubble')!;
+
+		await renderer.apply(
+			stage([entity({id: 'mira', at: {x: 0, y: 0}, scale: 2})]),
+			[]
+		);
+
+		// The origin is the feet, so it does not move however big the sprite gets.
+		expect(renderer.measure('mira', 'origin')).toEqual({x: 800, y: 450});
+
+		const scaled = renderer.measure('mira', 'bubble')!;
+
+		// Every anchor is a frame fraction, so it moves twice as far from the origin.
+		expect(scaled.x - 800).toBeCloseTo(2 * (bubble.x - 800), 6);
+		expect(scaled.y - 450).toBeCloseTo(2 * (bubble.y - 450), 6);
+	});
+
 	it('returns null after destroy instead of throwing', async () => {
 		const {renderer} = await mounted();
 
@@ -210,6 +233,123 @@ describe('measure', () => {
 		renderer.destroy();
 
 		expect(renderer.measure('mira', 'bubble')).toBeNull();
+	});
+});
+
+describe('rectOf', () => {
+	// mira stands on the scene point with a 0.5/1 origin, so at {0, 0} the rect hangs
+	// upward from the centre of a 1600x900 box.
+	const NATURAL = {
+		left: 800 - SPRITE_W / 2,
+		top: 450 - SPRITE_H,
+		width: SPRITE_W,
+		height: SPRITE_H
+	};
+
+	it('reports the sprite rect in MOUNT px under an identity camera', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(stage([entity({id: 'mira', at: {x: 0, y: 0}})]), []);
+
+		expect(renderer.rectOf('mira')).toEqual(NATURAL);
+	});
+
+	it('agrees with measure(): the origin anchor lands inside the rect', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(stage([entity({id: 'mira', at: {x: -0.4, y: -0.85}})]), []);
+
+		const rect = renderer.rectOf('mira')!;
+		const feet = renderer.measure('mira', 'origin')!;
+
+		expect(rect.left + 0.5 * rect.width).toBeCloseTo(feet.x, 6);
+		expect(rect.top + rect.height).toBeCloseTo(feet.y, 6);
+	});
+
+	it('includes the letterbox bars', async () => {
+		// 1600x1000 leaves 50px bars top and bottom.
+		const {renderer} = await mounted(1600, 1000);
+
+		await renderer.apply(stage([entity({id: 'mira', at: {x: 0, y: 0}})]), []);
+
+		// The box is still 1600x900, so the sprite keeps its size and only shifts down 50.
+		expect(renderer.rectOf('mira')!.top).toBeCloseTo(50 + 450 - SPRITE_H, 6);
+		expect(renderer.rectOf('mira')!.height).toBeCloseTo(SPRITE_H, 6);
+	});
+
+	it('moves with a pan and does not resize', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(
+			stage([entity({id: 'mira', at: {x: 0, y: 0}})], {
+				camera: {at: {x: 0.5, y: 0}, zoom: 1}
+			}),
+			[]
+		);
+
+		const rect = renderer.rectOf('mira')!;
+
+		expect(rect.left).toBeCloseTo(NATURAL.left - 0.5 * 800, 6);
+		expect(rect.width).toBeCloseTo(NATURAL.width, 6);
+		expect(rect.height).toBeCloseTo(NATURAL.height, 6);
+	});
+
+	it('scales width and height with the camera zoom, not just position', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(
+			stage([entity({id: 'mira', at: {x: 0, y: 0}})], {
+				camera: {at: {x: 0, y: 0}, zoom: 2}
+			}),
+			[]
+		);
+
+		const rect = renderer.rectOf('mira')!;
+
+		// Zoom is about the centre of the box, which is where the feet are.
+		expect(rect.width).toBeCloseTo(2 * SPRITE_W, 6);
+		expect(rect.height).toBeCloseTo(2 * SPRITE_H, 6);
+		expect(rect.left).toBeCloseTo(800 - SPRITE_W, 6);
+		expect(rect.top).toBeCloseTo(450 - 2 * SPRITE_H, 6);
+	});
+
+	it('grows about the feet for a scaled entity', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(
+			stage([entity({id: 'mira', at: {x: 0, y: 0}, scale: 1.5})]),
+			[]
+		);
+
+		const rect = renderer.rectOf('mira')!;
+
+		expect(rect.width).toBeCloseTo(1.5 * SPRITE_W, 6);
+		expect(rect.height).toBeCloseTo(1.5 * SPRITE_H, 6);
+		expect(rect.top + rect.height).toBeCloseTo(450, 6);
+		expect(rect.left + rect.width / 2).toBeCloseTo(800, 6);
+	});
+
+	it('does not move for a flip — the sprite mirrors inside the same box', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(stage([entity({id: 'mira', at: {x: -0.4, y: 0}})]), []);
+
+		const unflipped = renderer.rectOf('mira');
+
+		await renderer.apply(
+			stage([entity({id: 'mira', at: {x: -0.4, y: 0}, flip: true})]),
+			[]
+		);
+
+		expect(renderer.rectOf('mira')).toEqual(unflipped);
+	});
+
+	it('returns null for an unknown id', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(stage([entity({id: 'mira', at: {x: 0, y: 0}})]), []);
+
+		expect(renderer.rectOf('nobody')).toBeNull();
 	});
 });
 

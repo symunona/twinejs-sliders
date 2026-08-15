@@ -59,7 +59,9 @@ export const RENDER_DOM_CSS = `
 	position: absolute;
 	left: 0;
 	top: 0;
-	transition-property: transform, opacity;
+	/* Size is width/height, not transform, so scale: has to be listed or a resize snaps
+	   while the position glides. */
+	transition-property: transform, opacity, width, height;
 	transition-duration: 0s;
 	transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
 	will-change: transform, opacity;

@@ -141,6 +141,24 @@ describe('characterMetrics', () => {
 		expect(big.height).toBe(small.height);
 		expect(big.width).toBe(small.width);
 	});
+
+	it('multiplies both dimensions by the entity scale, keeping the aspect', () => {
+		const natural = characterMetrics(box, CHAR);
+		const scaled = characterMetrics(box, CHAR, 1.5);
+
+		expect(scaled.height).toBeCloseTo(natural.height * 1.5, 10);
+		expect(scaled.width).toBeCloseTo(natural.width * 1.5, 10);
+		expect(scaled.width / scaled.height).toBeCloseTo(natural.width / natural.height, 10);
+		expect(scaled.origin).toEqual(natural.origin);
+	});
+
+	it('falls back to natural size on a scale that would erase the sprite', () => {
+		const natural = characterMetrics(box, CHAR);
+
+		for (const bad of [0, -2, NaN, undefined]) {
+			expect(characterMetrics(box, CHAR, bad as number).height).toBe(natural.height);
+		}
+	});
 });
 
 describe('propMetrics', () => {
@@ -150,6 +168,22 @@ describe('propMetrics', () => {
 
 		expect(m.height).toBeCloseTo(540 * (900 / PROP_DESIGN_HEIGHT), 10);
 		expect(m.width).toBeCloseTo(m.height, 10);
+	});
+
+	it('multiplies both dimensions by the entity scale', () => {
+		const box = computeStageBox(1600, 900);
+		const m = propMetrics(box, {w: 540, h: 270}, DEFAULT_ORIGIN, 0.6);
+
+		expect(m.height).toBeCloseTo(270 * (900 / PROP_DESIGN_HEIGHT) * 0.6, 10);
+		expect(m.width).toBeCloseTo(540 * (900 / PROP_DESIGN_HEIGHT) * 0.6, 10);
+	});
+
+	it('falls back to natural size on a scale that would erase the sprite', () => {
+		const box = computeStageBox(1600, 900);
+
+		expect(propMetrics(box, {w: 540, h: 540}, DEFAULT_ORIGIN, 0)).toEqual(
+			propMetrics(box, {w: 540, h: 540})
+		);
 	});
 });
 
@@ -173,6 +207,16 @@ describe('spriteRect', () => {
 
 		expect(rect.top + rect.height).toBeCloseTo(900, 10);
 		expect(rect.left + m.origin.x * rect.width).toBeCloseTo(800 - 0.4 * 800, 10);
+	});
+
+	it('grows a scaled sprite about its origin — the feet stay on the floor', () => {
+		const natural = spriteRect(box, {x: 0, y: -1}, characterMetrics(box, CHAR));
+		const scaled = spriteRect(box, {x: 0, y: -1}, characterMetrics(box, CHAR, 2));
+
+		expect(scaled.top + scaled.height).toBeCloseTo(natural.top + natural.height, 10);
+		expect(scaled.height).toBeCloseTo(natural.height * 2, 10);
+		// Origin x is 0.5, so it widens evenly either side of the same point.
+		expect(scaled.left + scaled.width / 2).toBeCloseTo(natural.left + natural.width / 2, 10);
 	});
 
 	it('honours a non-default origin', () => {

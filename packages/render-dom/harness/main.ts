@@ -29,6 +29,7 @@ function cast(
 		flip: false,
 		layer: 'mid',
 		opacity: 1,
+		scale: 1,
 		...patch
 	};
 }
@@ -47,6 +48,7 @@ function prop(
 		flip: false,
 		layer: 'mid',
 		opacity: 1,
+		scale: 1,
 		...patch
 	};
 }

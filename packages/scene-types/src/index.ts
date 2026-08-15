@@ -59,6 +59,15 @@ export interface StageEntity {
 	/** Explicit z within a layer. When undefined, z derives from y. */
 	z?: number;
 	opacity: number;
+	/**
+	 * Uniform size multiplier, about the entity's own origin — so scaling a character does
+	 * not lift it off the floor. 1 is the natural size (a character's manifest `size`, a
+	 * prop's pixels).
+	 *
+	 * Required rather than optional, like `opacity` and unlike `z`: every renderer has to
+	 * multiply by something, and an optional key would put a `?? 1` in each of them.
+	 */
+	scale: number;
 }
 
 export interface StageFx {
@@ -96,12 +105,19 @@ export interface BeatBase {
 	index: number;
 }
 
+/**
+ * The stage keys an entity entry or a beat may set. Derived from StageEntity rather than
+ * listed by hand, so adding an entity key (`scale`, and whatever follows it) does not mean
+ * hunting down three separate Pick lists that then quietly disagree.
+ */
+export type EntityPatchBody = Partial<Omit<StageEntity, 'id' | 'kind' | 'ref'>>;
+
 export interface SayBeat extends BeatBase {
 	kind: 'say';
 	who: EntityId;
 	text: string;
 	/** Stage mutations applied when this beat runs. */
-	patch?: Partial<Pick<StageEntity, 'at' | 'frame' | 'flip' | 'layer' | 'z' | 'opacity'>>;
+	patch?: EntityPatchBody;
 }
 
 export interface BoxBeat extends BeatBase {
@@ -128,7 +144,7 @@ export interface MarkBeat extends BeatBase {
 export interface SetBeat extends BeatBase {
 	kind: 'set';
 	who: EntityId;
-	patch: Partial<Pick<StageEntity, 'at' | 'frame' | 'flip' | 'layer' | 'z' | 'opacity'>>;
+	patch: EntityPatchBody;
 }
 
 export type Beat = SayBeat | BoxBeat | WaitBeat | FxBeat | MarkBeat | SetBeat;
@@ -173,15 +189,9 @@ export interface Scene {
 	replaceProps?: boolean;
 }
 
-export interface EntityPatch {
+export interface EntityPatch extends EntityPatchBody {
 	kind: EntityKind;
 	ref: string;
-	at?: Vec2;
-	frame?: string;
-	flip?: boolean;
-	layer?: Layer;
-	z?: number;
-	opacity?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +239,16 @@ export interface ParseResult {
 // Transitions — what the differ derives.
 // ---------------------------------------------------------------------------
 
-export type TransitionKind = 'enter' | 'exit' | 'move' | 'frame' | 'flip' | 'bg' | 'camera' | 'fx';
+export type TransitionKind =
+	| 'enter'
+	| 'exit'
+	| 'move'
+	| 'scale'
+	| 'frame'
+	| 'flip'
+	| 'bg'
+	| 'camera'
+	| 'fx';
 
 export interface Transition {
 	kind: TransitionKind;

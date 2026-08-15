@@ -271,6 +271,40 @@ export class DomRenderer implements Renderer {
 		return {...this.box};
 	}
 
+	/**
+	 * An entity's on-screen rect in MOUNT px, camera applied. null when it is not on stage.
+	 *
+	 * The visual editor hit-tests by rectangle rather than by DOM event — `.sliders-entity` is
+	 * `pointer-events: none` and the overlay sits above the stage anyway. Built from the same
+	 * pure functions `measure()` uses, so a handle can never drift away from the sprite.
+	 *
+	 * A flip does NOT move this rect: `scaleX(-1)` mirrors the sprite about its own
+	 * transform-origin, which is the origin fraction, so the box it occupies is unchanged for
+	 * a centred origin and only its CONTENT mirrors for an off-centre one.
+	 */
+	rectOf(entityId: EntityId): Rect | null {
+		const rec = this.entities.get(entityId);
+
+		if (!rec) {
+			return null;
+		}
+
+		const topLeft = boxToMount(
+			this.box,
+			applyCamera(this.box, this.camera, {x: rec.rect.left, y: rec.rect.top})
+		);
+		// The camera zoom scales size as well as position — the layer stack is one
+		// `scale(zoom)` transform, so the sprite inside it grows with it.
+		const zoom = safeZoom(this.camera.zoom);
+
+		return {
+			left: topLeft.x,
+			top: topLeft.y,
+			width: rec.rect.width * zoom,
+			height: rec.rect.height * zoom
+		};
+	}
+
 	/** Fired after every apply() and every resize relayout. Returns an unsubscribe. */
 	subscribe(fn: () => void): () => void {
 		this.listeners.add(fn);
@@ -515,9 +549,14 @@ export class DomRenderer implements Renderer {
 
 		this.setContent(rec, res, durations.duration('frame', rec.id));
 
+		// One element carries position, mirror and size, and CSS gives it one
+		// transition-duration, so the longest of the three wins. A scale left out here would
+		// snap while the move glides, which is exactly what listing width/height in the CSS
+		// transition is there to prevent.
 		const duration = Math.max(
 			durations.duration('move', rec.id),
-			durations.duration('flip', rec.id)
+			durations.duration('flip', rec.id),
+			durations.duration('scale', rec.id)
 		);
 
 		this.layout(rec, duration);
@@ -612,13 +651,16 @@ export class DomRenderer implements Renderer {
 		if (res.entity.kind === 'cast') {
 			return characterMetrics(
 				this.box,
-				res.character ?? {size: PLACEHOLDER_FRAME, origin: DEFAULT_ORIGIN}
+				res.character ?? {size: PLACEHOLDER_FRAME, origin: DEFAULT_ORIGIN},
+				res.entity.scale
 			);
 		}
 
 		return propMetrics(
 			this.box,
-			res.meta && res.meta.w > 0 && res.meta.h > 0 ? res.meta : PLACEHOLDER_PROP
+			res.meta && res.meta.w > 0 && res.meta.h > 0 ? res.meta : PLACEHOLDER_PROP,
+			DEFAULT_ORIGIN,
+			res.entity.scale
 		);
 	}
 

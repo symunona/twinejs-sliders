@@ -19,10 +19,16 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
 	flip: 0.15,
 	frame: 0.15,
 	fx: 0.3,
-	move: 0.3
+	move: 0.3,
+	scale: 0.3
 };
 
-/** What a `move` transition carries: everything that places an entity in space. */
+/**
+ * What a `move` transition carries: everything that places an entity in space.
+ *
+ * `scale` is deliberately NOT in here. Size is its own transition kind, like `flip` and
+ * `frame`, so a renderer can time a resize separately from a walk across the stage.
+ */
 export interface Placement {
 	at: Vec2;
 	layer: StageEntity['layer'];
@@ -150,6 +156,16 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 				from: placementOf(before),
 				kind: 'move',
 				to: placementOf(after)
+			});
+		}
+
+		if (before.scale !== after.scale) {
+			out.push({
+				duration: DEFAULT_DURATIONS.scale,
+				entityId: id,
+				from: before.scale,
+				kind: 'scale',
+				to: after.scale
 			});
 		}
 

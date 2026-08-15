@@ -223,34 +223,49 @@ export function sortByZ<T extends {id: string; at: Vec2; z?: number}>(
 	});
 }
 
-/** Sprite metrics for a cast member with a resolved manifest. */
+/**
+ * The entity's own `scale`, made safe. Zero, negative or NaN would make the sprite vanish or
+ * turn inside out; the parser rejects those, but a stage can also be built by hand.
+ */
+export function safeScale(scale: number | undefined): number {
+	return Number.isFinite(scale) && (scale as number) > 0 ? (scale as number) : 1;
+}
+
+/**
+ * Sprite metrics for a cast member with a resolved manifest.
+ *
+ * `scale` is the entity's own multiplier on top of the manifest normalization — the size the
+ * author (or the visual editor's resize handles) asked for. It scales width and height alike;
+ * `origin` is a fraction, so the sprite grows about its feet with no further arithmetic.
+ */
 export function characterMetrics(
 	box: StageBox,
-	character: Pick<Character, 'size' | 'origin'>
+	character: Pick<Character, 'size' | 'origin'>,
+	scale = 1
 ): SpriteMetrics {
 	const h = character.size?.h > 0 ? character.size.h : PLACEHOLDER_FRAME.h;
 	const w = character.size?.w > 0 ? character.size.w : PLACEHOLDER_FRAME.w;
-	const height = box.height * CHARACTER_STAGE_HEIGHT;
-	const scale = height / h;
+	const height = box.height * CHARACTER_STAGE_HEIGHT * safeScale(scale);
 
 	return {
-		width: w * scale,
+		width: w * (height / h),
 		height,
 		origin: character.origin ?? DEFAULT_ORIGIN
 	};
 }
 
-/** Sprite metrics for a prop, from its asset's pixel size. */
+/** Sprite metrics for a prop, from its asset's pixel size and its own `scale`. */
 export function propMetrics(
 	box: StageBox,
 	size: {w: number; h: number},
-	origin: Frac2 = DEFAULT_ORIGIN
+	origin: Frac2 = DEFAULT_ORIGIN,
+	scale = 1
 ): SpriteMetrics {
-	const scale = box.height / PROP_DESIGN_HEIGHT;
+	const pxPerDesignPx = (box.height / PROP_DESIGN_HEIGHT) * safeScale(scale);
 
 	return {
-		width: Math.max(1, size.w) * scale,
-		height: Math.max(1, size.h) * scale,
+		width: Math.max(1, size.w) * pxPerDesignPx,
+		height: Math.max(1, size.h) * pxPerDesignPx,
 		origin
 	};
 }

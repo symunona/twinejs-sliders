@@ -91,6 +91,7 @@ links:
 | Key | Meaning |
 |---|---|
 | `at` | position. See Coordinates. |
+| `scale` | uniform size multiplier. 1 = natural size. Scales about the origin, so a character keeps its feet on the floor. Must be > 0. |
 | `frame` | which named frame of the character/prop (D5) |
 | `flip` | mirror horizontally |
 | `layer` | `back` / `mid` / `front`. Optional. |

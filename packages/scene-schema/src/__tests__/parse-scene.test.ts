@@ -163,6 +163,53 @@ describe('parseScene', () => {
 		});
 	});
 
+	describe('scale', () => {
+		it('reads a positive number on cast and props alike', () => {
+			const {errors, scene} = parseScene(
+				'cast:\n  mira: {at: -0.4, scale: 1.15}\nprops:\n  candle: {at: [0.1, -0.2], scale: 0.6, layer: front}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.entities.mira).toMatchObject({scale: 1.15});
+			expect(scene.entities.candle).toMatchObject({scale: 0.6, layer: 'front'});
+		});
+
+		it('reads a scale inside a beat patch', () => {
+			const {errors, scene} = parseScene(
+				'cast:\n  mira: {at: 0}\nbeats:\n  - mira: {scale: 2, say: "Bigger."}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect((scene.beats[0] as SayBeat).patch).toEqual({scale: 2});
+		});
+
+		it('rejects zero and negative — a vanished or inverted sprite reads as a bug', () => {
+			for (const bad of ['0', '-1']) {
+				const {errors, scene} = parseScene(`cast:\n  mira: {scale: ${bad}}\n`);
+
+				expect(codes(errors)).toEqual(['bad-value']);
+				expect(errors[0].severity).toBe('error');
+				expect(errors[0].line).toBe(2);
+				// Still an entity, just at its natural size.
+				expect(scene.entities.mira).not.toMatchObject({scale: Number(bad)});
+			}
+		});
+
+		it('rejects a non-numeric scale', () => {
+			const {errors} = parseScene('cast:\n  mira: {scale: huge}\n');
+
+			expect(find(errors, 'bad-value')?.severity).toBe('error');
+		});
+
+		it('warns above 10 but keeps the value', () => {
+			const {errors, scene} = parseScene('cast:\n  mira: {scale: 40}\n');
+
+			expect(codes(errors)).toEqual(['bad-value']);
+			expect(errors[0].severity).toBe('warning');
+			expect(scene.entities.mira).toMatchObject({scale: 40});
+		});
+	});
+
 	describe('layers', () => {
 		it('accepts back, mid and front', () => {
 			const {errors} = parseScene(

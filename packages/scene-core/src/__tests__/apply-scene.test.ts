@@ -47,6 +47,7 @@ describe('applyScene', () => {
 				layer: 'mid',
 				opacity: 1,
 				ref: 'mira',
+				scale: 1,
 				z: undefined
 			});
 		});

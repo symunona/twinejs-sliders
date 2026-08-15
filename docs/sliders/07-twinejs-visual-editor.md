@@ -41,6 +41,7 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 |---|---|
 | Drag an entity | `at:` |
 | Shift-drag | constrain to one axis |
+| Drag a corner handle | `scale:` — uniform, about the origin, so the feet stay on the floor. Alt scales about the centre. |
 | Drag from asset panel onto stage | new entry under `cast:` / `props:` |
 | Drop a background | `bg:` |
 | Delete key | remove the entry — or `~` if the scene has `from:` (see [02](02-sliders-format.md)) |

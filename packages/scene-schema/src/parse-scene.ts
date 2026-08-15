@@ -18,13 +18,13 @@ import {
 	type Camera,
 	type EntityKind,
 	type EntityPatch,
+	type EntityPatchBody,
 	type Layer,
 	type ParseResult,
 	type Scene,
 	type SceneError,
 	type SceneErrorCode,
 	type SceneLink,
-	type StageEntity,
 	type StageFx,
 	type Vec2
 } from '@sliders/scene-types';
@@ -46,6 +46,7 @@ export const TOP_LEVEL_KEYS = [
 /** Keys accepted inside a `cast:` / `props:` entry. */
 export const ENTITY_KEYS = [
 	'at',
+	'scale',
 	'frame',
 	'flip',
 	'layer',
@@ -64,9 +65,11 @@ export const LINK_KEYS = ['to', 'if', 'icon', 'transition'] as const;
 /** The single tag the subset permits: `cast: !only {…}`. */
 const ONLY_TAG = '!only';
 
-type EntityPatchBody = Partial<
-	Pick<StageEntity, 'at' | 'frame' | 'flip' | 'layer' | 'z' | 'opacity'>
->;
+/**
+ * Above this a sprite is many stage-heights tall, so the author almost certainly meant a
+ * fraction. A warning, not an error — a deliberately huge prop is a legitimate effect.
+ */
+const MAX_SCALE = 10;
 
 interface Ctx {
 	errors: SceneError[];
@@ -372,6 +375,42 @@ function parseEntityBody(ctx: Ctx, map: YAMLMap, allowSay: boolean): EntityBody 
 
 				if (at) {
 					body.patch.at = at;
+				}
+
+				break;
+			}
+
+			case 'scale': {
+				const scale = asNumber(ctx, pair.value, 'scale');
+
+				if (scale !== undefined) {
+					// Zero or negative is an error, not a warning: the sprite vanishes or turns
+					// inside out, which reads as a broken renderer rather than as bad input.
+					if (scale <= 0) {
+						addError(
+							ctx,
+							'bad-value',
+							`scale of ${scale} is not a size.`,
+							pair.value,
+							{hint: 'scale multiplies the natural size. 1 is normal, 0.5 is half.'}
+						);
+						break;
+					}
+
+					if (scale > MAX_SCALE) {
+						addError(
+							ctx,
+							'bad-value',
+							`scale of ${scale} is far past the stage (up to ${MAX_SCALE}).`,
+							pair.value,
+							{
+								hint: 'scale multiplies the natural size. 1 is normal, 0.5 is half.',
+								severity: 'warning'
+							}
+						);
+					}
+
+					body.patch.scale = scale;
 				}
 
 				break;

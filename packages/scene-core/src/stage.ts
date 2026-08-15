@@ -21,7 +21,8 @@ export const ENTITY_DEFAULTS = {
 	at: {x: 0, y: LAYER_BASELINE} as Vec2,
 	flip: false,
 	layer: 'mid' as Layer,
-	opacity: 1
+	opacity: 1,
+	scale: 1
 };
 
 export const CAMERA_DEFAULT: Camera = {at: {x: 0, y: 0}, zoom: 1};
@@ -96,6 +97,10 @@ export function mergePatch(
 		next.opacity = patch.opacity;
 	}
 
+	if (patch.scale !== undefined) {
+		next.scale = patch.scale;
+	}
+
 	return next;
 }
 
@@ -110,6 +115,7 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		layer: patch.layer ?? ENTITY_DEFAULTS.layer,
 		opacity: patch.opacity ?? ENTITY_DEFAULTS.opacity,
 		ref: patch.ref,
+		scale: patch.scale ?? ENTITY_DEFAULTS.scale,
 		z: patch.z
 	};
 }

@@ -17,6 +17,15 @@ export interface SceneBlock {
 	 * 1-indexed line to get the real passage line.
 	 */
 	lineOffset: number;
+	/**
+	 * 0-based CHARACTER index of the block's first character within the passage.
+	 *
+	 * `lineOffset` is enough to place an error marker, but not to write: a scene-edit
+	 * `TextEdit` is block-relative, and splicing it into the passage means adding this.
+	 * Recomputing it from `lineOffset` at the call site would re-split the passage and
+	 * silently disagree the moment line endings stop being plain `\n`.
+	 */
+	offset: number;
 }
 
 export function extractSceneBlock(passageText: string): SceneBlock | undefined {
@@ -47,5 +56,12 @@ export function extractSceneBlock(passageText: string): SceneBlock | undefined {
 		}
 	}
 
-	return {lineOffset: start, text: lines.slice(start, end).join('\n')};
+	// Every skipped line contributes its own length plus the '\n' that split() ate.
+	let offset = 0;
+
+	for (let i = 0; i < start; i++) {
+		offset += lines[i].length + 1;
+	}
+
+	return {lineOffset: start, offset, text: lines.slice(start, end).join('\n')};
 }

@@ -54,7 +54,7 @@ Full reasoning is in each package; the ones that could surprise you:
 
 ## Not built
 
-- **Visual editor (spec 07)** — drag-on-preview write-back. Everything it needs is in place (`yaml` round-trip, `measure()`, stable DOM hooks); it's the next piece.
+- **Visual editor (spec 07)** — drag-on-preview write-back. Everything it needs is in place (`yaml` round-trip, `measure()`, stable DOM hooks); it's the next piece. Build plan: [`docs/sliders/09-visual-editor-plan.md`](docs/sliders/09-visual-editor-plan.md).
 - **Electron asset backend** — interface + stub only. Web (OPFS/IndexedDB) is live.
 
 ## How to run it
@@ -71,8 +71,14 @@ npx jest                               # 2053 unit tests
 npx playwright test                    # 15 E2E, real browser
 
 # rebuild the story format after changing packages/scene-*
-cd ../sliders-format && npm run build:format && npm run verify
-cp dist/use/0.1.0/format.js ../twinejs-sliders/public/story-formats/sliders-0.1.0/format.js
+# SLIDERS_PACKAGES is required: the format's alias resolver looks for
+# ../twinejs-sliders/packages, which is not where this repo lives, and it THROWS
+# rather than falling back to stubs.
+cd /mnt/data_ssd/dev/sliders-format
+export SLIDERS_PACKAGES=/mnt/data_ssd/dev/twinery/twine-sliders-2/packages
+npm run build:format && npm run verify
+cp dist/use/0.1.0/format.js \
+   /mnt/data_ssd/dev/twinery/twine-sliders-2/public/story-formats/sliders-0.1.0/format.js
 ```
 
 The format bundles `packages/scene-*`, so **changing a scene package means rebuilding the
