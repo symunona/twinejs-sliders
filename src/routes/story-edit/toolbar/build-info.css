@@ -2,7 +2,9 @@
 @import '../../../styles/metrics.css';
 
 .build-info {
+	align-items: center;
 	color: var(--gray);
+	display: flex;
 	font-size: 80%;
 	padding: 0 var(--grid-size);
 	white-space: nowrap;
