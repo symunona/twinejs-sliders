@@ -9,6 +9,12 @@ import {useAssetLibrary} from '../sliders-assets/asset-store-context';
 export interface AssetPickerProps {
 	disabled?: boolean;
 	onChange: (ids: AssetId[]) => void;
+	/** Double-clicking an asset opens the asset editor on it. */
+	onEdit?: (id: AssetId) => void;
+	/** Clicking an asset also shows it in the preview pane. */
+	onPreview?: (id: AssetId) => void;
+	/** Which asset the preview pane is showing, if it is showing one of these. */
+	previewId?: AssetId;
 	value: AssetId[];
 }
 
@@ -17,7 +23,7 @@ export interface AssetPickerProps {
  * because "the same character, now sitting down" is the main reason to attach anything.
  */
 export const AssetPicker: React.FC<AssetPickerProps> = props => {
-	const {disabled, onChange, value} = props;
+	const {disabled, onChange, onEdit, onPreview, previewId, value} = props;
 	const library = useAssetLibrary();
 	const [search, setSearch] = React.useState('');
 	const {t} = useTranslation();
@@ -31,6 +37,7 @@ export const AssetPicker: React.FC<AssetPickerProps> = props => {
 		onChange(
 			value.includes(id) ? value.filter(other => other !== id) : [...value, id]
 		);
+		onPreview?.(id);
 	}
 
 	return (
@@ -49,12 +56,16 @@ export const AssetPicker: React.FC<AssetPickerProps> = props => {
 					<button
 						aria-pressed={value.includes(asset.id)}
 						className={classNames('asset-picker-item', {
+							previewed: previewId === asset.id,
 							selected: value.includes(asset.id)
 						})}
 						disabled={disabled}
 						key={asset.id}
 						onClick={() => toggle(asset.id)}
-						title={asset.name}
+						// A double click toggles the attachment twice, ending where it
+						// started, so opening the editor is all it does.
+						onDoubleClick={() => onEdit?.(asset.id)}
+						title={t('dialogs.assetGenerator.assetTitle', {name: asset.name})}
 						type="button"
 					>
 						<AssetPreview alt={asset.name} assetId={asset.id} />

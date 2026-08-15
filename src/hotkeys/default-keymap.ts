@@ -85,6 +85,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// Asset generator. A chord, because focus lives in the prompt box.
 
 	'assetGenerator.generate': {bindings: ['mod+enter']},
+	'assetGenerator.stop': {bindings: ['mod+.']},
 
 	// Image editor. Saving is a chord because the name field has focus most of
 	// the time it's wanted.

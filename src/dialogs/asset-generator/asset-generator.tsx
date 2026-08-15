@@ -13,7 +13,9 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
-	slidersAssetStore
+	slidersAssetStore,
+	useAssetLibrary,
+	useAssetUrl
 } from '../sliders-assets/asset-store-context';
 import {AssetPicker} from './asset-picker';
 import {generateImage, GenerateError} from './generate';
@@ -25,6 +27,7 @@ import {
 	updateGeneration
 } from './generation-store';
 import {GenerationTile} from './generation-tile';
+import {GeneratorPreview, GeneratorSelection} from './generator-preview';
 import {ModelSelect} from './model-select';
 import {aspectRatios, modelFromKey, provider, ProviderId} from './models';
 import {SaveTarget, saveGeneration} from './save-generation';
@@ -47,7 +50,38 @@ export const AssetGeneratorDialog: React.FC<
 	const [notice, setNotice] = React.useState<string>();
 	const [prompt, setPrompt] = React.useState('');
 	const [saving, setSaving] = React.useState<string>();
+	const [selection, setSelection] = React.useState<GeneratorSelection>();
+	const library = useAssetLibrary();
 	const {t} = useTranslation();
+
+	// Assets live in the store rather than in memory, so the preview has to resolve
+	// its own URL; generations already hold one per blob.
+	const assetUrl = useAssetUrl(
+		selection?.kind === 'asset' ? selection.id : undefined
+	);
+	const previewed =
+		selection?.kind === 'generation'
+			? history.generations.find(entry => entry.id === selection.id)
+			: undefined;
+	const previewedAsset =
+		selection?.kind === 'asset'
+			? library.all.find(asset => asset.id === selection.id)
+			: undefined;
+	const preview = previewed
+		? {
+				detail: `${previewed.model} · ${previewed.aspect} · ${new Date(
+					previewed.createdAt
+				).toLocaleString()}`,
+				name: previewed.prompt,
+				url: history.urls[previewed.id]
+		  }
+		: {
+				detail: previewedAsset
+					? t('dialogs.assetGenerator.libraryAsset')
+					: undefined,
+				name: previewedAsset?.name,
+				url: previewedAsset ? assetUrl : undefined
+		  };
 
 	const hasKey: Record<ProviderId, boolean> = {
 		gemini: prefs.geminiApiKey.trim() !== '',
@@ -115,6 +149,8 @@ export const AssetGeneratorDialog: React.FC<
 
 			await putGeneration(generation);
 			refreshGenerations();
+			// What was just asked for is what the author wants to look at.
+			setSelection({id: generation.id, kind: 'generation'});
 
 			if (image.text) {
 				setNotice(image.text);
@@ -173,6 +209,11 @@ export const AssetGeneratorDialog: React.FC<
 	async function handleDelete(generation: Generation) {
 		await removeGeneration(generation.id);
 		refreshGenerations();
+		setSelection(current =>
+			current?.kind === 'generation' && current.id === generation.id
+				? undefined
+				: current
+		);
 	}
 
 	/**
@@ -199,6 +240,16 @@ export const AssetGeneratorDialog: React.FC<
 		});
 	}
 
+	/** Double-clicking a library asset edits the asset itself, in place. */
+	function handleEditAsset(assetId: AssetId) {
+		dispatch({
+			type: 'addDialog',
+			component: AssetEditorDialog,
+			maximized: true,
+			props: {assetId}
+		});
+	}
+
 	function handleReuse(generation: Generation) {
 		setPrompt(generation.prompt);
 		setAttachments(generation.attachments);
@@ -210,6 +261,15 @@ export const AssetGeneratorDialog: React.FC<
 		id: 'assetGenerator.generate',
 		label: t('hotkeys.commands.assetGenerator.generate'),
 		run: handleGenerate,
+		scope: 'asset-generator'
+	});
+
+	useCommand({
+		allowInInput: true,
+		enabled: busy,
+		id: 'assetGenerator.stop',
+		label: t('hotkeys.commands.assetGenerator.stop'),
+		run: () => cancel.current?.abort(),
 		scope: 'asset-generator'
 	});
 
@@ -249,18 +309,22 @@ export const AssetGeneratorDialog: React.FC<
 						/>
 					</label>
 					<ButtonBar>
-						<IconButton
-							disabled={busy || !usable || prompt.trim() === ''}
-							icon={<IconWand />}
-							label={t('dialogs.assetGenerator.generate')}
-							onClick={handleGenerate}
-							variant="create"
-						/>
-						{busy && (
+						{/* One button, two jobs: while a request is out there is nothing to
+						    press but Stop, so it takes the Generate button's place. */}
+						{busy ? (
 							<IconButton
 								icon={<IconX />}
-								label={t('common.cancel')}
+								label={t('dialogs.assetGenerator.stop')}
 								onClick={() => cancel.current?.abort()}
+								variant="danger"
+							/>
+						) : (
+							<IconButton
+								disabled={!usable || prompt.trim() === ''}
+								icon={<IconWand />}
+								label={t('dialogs.assetGenerator.generate')}
+								onClick={handleGenerate}
+								variant="create"
 							/>
 						)}
 					</ButtonBar>
@@ -271,35 +335,25 @@ export const AssetGeneratorDialog: React.FC<
 							})}
 						</p>
 					)}
-					<TextSelect
-						onChange={event =>
-							prefsDispatch(setPref('assetGeneratorAspect', event.target.value))
-						}
-						options={aspectRatios.map(ratio => ({
-							label: ratio,
-							value: ratio
-						}))}
-						value={aspect}
-					>
-						{t('dialogs.assetGenerator.aspect')}
-					</TextSelect>
-					{model && !model.imageInput && attachments.length > 0 && (
-						<p className="asset-generator-detail">
-							{t('dialogs.assetGenerator.attachmentsIgnored', {
-								model: model.label
-							})}
-						</p>
-					)}
-					<AssetPicker onChange={setAttachments} value={attachments} />
-				</div>
-				<div className="asset-generator-models">
-					<ModelSelect
-						hasKey={hasKey}
-						onChange={key =>
-							prefsDispatch(setPref('assetGeneratorModel', key))
-						}
-						value={prefs.assetGeneratorModel}
-					/>
+					<div className="asset-generator-settings">
+						<ModelSelect
+							hasKey={hasKey}
+							onChange={key => prefsDispatch(setPref('assetGeneratorModel', key))}
+							value={prefs.assetGeneratorModel}
+						/>
+						<TextSelect
+							onChange={event =>
+								prefsDispatch(setPref('assetGeneratorAspect', event.target.value))
+							}
+							options={aspectRatios.map(ratio => ({
+								label: ratio,
+								value: ratio
+							}))}
+							value={aspect}
+						>
+							{t('dialogs.assetGenerator.aspect')}
+						</TextSelect>
+					</div>
 					{model && !usable && (
 						<p className="asset-generator-warning">
 							{t('dialogs.assetGenerator.needsKey', {
@@ -312,6 +366,27 @@ export const AssetGeneratorDialog: React.FC<
 							{t('dialogs.assetGenerator.pickModel')}
 						</p>
 					)}
+					{model && !model.imageInput && attachments.length > 0 && (
+						<p className="asset-generator-detail">
+							{t('dialogs.assetGenerator.attachmentsIgnored', {
+								model: model.label
+							})}
+						</p>
+					)}
+					<AssetPicker
+						onChange={setAttachments}
+						onEdit={handleEditAsset}
+						onPreview={id => setSelection({id, kind: 'asset'})}
+						previewId={selection?.kind === 'asset' ? selection.id : undefined}
+						value={attachments}
+					/>
+				</div>
+				<div className="asset-generator-side">
+					<GeneratorPreview
+						detail={preview.detail}
+						name={preview.name}
+						url={preview.url}
+					/>
 				</div>
 			</div>
 			<h3 className="asset-generator-heading">
@@ -326,8 +401,15 @@ export const AssetGeneratorDialog: React.FC<
 							key={generation.id}
 							onDelete={() => handleDelete(generation)}
 							onEdit={() => handleEdit(generation)}
+							onPreview={() =>
+								setSelection({id: generation.id, kind: 'generation'})
+							}
 							onReuse={() => handleReuse(generation)}
 							onSave={(target, name) => handleSave(generation, target, name)}
+							selected={
+								selection?.kind === 'generation' &&
+								selection.id === generation.id
+							}
 							url={history.urls[generation.id]}
 						/>
 					))}

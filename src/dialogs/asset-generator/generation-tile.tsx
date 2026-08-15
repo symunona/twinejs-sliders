@@ -1,4 +1,5 @@
 import {nameFromFilename} from '@sliders/asset-store';
+import classNames from 'classnames';
 import {
 	IconCopy,
 	IconPhotoEdit,
@@ -22,8 +23,12 @@ export interface GenerationTileProps {
 	generation: Generation;
 	onDelete: () => void;
 	onEdit: () => void;
+	/** Clicking the image shows it in the preview pane. */
+	onPreview: () => void;
 	onReuse: () => void;
 	onSave: (target: SaveTarget, name: string) => void;
+	/** Is the preview pane showing this one? */
+	selected?: boolean;
 	url?: string;
 }
 
@@ -33,7 +38,17 @@ function nameFromPrompt(prompt: string): string {
 }
 
 export const GenerationTile: React.FC<GenerationTileProps> = props => {
-	const {busy, generation, onDelete, onEdit, onReuse, onSave, url} = props;
+	const {
+		busy,
+		generation,
+		onDelete,
+		onEdit,
+		onPreview,
+		onReuse,
+		onSave,
+		selected,
+		url
+	} = props;
 	const [name, setName] = React.useState(() => nameFromPrompt(generation.prompt));
 	const {t} = useTranslation();
 
@@ -56,14 +71,25 @@ export const GenerationTile: React.FC<GenerationTileProps> = props => {
 	];
 
 	return (
-		<div className="generation-tile" data-generation-id={generation.id}>
-			<span className="asset-preview">
-				{url ? (
-					<img alt={generation.prompt} src={url} />
-				) : (
-					<span className="asset-preview-empty" />
-				)}
-			</span>
+		<div
+			className={classNames('generation-tile', {selected})}
+			data-generation-id={generation.id}
+		>
+			<button
+				className="generation-tile-image"
+				onClick={onPreview}
+				onDoubleClick={onEdit}
+				title={t('dialogs.assetGenerator.tileTitle')}
+				type="button"
+			>
+				<span className="asset-preview">
+					{url ? (
+						<img alt={generation.prompt} src={url} />
+					) : (
+						<span className="asset-preview-empty" />
+					)}
+				</span>
+			</button>
 			<p className="generation-tile-prompt" title={generation.prompt}>
 				{generation.prompt}
 			</p>

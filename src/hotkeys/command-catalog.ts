@@ -73,6 +73,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'slidersAssets.search', scope: 'sliders-assets'},
 
 	{id: 'assetGenerator.generate', scope: 'asset-generator'},
+	{id: 'assetGenerator.stop', scope: 'asset-generator'},
 
 	{id: 'assetEditor.removeBackground', scope: 'asset-editor'},
 	{id: 'assetEditor.restoreBackground', scope: 'asset-editor'},

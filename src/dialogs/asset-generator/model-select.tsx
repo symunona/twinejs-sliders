@@ -1,6 +1,8 @@
+import {IconChevronDown} from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {usePopper} from 'react-popper';
 import {TextInput} from '../../components/control/text-input';
 import {
 	customModel,
@@ -21,14 +23,24 @@ export interface ModelSelectProps {
 }
 
 /**
- * The model list is long enough to need searching and will only get longer, so it is a
- * filtered list rather than a `<select>`. Models whose provider has no key stay
- * visible--seeing that Imagen exists is how you find out you want a Google key--but
- * can't be chosen.
+ * One line that names the current model, and a panel that drops out of it. The list is
+ * long enough to need searching and will only get longer, so the panel is a filtered
+ * list rather than a `<select>`. Models whose provider has no key stay visible--seeing
+ * that Imagen exists is how you find out you want a Google key--but can't be chosen.
  */
 export const ModelSelect: React.FC<ModelSelectProps> = props => {
 	const {hasKey, onChange, value} = props;
+	const [open, setOpen] = React.useState(false);
 	const [search, setSearch] = React.useState('');
+	const [buttonEl, setButtonEl] = React.useState<HTMLButtonElement | null>(null);
+	const [panelEl, setPanelEl] = React.useState<HTMLDivElement | null>(null);
+	const searchEl = React.useRef<HTMLInputElement>(null);
+	const {attributes, styles} = usePopper(buttonEl, panelEl, {
+		placement: 'bottom-start',
+		// The dialog is a transformed ancestor, so an absolute panel would be clipped
+		// by it and scroll away from its button.
+		strategy: 'fixed'
+	});
 	const {t} = useTranslation();
 
 	const selected = modelFromKey(value);
@@ -57,6 +69,53 @@ export const ModelSelect: React.FC<ModelSelectProps> = props => {
 			? selected
 			: undefined;
 
+	React.useEffect(() => {
+		if (!open) {
+			return;
+		}
+
+		searchEl.current?.focus();
+
+		const onPointerDown = (event: MouseEvent) => {
+			const target = event.target as Node;
+
+			// Clicking the search field must not count as clicking away.
+			if (panelEl?.contains(target) || buttonEl?.contains(target)) {
+				return;
+			}
+
+			setOpen(false);
+		};
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				// Captured, so Escape closes the list rather than the whole dialog.
+				event.preventDefault();
+				event.stopPropagation();
+				setOpen(false);
+				buttonEl?.focus();
+			}
+		};
+
+		document.addEventListener('mousedown', onPointerDown);
+		document.addEventListener('keydown', onKeyDown, true);
+
+		return () => {
+			document.removeEventListener('mousedown', onPointerDown);
+			document.removeEventListener('keydown', onKeyDown, true);
+		};
+	}, [buttonEl, open, panelEl]);
+
+	function handleOpen() {
+		setSearch('');
+		setOpen(current => !current);
+	}
+
+	function handlePick(key: string) {
+		onChange(key);
+		setOpen(false);
+		buttonEl?.focus();
+	}
+
 	function renderRow(model: GeneratorModel, isCustom: boolean) {
 		const key = modelKey(model);
 		const enabled = hasKey[model.provider];
@@ -67,7 +126,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = props => {
 					aria-pressed={key === value}
 					className={classNames('model-option', {selected: key === value})}
 					disabled={!enabled}
-					onClick={() => onChange(key)}
+					onClick={() => handlePick(key)}
 					type="button"
 				>
 					<span className="model-option-label">
@@ -101,25 +160,57 @@ export const ModelSelect: React.FC<ModelSelectProps> = props => {
 
 	return (
 		<div className="model-select">
-			<TextInput
-				onChange={event => setSearch(event.target.value)}
-				orientation="vertical"
-				placeholder={t('dialogs.assetGenerator.searchModelsPlaceholder')}
-				type="search"
-				value={search}
-			>
+			<span className="model-select-label">
 				{t('dialogs.assetGenerator.model')}
-			</TextInput>
-			<ul className="model-options">
-				{selectedOffList && renderRow(selectedOffList, false)}
-				{matches.map(model => renderRow(model, false))}
-				{custom.map(model => renderRow(model, true))}
-				{matches.length === 0 && custom.length === 0 && !selectedOffList && (
-					<li className="model-options-empty">
-						{t('dialogs.assetGenerator.noModels')}
-					</li>
+			</span>
+			<button
+				aria-expanded={open}
+				aria-haspopup="listbox"
+				className="model-select-toggle"
+				onClick={handleOpen}
+				ref={setButtonEl}
+				title={selected ? `${provider(selected.provider).label} · ${selected.id}` : undefined}
+				type="button"
+			>
+				<span className="model-select-value">
+					{selected?.label ?? t('dialogs.assetGenerator.pickModel')}
+				</span>
+				{selected && (
+					<span className="model-select-provider">
+						{provider(selected.provider).label}
+					</span>
 				)}
-			</ul>
+				<IconChevronDown />
+			</button>
+			{open && (
+				<div
+					className="model-select-panel"
+					ref={setPanelEl}
+					style={styles.popper}
+					{...attributes.popper}
+				>
+					<TextInput
+						onChange={event => setSearch(event.target.value)}
+						orientation="vertical"
+						placeholder={t('dialogs.assetGenerator.searchModelsPlaceholder')}
+						ref={searchEl}
+						type="search"
+						value={search}
+					>
+						{t('dialogs.assetGenerator.searchModels')}
+					</TextInput>
+					<ul className="model-options">
+						{selectedOffList && renderRow(selectedOffList, false)}
+						{matches.map(model => renderRow(model, false))}
+						{custom.map(model => renderRow(model, true))}
+						{matches.length === 0 && custom.length === 0 && !selectedOffList && (
+							<li className="model-options-empty">
+								{t('dialogs.assetGenerator.noModels')}
+							</li>
+						)}
+					</ul>
+				</div>
+			)}
 		</div>
 	);
 };
