@@ -431,11 +431,9 @@
 				"command": "Command",
 				"binding": "Keybinding",
 				"scope": "Where It Works",
-				"source": "Source",
 				"actions": "Actions"
 			},
 			"source": {
-				"default": "Default",
 				"user": "Changed"
 			},
 			"filters": {
