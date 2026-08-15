@@ -8,6 +8,7 @@ import {StoryFormat} from '../../store/story-formats';
 import {useCodeMirrorPassageHints} from '../../store/use-codemirror-passage-hints';
 import {useFormatCodeMirrorMode} from '../../store/use-format-codemirror-mode';
 import {codeMirrorOptionsFromPrefs} from '../../util/codemirror-options';
+import {useSceneHints} from './use-scene-hints';
 
 export interface PassageTextProps {
 	disabled?: boolean;
@@ -32,6 +33,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 	const [localText, setLocalText] = React.useState(passage.text);
 	const {prefs} = usePrefsContext();
 	const autocompletePassageNames = useCodeMirrorPassageHints(story);
+	const autocompleteSceneNames = useSceneHints();
 	const mode =
 		useFormatCodeMirrorMode(storyFormat.name, storyFormat.version) ?? 'text';
 	const codeAreaContainerRef = React.useRef<HTMLDivElement>(null);
@@ -142,6 +144,10 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		() => ({
 			...codeMirrorOptionsFromPrefs(prefs),
 			mode: storyFormatExtensionsDisabled ? 'text' : mode,
+			// Scene autocomplete is a CodeMirror key, not an app hotkey: it only
+			// means anything with the cursor in the text, and routing it through
+			// the app dispatcher would fight the editor for the keystroke.
+			extraKeys: {'Ctrl-Space': autocompleteSceneNames},
 			lineWrapping: true,
 			placeholder: t('dialogs.passageEdit.passageTextPlaceholder'),
 			prefixTrigger: {
@@ -153,6 +159,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		}),
 		[
 			autocompletePassageNames,
+			autocompleteSceneNames,
 			disabled,
 			mode,
 			prefs,

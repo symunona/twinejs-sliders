@@ -1,0 +1,400 @@
+/**
+ * Autocomplete for the `[scene]` block: asset names, character ids, frames,
+ * layers and effects, pulled from the live asset library.
+ *
+ * Why this is possible at all: scene YAML refers to assets by NAME, not by id
+ * (see `scene-preview/use-preview-resolver.ts`), so the string the library
+ * already holds is exactly the string the author needs typed.
+ *
+ * Fires on Ctrl-Space only, and only when the cursor is inside a `[scene]`
+ * block -- the rest of a Chapbook passage is prose, and popping a dropdown
+ * there would be noise. The passage-name completion in
+ * `store/use-codemirror-passage-hints.ts` still owns `[[` and `->`.
+ */
+
+import CodeMirror, {Editor} from 'codemirror';
+import * as React from 'react';
+import {extractSceneBlock} from '@sliders/scene-index';
+import {parseScene} from '@sliders/scene-schema';
+import {AssetMeta, Character, LAYERS} from '@sliders/scene-types';
+import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-context';
+import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
+
+/**
+ * Every effect the DOM renderer knows how to draw, from
+ * `packages/render-dom/src/styles.ts`. Not author-extensible, so a literal list
+ * is the whole truth.
+ */
+export const FX_IDS = ['cold', 'dark', 'flash', 'rain', 'warm'];
+
+/** What the cursor is sitting in, and therefore what to offer. */
+export type HintSlot =
+	| {kind: 'bg'}
+	| {kind: 'cast'}
+	| {kind: 'props'}
+	| {kind: 'frame'; entity: string}
+	| {kind: 'layer'}
+	| {kind: 'fx'};
+
+export interface SceneHintContext {
+	slot: HintSlot;
+	/** What the author has typed so far, used to filter. */
+	typed: string;
+	/** Column where the completion starts replacing. */
+	start: number;
+	/**
+	 * True when the cursor sits directly on the colon, with no space yet. YAML
+	 * reads `bg:tavern` as the plain scalar "bg:tavern" rather than a mapping,
+	 * so the completion has to bring its own space.
+	 */
+	needsSpace: boolean;
+}
+
+/**
+ * Characters an asset or character name can contain. Deliberately excludes
+ * whitespace: it is what stops a token walking backwards out of `- mira` into
+ * the list dash, and names like `tavern/night` need the slash.
+ */
+const NAME_CHAR = /[\w./-]/;
+
+/** `key:` on a line, with an optional list dash: `mira:`, `- mira:`, `cast:`. */
+const KEY_LINE_RE = /^\s*(?:-\s*)?([A-Za-z0-9_][\w .-]*?)\s*:\s*(.*)$/;
+
+/** An entity written as a flow map on one line: `mira: {at: -0.4}`. */
+const FLOW_OWNER_RE = /^\s*(?:-\s*)?([A-Za-z0-9_][\w .-]*?)\s*:\s*\{/;
+
+function indentOf(line: string): number {
+	return /^[ \t]*/.exec(line)![0].length;
+}
+
+/** The name-ish token ending at the cursor, and where it starts. */
+function typedToken(before: string): {start: number; text: string} {
+	let start = before.length;
+
+	while (start > 0 && NAME_CHAR.test(before[start - 1])) {
+		start--;
+	}
+
+	return {start, text: before.slice(start)};
+}
+
+/**
+ * The key whose VALUE the cursor is in, or undefined when the cursor is in key
+ * position. Understands both `bg: tav` and the flow form
+ * `mira: {at: -0.4, frame: ar`, where the innermost key is what matters.
+ */
+function valueKey(before: string, tokenStart: number): string | undefined {
+	// Drop the token being typed, then the whitespace and any container opener
+	// between it and the colon. A list dash is NOT an opener -- `- mira` is a
+	// key, not a value, and stripping the dash would misread it as one.
+
+	const head = before.slice(0, tokenStart).replace(/[\s[{,]+$/, '');
+
+	if (!head.endsWith(':')) {
+		return undefined;
+	}
+
+	const keyPart = head.slice(0, -1);
+	const boundary = Math.max(
+		keyPart.lastIndexOf('{'),
+		keyPart.lastIndexOf('['),
+		keyPart.lastIndexOf(',')
+	);
+
+	// A beat is a list item, so `- fx: rain` has to yield `fx`, not `- fx`. Only
+	// a dash followed by space is a list marker; a name may start with one.
+	return keyPart.slice(boundary + 1).replace(/^\s*-\s+/, '').trim() || undefined;
+}
+
+/**
+ * The `key:` lines enclosing a line, innermost first. Walking the whole chain
+ * rather than stopping at the first one is what lets `ref:` find the `cast:` it
+ * sits two levels below.
+ */
+function enclosingKeys(
+	lines: string[],
+	blockStart: number,
+	lineNo: number
+): string[] {
+	const chain: string[] = [];
+	let indent = indentOf(lines[lineNo]);
+
+	for (let i = lineNo - 1; i >= blockStart && indent > 0; i--) {
+		if (lines[i].trim() === '') {
+			continue;
+		}
+
+		const lineIndent = indentOf(lines[i]);
+
+		if (lineIndent < indent) {
+			const key = KEY_LINE_RE.exec(lines[i])?.[1].trim();
+
+			if (key) {
+				chain.push(key);
+			}
+
+			indent = lineIndent;
+		}
+	}
+
+	return chain;
+}
+
+/**
+ * Which entity a `frame:` belongs to. The flow form puts it on the same line
+ * (`mira: {frame: angry}`); the block form makes it the enclosing key.
+ */
+function entityOfLine(
+	lines: string[],
+	blockStart: number,
+	lineNo: number
+): string | undefined {
+	return (
+		FLOW_OWNER_RE.exec(lines[lineNo])?.[1].trim() ??
+		enclosingKeys(lines, blockStart, lineNo)[0]
+	);
+}
+
+/**
+ * Classifies the cursor position. `lines` is the whole passage, so line numbers
+ * line up with CodeMirror's.
+ */
+export function sceneHintContext(
+	lines: string[],
+	blockStart: number,
+	blockEnd: number,
+	cursor: {ch: number; line: number}
+): SceneHintContext | undefined {
+	if (cursor.line < blockStart || cursor.line >= blockEnd) {
+		return undefined;
+	}
+
+	const before = (lines[cursor.line] ?? '').slice(0, cursor.ch);
+	const {start, text: typed} = typedToken(before);
+	const key = valueKey(before, start);
+	const found = (slot: HintSlot): SceneHintContext => ({
+		needsSpace: key !== undefined && before.slice(0, start).endsWith(':'),
+		slot,
+		start,
+		typed
+	});
+
+	if (key !== undefined) {
+		switch (key) {
+			case 'bg':
+				return found({kind: 'bg'});
+
+			case 'layer':
+				return found({kind: 'layer'});
+
+			case 'fx':
+				return found({kind: 'fx'});
+
+			case 'frame': {
+				const entity = entityOfLine(lines, blockStart, cursor.line);
+
+				return entity ? found({kind: 'frame', entity}) : undefined;
+			}
+
+			case 'ref': {
+				// `ref:` names a character under `cast:` and an asset under
+				// `props:`, so the block the entity lives in decides.
+				const section = enclosingKeys(lines, blockStart, cursor.line).find(
+					one => one === 'cast' || one === 'props'
+				);
+
+				return section === 'cast' || section === 'props'
+					? found({kind: section})
+					: undefined;
+			}
+
+			default:
+				return undefined;
+		}
+	}
+
+	// Key position: the enclosing block decides what names belong here.
+
+	switch (enclosingKeys(lines, blockStart, cursor.line)[0]) {
+		case 'cast':
+			return found({kind: 'cast'});
+
+		case 'props':
+			return found({kind: 'props'});
+
+		case 'fx':
+			return found({kind: 'fx'});
+
+		default:
+			return undefined;
+	}
+}
+
+/** MRU bucket for a slot. Frames are per-character; the rest are app-wide. */
+function slotKey(slot: HintSlot): string {
+	return slot.kind === 'frame' ? `frame:${slot.entity}` : slot.kind;
+}
+
+/**
+ * Asset names, with `preferred` kinds first. Character frames are left out --
+ * they are reached through a character's `frame:`, never named directly.
+ */
+function assetNames(all: AssetMeta[], preferred: string[]): string[] {
+	const rank = (asset: AssetMeta) => {
+		const index = preferred.indexOf(asset.kind);
+
+		return index === -1 ? preferred.length : index;
+	};
+
+	return all
+		.filter(asset => !asset.ownerCharacter)
+		.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+		.map(asset => asset.name);
+}
+
+/**
+ * The names offered for a slot, in the order they should appear before recent
+ * ones are lifted out. `refs` maps an entity id to what it refers to, since
+ * `mira: {ref: villager}` means the frames come from `villager`.
+ */
+function namesForSlot(
+	slot: HintSlot,
+	all: AssetMeta[],
+	characters: Character[],
+	refs: Map<string, string>
+): string[] {
+	switch (slot.kind) {
+		case 'bg':
+			return assetNames(all, ['bg']);
+
+		case 'props':
+			return assetNames(all, ['object', 'fx']);
+
+		case 'cast':
+			return characters.map(character => character.id).sort();
+
+		case 'layer':
+			return [...LAYERS];
+
+		case 'fx':
+			return [...FX_IDS];
+
+		case 'frame': {
+			// An entity id IS its ref unless `ref:` overrides it -- the parser
+			// does `ref: body.ref ?? id`.
+			const ref = refs.get(slot.entity) ?? slot.entity;
+			const character = characters.find(one => one.id === ref);
+
+			return character ? Object.keys(character.frames).sort() : [];
+		}
+	}
+}
+
+/** Entity id -> ref, read from the block as it currently stands. */
+function entityRefs(blockText: string): Map<string, string> {
+	const refs = new Map<string, string>();
+
+	try {
+		const {entities} = parseScene(blockText).scene;
+
+		for (const [id, patch] of Object.entries(entities)) {
+			if (patch) {
+				refs.set(id, patch.ref);
+			}
+		}
+	} catch (error) {
+		// The parser is best-effort and shouldn't throw, but a completion popup
+		// is not worth taking the editor down over.
+		console.warn('Could not parse the scene while completing', error);
+	}
+
+	return refs;
+}
+
+/**
+ * Builds the completion for wherever the cursor is now, or undefined when
+ * there's nothing to offer. Recomputed on every keystroke while the dropdown is
+ * open, which is what narrows the list as the author types.
+ *
+ * Exported for tests: it needs only `getValue` and `getCursor` off the editor,
+ * which is a great deal easier to drive than a mounted CodeMirror.
+ */
+export function sceneCompletion(
+	editor: Editor,
+	library: Pick<AssetLibrary, 'all' | 'characters'>
+) {
+	const text = editor.getValue();
+	const block = extractSceneBlock(text);
+
+	if (!block) {
+		return undefined;
+	}
+
+	const lines = text.split('\n');
+	const cursor = editor.getCursor();
+	const context = sceneHintContext(
+		lines,
+		block.lineOffset,
+		block.lineOffset + block.text.split('\n').length,
+		cursor
+	);
+
+	if (!context) {
+		return undefined;
+	}
+
+	const {needsSpace, slot, start, typed} = context;
+	const candidate = typed.toLowerCase();
+	const names = namesForSlot(
+		slot,
+		library.all,
+		library.characters,
+		entityRefs(block.text)
+	).filter(name => name.toLowerCase().includes(candidate));
+
+	if (names.length === 0) {
+		return undefined;
+	}
+
+	const bucket = slotKey(slot);
+	const completion = {
+		from: {ch: start, line: cursor.line},
+		to: {ch: cursor.ch, line: cursor.line},
+		list: orderByRecent(names, bucket).map(({name, recent}) => ({
+			className: recent ? 'sliders-hint-recent' : undefined,
+			// The name is what shows and what gets remembered; `text` is only
+			// what lands in the document, space and all.
+			displayText: name,
+			text: needsSpace ? ` ${name}` : name
+		}))
+	};
+
+	CodeMirror.on(completion, 'pick', (picked: {displayText: string}) =>
+		noteNameUsed(bucket, picked.displayText)
+	);
+
+	return completion;
+}
+
+/**
+ * The Ctrl-Space handler. Its identity is stable across renders on purpose: it
+ * goes into the CodeMirror options object, and a changing options identity
+ * would re-set every option on the editor, `prefixTrigger` included.
+ */
+export function useSceneHints(): (editor: Editor) => void {
+	const library = useAssetLibrary();
+	const libraryRef = React.useRef(library);
+
+	libraryRef.current = library;
+
+	return React.useCallback((editor: Editor) => {
+		if (!sceneCompletion(editor, libraryRef.current)) {
+			return;
+		}
+
+		editor.showHint({
+			completeSingle: false,
+			hint: () => sceneCompletion(editor, libraryRef.current)
+		});
+	}, []);
+}
