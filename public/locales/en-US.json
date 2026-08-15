@@ -192,8 +192,7 @@
 			"themeSystem": "System",
 			"theme": "Theme",
 			"title": "Preferences",
-			"useEnhancedEditors": "Use Enhanced Editors",
-			"keyboardShortcuts": "Keyboard Shortcuts"
+			"useEnhancedEditors": "Use Enhanced Editors"
 		},
 		"assetEditor": {
 			"adjust": "Adjust",
