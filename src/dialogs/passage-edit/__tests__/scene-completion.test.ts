@@ -187,6 +187,44 @@ describe('sceneCompletion()', () => {
 		});
 	});
 
+	describe('prefilling a new entity', () => {
+		it('writes at and layer out for a character', () => {
+			expect(completeAt('[scene]\ncast:\n  mir|')!.list[0]).toMatchObject({
+				displayText: 'mira',
+				text: 'mira: {at: 0, layer: mid}'
+			});
+		});
+
+		it('writes at and layer out for a prop', () => {
+			expect(completeAt('[scene]\nprops:\n  cand|')!.list[0]).toMatchObject({
+				displayText: 'candle',
+				text: 'candle: {at: 0, layer: mid}'
+			});
+		});
+
+		it('leaves ref: alone -- that wants the bare name', () => {
+			expect(
+				completeAt('[scene]\ncast:\n  stranger: {ref: mir|}')!.list[0]
+			).toMatchObject({text: 'mira'});
+		});
+
+		it('leaves an entity that already has a body alone', () => {
+			// Renaming the id in `mira: {at: -0.4}` must not append a second body.
+			expect(
+				completeAt('[scene]\ncast:\n  mir|: {at: -0.4}')!.list[0]
+			).toMatchObject({text: 'mira'});
+		});
+
+		it('does not prefill a frame, layer or effect', () => {
+			expect(completeAt('[scene]\nfx:\n  - ra|')!.list[0]).toMatchObject({
+				text: 'rain'
+			});
+			expect(
+				completeAt('[scene]\ncast:\n  mira: {frame: ang|}')!.list[0]
+			).toMatchObject({text: 'angry'});
+		});
+	});
+
 	describe('what lands in the document', () => {
 		it('inserts the name as typed when there is already a space', () => {
 			expect(completeAt('[scene]\nbg: str|')!.list[0]).toMatchObject({

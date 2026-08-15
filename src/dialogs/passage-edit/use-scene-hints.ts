@@ -48,7 +48,28 @@ export interface SceneHintContext {
 	 * so the completion has to bring its own space.
 	 */
 	needsSpace: boolean;
+	/**
+	 * True when picking a name should write a whole entity line rather than just
+	 * the name -- `mira` becomes `mira: {at: 0, layer: mid}`.
+	 *
+	 * Only for an entity id in KEY position, and only when the rest of the line
+	 * is still empty. `ref: mi` wants the bare name, and an id being edited in a
+	 * line that already has `: {…}` after it would end up with two of them.
+	 */
+	scaffold: boolean;
 }
+
+/**
+ * What an entity gets prefilled with. `at` and `layer` are the two knobs almost
+ * every entity ends up setting, and writing them out beats remembering the key
+ * names -- `at: 0` is centre stage with the feet on the layer baseline, `mid` is
+ * the layer an entity would have defaulted to anyway (scene-core's `stage.ts`).
+ *
+ * Split so the caller can put the cursor on the value instead of after it.
+ */
+const ENTITY_PREFIX = ': {at: ';
+const ENTITY_AT = '0';
+const ENTITY_SUFFIX = ', layer: mid}';
 
 /**
  * Characters an asset or character name can contain. Deliberately excludes
@@ -169,11 +190,14 @@ export function sceneHintContext(
 		return undefined;
 	}
 
-	const before = (lines[cursor.line] ?? '').slice(0, cursor.ch);
+	const line = lines[cursor.line] ?? '';
+	const before = line.slice(0, cursor.ch);
 	const {start, text: typed} = typedToken(before);
 	const key = valueKey(before, start);
-	const found = (slot: HintSlot): SceneHintContext => ({
+	const restIsEmpty = line.slice(cursor.ch).trim() === '';
+	const found = (slot: HintSlot, scaffold = false): SceneHintContext => ({
 		needsSpace: key !== undefined && before.slice(0, start).endsWith(':'),
+		scaffold: scaffold && restIsEmpty,
 		slot,
 		start,
 		typed
@@ -217,10 +241,10 @@ export function sceneHintContext(
 
 	switch (enclosingKeys(lines, blockStart, cursor.line)[0]) {
 		case 'cast':
-			return found({kind: 'cast'});
+			return found({kind: 'cast'}, true);
 
 		case 'props':
-			return found({kind: 'props'});
+			return found({kind: 'props'}, true);
 
 		case 'fx':
 			return found({kind: 'fx'});
@@ -312,6 +336,40 @@ function entityRefs(blockText: string): Map<string, string> {
 }
 
 /**
+ * Writes a picked entity out in full and leaves the `at` value selected, so the
+ * next thing typed replaces it instead of landing after the closing brace.
+ *
+ * show-hint hands the whole insertion over once an entry carries a `hint`, and
+ * still signals `pick` afterwards, so the recently-used list keeps working.
+ */
+function insertEntity(name: string) {
+	return (
+		cm: Editor,
+		data: {from: CodeMirror.Position; to: CodeMirror.Position},
+		completion: {from?: CodeMirror.Position; to?: CodeMirror.Position}
+	) => {
+		const from = completion.from ?? data.from;
+		const to = completion.to ?? data.to;
+
+		cm.replaceRange(
+			`${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`,
+			from,
+			to,
+			'complete'
+		);
+
+		// Counted rather than searched for: a character called `guard0` would
+		// throw off anything looking for the first `0`.
+		const valueStart = from.ch + name.length + ENTITY_PREFIX.length;
+
+		cm.setSelection(
+			{ch: valueStart, line: from.line},
+			{ch: valueStart + ENTITY_AT.length, line: from.line}
+		);
+	};
+}
+
+/**
  * Builds the completion for wherever the cursor is now, or undefined when
  * there's nothing to offer. Recomputed on every keystroke while the dropdown is
  * open, which is what narrows the list as the author types.
@@ -343,7 +401,7 @@ export function sceneCompletion(
 		return undefined;
 	}
 
-	const {needsSpace, slot, start, typed} = context;
+	const {needsSpace, scaffold, slot, start, typed} = context;
 	const candidate = typed.toLowerCase();
 	const names = namesForSlot(
 		slot,
@@ -363,9 +421,14 @@ export function sceneCompletion(
 		list: orderByRecent(names, bucket).map(({name, recent}) => ({
 			className: recent ? 'sliders-hint-recent' : undefined,
 			// The name is what shows and what gets remembered; `text` is only
-			// what lands in the document, space and all.
+			// what lands in the document, scaffold and spaces and all.
 			displayText: name,
-			text: needsSpace ? ` ${name}` : name
+			hint: scaffold ? insertEntity(name) : undefined,
+			text: scaffold
+				? `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
+				: needsSpace
+				? ` ${name}`
+				: name
 		}))
 	};
 

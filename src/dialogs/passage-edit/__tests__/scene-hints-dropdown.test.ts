@@ -45,7 +45,17 @@ const library = {
 			w: 10
 		}
 	] as AssetMeta[],
-	characters: [] as Character[]
+	characters: [
+		{
+			anchors: {},
+			frames: {idle: {asset: 'a_mira-idle'}},
+			id: 'mira',
+			name: 'mira',
+			origin: {x: 0.5, y: 1},
+			size: {h: 10, w: 10},
+			tags: []
+		}
+	] as Character[]
 };
 
 /**
@@ -119,6 +129,24 @@ describe('the scene hint dropdown', () => {
 	it('shows nothing outside a scene block', () => {
 		openHints('Just prose.', {ch: 5, line: 0});
 		expect(document.querySelector('.CodeMirror-hints')).toBeNull();
+	});
+
+	it('prefills a picked entity and selects the at value', () => {
+		const editor = openHints('[scene]\ncast:\n  mi', {ch: 4, line: 2});
+
+		(document.querySelector('.CodeMirror-hint') as HTMLElement).click();
+
+		expect(editor.getValue()).toBe(
+			'[scene]\ncast:\n  mira: {at: 0, layer: mid}'
+		);
+		// The next thing typed should replace the position, not sit after the
+		// closing brace.
+		expect(editor.getSelection()).toBe('0');
+
+		editor.replaceSelection('-0.4');
+		expect(editor.getValue()).toBe(
+			'[scene]\ncast:\n  mira: {at: -0.4, layer: mid}'
+		);
 	});
 
 	it('replaces the token and remembers the pick', () => {
