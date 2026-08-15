@@ -211,6 +211,7 @@
 			"loading": "Opening…",
 			"lockAspect": "Lock Aspect",
 			"name": "Name",
+			"needsRealGpu": "Your browser is running WebGPU on a software renderer (SwiftShader), not on your graphics card, where the model takes minutes per image instead of a second. Turn on “Use graphics acceleration when available” in your browser settings, and if it is already on, check chrome://gpu to see why your card was rejected.",
 			"needsWebGpu": "Removing the background needs WebGPU, which this browser doesn't have. Try a recent Chrome or Edge—there's no CPU fallback, because these models are far too heavy to run without a GPU.",
 			"onCpuError": "One pass took {{seconds}} seconds, which means the model is running on your CPU rather than your graphics card—it would take many minutes and the result would be no better. Your browser reports its GPU as: {{gpu}}. Check that hardware acceleration is on in your browser settings, then reload.",
 			"removeBackground": "Remove Background",

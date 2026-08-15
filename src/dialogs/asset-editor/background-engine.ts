@@ -5,6 +5,7 @@ import {
 	EngineProgress,
 	EngineSupport,
 	hasWebGpu,
+	webGpuIsSoftware,
 	MaskFunction,
 	MaskOptions
 } from './engine-types';
@@ -42,10 +43,18 @@ const ENGINES: EngineDescriptor[] = [
 		license: 'Apache-2.0',
 		load: async () => (await import('./engines/ormbg-engine')).mask,
 		resolution: 1024,
-		support: async () =>
-			(await hasWebGpu())
-				? {supported: true}
-				: {reasonKey: 'dialogs.assetEditor.needsWebGpu', supported: false}
+		support: async () => {
+			if (!(await hasWebGpu())) {
+				return {reasonKey: 'dialogs.assetEditor.needsWebGpu', supported: false};
+			}
+
+			// A software adapter is WebGPU in name only--measured at 146 seconds
+			// a pass against 0.65 on real hardware. Refuse up front rather than
+			// let someone wait two and a half minutes to be told.
+			return webGpuIsSoftware()
+				? {reasonKey: 'dialogs.assetEditor.needsRealGpu', supported: false}
+				: {supported: true};
+		}
 	}
 ];
 

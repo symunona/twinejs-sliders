@@ -54,8 +54,12 @@
 	margin: 0;
 }
 
+/* Something went wrong reads as red, not as a mild note. Both tokens flip with
+   the dark theme, so this stays legible either way. */
+
 .asset-editor-error {
-	background: var(--faint-yellow);
+	background: var(--faint-red);
+	border-left: 4px solid var(--red);
 	border-radius: var(--corner-round);
 	margin: var(--grid-size);
 	padding: var(--control-inner-padding) var(--grid-size);

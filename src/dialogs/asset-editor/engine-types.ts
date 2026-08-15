@@ -57,6 +57,29 @@ interface NavigatorGpu {
 
 let webGpuProbe: Promise<boolean> | undefined;
 let adapterSummary: string | undefined;
+let adapterIsSoftware = false;
+
+/**
+ * Adapters that are really a CPU renderer wearing a GPU's clothes.
+ *
+ * A browser with hardware acceleration off, or a blocklisted driver, still
+ * hands out a perfectly valid WebGPU adapter -- Chrome's is SwiftShader, and
+ * Mesa's are lavapipe and llvmpipe. Everything works, just a hundred times too
+ * slowly: measured on this repo's own model, 146 seconds for a pass that takes
+ * 0.65 on real hardware. Letting that start is worse than refusing it, because
+ * the author waits two and a half minutes to be told it didn't work.
+ */
+const SOFTWARE_ADAPTERS = /swiftshader|lavapipe|llvmpipe|软件|software|warp|basic render/i;
+
+/** Whether an adapter's reported name is one of the CPU renderers. */
+export function isSoftwareAdapter(name: string): boolean {
+	return SOFTWARE_ADAPTERS.test(name);
+}
+
+/** True when WebGPU exists but is being emulated on the CPU. */
+export function webGpuIsSoftware(): boolean {
+	return adapterIsSoftware;
+}
 
 /**
  * What the browser says it's about to run on, for error messages. Worth
@@ -102,6 +125,13 @@ export function hasWebGpu(): Promise<boolean> {
 						.filter(Boolean)
 						.join(' ')
 						.trim() || 'an unnamed adapter';
+				// Deliberately a name match and nothing cleverer. Guessing from
+				// limits would be wrong in the expensive direction: a real GTX 1050
+				// Ti reports no `shader-f16` and only 10 storage buffers under an
+				// older Chromium, which is indistinguishable from SwiftShader's
+				// numbers. Refusing a working GPU is worse than the timing check
+				// below catching a slow one late.
+				adapterIsSoftware = isSoftwareAdapter(adapterSummary);
 				return true;
 			} catch (error) {
 				return false;
