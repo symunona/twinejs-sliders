@@ -438,7 +438,7 @@
 	"routes": {
 		"storyEdit": {
 			"buildInfo": {
-				"daysAgo": "{{value}}d ago",
+				"daysAgo": "Built: {{value}}d ago",
 				"details": "Built {{time}} (commit {{commit}})",
 				"hoursAgo": "{{value}}h ago",
 				"justNow": "just now",
