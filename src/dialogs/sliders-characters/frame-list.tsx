@@ -1,5 +1,11 @@
 import {AssetMeta, CharacterFrame} from '@sliders/scene-types';
-import {IconPencil, IconRepeat, IconRepeatOff, IconTrash} from '@tabler/icons';
+import {
+	IconPencil,
+	IconPhotoEdit,
+	IconRepeat,
+	IconRepeatOff,
+	IconTrash
+} from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -17,6 +23,7 @@ export interface FrameListProps {
 	onAddFiles: (files: File[]) => void;
 	onChangeLoop: (name: string, loop: boolean) => void;
 	onDelete: (name: string) => void;
+	onEdit: (name: string) => void;
 	onRename: (name: string, newName: string) => void;
 	onSelect: (name: string) => void;
 	selected?: string;
@@ -29,6 +36,7 @@ export const FrameList: React.FC<FrameListProps> = props => {
 		onAddFiles,
 		onChangeLoop,
 		onDelete,
+		onEdit,
 		onRename,
 		onSelect,
 		selected
@@ -79,6 +87,18 @@ export const FrameList: React.FC<FrameListProps> = props => {
 									)}
 								</button>
 								<ButtonBar>
+									<IconButton
+										// Editing an animation would flatten it to one frame.
+										disabled={meta?.animated}
+										icon={<IconPhotoEdit />}
+										iconOnly
+										label={
+											meta?.animated
+												? t('dialogs.slidersAssets.editImageAnimated')
+												: t('dialogs.slidersAssets.editImage')
+										}
+										onClick={() => onEdit(name)}
+									/>
 									<PromptButton
 										icon={<IconPencil />}
 										iconOnly

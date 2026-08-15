@@ -1,6 +1,19 @@
 import {slugify} from '@sliders/asset-store';
-import {AssetId, AssetMeta, Character, Frac2} from '@sliders/scene-types';
-import {IconCrosshair, IconTrash} from '@tabler/icons';
+import {
+	AssetId,
+	AssetMeta,
+	Character,
+	CharacterFrame,
+	DEFAULT_FIT,
+	Frac2,
+	FrameFit
+} from '@sliders/scene-types';
+import {
+	IconArrowBackUp,
+	IconCopy,
+	IconCrosshair,
+	IconTrash
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {ButtonBar} from '../../components/container/button-bar';
@@ -10,6 +23,7 @@ import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
 import {TextSelect} from '../../components/control/text-select';
 import {useCommand} from '../../hotkeys';
+import {AdjustSlider} from '../asset-editor/adjust-slider';
 import {FrameList} from './frame-list';
 import {SpritePreview} from './sprite-preview';
 
@@ -19,6 +33,8 @@ export interface CharacterEditorProps {
 	onChange: (character: Character) => void;
 	/** Write the current character out immediately, rather than on the usual debounce. */
 	onCommit: () => void;
+	/** Open the asset editor on a frame's image — cropping, levels, background removal. */
+	onEditFrame: (name: string) => void;
 	onUploadFrames: (files: File[]) => void;
 }
 
@@ -29,7 +45,8 @@ function parseSize(value: string, fallback: number): number {
 }
 
 export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
-	const {assets, character, onChange, onCommit, onUploadFrames} = props;
+	const {assets, character, onChange, onCommit, onEditFrame, onUploadFrames} =
+		props;
 	const frameNames = Object.keys(character.frames);
 	const [newAnchor, setNewAnchor] = React.useState('');
 	const [newAnchorOpen, setNewAnchorOpen] = React.useState(false);
@@ -108,6 +125,53 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 		});
 	}
 
+	function handleChangeFit(fit: FrameFit) {
+		if (!selectedFrame) {
+			return;
+		}
+
+		// Identity is stored as absent, so a frame nudged back to zero reads the same as
+		// one never touched--and the manifest stays free of no-op entries.
+		const identity = fit.offset.x === 0 && fit.offset.y === 0 && fit.scale === 1;
+		const frame: CharacterFrame = {...character.frames[selectedFrame]};
+
+		if (identity) {
+			delete frame.fit;
+		} else {
+			frame.fit = fit;
+		}
+
+		onChange({
+			...character,
+			frames: {...character.frames, [selectedFrame]: frame}
+		});
+	}
+
+	/**
+	 * A sprite sheet is usually off by the same amount throughout, so the fit that fixed
+	 * one frame normally fixes all of them.
+	 */
+	function handleApplyFitToAll() {
+		if (!activeFrame) {
+			return;
+		}
+
+		const frames: Character['frames'] = {};
+
+		for (const [name, frame] of Object.entries(character.frames)) {
+			frames[name] = {...frame};
+
+			if (activeFrame.fit) {
+				frames[name].fit = {...activeFrame.fit, offset: {...activeFrame.fit.offset}};
+			} else {
+				delete frames[name].fit;
+			}
+		}
+
+		onChange({...character, frames});
+		onCommit();
+	}
+
 	return (
 		<div className="character-editor">
 			<div className="character-editor-body">
@@ -117,6 +181,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					onAddFiles={onUploadFrames}
 					onChangeLoop={handleChangeLoop}
 					onDelete={handleDeleteFrame}
+					onEdit={onEditFrame}
 					onRename={handleRenameFrame}
 					onSelect={setSelectedFrame}
 					selected={selectedFrame}
@@ -125,13 +190,46 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					<SpritePreview
 						anchors={character.anchors}
 						assetId={activeFrame?.asset}
+						fit={activeFrame?.fit}
 						onChangeAnchor={handleChangeAnchor}
+						onChangeFit={handleChangeFit}
 						onChangeOrigin={origin => onChange({...character, origin})}
 						onCommit={onCommit}
 						onionAssetId={onion ? character.frames[onion]?.asset : undefined}
+						onionFit={onion ? character.frames[onion]?.fit : undefined}
 						origin={character.origin}
 						size={character.size}
 					/>
+					{activeFrame && (
+						<div className="character-editor-fit">
+							<AdjustSlider
+								label={t('dialogs.slidersCharacters.frameZoom')}
+								max={3}
+								min={0.2}
+								onChange={scale =>
+									handleChangeFit({...(activeFrame.fit ?? DEFAULT_FIT), scale})
+								}
+								resetLabel={t('dialogs.slidersCharacters.resetFrameZoom')}
+								resetTo={DEFAULT_FIT.scale}
+								step={0.01}
+								value={activeFrame.fit?.scale ?? DEFAULT_FIT.scale}
+							/>
+							<ButtonBar>
+								<IconButton
+									disabled={!activeFrame.fit}
+									icon={<IconArrowBackUp />}
+									label={t('dialogs.slidersCharacters.resetFit')}
+									onClick={() => handleChangeFit(DEFAULT_FIT)}
+								/>
+								<IconButton
+									disabled={frameNames.length < 2}
+									icon={<IconCopy />}
+									label={t('dialogs.slidersCharacters.fitToAllFrames')}
+									onClick={handleApplyFitToAll}
+								/>
+							</ButtonBar>
+						</div>
+					)}
 					<ButtonBar>
 						<TextSelect
 							onChange={event => setOnion(event.target.value)}

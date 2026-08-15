@@ -313,6 +313,8 @@
 			"deleteFramePrompt": "Are you sure you want to remove the frame “{{name}}”?",
 			"deletePrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
 			"dropFrames": "Drop image files here to add frames.",
+			"fitToAllFrames": "Apply This Fit To All Frames",
+			"frameZoom": "Frame zoom",
 			"frames": "Frames",
 			"height": "Height",
 			"loops": "Loops",
@@ -329,6 +331,8 @@
 			"removeAnchor": "Remove the {{name}} anchor",
 			"renameFrame": "Rename Frame",
 			"renameFramePrompt": "What should this frame be called? This is what frame: refers to in scene text.",
+			"resetFit": "Reset Frame Position",
+			"resetFrameZoom": "Reset zoom",
 			"title": "Characters",
 			"width": "Width"
 		},

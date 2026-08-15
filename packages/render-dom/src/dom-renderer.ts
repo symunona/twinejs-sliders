@@ -18,6 +18,7 @@ import type {
 	Character,
 	EntityId,
 	Frac2,
+	FrameFit,
 	Layer,
 	Renderer,
 	Stage,
@@ -90,6 +91,8 @@ interface ResolvedEntity {
 	assetId?: string;
 	url?: string;
 	meta?: AssetMeta;
+	/** The cast frame's registration transform, if it has one. */
+	fit?: FrameFit;
 	/** Set when we cannot draw the real thing — render a labelled placeholder instead. */
 	placeholderLabel?: string;
 	/** The id that failed to resolve. Exposed as `data-asset-id` for tests to assert on. */
@@ -357,6 +360,7 @@ export class DomRenderer implements Renderer {
 				character,
 				assetId: frame.asset,
 				url,
+				fit: frame.fit,
 				placeholderId: url ? undefined : frame.asset,
 				placeholderLabel: url ? undefined : `? asset\n${frame.asset}`
 			};
@@ -478,6 +482,7 @@ export class DomRenderer implements Renderer {
 
 		this.entities.set(id, rec);
 		this.setContent(rec, res);
+		this.applyFit(rec, res);
 		this.layerFor(res.entity.layer).appendChild(el);
 
 		// Enter: fade + slight rise. Snap into the start pose with transitions off, force a
@@ -514,6 +519,7 @@ export class DomRenderer implements Renderer {
 		}
 
 		this.setContent(rec, res, durations.duration('frame', rec.id));
+		this.applyFit(rec, res);
 
 		const duration = Math.max(
 			durations.duration('move', rec.id),
@@ -606,6 +612,40 @@ export class DomRenderer implements Renderer {
 		rec.img = img;
 		rec.assetId = res.assetId;
 		rec.url = res.url;
+	}
+
+	/**
+	 * The frame's registration transform, written on the <img> rather than the sprite box.
+	 * The box's own `transform` is fully occupied by position and the mirror, and its
+	 * `transform-origin` has to stay the entity origin for `scaleX(-1)` to mirror about the
+	 * feet — so this gets its own element, and the two never fight.
+	 *
+	 * Scaling about that same origin keeps the feet planted when a frame is resized, and
+	 * `translate` reads as a fraction of the box because the <img> is stretched to fill it.
+	 * Written outside `setContent`, which bails early when the asset is unchanged: two
+	 * frames can share one asset and differ only in fit.
+	 */
+	private applyFit(rec: EntityRecord, res: ResolvedEntity): void {
+		if (!rec.img) {
+			return;
+		}
+
+		const style = rec.img.style;
+
+		if (!res.fit) {
+			style.transform = '';
+			style.transformOrigin = '';
+			return;
+		}
+
+		const {offset, scale} = res.fit;
+
+		style.transformOrigin = `${rec.metrics.origin.x * 100}% ${
+			rec.metrics.origin.y * 100
+		}%`;
+		style.transform = `translate(${offset.x * 100}%, ${
+			offset.y * 100
+		}%) scale(${scale})`;
 	}
 
 	private metricsFor(res: ResolvedEntity): SpriteMetrics {

@@ -1,6 +1,7 @@
 import {IconArrowBackUp} from '@tabler/icons';
 import * as React from 'react';
 import {IconButton} from '../../components/control/icon-button';
+import './adjust-slider.css';
 
 export interface AdjustSliderProps {
 	label: string;

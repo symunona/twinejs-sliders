@@ -59,6 +59,11 @@ const MAX_PREVIEW = 900;
 
 export interface AssetEditorDialogProps extends DialogComponentProps {
 	assetId: AssetId;
+	/**
+	 * Told the id the edit ended up under. Replacing reports the id it came in with;
+	 * saving as new reports the new one, so a character can repoint its frame at it.
+	 */
+	onSaved?: (assetId: AssetId) => void;
 }
 
 function megabytes(bytes: number): string {
@@ -472,6 +477,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		try {
 			await store.replace(meta.id, await editedFile(meta.name));
 			refreshAssetLibrary();
+			props.onSaved?.(meta.id);
 			props.onClose();
 		} catch (saveError) {
 			console.error('Could not overwrite the asset', saveError);
@@ -491,13 +497,18 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		try {
 			const saveName = name.trim() || `${meta.name}-edit`;
 
-			await store.putAsset(await editedFile(saveName), {
+			// `ownerCharacter` rides along, or a character frame edited here would land
+			// in the library as a loose asset while the character kept the old one.
+			const saved = await store.putAsset(await editedFile(saveName), {
 				kind: meta.kind,
 				name: saveName,
+				ownerCharacter: meta.ownerCharacter,
 				sourceAsset: meta.id,
 				tags: meta.tags
 			});
+
 			refreshAssetLibrary();
+			props.onSaved?.(saved.id);
 			props.onClose();
 		} catch (saveError) {
 			console.error('Could not save the edited asset', saveError);

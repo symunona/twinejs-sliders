@@ -1,0 +1,30 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.adjust-slider {
+	align-items: end;
+	display: flex;
+	gap: var(--control-inner-padding);
+}
+
+.adjust-slider label {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.adjust-slider-label {
+	color: var(--gray);
+	display: flex;
+	font-size: 85%;
+	justify-content: space-between;
+}
+
+.adjust-slider-value {
+	font-family: var(--font-monospaced, monospace);
+}
+
+.adjust-slider input[type='range'] {
+	width: 100%;
+}
