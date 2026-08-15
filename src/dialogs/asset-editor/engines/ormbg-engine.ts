@@ -31,11 +31,34 @@ import {BackgroundMask, MaskOptions, checkAborted} from '../engine-types';
  * non-commercial.
  */
 
+/**
+ * Pinned to a commit rather than `main`. The weights are 168 MB and get cached
+ * under this URL, so the key has to mean exactly one file forever: if the repo
+ * ever re-exports, a `main` URL would quietly serve different weights to fresh
+ * visitors than to everyone holding a cache entry, and the ceil_mode patch
+ * below would be reasoning about a graph nobody had checked.
+ */
+const MODEL_COMMIT = '034e2d884afbab897e10e78fc5bb566b29533fd6';
+const MODEL_BASE = `https://huggingface.co/onnx-community/ormbg-ONNX/resolve/${MODEL_COMMIT}/onnx/`;
+
 /** The ONNX exports, in the two dtypes we're willing to run. */
 const MODEL_URLS = {
-	fp16: 'https://huggingface.co/onnx-community/ormbg-ONNX/resolve/main/onnx/model_fp16.onnx',
-	fp32: 'https://huggingface.co/onnx-community/ormbg-ONNX/resolve/main/onnx/model.onnx'
+	fp16: `${MODEL_BASE}model_fp16.onnx`,
+	fp32: `${MODEL_BASE}model.onnx`
 } as const;
+
+/**
+ * Where downloaded weights live between visits.
+ *
+ * They have to be cached by hand: Hugging Face answers the resolve URL with
+ * `cache-control: no-store` and a *signed* CDN redirect whose URL changes on
+ * every request, and the blob at the end of it carries no caching directives at
+ * all. So the browser's HTTP cache never reuses it, and without this every
+ * single page load re-downloads 168 MB before the first cutout can start.
+ *
+ * Cache Storage also survives a hard refresh, which the HTTP cache does not.
+ */
+const MODEL_CACHE = 'sliders-models';
 
 /**
  * The ONNX runtime, fetched at run time instead of bundled.
@@ -168,6 +191,48 @@ async function hasShaderF16(): Promise<boolean> {
 	}
 }
 
+/** The weight cache, or undefined where Cache Storage isn't available. */
+async function modelCache(): Promise<Cache | undefined> {
+	try {
+		return await caches.open(MODEL_CACHE);
+	} catch (error) {
+		// Cache Storage needs a secure context. Without one every visit
+		// re-downloads, which is slow but still correct.
+		console.warn('Could not open the model cache', error);
+		return undefined;
+	}
+}
+
+/**
+ * The weights, from the cache if they're there and from the network if not.
+ * What gets cached is the untouched download, keyed by the stable resolve URL
+ * rather than the signed CDN one it redirects to.
+ */
+async function weights(
+	url: string,
+	options?: MaskOptions
+): Promise<Uint8Array> {
+	const cache = await modelCache();
+	const hit = await cache?.match(url);
+
+	if (hit) {
+		options?.onProgress?.({stage: 'download', progress: 1});
+		return new Uint8Array(await hit.arrayBuffer());
+	}
+
+	const model = await download(url, options);
+
+	try {
+		await cache?.put(url, new Response(model));
+	} catch (error) {
+		// Out of quota, most likely. Not a reason to fail the cutout--it just
+		// means the next visit pays for the download again.
+		console.warn('Could not cache the background removal model', error);
+	}
+
+	return model;
+}
+
 /** Downloads the weights, reporting progress as they arrive. */
 async function download(
 	url: string,
@@ -260,7 +325,7 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 
 	const dtype = (await hasShaderF16()) ? 'fp16' : 'fp32';
 	const build = async (which: 'fp16' | 'fp32') => {
-		const model = await download(MODEL_URLS[which], options);
+		const model = await weights(MODEL_URLS[which], options);
 
 		checkAborted(options?.signal);
 
