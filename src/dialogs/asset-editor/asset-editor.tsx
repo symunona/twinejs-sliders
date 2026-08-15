@@ -58,7 +58,16 @@ import './asset-editor.css';
 const MAX_PREVIEW = 900;
 
 export interface AssetEditorDialogProps extends DialogComponentProps {
-	assetId: AssetId;
+	/** The asset being edited. Absent when editing pixels that aren't in the library. */
+	assetId?: AssetId;
+	/**
+	 * Image bytes to edit that no asset owns yet--a freshly generated image. The
+	 * generator keeps its own history and decides for itself what becomes an asset, so
+	 * this mode offers `onApply` in place of the two library saves.
+	 */
+	source?: {blob: Blob; name: string};
+	/** Handed the edited bytes, when editing something that isn't an asset. */
+	onApply?: (blob: Blob) => void | Promise<void>;
 	/**
 	 * Told the id the edit ended up under. Replacing reports the id it came in with;
 	 * saving as new reports the new one, so a character can repoint its frame at it.
@@ -92,7 +101,7 @@ function elapsedLabel(seconds: number): string {
 }
 
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
-	const {assetId} = props;
+	const {assetId, source: sourceImage} = props;
 	const store = React.useMemo(() => slidersAssetStore(), []);
 	const [background, setBackground] = React.useState<BackgroundSupport>();
 	const cancel = React.useRef<AbortController>();
@@ -182,23 +191,24 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		let current = true;
 
 		async function load() {
-			const [assetMeta, blob] = await Promise.all([
-				store.meta(assetId),
-				store.get(assetId)
-			]);
+			// Two ways in: an asset id, or raw bytes that no asset owns yet. Only the
+			// first has metadata, and everything that needs metadata is guarded on it.
+			const [assetMeta, blob] = assetId
+				? await Promise.all([store.meta(assetId), store.get(assetId)])
+				: [undefined, sourceImage?.blob];
 
 			if (!current) {
 				return;
 			}
 
-			if (!assetMeta || !blob) {
+			if ((assetId && !assetMeta) || !blob) {
 				setError(t('dialogs.assetEditor.loadError'));
 				return;
 			}
 
 			// Editing an animation would flatten it to its first frame, so don't.
 
-			if (assetMeta.animated) {
+			if (assetMeta?.animated) {
 				setMeta(assetMeta);
 				setError(t('dialogs.assetEditor.animatedError'));
 				return;
@@ -217,7 +227,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			}
 
 			setMeta(assetMeta);
-			setName(`${assetMeta.name}-edit`);
+			setName(assetMeta ? `${assetMeta.name}-edit` : sourceImage?.name ?? '');
 			setOriginal(canvas);
 			setSource(canvas);
 			setEdits(defaultEdits(canvas.width, canvas.height));
@@ -234,7 +244,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		return () => {
 			current = false;
 		};
-	}, [assetId, store, t]);
+	}, [assetId, sourceImage, store, t]);
 
 	// Redraw the preview whenever the source or the adjustments change. The crop
 	// is drawn as an overlay instead, so that it stays possible to re-crop.
@@ -275,6 +285,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 	const busy = saving || progress !== undefined;
 	const backgroundRemoved = source !== undefined && source !== original;
+	/** Editing bytes no asset owns--everything keyed off library metadata is off. */
+	const detached = assetId === undefined;
 
 	function changeEdits(changes: Partial<ImageEdits>) {
 		setEdits(current => (current ? {...current, ...changes} : current));
@@ -465,6 +477,32 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		return new File([blob], `${fileName}.png`, {type: 'image/png'});
 	}
 
+	/**
+	 * Hands the edited bytes back to whoever opened the editor on them. Used by the
+	 * asset generator, which keeps generated images in its own history until someone
+	 * chooses what they should become.
+	 */
+	async function handleApply() {
+		if (!source || !edits || !props.onApply) {
+			return;
+		}
+
+		setError(undefined);
+		setSaving(true);
+
+		try {
+			const canvas = document.createElement('canvas');
+
+			drawEdited(source, edits, canvas);
+			await props.onApply(await canvasBlob(canvas));
+			props.onClose();
+		} catch (applyError) {
+			console.error('Could not apply the edit', applyError);
+			setError(t('dialogs.assetEditor.saveError'));
+			setSaving(false);
+		}
+	}
+
 	/** Writes the edit back over the asset it came from, keeping its id. */
 	async function handleReplace() {
 		if (!source || !edits || !meta) {
@@ -572,13 +610,15 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		enabled: !saveDisabled,
 		id: 'assetEditor.saveAsNew',
 		label: t('hotkeys.commands.assetEditor.saveAsNew'),
-		run: handleSave,
+		// Detached editing has one destination rather than two, so the same key
+		// commits the edit there instead.
+		run: detached ? handleApply : handleSave,
 		scope: 'asset-editor'
 	});
 
 	useCommand({
 		allowInInput: true,
-		enabled: !saveDisabled,
+		enabled: !saveDisabled && !detached,
 		id: 'assetEditor.replace',
 		label: t('hotkeys.commands.assetEditor.replace'),
 		run: () => setReplaceOpen(true),
@@ -590,7 +630,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			{...props}
 			className="asset-editor-dialog"
 			focusOnOpen
-			headerLabel={t('dialogs.assetEditor.title', {name: meta?.name ?? ''})}
+			headerLabel={t('dialogs.assetEditor.title', {
+				name: meta?.name ?? sourceImage?.name ?? ''
+			})}
 			hotkeyScope="asset-editor"
 			maximizable
 		>
@@ -824,19 +866,26 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 						</section>
 						<section>
 							<h3>{t('dialogs.assetEditor.save')}</h3>
-							<TextInput
-								onChange={event => setName(event.target.value)}
-								value={name}
-							>
-								{t('dialogs.assetEditor.name')}
-							</TextInput>
+							{!detached && (
+								<TextInput
+									onChange={event => setName(event.target.value)}
+									value={name}
+								>
+									{t('dialogs.assetEditor.name')}
+								</TextInput>
+							)}
 							<p className="asset-editor-detail">
-								{t('dialogs.assetEditor.saveNote', {
-									height: edits.height,
-									width: edits.width
-								})}
+								{detached
+									? t('dialogs.assetEditor.applyNote', {
+											height: edits.height,
+											width: edits.width
+									  })
+									: t('dialogs.assetEditor.saveNote', {
+											height: edits.height,
+											width: edits.width
+									  })}
 							</p>
-							{clash && (
+							{!detached && clash && (
 								<p className="asset-editor-warning" role="status">
 									{t(
 										clash.id === meta?.id
@@ -850,22 +899,28 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								<IconButton
 									disabled={saveDisabled}
 									icon={<IconDeviceFloppy />}
-									label={t('dialogs.assetEditor.saveAsNew')}
-									onClick={handleSave}
+									label={t(
+										detached
+											? 'dialogs.assetEditor.apply'
+											: 'dialogs.assetEditor.saveAsNew'
+									)}
+									onClick={detached ? handleApply : handleSave}
 									variant="create"
 								/>
-								<ConfirmButton
-									confirmVariant="danger"
-									disabled={saveDisabled}
-									icon={<IconArrowsExchange />}
-									label={t('dialogs.assetEditor.replace')}
-									onChangeOpen={setReplaceOpen}
-									onConfirm={handleReplace}
-									open={replaceOpen}
-									prompt={t('dialogs.assetEditor.replacePrompt', {
-										name: meta?.name ?? ''
-									})}
-								/>
+								{!detached && (
+									<ConfirmButton
+										confirmVariant="danger"
+										disabled={saveDisabled}
+										icon={<IconArrowsExchange />}
+										label={t('dialogs.assetEditor.replace')}
+										onChangeOpen={setReplaceOpen}
+										onConfirm={handleReplace}
+										open={replaceOpen}
+										prompt={t('dialogs.assetEditor.replacePrompt', {
+											name: meta?.name ?? ''
+										})}
+									/>
+								)}
 							</ButtonBar>
 						</section>
 					</div>

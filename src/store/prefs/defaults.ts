@@ -2,6 +2,8 @@ import {PrefsState} from './prefs.types';
 
 export const defaults = (): PrefsState => ({
 	appTheme: 'system',
+	assetGeneratorAspect: '16:9',
+	assetGeneratorModel: 'gemini:gemini-2.5-flash-image',
 	codeEditorFontFamily: 'var(--font-monospaced)',
 	codeEditorFontScale: 1,
 	dialogWidth: 600,
@@ -9,6 +11,7 @@ export const defaults = (): PrefsState => ({
 	donateShown: false,
 	editorCursorBlinks: true,
 	firstRunTime: new Date().getTime(),
+	geminiApiKey: '',
 	hotkeyOverrides: {},
 	lastUpdateSeen: '',
 	lastUpdateCheckTime: new Date().getTime(),
@@ -17,6 +20,7 @@ export const defaults = (): PrefsState => ({
 		(window.navigator as any).browserLanguage ||
 		(window.navigator as any).systemLanguage ||
 		'en-us',
+	openAiApiKey: '',
 	passageEditorFontFamily: 'var(--font-system)',
 	passageEditorFontScale: 1,
 	passageTagDisplay: 'color',

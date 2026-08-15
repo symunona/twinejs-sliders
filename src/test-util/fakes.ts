@@ -113,6 +113,8 @@ export function fakePrefs(overrides?: Partial<PrefsState>): PrefsState {
 
 	return {
 		appTheme: faker.helpers.arrayElement(['light', 'dark', 'system']),
+		assetGeneratorAspect: '16:9',
+		assetGeneratorModel: 'gemini:gemini-2.5-flash-image',
 		codeEditorFontFamily: faker.lorem.words(2),
 		codeEditorFontScale: 0.8 + faker.number.int(0.5),
 		dialogWidth: faker.number.int(600),
@@ -122,10 +124,12 @@ export function fakePrefs(overrides?: Partial<PrefsState>): PrefsState {
 		donateShown: faker.datatype.boolean(),
 		editorCursorBlinks: faker.datatype.boolean(),
 		firstRunTime: new Date().getTime(),
+		geminiApiKey: '',
 		hotkeyOverrides: {},
 		lastUpdateSeen: '',
 		lastUpdateCheckTime: new Date().getTime(),
 		locale: faker.location.countryCode(),
+		openAiApiKey: '',
 		passageEditorFontFamily: faker.lorem.words(2),
 		passageEditorFontScale: 0.8 + faker.number.float(0.5),
 		passageTagDisplay: 'color',

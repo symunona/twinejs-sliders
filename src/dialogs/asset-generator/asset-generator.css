@@ -1,0 +1,252 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.asset-generator-dialog .button-bar {
+	flex-wrap: wrap;
+}
+
+/* Compose on the left, the model list on the right, stacking when there's no room. */
+
+.asset-generator {
+	display: grid;
+	/* Must not eat the history's share of the dialog when the model list is long. */
+	flex: 0 0 auto;
+	gap: var(--grid-size);
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	padding: var(--grid-size);
+}
+
+.asset-generator-compose,
+.asset-generator-models {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	min-width: 0;
+}
+
+.asset-generator-prompt {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+}
+
+.asset-generator-prompt textarea {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	font: inherit;
+	padding: var(--control-inner-padding);
+	resize: vertical;
+	width: 100%;
+}
+
+.asset-generator-prompt textarea:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+/* Both search fields sit above a list as wide as the column, so they match it. */
+
+.asset-generator-dialog .text-input,
+.asset-generator-dialog .text-input > label,
+.asset-generator-dialog .text-input input {
+	width: 100%;
+}
+
+.asset-generator-heading {
+	flex: 0 0 auto;
+	margin: 0;
+	padding: var(--grid-size) var(--grid-size) 0;
+}
+
+.asset-generator-history {
+	flex: 1 1 0;
+	/* Zero, not a floor: a flex item won't scroll until it may shrink past its
+	   content, and the history is what should scroll rather than the dialog. */
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--grid-size);
+}
+
+.asset-generator-history .sliders-tiles {
+	/* Wider than a library tile: three save buttons on one line beats six lines. */
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
+.asset-generator-detail {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
+
+.asset-generator-notice {
+	background: var(--faint-blue);
+	border-radius: var(--corner-round);
+	margin: 0 var(--grid-size);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-generator-warning {
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	margin: 0 var(--grid-size);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-generator-models .asset-generator-warning {
+	margin: 0;
+}
+
+/* Model list. Long, searchable, and scrolls rather than pushing the prompt away. */
+
+.model-select {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	min-height: 0;
+}
+
+.model-options {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	list-style: none;
+	margin: 0;
+	max-height: calc(var(--grid-size) * 28);
+	overflow-y: auto;
+	padding: 0;
+}
+
+.model-option {
+	background: none;
+	border: none;
+	border-bottom: 1px solid var(--light-gray);
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	font: inherit;
+	gap: 2px;
+	padding: var(--control-inner-padding);
+	text-align: left;
+	width: 100%;
+}
+
+.model-option:hover:not(:disabled) {
+	background: var(--faint-gray);
+}
+
+.model-option.selected {
+	background: var(--faint-blue);
+}
+
+.model-option:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.model-option:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: -2px;
+}
+
+.model-option-label {
+	color: var(--black);
+	font-weight: bold;
+}
+
+.model-option-detail {
+	color: var(--gray);
+	font-size: 85%;
+}
+
+.model-option-warning {
+	color: var(--dark-yellow, var(--gray));
+	font-size: 85%;
+}
+
+.model-options-empty {
+	color: var(--gray);
+	padding: var(--control-inner-padding);
+}
+
+/* Attachment picker. */
+
+.asset-picker-grid {
+	display: grid;
+	gap: var(--control-inner-padding);
+	grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+	max-height: calc(var(--grid-size) * 20);
+	overflow-y: auto;
+}
+
+.asset-picker-item {
+	background: none;
+	border: 2px solid transparent;
+	border-radius: var(--corner-round);
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	font: inherit;
+	gap: 2px;
+	/* Grid items default to min-content width, which lets a long asset name push
+	   the tile out over its neighbours instead of ellipsing. */
+	min-width: 0;
+	overflow: hidden;
+	padding: 2px;
+}
+
+.asset-picker-item.selected {
+	background: var(--faint-blue);
+	border-color: var(--blue);
+}
+
+.asset-picker-item:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+.asset-picker-item .asset-preview {
+	height: calc(var(--grid-size) * 5);
+}
+
+.asset-picker-name {
+	color: var(--gray);
+	font-size: 80%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-picker-empty {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
+
+/* History tiles reuse the asset library's tile look. */
+
+.generation-tile {
+	background: var(--faint-gray);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding);
+}
+
+.generation-tile .asset-preview {
+	height: calc(var(--grid-size) * 9);
+}
+
+.generation-tile-prompt {
+	color: var(--black);
+	display: -webkit-box;
+	margin: 0;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+
+.generation-tile .button-bar:last-of-type {
+	margin-top: auto;
+}

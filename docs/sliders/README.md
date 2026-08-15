@@ -13,6 +13,8 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 05 | [twinejs-parser.md](05-twinejs-parser.md) | Shared YAML→Stage parser. Errors. CM5 highlighting. |
 | 06 | [twinejs-preview.md](06-twinejs-preview.md) | Live preview under the passage editor. Full screen. |
 | 07 | [twinejs-visual-editor.md](07-twinejs-visual-editor.md) | Drag on the preview, write back to YAML. |
+| 08 | [export-import-bundle.md](08-export-import-bundle.md) | `.sliders.zip` — story text plus its assets. |
+| 09 | [twinejs-asset-generator.md](09-twinejs-asset-generator.md) | Gemini/OpenAI image generation. History, saving. |
 
 Origin notes with the full Q&A history: [`../2026-08-14-twine-languages.md`](../2026-08-14-twine-languages.md).
 

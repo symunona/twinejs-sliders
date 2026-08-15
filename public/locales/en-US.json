@@ -192,7 +192,12 @@
 			"themeSystem": "System",
 			"theme": "Theme",
 			"title": "Preferences",
-			"useEnhancedEditors": "Use Enhanced Editors"
+			"useEnhancedEditors": "Use Enhanced Editors",
+			"apiKeyPlaceholder": "Paste a key",
+			"assetGenerator": "Asset Generator",
+			"assetGeneratorExplanation": "Keys are kept on this machine, in the same browser storage as every other preference, and are sent only to the provider they belong to. Anyone with access to this browser profile can read them.",
+			"geminiApiKey": "Google AI Studio API Key",
+			"openAiApiKey": "OpenAI API Key"
 		},
 		"assetEditor": {
 			"adjust": "Adjust",
@@ -243,7 +248,9 @@
 			"title": "Edit {{name}}",
 			"tuningNote": "Drag these if too much or too little was cut—they re-use the cutout the model already made, so they apply instantly. Lower “keep ↔ cut” rescues a subject that came out full of holes; higher softness keeps the model’s own soft edges instead of forcing them to solid or clear.",
 			"unknownGpu": "not reported",
-			"width": "Width"
+			"width": "Width",
+			"apply": "Apply Edit",
+			"applyNote": "The edit goes back into the generation history at {{width}}×{{height}}. Nothing reaches the asset library until you save it there."
 		},
 		"passageEdit": {
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",
@@ -477,6 +484,41 @@
 				},
 				"notThisPlatform": "These aren’t the keys this computer uses."
 			}
+		},
+		"assetGenerator": {
+			"alreadySaved": "The library already had these exact pixels, so it kept pointing at “{{name}}” instead of making a second copy.",
+			"aspect": "Aspect Ratio",
+			"assetName": "Name",
+			"attach": "Attach Assets",
+			"attachmentsIgnored": "{{model}} can’t take reference images, so what you attached won’t be sent.",
+			"customModel": "Use “{{id}}” as a {{provider}} model",
+			"deletePrompt": "Delete this generated image? It was never in the asset library, so this cannot be undone.",
+			"edit": "Edit",
+			"emptyHistory": "Nothing generated yet. Describe an image and press Generate.",
+			"generate": "Generate",
+			"history": "History",
+			"historyNote": "Generated images live here, not in the asset library, and are never bundled with a story. Save the ones you want to keep.",
+			"model": "Model",
+			"needsKey": "Needs a {{provider}} API key, set in Preferences.",
+			"noAssets": "No assets to attach yet.",
+			"noKeys": "No API keys are set. Add a Google or OpenAI key in Preferences before generating.",
+			"noModels": "No models match that search. Type a full model id to use one this list doesn’t know about.",
+			"pickModel": "Choose a model to generate with.",
+			"prompt": "Prompt",
+			"promptPlaceholder": "A rain-slick tavern street at night, warm windows, no people",
+			"requestError": "The request failed: {{message}}",
+			"reuse": "Reuse Prompt",
+			"saveAsBackground": "Save as Background",
+			"saveAsCharacter": "Save as Character",
+			"saveAsObject": "Save as Object",
+			"saveError": "Could not save this image to the asset library.",
+			"saved": "Saved to the library as “{{name}}”.",
+			"savedAs": "Saved: {{name}}",
+			"searchAssetsPlaceholder": "Search assets",
+			"searchModelsPlaceholder": "Search models, or type a model id",
+			"takesAttachments": "takes attachments",
+			"title": "Asset Generator",
+			"working": "Asking {{model}} for an image…"
 		}
 	},
 	"electron": {
@@ -547,7 +589,8 @@
 				"snapToGrid": "Snap to Grid",
 				"startStoryHere": "Start Story Here",
 				"stylesheet": "Stylesheet",
-				"testFromHere": "Test From Here"
+				"testFromHere": "Test From Here",
+				"slidersGenerator": "Generate"
 			},
 			"topBar": {
 				"editJavaScript": "Edit Story JavaScript",
@@ -723,7 +766,8 @@
 			},
 			"sliders": {
 				"assets": "Asset Manager",
-				"characters": "Character Editor"
+				"characters": "Character Editor",
+				"generator": "Asset Generator"
 			},
 			"scene": {
 				"togglePreview": "Show or Hide Scene Preview",
@@ -749,6 +793,9 @@
 				"delete": "Delete Character",
 				"addFrames": "Add Frames",
 				"addAnchor": "Add Anchor"
+			},
+			"assetGenerator": {
+				"generate": "Generate Image"
 			}
 		},
 		"scopes": {
@@ -764,7 +811,8 @@
 			"scene-preview": "Scene Preview",
 			"sliders-assets": "Asset Manager",
 			"asset-editor": "Image Editor",
-			"sliders-characters": "Character Editor"
+			"sliders-characters": "Character Editor",
+			"asset-generator": "Asset Generator"
 		}
 	}
 }

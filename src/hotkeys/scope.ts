@@ -29,6 +29,7 @@ export const scopes = [
 	'passage-editor',
 	'scene-preview',
 	'sliders-assets',
+	'asset-generator',
 	'asset-editor',
 	'sliders-characters',
 	'fuzzy-finder',
