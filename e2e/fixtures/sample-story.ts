@@ -53,10 +53,11 @@ beats:
   - mira: {frame: angry, at: -0.25, say: "Get out."}
   - wait: 0.5
   - box: "The candle gutters."
-  # Targets go inline. Twine's own editor parses [[...]] out of the passage SOURCE to
-  # draw the map and auto-create passages, so a bare [[stay]] would make it invent a
-  # passage called "stay". The links: map then only carries presentation props.
-  - mira: "Will you [[stay -> Tavern - Fight]] or [[go -> Street]]?"
+  # Targets go inline: Twine parses [[...]] out of the passage SOURCE to draw the map
+  # and auto-create passages, so a bare [[stay]] makes it invent a passage called
+  # "stay". Note there are NO spaces around ->; Twine does not trim, so "[[a -> B]]"
+  # would create a passage named " B". The links: map carries only presentation props.
+  - mira: "Will you [[stay->Tavern - Fight]] or [[go->Street]]?"
 
 links:
   stay: {icon: sword}
@@ -81,7 +82,7 @@ beats:
   - mira: "Then draw."
   - fx: thunder
   - joren: "As you like."
-  - box: "Steel on wood. [[Out into the night -> Street]]"
+  - box: "Steel on wood. [[Out into the night->Street]]"
 `
 	},
 	{

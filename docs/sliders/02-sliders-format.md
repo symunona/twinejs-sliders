@@ -134,14 +134,21 @@ bg is the backdrop, outside the layer stack.
 
 ## Links (D3)
 
-Wiki-style. Two forms, both found by `parsePassageText` so the map draws lines either way.
+Wiki-style. **Always write the target inline**, because Twine's own editor parses `[[…]]`
+out of the passage *source* to draw the story map and auto-create passages. A bare
+`[[stay]]` makes Twine invent a passage called `stay`.
 
 | Form | Use |
 |---|---|
-| `[[stay -> Tavern Fight]]` | inline, no props |
-| `[[stay]]` + entry in `links:` | props needed |
+| `[[stay->Tavern Fight]]` | the normal case |
+| `[[stay->Tavern Fight]]` + `stay: {icon: sword}` under `links:` | when the link needs props |
 
-Link props: `to`, `if`, `icon`, `transition`.
+⚠️ **No spaces around `->`.** Twine does not trim link targets, so `[[stay -> Tavern Fight]]`
+creates a passage named `" Tavern Fight"` with a leading space — which then silently fails
+to match the real one.
+
+Link props: `to`, `if`, `icon`, `transition`. `to:` is optional when the target is inline;
+the parser fills it in.
 
 Because bubbles are DOM (D2), a link in bubble text is an `<a>` in a `<div>`. Hover, focus,
 keyboard nav, screen readers — free.
