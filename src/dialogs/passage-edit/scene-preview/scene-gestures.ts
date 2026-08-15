@@ -1,5 +1,5 @@
 /**
- * The rules behind phase 4's gestures (spec 09): flip, layer, z, frame, delete, drop, camera.
+ * The rules behind phase 4's gestures (spec 10): flip, layer, z, frame, delete, drop, camera.
  *
  * Pure, like `planEntityWrite` and for the same reason — "does `f` on an unflipped sprite
  * write `flip: true` or delete the key" is a rule, and a rule that can only be checked by

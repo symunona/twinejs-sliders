@@ -13,11 +13,7 @@ before phase 3 so ids and keys land together.
 
 1. **Twine's users are writers.** Most of their time is spent inside a textarea/CodeMirror. Any
    bare letter that can fire while typing is a bug, not a shortcut. Bare letters are allowed
-   **only** in browse-first scopes — the routes' canvases (`story-map`, `story-list`), the
-   sliders browsers (`sliders-assets`, `sliders-characters`, `asset-editor`) and the scene
-   preview (`scene-preview`). What those have in common is that the work is picking things,
-   not writing; where they do hold a field, the dispatcher's text-entry rule (§2.3 of the
-   registry plan) already keeps a bare key from firing into it.
+   **only** in canvas-like scopes (`story-map`, `story-list`) where no text entry exists.
 2. **The story map is a canvas.** There, single letters are the right call — Figma, Blender and
    Photoshop all work this way, and Twine already ships bare `p`, `-`, `=`. Keep that precedent.
 3. **Bind what you do many times per session.** Create/edit/rename/delete/navigate/zoom/play.
@@ -149,7 +145,7 @@ exists, no default binding.
 | ● | `?` | `app.shortcutsHelp` | Shortcut cheat sheet | not in inputs; `shift+/` |
 | ● | `mod+,` | `app.preferences` | Preferences | may be swallowed by Chrome/macOS |
 | ● | `Escape` | `dialog.close` | Close topmost dialog | already implemented in `dialog-card.tsx:71`; document, don't rebind |
-| ○ | — | `app.keyboardShortcuts` | Keyboard shortcuts editor | `mod+k mod+s` once chords land |
+| ● | `mod+shift+?` | `app.keyboardShortcuts` | Keyboard shortcuts editor | `?` already needs Shift, so this is Ctrl+Shift+/ on a US layout |
 | ○ | — | `app.storyFormats`, `app.about`, `app.reportBug` | | palette only |
 
 ### 3.2 Story list (`story-list`)
@@ -196,7 +192,7 @@ Undo/redo bind to the `useUndoableStoriesContext()` `undo`/`redo` the toolbar bu
 `!undo` / `!redo` condition — so the command is registered but not enabled when there's nothing to
 undo, and the shortcut is silently inert rather than throwing. Inside the passage editor,
 CodeMirror's own `mod+z` must still win: `story.undo` does **not** set `allowInInput`, so it never
-fires while a text field has focus (§3.4).
+fires while a text field has focus (§3.5).
 
 Deliberately **not** bound, though tempting:
 
@@ -204,7 +200,27 @@ Deliberately **not** bound, though tempting:
   "move passage by delta" action yet and it needs grid/undo-coalescing decisions. Separate PR.
 - `s` for start-at. Too close to a save reflex that does nothing here.
 
-### 3.4 Passage editor (`passage-editor`, inside CodeMirror)
+### 3.4 Dialogs (`dialog`)
+
+The scope every `DialogCard` declares. A dialog is mostly text fields — the passage editor is a
+CodeMirror — so anything here needs `allowInInput: true`, and therefore a chord that produces no
+character.
+
+| | key | command id | action | notes |
+|---|---|---|---|---|
+| ● | `alt+enter` | `dialog.maximize` | Maximize or restore the dialog | only on dialogs that offer the button; instance-scoped to the focused dialog |
+| ● | `Escape` | `dialog.close` | Close the dialog | handled inline in `dialog-card.tsx`, not a registered command |
+
+`alt+enter` is the long-standing "maximize / properties" convention, it inserts nothing in a
+textarea, and CodeMirror binds neither `Alt-Enter` nor `Cmd-Alt-Enter` in any of its default
+keymaps. Collapse/expand deliberately has no key: the pair would need two chords for something
+one click away, and the collapse button is not the one people reach for mid-sentence.
+
+Because a `DialogCard` is rendered once per open dialog, `dialog.maximize` passes `element` to
+`useCommand` so that only the dialog containing focus responds, and `enabled` mirrors
+`maximizable` so the key is inert exactly where the button is absent.
+
+### 3.5 Passage editor (`passage-editor`, inside CodeMirror)
 
 Every binding here needs `allowInInput: true`, and therefore must be a function key or a
 modified chord — never a bare letter.
@@ -220,7 +236,7 @@ CodeMirror's own bindings (`mod+z`, `mod+a`, word motion, etc.) must keep workin
 of the dispatcher rule from the registry plan §2.3 step 2: inside an input, only `allowInInput`
 commands are eligible, and everything else falls through to the editor untouched.
 
-### 3.5 Fuzzy finder / command palette (`fuzzy-finder`)
+### 3.6 Fuzzy finder / command palette (`fuzzy-finder`)
 
 Ships today, hand-rolled in `fuzzy-finder.tsx:38-77` with four copy-pasted `filter:` callbacks.
 Same keys, moved into the registry — this is the phase-2 refactor that deletes code:
@@ -231,7 +247,7 @@ Same keys, moved into the registry — this is the phase-2 refactor that deletes
 | ● | `Enter` | `finder.select` | Choose highlighted result |
 | ● | `↑` / `↓` | `finder.prev` / `finder.next` | Move highlight |
 
-### 3.6 Keyboard shortcuts dialog (`keybindings`)
+### 3.7 Keyboard shortcuts dialog (`keybindings`)
 
 | | key | command id | action |
 |---|---|---|---|
@@ -257,6 +273,12 @@ user-visible — worth a line in the release notes.
 
 `Escape` gains an ordering guarantee it doesn't have today: fuzzy finder → dialog →
 deselect-all, innermost scope first, first match wins and stops.
+
+It also gains a step: inside a dialog, the first `Escape` leaves a focused text field and
+puts focus on the dialog itself; the second closes the dialog. Before, there was no way to
+stop editing a passage without losing the editor, and no way to reach the dialog's own
+shortcuts from inside its text. This is handled by `DialogCard`, not by the registry, for
+the same reason closing always was: it is window behavior, not an app command.
 
 ---
 
@@ -322,6 +344,13 @@ The table in §3 is implemented in `src/hotkeys/default-keymap.ts`, with these e
   passage editor's rename) rather than in per-card scopes--see the UI doc §16.
 - `passage.test` deliberately does **not** register in the passage editor: bare `t` has no
   business firing there, and the story map toolbar already owns it.
+- `dialog.maximize` (§3.4) is registered by `DialogCard` itself, so it exists for every dialog in
+  the app at once. It is the first command to use `Command.element`, without which the four
+  dialogs that can be open together would all answer to the key and the winner would be whichever
+  mounted first. One consequence worth knowing: the Keyboard Shortcuts dialog wraps its own
+  contents in the `keybindings` scope, which suppresses every outer scope, so `alt+enter` only
+  maximizes that particular dialog while focus is on its header controls rather than in the list.
+  That is the scope rule working as designed, not a bug in this command.
 
 Two rules in §1 are now enforced by tests rather than convention
 (`src/hotkeys/__tests__/resolve-keymap.test.ts`): no bare letter outside a canvas scope, and

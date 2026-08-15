@@ -8,7 +8,7 @@ import {
 } from './sliders-helpers';
 
 /**
- * The visual editor (spec 09): drag a sprite, resize it, and get YAML back.
+ * The visual editor (spec 10): drag a sprite, resize it, and get YAML back.
  *
  * This is the acceptance test for the one rule the whole design rests on — **the text is
  * the source of truth** — and for the property that makes it usable: a write must be a

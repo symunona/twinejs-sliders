@@ -10,6 +10,8 @@ import {DialogCard} from '../../components/container/dialog-card';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
+import {AssetEditorDialog} from '../asset-editor';
+import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {useAssetLibrary} from '../sliders-assets/asset-store-context';
 import {CharacterEditor} from './character-editor';
@@ -43,6 +45,7 @@ export interface SlidersCharactersDialogProps extends DialogComponentProps {
 export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = props => {
 	const {characterId, ...other} = props;
 	const library = useAssetLibrary();
+	const {dispatch} = useDialogsContext();
 	const [createOpen, setCreateOpen] = React.useState(false);
 	const [deleteOpen, setDeleteOpen] = React.useState(false);
 	const [draft, setDraft] = React.useState<Character>();
@@ -195,6 +198,47 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		refresh();
 	}
 
+	/**
+	 * Frames are ordinary assets, so editing one is just the asset editor pointed at it.
+	 * Replacing reports back the id it came in with and needs no repoint; saving as new
+	 * reports a new id, and the frame has to follow or the edit goes nowhere visible.
+	 */
+	function handleEditFrame(name: string) {
+		const frame = latest.current?.frames[name];
+
+		if (!frame) {
+			return;
+		}
+
+		dispatch({
+			type: 'addDialog',
+			component: AssetEditorDialog,
+			maximized: true,
+			props: {
+				assetId: frame.asset,
+				onSaved: async (assetId: string) => {
+					// Read through the ref: the editor outlives any render this closed over.
+					const current = latest.current;
+
+					if (current && current.frames[name] && current.frames[name].asset !== assetId) {
+						const updated = {
+							...current,
+							frames: {
+								...current.frames,
+								[name]: {...current.frames[name], asset: assetId}
+							}
+						};
+
+						setDraft(updated);
+						await store.putCharacter(updated);
+					}
+
+					refresh();
+				}
+			}
+		});
+	}
+
 	const tabIndex = Math.max(
 		0,
 		characters.findIndex(character => character.id === activeId)
@@ -285,6 +329,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 									character={draft}
 									onChange={setDraft}
 									onCommit={commit}
+									onEditFrame={handleEditFrame}
 									onUploadFrames={handleUploadFrames}
 								/>
 							)}

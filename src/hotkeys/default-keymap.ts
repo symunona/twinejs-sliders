@@ -27,8 +27,13 @@ export interface DefaultBinding {
 export const defaultKeymap: Record<string, DefaultBinding> = {
 	// Global.
 
-	'app.keyboardShortcuts': {bindings: []},
+	'app.keyboardShortcuts': {bindings: ['mod+shift+?']},
 	'app.preferences': {bindings: ['mod+,']},
+
+	// Dialogs. Dialogs are mostly text fields, so this has to be a chord that
+	// produces no character and that CodeMirror doesn't use.
+
+	'dialog.maximize': {bindings: ['alt+enter']},
 
 	// Story list.
 
@@ -60,6 +65,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'build.test': {bindings: ['mod+shift+enter']},
 	'sliders.assets': {bindings: ['a']},
 	'sliders.characters': {bindings: ['c']},
+	'sliders.generator': {bindings: ['g']},
 
 	// Scene preview. Viewer keys, so they only fire once focus is inside the
 	// preview--pressing left in the passage text still moves the cursor.
@@ -99,6 +105,11 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'slidersAssets.upload': {bindings: ['u']},
 	'slidersAssets.newCharacter': {bindings: ['n']},
 	'slidersAssets.search': {bindings: ['mod+f']},
+
+	// Asset generator. A chord, because focus lives in the prompt box.
+
+	'assetGenerator.generate': {bindings: ['mod+enter']},
+	'assetGenerator.stop': {bindings: ['mod+.']},
 
 	// Image editor. Saving is a chord because the name field has focus most of
 	// the time it's wanted.

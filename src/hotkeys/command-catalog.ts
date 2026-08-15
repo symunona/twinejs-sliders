@@ -90,8 +90,10 @@ export const commandCatalog: CatalogEntry[] = [
 
 	{id: 'sliders.assets', scope: 'story-map'},
 	{id: 'sliders.characters', scope: 'story-map'},
+	{id: 'sliders.generator', scope: 'story-map'},
 
 	{id: 'passage.rename', scope: 'dialog'},
+	{id: 'dialog.maximize', scope: 'dialog'},
 
 	{id: 'scene.togglePreview', scope: 'scene-preview'},
 	{id: 'scene.play', scope: 'scene-preview'},
@@ -146,6 +148,9 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'slidersAssets.upload', scope: 'sliders-assets'},
 	{id: 'slidersAssets.newCharacter', scope: 'sliders-assets'},
 	{id: 'slidersAssets.search', scope: 'sliders-assets'},
+
+	{id: 'assetGenerator.generate', scope: 'asset-generator'},
+	{id: 'assetGenerator.stop', scope: 'asset-generator'},
 
 	{id: 'assetEditor.removeBackground', scope: 'asset-editor'},
 	{id: 'assetEditor.restoreBackground', scope: 'asset-editor'},

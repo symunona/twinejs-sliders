@@ -263,9 +263,33 @@ export interface Transition {
 // Cast + assets
 // ---------------------------------------------------------------------------
 
+/**
+ * How one frame's art sits inside the character box — registration, not expression.
+ * Sprite sheets rarely agree: a wave is drawn a little higher, an idle a little smaller.
+ * This nudges each frame until they line up, which is what the editor's onion skin is
+ * for seeing.
+ *
+ * The rig does NOT move with it. `origin` and `anchors` stay character-level and stay in
+ * box space, so a speech bubble does not jitter as frames swap.
+ *
+ * Fractions of the character box, never pixels — `replace` re-derives an asset's `w`/`h`
+ * from new bytes, so a pixel offset would silently shift every aligned frame the moment
+ * its background was cut out.
+ */
+export interface FrameFit {
+	/** {x: 0, y: 0} leaves the art where it is. */
+	offset: Frac2;
+	/** Uniform. 1 fills the box. */
+	scale: number;
+}
+
+export const DEFAULT_FIT: FrameFit = {offset: {x: 0, y: 0}, scale: 1};
+
 export interface CharacterFrame {
 	asset: AssetId;
 	loop?: boolean;
+	/** Absent means identity — every frame drawn before this existed. */
+	fit?: FrameFit;
 }
 
 export interface Character {

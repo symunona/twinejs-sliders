@@ -25,6 +25,12 @@
 }
 
 .app-prefs-dialog .text-input,
-.app-prefs-dialog input[type='text'] {
+.app-prefs-dialog input[type='text'],
+.app-prefs-dialog input[type='password'] {
 	width: 100%;
+}
+
+.app-prefs-dialog .app-prefs-heading {
+	grid-column: 1 / span 2;
+	margin: var(--grid-size) 0 0;
 }

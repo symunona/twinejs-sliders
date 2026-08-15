@@ -1,5 +1,5 @@
 /**
- * Pure geometry for the visual scene editor (spec 09, phases 2 and 3).
+ * Pure geometry for the visual scene editor (spec 10, phases 2 and 3).
  *
  * `coords.ts` in `@sliders/render-dom` maps scene -> screen. The editor needs the other
  * direction — where did the pointer land, in scene units — plus snapping and handle math.
@@ -145,7 +145,7 @@ export interface HitTarget {
  *
  * By rect and not by DOM event, because `.sliders-entity` is `pointer-events: none` and
  * because a rect test survives the camera transform without the renderer knowing the editor
- * exists. Transparent pixels inside the frame count as hits — accepted for v1 (spec 09).
+ * exists. Transparent pixels inside the frame count as hits — accepted for v1 (spec 10).
  *
  * Ties on `zIndex` go to the LAST target in the list: same rule the painter's algorithm
  * uses, so whatever was drawn on top is what gets picked.

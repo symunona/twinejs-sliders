@@ -24,6 +24,24 @@ export interface PrefsState {
 	 */
 	appTheme: 'dark' | 'light' | 'system';
 	/**
+	 * Aspect ratio the asset generator last asked for.
+	 */
+	assetGeneratorAspect: string;
+	/**
+	 * Model the asset generator last generated with, as `provider:model`.
+	 */
+	assetGeneratorModel: string;
+	/**
+	 * Google AI Studio key, used by the asset generator for Gemini and Imagen
+	 * models. Kept in local storage in the clear, like every other preference.
+	 */
+	geminiApiKey: string;
+	/**
+	 * OpenAI key, used by the asset generator for GPT Image and DALL·E models.
+	 * Kept in local storage in the clear, like every other preference.
+	 */
+	openAiApiKey: string;
+	/**
 	 * Font family for the story JS and stylesheet editor.
 	 */
 	codeEditorFontFamily: string;

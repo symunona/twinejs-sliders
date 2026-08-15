@@ -124,10 +124,32 @@
 	position: relative;
 }
 
+.sprite-preview-frame.pannable {
+	cursor: grab;
+}
+
+.sprite-preview-frame.panning {
+	cursor: grabbing;
+}
+
 .sprite-preview-frame > img {
 	height: 100%;
 	object-fit: contain;
 	width: 100%;
+}
+
+/* Fit controls */
+
+/* Stacked, not side by side: the two button labels are long enough to squeeze a
+   same-row slider down to nothing. */
+.character-editor-fit {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+}
+
+.character-editor-fit .adjust-slider {
+	min-width: 0;
 }
 
 .sprite-onion {

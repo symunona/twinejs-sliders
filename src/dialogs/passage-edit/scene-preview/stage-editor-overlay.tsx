@@ -1,5 +1,5 @@
 /**
- * The visual editor's pointer surface and markers (spec 09, phases 1-3).
+ * The visual editor's pointer surface and markers (spec 10, phases 1-3).
  *
  * This component IS the stage frame: it renders `<SceneStage>` as its child so that its own
  * box and the renderer's mount element are the same rectangle. That is not tidiness — every

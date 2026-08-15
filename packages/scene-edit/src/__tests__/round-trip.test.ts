@@ -1,7 +1,7 @@
 /**
  * @jest-environment-options {"customExportConditions": ["node"]}
  *
- * THE GATE (spec 09 phase 0). No drag handle gets written until this file is green.
+ * THE GATE (spec 10 phase 0). No drag handle gets written until this file is green.
  *
  * Every case asserts the same thing: after the edit, every byte outside the spliced range
  * is identical. That is stronger than "the comments are still there" — it also catches

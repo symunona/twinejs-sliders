@@ -55,7 +55,7 @@ Full reasoning is in each package; the ones that could surprise you:
 ## Visual editor (spec 07) — built
 
 Drag, resize, flip, layer, delete, frame, asset-drop and camera, all writing back to the
-YAML. Plan and the shipped key bindings: [`docs/sliders/09-visual-editor-plan.md`](docs/sliders/09-visual-editor-plan.md).
+YAML. Plan and the shipped key bindings: [`docs/sliders/10-visual-editor-plan.md`](docs/sliders/10-visual-editor-plan.md).
 
 | # | Question | Chose | Why |
 |---|---|---|---|

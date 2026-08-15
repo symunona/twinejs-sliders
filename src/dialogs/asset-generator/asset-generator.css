@@ -1,0 +1,422 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.asset-generator-dialog .button-bar {
+	flex-wrap: wrap;
+}
+
+/* Compose on the left, the preview of whatever was last clicked on the right. Stacks
+   when the dialog isn't wide enough for two columns. */
+
+.asset-generator {
+	display: grid;
+	/* Must not eat the history's share of the dialog. */
+	flex: 0 0 auto;
+	gap: var(--grid-size);
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	padding: var(--grid-size);
+}
+
+.asset-generator-compose,
+.asset-generator-side {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	min-width: 0;
+}
+
+/* Model and aspect ratio are both one line, so they share one. */
+
+.asset-generator-settings {
+	align-items: flex-end;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--control-inner-padding);
+}
+
+.asset-generator-settings .model-select {
+	flex: 1 1 12em;
+}
+
+.asset-generator-prompt {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+}
+
+.asset-generator-prompt textarea {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	font: inherit;
+	padding: var(--control-inner-padding);
+	resize: vertical;
+	width: 100%;
+}
+
+.asset-generator-prompt textarea:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+/* Both search fields sit above a list as wide as the column, so they match it. */
+
+.asset-generator-dialog .text-input,
+.asset-generator-dialog .text-input > label,
+.asset-generator-dialog .text-input input {
+	width: 100%;
+}
+
+.asset-generator-heading {
+	flex: 0 0 auto;
+	margin: 0;
+	padding: var(--grid-size) var(--grid-size) 0;
+}
+
+.asset-generator-history {
+	flex: 1 1 0;
+	/* Zero, not a floor: a flex item won't scroll until it may shrink past its
+	   content, and the history is what should scroll rather than the dialog. */
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--grid-size);
+}
+
+.asset-generator-history .sliders-tiles {
+	/* Wider than a library tile: three save buttons on one line beats six lines. */
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
+.asset-generator-detail {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
+
+.asset-generator-notice {
+	background: var(--faint-blue);
+	border-radius: var(--corner-round);
+	margin: 0 var(--grid-size);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-generator-warning {
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	margin: 0 var(--grid-size);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-generator-compose .asset-generator-warning {
+	margin: 0;
+}
+
+/* Model selector. One line that names the model; the long, searchable list drops out
+   of it so it never pushes the prompt away. */
+
+.model-select {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.model-select-label {
+	font-size: 85%;
+}
+
+.model-select-toggle {
+	align-items: center;
+	background: var(--white);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	cursor: pointer;
+	display: flex;
+	font: inherit;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding);
+	text-align: left;
+	width: 100%;
+}
+
+.model-select-toggle:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+.model-select-toggle svg {
+	flex: 0 0 auto;
+}
+
+/* The model name gets whatever the provider label doesn't need, and ellipses--this row
+   stays one line however long the id is. */
+
+.model-select-value {
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.model-select-provider {
+	color: var(--gray);
+	flex: 0 1 auto;
+	font-size: 85%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.model-select-panel {
+	background: var(--white);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	max-width: 90vw;
+	padding: var(--control-inner-padding);
+	width: calc(var(--grid-size) * 40);
+	z-index: 1000;
+}
+
+.model-options {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	list-style: none;
+	margin: 0;
+	max-height: calc(var(--grid-size) * 28);
+	overflow-y: auto;
+	padding: 0;
+}
+
+.model-option {
+	background: none;
+	border: none;
+	border-bottom: 1px solid var(--light-gray);
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	font: inherit;
+	gap: 2px;
+	padding: var(--control-inner-padding);
+	text-align: left;
+	width: 100%;
+}
+
+.model-option:hover:not(:disabled) {
+	background: var(--faint-gray);
+}
+
+.model-option.selected {
+	background: var(--faint-blue);
+}
+
+.model-option:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.model-option:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: -2px;
+}
+
+.model-option-label {
+	color: var(--black);
+	font-weight: bold;
+}
+
+.model-option-detail {
+	color: var(--gray);
+	font-size: 85%;
+}
+
+.model-option-warning {
+	color: var(--dark-yellow, var(--gray));
+	font-size: 85%;
+}
+
+.model-options-empty {
+	color: var(--gray);
+	padding: var(--control-inner-padding);
+}
+
+/* Attachment picker. */
+
+.asset-picker-grid {
+	display: grid;
+	gap: var(--control-inner-padding);
+	grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+	max-height: calc(var(--grid-size) * 20);
+	overflow-y: auto;
+}
+
+.asset-picker-item {
+	background: none;
+	border: 2px solid transparent;
+	border-radius: var(--corner-round);
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	font: inherit;
+	gap: 2px;
+	/* Grid items default to min-content width, which lets a long asset name push
+	   the tile out over its neighbours instead of ellipsing. */
+	min-width: 0;
+	overflow: hidden;
+	padding: 2px;
+}
+
+.asset-picker-item.selected {
+	background: var(--faint-blue);
+	border-color: var(--blue);
+}
+
+/* Attached and previewed are different things: one gets sent, one is on screen. */
+
+.asset-picker-item.previewed {
+	border-color: var(--dark-gray, var(--gray));
+	border-style: dashed;
+}
+
+.asset-picker-item.selected.previewed {
+	border-color: var(--blue);
+	border-style: solid;
+	box-shadow: 0 0 0 2px var(--blue);
+}
+
+.asset-picker-item:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+.asset-picker-item .asset-preview {
+	height: calc(var(--grid-size) * 5);
+}
+
+.asset-picker-name {
+	color: var(--gray);
+	font-size: 80%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-picker-empty {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
+
+/* History tiles reuse the asset library's tile look. */
+
+.generation-tile {
+	background: var(--faint-gray);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding);
+}
+
+.generation-tile.selected {
+	border-color: var(--blue);
+	box-shadow: 0 0 0 1px var(--blue);
+}
+
+.generation-tile-image {
+	background: none;
+	border: none;
+	cursor: zoom-in;
+	display: block;
+	font: inherit;
+	padding: 0;
+	width: 100%;
+}
+
+.generation-tile-image:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+.generation-tile .asset-preview {
+	height: calc(var(--grid-size) * 9);
+}
+
+/* Preview pane: the big look at whatever tile was clicked last. */
+
+.generator-preview {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	min-width: 0;
+}
+
+.generator-preview .asset-generator-heading {
+	padding: 0;
+}
+
+.generator-preview-image {
+	align-items: center;
+	background: var(--faint-gray);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	cursor: zoom-in;
+	display: flex;
+	justify-content: center;
+	padding: var(--control-inner-padding);
+	width: 100%;
+}
+
+.generator-preview-image:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+.generator-preview-image img {
+	max-height: min(48vh, calc(var(--grid-size) * 40));
+	max-width: 100%;
+	object-fit: contain;
+}
+
+.generator-preview-name {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+/* Full screen. Portalled to the body, so it really is the whole viewport. */
+
+.generator-preview-full {
+	align-items: center;
+	background: rgba(0, 0, 0, 0.9);
+	bottom: 0;
+	cursor: zoom-out;
+	display: flex;
+	justify-content: center;
+	left: 0;
+	padding: var(--grid-size);
+	position: fixed;
+	right: 0;
+	top: 0;
+	/* Above the dialog stack, which paints its own scrim at a high z-index. */
+	z-index: 10000;
+}
+
+.generator-preview-full img {
+	max-height: 100%;
+	max-width: 100%;
+	object-fit: contain;
+}
+
+.generation-tile-prompt {
+	color: var(--black);
+	display: -webkit-box;
+	margin: 0;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+}
+
+.generation-tile .button-bar:last-of-type {
+	margin-top: auto;
+}

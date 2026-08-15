@@ -1,5 +1,5 @@
 /**
- * Gesture -> ONE text edit -> CodeMirror (spec 09, phases 2 and 3).
+ * Gesture -> ONE text edit -> CodeMirror (spec 10, phases 2 and 3).
  *
  * Everything above the CodeMirror call is a pure function of its arguments, because the
  * interesting part — *which* `at:` a drag writes when the scrubber sits on beat 3 — is a
@@ -119,7 +119,7 @@ export function beatPatchesEntity(
 /**
  * Where a drag or resize on `id` should write, given where the scrubber is.
  *
- * The rule (spec 09) is "write what the eye is looking at": if the beat on screen already
+ * The rule (spec 10) is "write what the eye is looking at": if the beat on screen already
  * patches this entity, that patch is what put it where it is, so that is what moves.
  * Otherwise the `cast:` / `props:` entry is.
  *

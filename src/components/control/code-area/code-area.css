@@ -71,3 +71,15 @@ li.CodeMirror-hint-active {
 	background: var(--light-blue);
 	color: var(--dark-gray);
 }
+
+/*
+Names the author has picked before. They're already sorted to the top of the
+list; this is what says why they're there. An inset shadow rather than a border
+so the rows don't shift when the marker appears.
+*/
+
+li.CodeMirror-hint.sliders-hint-recent {
+	box-shadow: inset 2px 0 var(--blue);
+	color: var(--dark-blue);
+	font-weight: 600;
+}

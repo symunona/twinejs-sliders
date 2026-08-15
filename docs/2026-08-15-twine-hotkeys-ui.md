@@ -18,7 +18,32 @@ scope chain). Everything here reads the registry; nothing here is needed to make
 
 ## 1. Entry points
 
-### 1.1 From Preferences (the requested one)
+### 1.1 From the Twine toolbar tab
+
+> **Shipped differently.** This started out as a button inside the Preferences
+> dialog, next to the enhanced-editors checkbox. It ended up on the Twine toolbar
+> tab instead, between Story Formats and About Twine, where it sits beside the
+> other app-level destinations rather than being buried one dialog deep. The
+> original sketch is kept below for the record.
+
+```tsx
+	<IconButton
+		icon={<IconFileCode />}
+		label={t('routeActions.app.storyFormats')}
+		...
+	/>
++	<IconButton
++		icon={<IconKeyboard />}
++		label={t('dialogs.keyboardShortcuts.title')}
++		onClick={handleKeyboardShortcuts}
++	/>
+	<IconButton icon={<IconAward />} label={t('routeActions.app.aboutApp')} ... />
+```
+
+`AppActions` already registers the `app.keyboardShortcuts` command, so the button
+and the command share one handler.
+
+### 1.1a Original sketch: from Preferences
 
 `src/dialogs/app-prefs.tsx:84` currently ends with the enhanced-editors checkbox. Add a button
 directly beside it:
@@ -511,6 +536,33 @@ chain `['global']` → nothing bound → F2 does nothing, which is right for "no
 `allowInInput: true` is required on the editor one and is safe: F2 produces no character, so
 letting it through a textarea can't eat typing. General rule: function keys and `mod+`/`alt+`
 chords may set `allowInInput`; bare letters never may.
+
+### 10.3a Window chrome is exempt from scope suppression
+
+The `keybindings` scope suppresses every command so that looking a shortcut up can't trigger
+it (§2). That rule is right for the app's own commands and wrong for the dialog's chrome:
+maximizing the window you are reading is not the same kind of action as the ones listed in
+it. `Command.chrome` opts a command out of the suppression:
+
+```ts
+useCommand({
+	chrome: true,          // still runs inside the shortcuts list
+	element: containerRef, // ...but only for the dialog that has focus
+	id: 'dialog.maximize',
+	...
+});
+```
+
+Only `dialog.maximize` sets it today. Note the pairing with `element`: chrome commands are
+registered by a component that exists once per dialog, so without instance scoping every
+open dialog would answer the key.
+
+One consequence worth knowing: toggling maximize changes the element structure around a
+dialog (`Dialogs` wraps maximized ones in an extra div), so React remounts it and focus is
+orphaned onto the body — where that dialog's shortcuts no longer resolve. `DialogCard`
+reclaims focus on mount when, and only when, focus was orphaned that way. Without it the
+maximize shortcut works exactly once, and clicking the maximize button silently costs you
+the dialog's keyboard access.
 
 ### 10.4 The blocker: rename has no programmatic opener
 

@@ -1,15 +1,12 @@
-import {IconKeyboard} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {CardContent} from '../components/container/card';
 import {DialogCard, DialogCardProps} from '../components/container/dialog-card';
 import {CheckboxButton} from '../components/control/checkbox-button';
-import {IconButton} from '../components/control/icon-button';
 import {FontSelect} from '../components/control/font-select';
+import {TextInput} from '../components/control/text-input';
 import {TextSelect} from '../components/control/text-select';
 import {setPref, usePrefsContext} from '../store/prefs';
-import {useDialogsContext} from './context';
-import {KeyboardShortcutsDialog} from './keyboard-shortcuts';
 import {closestAppLocale, locales} from '../util/locales';
 import './app-prefs.css';
 
@@ -17,7 +14,6 @@ export const AppPrefsDialog: React.FC<
 	Omit<DialogCardProps, 'headerLabel'>
 > = props => {
 	const {dispatch, prefs} = usePrefsContext();
-	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {t} = useTranslation();
 
 	function handleUseCodeMirrorChange(value: boolean) {
@@ -75,11 +71,19 @@ export const AppPrefsDialog: React.FC<
 				<TextSelect
 					onChange={e => dispatch(setPref('passageTagDisplay', e.target.value))}
 					options={[
-						{label: t('dialogs.appPrefs.passageTagDisplays.color'), value: 'color'},
-						{label: t('dialogs.appPrefs.passageTagDisplays.name'), value: 'name'}
+						{
+							label: t('dialogs.appPrefs.passageTagDisplays.color'),
+							value: 'color'
+						},
+						{
+							label: t('dialogs.appPrefs.passageTagDisplays.name'),
+							value: 'name'
+						}
 					]}
 					value={prefs.passageTagDisplay}
-				>{t('dialogs.appPrefs.passageTagDisplay')}</TextSelect>
+				>
+					{t('dialogs.appPrefs.passageTagDisplay')}
+				</TextSelect>
 				<CheckboxButton
 					disabled={!prefs.useCodeMirror}
 					label={t('dialogs.appPrefs.editorCursorBlinks')}
@@ -90,17 +94,6 @@ export const AppPrefsDialog: React.FC<
 					label={t('dialogs.appPrefs.useEnhancedEditors')}
 					onChange={handleUseCodeMirrorChange}
 					value={prefs.useCodeMirror}
-				/>
-				<IconButton
-					icon={<IconKeyboard />}
-					label={t('dialogs.appPrefs.keyboardShortcuts')}
-					onClick={() =>
-						dialogsDispatch({
-							type: 'addDialog',
-							component: KeyboardShortcutsDialog,
-							maximized: true
-						})
-					}
 				/>
 				<p className="font-explanation">
 					{t('dialogs.appPrefs.fontExplanation')}
@@ -129,6 +122,30 @@ export const AppPrefsDialog: React.FC<
 					}
 					scaleLabel={t('dialogs.appPrefs.codeEditorFontScale')}
 				/>
+				<h3 className="app-prefs-heading">
+					{t('dialogs.appPrefs.assetGenerator')}
+				</h3>
+				<p className="font-explanation">
+					{t('dialogs.appPrefs.assetGeneratorExplanation')}
+				</p>
+				<TextInput
+					onChange={e => dispatch(setPref('geminiApiKey', e.target.value))}
+					orientation="vertical"
+					placeholder={t('dialogs.appPrefs.apiKeyPlaceholder')}
+					type="password"
+					value={prefs.geminiApiKey}
+				>
+					{t('dialogs.appPrefs.geminiApiKey')}
+				</TextInput>
+				<TextInput
+					onChange={e => dispatch(setPref('openAiApiKey', e.target.value))}
+					orientation="vertical"
+					placeholder={t('dialogs.appPrefs.apiKeyPlaceholder')}
+					type="password"
+					value={prefs.openAiApiKey}
+				>
+					{t('dialogs.appPrefs.openAiApiKey')}
+				</TextInput>
 			</CardContent>
 		</DialogCard>
 	);

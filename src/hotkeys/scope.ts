@@ -29,11 +29,32 @@ export const scopes = [
 	'passage-editor',
 	'scene-preview',
 	'sliders-assets',
+	'asset-generator',
 	'asset-editor',
 	'sliders-characters',
 	'fuzzy-finder',
 	KEYBINDINGS_SCOPE
 ] as const;
+
+/**
+ * Is the user typing into this element? Commands that would swallow a
+ * keystroke must not run when they are.
+ */
+export function isTextEntry(element: Element | null): boolean {
+	if (!element) {
+		return false;
+	}
+
+	if (['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName)) {
+		return true;
+	}
+
+	if ((element as HTMLElement).isContentEditable) {
+		return true;
+	}
+
+	return !!element.closest?.('.CodeMirror');
+}
 
 /**
  * Returns the scopes containing an element, innermost first, always ending

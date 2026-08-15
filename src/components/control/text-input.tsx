@@ -11,7 +11,7 @@ export interface TextInputProps {
 	onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
 	orientation?: 'horizontal' | 'vertical';
 	placeholder?: string;
-	type?: 'search' | 'text';
+	type?: 'password' | 'search' | 'text';
 	value: string;
 }
 

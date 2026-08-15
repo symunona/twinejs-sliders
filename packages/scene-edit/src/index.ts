@@ -1,5 +1,5 @@
 /**
- * @sliders/scene-edit — text edits for the visual editor (spec 07, spec 09 phase 0).
+ * @sliders/scene-edit — text edits for the visual editor (spec 07, spec 10 phase 0).
  *
  * The text is the source of truth. There is no scene model that YAML is generated from;
  * a drag produces a `TextEdit`, the editor applies it to the CodeMirror document, and the
