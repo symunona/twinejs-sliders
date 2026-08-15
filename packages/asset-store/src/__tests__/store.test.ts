@@ -1,7 +1,12 @@
 import {MemoryBackend} from '../backends/memory-backend';
 import {assetFragment, characterFragment} from '../fragment';
 import {BackedAssetStore, defaultCharacter} from '../store';
-import {animatedWebpBytes, gifBytes, pngBytes} from '../test-fixtures';
+import {
+	animatedWebpBytes,
+	gifBytes,
+	jpegBytes,
+	pngBytes
+} from '../test-fixtures';
 
 // jsdom ships getRandomValues but not SubtleCrypto.
 beforeAll(() => {
@@ -232,5 +237,42 @@ describe('YAML fragments', () => {
 		expect(characterFragment(defaultCharacter('joren'))).toBe(
 			'joren: {at: 0, frame: idle}'
 		);
+	});
+
+	it('replaces an asset in place, keeping its identity', async () => {
+		const store = newStore();
+		const id = await store.put(file(pngBytes(), 'Tavern Night.png', 'image/png'), {
+			kind: 'bg',
+			tags: ['night']
+		});
+		const before = await store.meta(id);
+
+		await store.replace(id, file(jpegBytes(), 'whatever-i-called-it.jpg', 'image/jpeg'));
+
+		const after = await store.meta(id);
+
+		// What the author chose survives.
+		expect(after?.id).toBe(id);
+		expect(after?.name).toBe('tavern-night');
+		expect(after?.kind).toBe('bg');
+		expect(after?.tags).toEqual(['night']);
+
+		// What describes the bytes does not.
+		expect(after?.mime).toBe('image/jpeg');
+		expect(after?.hash).not.toBe(before?.hash);
+		expect(after?.w).toBe(300);
+		expect(after?.h).toBe(150);
+
+		// And it is still one asset, not two.
+		expect(await store.list({kind: 'bg'})).toHaveLength(1);
+		expect(await store.get(id)).toBeDefined();
+	});
+
+	it('refuses to replace an asset that is not there', async () => {
+		const store = newStore();
+
+		await expect(
+			store.replace('a_beef', file(pngBytes(), 'a.png', 'image/png'))
+		).rejects.toThrow(/no asset with ID/);
 	});
 });

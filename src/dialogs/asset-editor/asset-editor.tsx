@@ -1,6 +1,7 @@
 import {AssetId, AssetMeta} from '@sliders/scene-types';
 import classNames from 'classnames';
 import {
+	IconArrowsExchange,
 	IconCrop,
 	IconDeviceFloppy,
 	IconEraser,
@@ -13,6 +14,7 @@ import {useTranslation} from 'react-i18next';
 import {ButtonBar} from '../../components/container/button-bar';
 import {DialogCard} from '../../components/container/dialog-card';
 import {CheckboxButton} from '../../components/control/checkbox-button';
+import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
 import {TextInput} from '../../components/control/text-input';
 import {DialogComponentProps} from '../dialogs.types';
@@ -103,6 +105,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
 	const [saving, setSaving] = React.useState(false);
+	/** Every asset's id and name, to spot a name clash before saving. */
+	const [library, setLibrary] = React.useState<{id: string; name: string}[]>([]);
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	const {t} = useTranslation();
 
@@ -150,6 +154,20 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			current = false;
 		};
 	}, []);
+
+	React.useEffect(() => {
+		let current = true;
+
+		store.list({includeFrames: true}).then(assets => {
+			if (current) {
+				setLibrary(assets.map(asset => ({id: asset.id, name: asset.name})));
+			}
+		});
+
+		return () => {
+			current = false;
+		};
+	}, [store]);
 
 	// Load the asset's pixels into a canvas we can work on.
 
@@ -427,6 +445,39 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 	}
 
+	/** The edited pixels, as a file the asset store will take. */
+	async function editedFile(fileName: string) {
+		const canvas = document.createElement('canvas');
+
+		drawEdited(source!, edits!, canvas);
+
+		// PNG, because the edit may have added transparency. The asset store
+		// re-encodes it to WebP on the way in either way.
+		const blob = await canvasBlob(canvas);
+
+		return new File([blob], `${fileName}.png`, {type: 'image/png'});
+	}
+
+	/** Writes the edit back over the asset it came from, keeping its id. */
+	async function handleReplace() {
+		if (!source || !edits || !meta) {
+			return;
+		}
+
+		setError(undefined);
+		setSaving(true);
+
+		try {
+			await store.replace(meta.id, await editedFile(meta.name));
+			refreshAssetLibrary();
+			props.onClose();
+		} catch (saveError) {
+			console.error('Could not overwrite the asset', saveError);
+			setError(t('dialogs.assetEditor.saveError'));
+			setSaving(false);
+		}
+	}
+
 	async function handleSave() {
 		if (!source || !edits || !meta) {
 			return;
@@ -436,16 +487,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setSaving(true);
 
 		try {
-			const canvas = document.createElement('canvas');
-
-			drawEdited(source, edits, canvas);
-
-			// PNG, because the edit may have added transparency. The asset store
-			// re-encodes it to WebP on the way in either way.
-			const blob = await canvasBlob(canvas);
 			const saveName = name.trim() || `${meta.name}-edit`;
 
-			await store.putAsset(new File([blob], `${saveName}.png`, {type: 'image/png'}), {
+			await store.putAsset(await editedFile(saveName), {
 				kind: meta.kind,
 				name: saveName,
 				sourceAsset: meta.id,
@@ -459,6 +503,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			setSaving(false);
 		}
 	}
+
+	// Names are how scenes refer to assets--`bg: tavern-night`--so two assets
+	// sharing one is ambiguous in a way two ids never are.
+	const trimmedName = name.trim().toLowerCase();
+	const clash = library.find(
+		asset => asset.name.toLowerCase() === trimmedName && trimmedName !== ''
+	);
 
 	const cropped =
 		source !== undefined &&
@@ -714,6 +765,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									width: edits.width
 								})}
 							</p>
+							{clash && (
+								<p className="asset-editor-warning" role="status">
+									{t(
+										clash.id === meta?.id
+											? 'dialogs.assetEditor.clashesWithSelf'
+											: 'dialogs.assetEditor.clashesWithOther',
+										{name: clash.name}
+									)}
+								</p>
+							)}
 							<ButtonBar>
 								<IconButton
 									disabled={
@@ -725,6 +786,20 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									label={t('dialogs.assetEditor.saveAsNew')}
 									onClick={handleSave}
 									variant="create"
+								/>
+								<ConfirmButton
+									confirmVariant="danger"
+									disabled={
+										busy ||
+										(!backgroundRemoved &&
+											isUnedited(edits, source.width, source.height))
+									}
+									icon={<IconArrowsExchange />}
+									label={t('dialogs.assetEditor.replace')}
+									onConfirm={handleReplace}
+									prompt={t('dialogs.assetEditor.replacePrompt', {
+										name: meta?.name ?? ''
+									})}
 								/>
 							</ButtonBar>
 						</section>

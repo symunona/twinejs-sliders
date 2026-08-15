@@ -173,6 +173,38 @@ export class BackedAssetStore implements AssetStore {
 			.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
+	async replace(id: AssetId, file: File): Promise<AssetMeta> {
+		const prepared = await prepareUpload(file);
+		const hash = await contentHash(await blobBytes(prepared.blob));
+		const updated = await this.mutate(async manifest => {
+			const existing = manifest.assets[id];
+
+			if (!existing) {
+				throw new Error(`There is no asset with ID ${id}.`);
+			}
+
+			// Identity--id, name, kind, tags, owner--is the author's. Everything
+			// else describes the bytes, and the bytes just changed.
+			const meta: AssetMeta = {
+				...existing,
+				animated: prepared.animated,
+				bytes: prepared.blob.size,
+				h: prepared.height,
+				hash,
+				mime: prepared.mime,
+				w: prepared.width
+			};
+
+			await this.storage.writeBlob(id, prepared.blob);
+			manifest.assets[id] = meta;
+			return meta;
+		});
+
+		// The cached object URL still points at the old bytes.
+		this.revoke(id);
+		return updated;
+	}
+
 	async update(id: AssetId, changes: Partial<AssetMeta>): Promise<AssetMeta> {
 		return await this.mutate(manifest => {
 			const existing = manifest.assets[id];

@@ -59,6 +59,12 @@ export interface AssetStore extends AssetResolver {
 	url(id: AssetId): Promise<string | undefined>;
 	meta(id: AssetId): Promise<AssetMeta | undefined>;
 	list(filter?: AssetFilter): Promise<AssetMeta[]>;
+	/**
+	 * Swaps an asset's pixels while keeping its id, so every scene already
+	 * pointing at it follows along. Its name, kind, tags and character
+	 * ownership survive; everything measured from the bytes is re-derived.
+	 */
+	replace(id: AssetId, file: File): Promise<AssetMeta>;
 	update(id: AssetId, changes: Partial<AssetMeta>): Promise<AssetMeta>;
 	remove(id: AssetId): Promise<void>;
 	putCharacter(character: Character): Promise<Character>;

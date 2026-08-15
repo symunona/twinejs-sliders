@@ -193,3 +193,15 @@
 .asset-editor-number input {
 	width: 100%;
 }
+
+/* A name clash is worth noticing but isn't an error--nothing has gone wrong
+   yet, and saving anyway is a legitimate choice. */
+
+.asset-editor-warning {
+	background: var(--faint-yellow);
+	border-left: 4px solid var(--yellow);
+	border-radius: var(--corner-round);
+	font-size: 85%;
+	margin: 0;
+	padding: var(--control-inner-padding);
+}

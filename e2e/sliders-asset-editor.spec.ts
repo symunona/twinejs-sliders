@@ -193,4 +193,55 @@ test.describe('Sliders asset editor', () => {
 			page.locator('.sliders-tile', {hasText: 'mira-idle-edit'})
 		).toBeVisible({timeout: 15000});
 	});
+
+	test('overwrites the original in place instead of making a copy', async ({
+		page
+	}) => {
+		await createStory(page, 'Asset overwrite test');
+
+		const editor = await openEditor(page, 'street-dusk.png', 'street-dusk');
+		const tile = page.locator('.sliders-tile', {hasText: 'street-dusk'});
+		const before = await tile.getAttribute('data-asset-id');
+
+		await expect(tile.locator('.sliders-tile-detail')).toContainText('1280×720');
+
+		// Halve it, so the change is visible in the tile's own numbers.
+		const width = editor.getByRole('spinbutton', {name: 'Width'});
+
+		await width.fill('640');
+		await width.blur();
+		await editor.getByRole('button', {name: 'Overwrite Original'}).click();
+		await page.getByRole('button', {name: 'OK', exact: true}).click();
+
+		await expect(editor).toBeHidden({timeout: 15000});
+
+		// Same asset, same id, new pixels--and no second copy.
+		await expect(page.locator('.sliders-tile', {hasText: 'street-dusk'})).toHaveCount(
+			1
+		);
+		await expect(tile).toHaveAttribute('data-asset-id', before!);
+		await expect(tile.locator('.sliders-tile-detail')).toContainText('640×360');
+		await shot(page, '24-asset-editor-overwritten');
+	});
+
+	test('warns when the name would collide with an existing asset', async ({
+		page
+	}) => {
+		await createStory(page, 'Asset name clash test');
+
+		const editor = await openEditor(page, 'street-dusk.png', 'street-dusk');
+		const nameField = editor.getByRole('textbox', {name: 'Name'});
+
+		// The default name is derived, so nothing collides yet.
+		await expect(nameField).toHaveValue('street-dusk-edit');
+		await expect(editor.locator('.asset-editor-warning')).toHaveCount(0);
+
+		// Typing the original's name would give two assets called the same thing,
+		// and `bg: street-dusk` could then mean either.
+		await nameField.fill('street-dusk');
+		await expect(editor.locator('.asset-editor-warning')).toContainText(
+			'Overwrite Original'
+		);
+		await shot(page, '25-asset-editor-name-clash');
+	});
 });

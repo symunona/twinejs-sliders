@@ -179,6 +179,10 @@ export function useAssetLibrary(): AssetLibrary {
 export function useAssetUrl(id?: AssetId): string | undefined {
 	const store = React.useMemo(() => slidersAssetStore(), []);
 	const [url, setUrl] = React.useState<string>();
+	// An asset's bytes can change under a stable id--the editor can write an
+	// edit back over the original. The old object URL is revoked at that point,
+	// so anything still holding it shows a broken image until it re-resolves.
+	const version = useLibraryVersion();
 
 	React.useEffect(() => {
 		let current = true;
@@ -197,7 +201,7 @@ export function useAssetUrl(id?: AssetId): string | undefined {
 		return () => {
 			current = false;
 		};
-	}, [id, store]);
+	}, [id, store, version]);
 
 	return url;
 }
