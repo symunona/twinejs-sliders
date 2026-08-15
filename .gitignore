@@ -19,3 +19,6 @@ docs/en/book/*
 # being committed. The tracked .env (build vars only) is unaffected -- git does
 # not apply ignore rules to files already in the index.
 *.env
+
+
+tmp
