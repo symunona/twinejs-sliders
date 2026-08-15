@@ -29,6 +29,8 @@ export interface PutAssetOptions {
 	tags?: string[];
 	/** Set when the asset is a character frame. */
 	ownerCharacter?: string;
+	/** Set when the asset is an edited copy of another one. */
+	sourceAsset?: AssetId;
 }
 
 export interface PutAssetResult {

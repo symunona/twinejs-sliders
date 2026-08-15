@@ -123,7 +123,8 @@ export class BackedAssetStore implements AssetStore {
 				bytes: prepared.blob.size,
 				hash,
 				mime: prepared.mime,
-				ownerCharacter: options.ownerCharacter
+				ownerCharacter: options.ownerCharacter,
+				sourceAsset: options.sourceAsset
 			};
 
 			await this.storage.writeBlob(id, prepared.blob);

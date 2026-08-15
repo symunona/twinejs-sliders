@@ -1,11 +1,12 @@
 import {assetFragment} from '@sliders/asset-store';
 import {AssetMeta} from '@sliders/scene-types';
-import {IconTags, IconTrash} from '@tabler/icons';
+import {IconPhotoEdit, IconTags, IconTrash} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Badge} from '../../components/badge/badge';
 import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
+import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {AssetPreview} from './asset-preview';
 import {CopyFragmentButton} from './copy-fragment-button';
@@ -14,6 +15,7 @@ export interface AssetTileProps {
 	meta: AssetMeta;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
+	onEdit: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -29,7 +31,7 @@ function formatBytes(bytes: number): string {
 }
 
 export const AssetTile: React.FC<AssetTileProps> = props => {
-	const {meta, onChangeTags, onDelete} = props;
+	const {meta, onChangeTags, onDelete, onEdit} = props;
 	const [tagText, setTagText] = React.useState(meta.tags.join(', '));
 	const {t} = useTranslation();
 
@@ -53,6 +55,17 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			</div>
 			<CopyFragmentButton fragment={assetFragment(meta)} />
 			<ButtonBar>
+				<IconButton
+					// Editing an animation would flatten it to one frame.
+					disabled={meta.animated}
+					icon={<IconPhotoEdit />}
+					label={
+						meta.animated
+							? t('dialogs.slidersAssets.editImageAnimated')
+							: t('dialogs.slidersAssets.editImage')
+					}
+					onClick={onEdit}
+				/>
 				<PromptButton
 					icon={<IconTags />}
 					label={t('dialogs.slidersAssets.editTags')}

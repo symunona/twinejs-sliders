@@ -34,6 +34,7 @@
 		"minimist": "^1.2.8",
 		"mkdir-promise": "^1.0.0",
 		"node-fetch": "^2.6.7",
+		"onnxruntime-web": "^1.27.0",
 		"react": "^16.14.0",
 		"react-codemirror2": "^7.2.1",
 		"react-dom": "^16.14.0",

@@ -275,6 +275,8 @@ export interface AssetMeta {
 	hash: string;
 	mime: string;
 	ownerCharacter?: string;
+	/** Set when this asset came out of the asset editor, not an upload. */
+	sourceAsset?: AssetId;
 }
 
 /** Resolves asset ids to something a renderer can draw. */

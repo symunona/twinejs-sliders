@@ -9,6 +9,7 @@ import {DialogCard} from '../../components/container/dialog-card';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
 import {TextSelect} from '../../components/control/text-select';
+import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {SlidersCharactersDialog} from '../sliders-characters';
@@ -54,6 +55,16 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 				character.id.includes(searchText)) &&
 			(!tagFilter || character.tags.includes(tagFilter))
 	);
+
+	function openAssetEditor(assetId: string) {
+		dispatch({
+			type: 'addDialog',
+			component: AssetEditorDialog,
+			// Editing needs the room--the preview is the point.
+			maximized: true,
+			props: {assetId}
+		});
+	}
 
 	function openCharacterEditor(characterId?: string) {
 		dispatch({
@@ -185,6 +196,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 												meta={asset}
 												onChangeTags={tags => handleChangeTags(asset.id, tags)}
 												onDelete={() => handleDeleteAsset(asset.id)}
+												onEdit={() => openAssetEditor(asset.id)}
 											/>
 									  ))
 									: matchingCharacters.map(character => (

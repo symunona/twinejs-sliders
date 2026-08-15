@@ -1,0 +1,137 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.asset-editor {
+	display: flex;
+	flex: 1 1 0;
+	gap: var(--grid-size);
+	min-height: 0;
+	overflow: hidden;
+	padding: var(--grid-size);
+}
+
+.asset-editor-stage {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	min-width: 0;
+}
+
+.asset-editor-canvas {
+	align-items: center;
+	background: var(--faint-gray);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex: 1 1 0;
+	justify-content: center;
+	min-height: 0;
+	overflow: hidden;
+	position: relative;
+	touch-action: none;
+}
+
+/* The checkerboard sits on the canvas itself, not the box around it, so that
+   transparency only shows where the image actually is. */
+
+.asset-editor-canvas canvas {
+	background: repeating-conic-gradient(
+			var(--light-gray) 0% 25%,
+			transparent 0% 50%
+		)
+		50% / 16px 16px;
+	cursor: crosshair;
+	max-height: 100%;
+	max-width: 100%;
+	object-fit: contain;
+}
+
+.asset-editor-hint,
+.asset-editor-detail {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
+
+.asset-editor-error {
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	margin: var(--grid-size);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-editor-controls {
+	display: flex;
+	flex: 0 0 300px;
+	flex-direction: column;
+	gap: var(--grid-size);
+	overflow-y: auto;
+}
+
+.asset-editor-controls section {
+	border-top: 1px solid var(--light-gray);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding-top: var(--control-inner-padding);
+}
+
+.asset-editor-controls section:first-child {
+	border-top: none;
+	padding-top: 0;
+}
+
+.asset-editor-controls h3 {
+	font-size: 100%;
+	margin: 0;
+}
+
+.adjust-slider {
+	align-items: end;
+	display: flex;
+	gap: var(--control-inner-padding);
+}
+
+.adjust-slider label {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.adjust-slider-label {
+	color: var(--gray);
+	display: flex;
+	font-size: 85%;
+	justify-content: space-between;
+}
+
+.adjust-slider-value {
+	font-family: var(--font-monospaced, monospace);
+}
+
+.adjust-slider input[type='range'] {
+	width: 100%;
+}
+
+.asset-editor-size {
+	display: flex;
+	gap: var(--control-inner-padding);
+}
+
+.asset-editor-number {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.asset-editor-number span {
+	color: var(--gray);
+	font-size: 85%;
+}
+
+.asset-editor-number input {
+	width: 100%;
+}
