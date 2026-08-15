@@ -10,6 +10,7 @@ import {
 } from '@tabler/icons';
 import {Card} from '../card';
 import {IconButton} from '../../control/icon-button';
+import {useCommand} from '../../../hotkeys';
 import './dialog-card.css';
 import useErrorBoundary from 'use-error-boundary';
 import {ErrorMessage} from '../../error';
@@ -63,6 +64,20 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 	const {didCatch, ErrorBoundary, error} = useErrorBoundary();
 	const container = React.useRef<HTMLDivElement>(null);
 	const {t} = useTranslation();
+
+	// Every open dialog renders one of these, so the command has to be scoped to
+	// this instance--otherwise which dialog maximizes would be up to
+	// registration order.
+
+	useCommand({
+		allowInInput: true,
+		element: container,
+		enabled: !!maximizable,
+		id: 'dialog.maximize',
+		label: t('hotkeys.commands.dialog.maximize'),
+		run: () => onChangeMaximized(!maximized),
+		scope: 'dialog'
+	});
 
 	React.useEffect(() => {
 		if (focusOnOpen) {

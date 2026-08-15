@@ -59,6 +59,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'sliders.characters', scope: 'story-map'},
 
 	{id: 'passage.rename', scope: 'dialog'},
+	{id: 'dialog.maximize', scope: 'dialog'},
 
 	{id: 'scene.togglePreview', scope: 'scene-preview'},
 	{id: 'scene.previousBeat', scope: 'scene-preview'},
