@@ -28,7 +28,12 @@ import {
 	BackgroundUnsupportedError,
 	removeBackground
 } from './background-engine';
-import {EngineProgress, webGpuDescription} from './engine-types';
+import {
+	BackgroundOnCpuError,
+	EngineProgress,
+	keepStorage,
+	webGpuDescription
+} from './engine-types';
 import {
 	canvasBlob,
 	CropRect,
@@ -126,6 +131,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		backgroundSupport().then(result => {
 			if (current) {
 				setBackground(result);
+			}
+
+			// The weights are 168 MB of otherwise-evictable storage, and losing
+			// them means downloading them again.
+			if (result.engine) {
+				keepStorage();
 			}
 		});
 
@@ -366,6 +377,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				// The author asked for this; nothing to report.
 			} else if (removeError instanceof BackgroundUnsupportedError) {
 				setError(t(removeError.reasonKey));
+			} else if (removeError instanceof BackgroundOnCpuError) {
+				setError(
+					t('dialogs.assetEditor.onCpuError', {
+						gpu: removeError.gpu ?? t('dialogs.assetEditor.unknownGpu'),
+						seconds: removeError.seconds
+					})
+				);
 			} else if (removeError instanceof BackgroundTimeoutError) {
 				setError(
 					t('dialogs.assetEditor.timeoutError', {
@@ -616,6 +634,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								<p className="asset-editor-detail">
 									{background?.engine
 										? t('dialogs.assetEditor.engineNote', {
+												gpu:
+													webGpuDescription() ??
+													t('dialogs.assetEditor.unknownGpu'),
 												license: background.engine.license,
 												name: background.engine.label,
 												resolution: background.engine.resolution,

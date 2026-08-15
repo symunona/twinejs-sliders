@@ -112,6 +112,39 @@ export function hasWebGpu(): Promise<boolean> {
 	return webGpuProbe;
 }
 
+/**
+ * Raised when the model loaded but is plainly not running on the GPU.
+ *
+ * Having an adapter is not the same as ORT using it. When its WebGPU backend
+ * can't take a graph it quietly runs the whole thing on the CPU instead, where
+ * a 1024² segmentation model takes 40 to 90 seconds *per pass* -- so a cutout
+ * that should take a second sits there for ten minutes and finishes eventually,
+ * which is worse than failing.
+ */
+export class BackgroundOnCpuError extends Error {
+	constructor(readonly seconds: number, readonly gpu?: string) {
+		super(
+			`The model took ${seconds}s for one pass, so it is running on the CPU, not ${
+				gpu ?? 'the GPU'
+			}.`
+		);
+		this.name = 'BackgroundOnCpuError';
+	}
+}
+
+/**
+ * Asks the browser to keep our storage rather than evict it under pressure.
+ * The weights are 168 MB of best-effort storage otherwise, and re-downloading
+ * them is the slowest thing this feature does.
+ */
+export async function keepStorage(): Promise<boolean> {
+	try {
+		return (await navigator.storage?.persist?.()) ?? false;
+	} catch (error) {
+		return false;
+	}
+}
+
 /** Throws if the caller has given up on us. */
 export function checkAborted(signal?: AbortSignal) {
 	if (signal?.aborted) {

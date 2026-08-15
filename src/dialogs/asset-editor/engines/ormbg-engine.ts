@@ -1,4 +1,18 @@
-import {BackgroundMask, MaskOptions, checkAborted} from '../engine-types';
+import {
+	BackgroundMask,
+	BackgroundOnCpuError,
+	MaskOptions,
+	checkAborted,
+	webGpuDescription
+} from '../engine-types';
+
+/**
+ * How long one 1024² pass may take before we call it a CPU fallback. Measured
+ * either side of the line: under a second on this repo's GTX 1050 Ti, 40 to 90
+ * seconds on wasm. Nothing lands in between, so the threshold has room to be
+ * generous--a weak integrated GPU is still an order of magnitude clear of it.
+ */
+const CPU_FALLBACK_SECONDS = 25;
 
 /**
  * ORMBG ("open remove background model") run through onnxruntime-web on
@@ -370,6 +384,30 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 	// `input`/`output` plus ten deep-supervision side outputs.
 	const inputName = session.inputNames[0];
 	const outputName = session.outputNames[0];
+
+	// One throwaway pass, to find out whether we actually got the GPU.
+	//
+	// ORT gives no way to ask which execution provider ended up running the
+	// graph, and when its WebGPU backend can't take one it falls back to the
+	// CPU silently. The difference is not subtle -- under a second against a
+	// minute and a half -- so timing it is a reliable test, and it costs
+	// nothing: this is the pass that compiles the pipelines, which the first
+	// real cutout would otherwise have paid for.
+	const warmedAt = performance.now();
+
+	await session.run({
+		[inputName]: new ort.Tensor(
+			'float32',
+			new Float32Array(3 * RESOLUTION * RESOLUTION),
+			[1, 3, RESOLUTION, RESOLUTION]
+		)
+	});
+
+	const warmSeconds = Math.round((performance.now() - warmedAt) / 1000);
+
+	if (warmSeconds > CPU_FALLBACK_SECONDS) {
+		throw new BackgroundOnCpuError(warmSeconds, webGpuDescription());
+	}
 
 	return {
 		inputName,
