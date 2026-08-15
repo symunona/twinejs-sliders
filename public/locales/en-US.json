@@ -403,6 +403,14 @@
 	},
 	"routes": {
 		"storyEdit": {
+			"buildInfo": {
+				"daysAgo": "{{value}}d ago",
+				"details": "Built {{time}} (commit {{commit}})",
+				"hoursAgo": "{{value}}h ago",
+				"justNow": "just now",
+				"minutesAgo": "{{value}}m ago",
+				"unknownCommit": "unknown"
+			},
 			"toolbar": {
 				"findAndReplace": "Find and Replace",
 				"goTo": "Go To",

@@ -1,0 +1,9 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/metrics.css';
+
+.build-info {
+	color: var(--gray);
+	font-size: 80%;
+	padding: 0 var(--grid-size);
+	white-space: nowrap;
+}

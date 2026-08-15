@@ -1,11 +1,29 @@
 import react from '@vitejs/plugin-react-swc';
 import browserslistToEsbuild from 'browserslist-to-esbuild';
 import {defineConfig} from 'vite';
+import {execSync} from 'node:child_process';
 import * as path from 'node:path';
 import checker from 'vite-plugin-checker';
 import {nodePolyfills} from 'vite-plugin-node-polyfills';
 import {VitePWA} from 'vite-plugin-pwa';
 import packageJson from './package.json';
+
+// When and from what this bundle was built, so the app can show it. Building
+// outside a git checkout is allowed--the hash is just unknown then.
+
+const buildTime = new Date().toISOString();
+
+let commitHash = '';
+
+try {
+	commitHash = execSync('git rev-parse --short HEAD', {
+		stdio: ['ignore', 'pipe', 'ignore']
+	})
+		.toString()
+		.trim();
+} catch (error) {
+	// Not a git checkout--leave the hash empty.
+}
 
 export default defineConfig({
 	base: './',
@@ -26,7 +44,9 @@ export default defineConfig({
 		// Make app name and version available to code.
 		// https://stackoverflow.com/a/74860417/7569568
 		'process.env.VITE_APP_NAME': JSON.stringify(packageJson.name),
-		'process.env.VITE_APP_VERSION': JSON.stringify(packageJson.version)
+		'process.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
+		'process.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
+		'process.env.VITE_COMMIT_HASH': JSON.stringify(commitHash)
 	},
 	plugins: [
 		checker({
