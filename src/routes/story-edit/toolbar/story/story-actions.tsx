@@ -6,6 +6,8 @@ import {DetailsButton} from './details-button';
 import {FindReplaceButton} from './find-replace-button';
 import {JavaScriptButton} from './javascript-button';
 import {PassageTagsButton} from './passage-tags-button';
+import {SlidersAssetsButton} from './sliders-assets-button';
+import {SlidersCharactersButton} from './sliders-characters-button';
 import {StylesheetButton} from './stylesheet-button';
 
 export interface StoryActionsProps {
@@ -26,6 +28,8 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 			/>
 			<DetailsButton story={story} />
 			<PassageTagsButton story={story} />
+			<SlidersAssetsButton />
+			<SlidersCharactersButton />
 			<JavaScriptButton story={story} />
 			<StylesheetButton story={story} />
 		</ButtonBar>

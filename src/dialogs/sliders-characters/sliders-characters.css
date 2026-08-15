@@ -1,0 +1,255 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.sliders-characters-dialog .react-tabs {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.sliders-characters-dialog .react-tabs__tab-panel {
+	display: none;
+}
+
+.sliders-characters-dialog .react-tabs__tab-panel--selected {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.character-editor {
+	display: flex;
+	flex-direction: column;
+	gap: var(--grid-size);
+}
+
+.character-editor-body {
+	display: flex;
+	gap: var(--grid-size);
+	padding: var(--grid-size);
+}
+
+/* Frame list */
+
+.frame-list {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 180px;
+	min-width: 0;
+}
+
+.frame-list h3 {
+	margin: 0 0 var(--control-inner-padding) 0;
+}
+
+.frame-list ul {
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.frame-list-item {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	padding: var(--control-inner-padding);
+}
+
+.frame-list-item.selected {
+	background: var(--faint-blue);
+	border-color: var(--blue);
+}
+
+.frame-list-select {
+	align-items: center;
+	background: none;
+	border: none;
+	cursor: pointer;
+	display: flex;
+	font: inherit;
+	gap: var(--control-inner-padding);
+	padding: 0;
+	text-align: left;
+	width: 100%;
+}
+
+.frame-list-select .asset-preview {
+	flex: 0 0 40px;
+	height: 40px;
+}
+
+.frame-list-name {
+	color: var(--black);
+	overflow-wrap: anywhere;
+}
+
+.frame-list-animated {
+	margin-left: auto;
+}
+
+/* Sprite preview */
+
+.character-editor-stage {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: var(--grid-size);
+	min-width: 0;
+}
+
+.sprite-preview {
+	align-items: center;
+	background: repeating-conic-gradient(
+			var(--light-gray) 0% 25%,
+			transparent 0% 50%
+		)
+		50% / 16px 16px;
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	height: 400px;
+	justify-content: center;
+	overflow: hidden;
+	/* Room for handles sitting at fraction 0 or 1 — without it they'd be clipped in half. */
+	padding: calc(var(--grid-size) * 1.6);
+}
+
+.sprite-preview-frame {
+	height: 100%;
+	position: relative;
+}
+
+.sprite-preview-frame > img {
+	height: 100%;
+	object-fit: contain;
+	width: 100%;
+}
+
+.sprite-onion {
+	left: 0;
+	opacity: 0.3;
+	position: absolute;
+	top: 0;
+}
+
+.sprite-preview-empty {
+	align-items: center;
+	color: var(--gray);
+	display: flex;
+	height: 100%;
+	justify-content: center;
+	padding: 0 var(--grid-size);
+	width: 100%;
+}
+
+.sprite-guide {
+	pointer-events: none;
+	position: absolute;
+}
+
+.sprite-guide.vertical {
+	border-left: 1px dashed var(--blue);
+	height: 100%;
+	top: 0;
+}
+
+.sprite-guide.floor {
+	border-top: 1px dashed var(--dark-orange);
+	left: 0;
+	width: 100%;
+}
+
+.sprite-handle {
+	background: var(--blue);
+	border: 2px solid var(--white);
+	border-radius: 50%;
+	cursor: grab;
+	height: 18px;
+	margin: -9px 0 0 -9px;
+	padding: 0;
+	position: absolute;
+	width: 18px;
+}
+
+.sprite-handle.dragging {
+	cursor: grabbing;
+}
+
+.sprite-handle:focus-visible {
+	outline: 2px solid var(--dark-blue);
+	outline-offset: 2px;
+}
+
+.sprite-handle-origin {
+	background: none;
+	border: none;
+	border-radius: 0;
+	height: 26px;
+	margin: -13px 0 0 -13px;
+	width: 26px;
+}
+
+.sprite-handle-origin::before,
+.sprite-handle-origin::after {
+	background: var(--dark-orange);
+	content: '';
+	position: absolute;
+}
+
+.sprite-handle-origin::before {
+	height: 26px;
+	left: 11px;
+	top: 0;
+	width: 4px;
+}
+
+.sprite-handle-origin::after {
+	height: 4px;
+	left: 0;
+	top: 11px;
+	width: 26px;
+}
+
+.sprite-handle-label {
+	background: var(--white-translucent);
+	border-radius: var(--corner-round);
+	color: var(--black);
+	font-size: 75%;
+	left: 22px;
+	padding: 0 3px;
+	position: absolute;
+	top: -2px;
+	white-space: nowrap;
+}
+
+/* Fields */
+
+.character-editor-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--grid-size);
+}
+
+.character-editor-readout {
+	display: grid;
+	gap: 0 var(--grid-size);
+	grid-template-columns: max-content 1fr;
+	margin: var(--grid-size) 0 0 0;
+}
+
+.character-editor-readout dt {
+	color: var(--gray);
+}
+
+.character-editor-readout dd {
+	align-items: center;
+	display: flex;
+	font-family: var(--font-monospaced, monospace);
+	gap: var(--control-inner-padding);
+	margin: 0;
+}

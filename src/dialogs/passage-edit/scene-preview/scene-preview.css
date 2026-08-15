@@ -1,0 +1,125 @@
+.scene-preview {
+	border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+}
+
+.scene-preview.full-screen {
+	background: var(--dialog-background-color, #fff);
+	bottom: 0;
+	left: 0;
+	position: fixed;
+	right: 0;
+	top: 0;
+	z-index: 1000;
+}
+
+.scene-preview-bar {
+	align-items: center;
+	display: flex;
+	gap: 2px;
+	padding: 2px 4px;
+}
+
+.scene-preview-title {
+	font-weight: bold;
+}
+
+.scene-preview-spacer {
+	flex-grow: 1;
+}
+
+.scene-preview-beat {
+	font-variant-numeric: tabular-nums;
+	min-width: 3.5em;
+	text-align: center;
+}
+
+.scene-preview-badge {
+	align-items: center;
+	background: var(--badge-background-color, #e8e2b0);
+	border-radius: 4px;
+	display: inline-flex;
+	gap: 2px;
+	padding: 0 6px;
+}
+
+.scene-preview-badge.error {
+	background: #f3c8c8;
+}
+
+.scene-preview-badge svg {
+	height: 1em;
+	width: 1em;
+}
+
+/* The renderer computes its own letterboxed 16:9 box inside this host, so the host must
+   NOT also declare an aspect ratio — `aspect-ratio` plus `max-height` makes the box
+   overflow and crops the sprites. Give it a height and let the renderer fit itself. */
+.scene-preview .scene-stage {
+	background: #101014;
+	height: clamp(180px, 34vh, 420px);
+	overflow: hidden;
+	position: relative;
+	width: 100%;
+}
+
+.scene-preview-stage-click {
+	cursor: zoom-in;
+	display: flex;
+	min-height: 0;
+}
+
+.scene-preview.full-screen .scene-preview-stage-click {
+	cursor: zoom-out;
+	flex-grow: 1;
+}
+
+.scene-preview-stage-click > .scene-stage {
+	flex-grow: 1;
+}
+
+.scene-preview.full-screen .scene-stage {
+	flex-grow: 1;
+	height: auto;
+	max-height: none;
+}
+
+.scene-preview-errors {
+	font-family: var(--font-monospaced, monospace);
+	list-style: none;
+	margin: 0;
+	max-height: 8em;
+	overflow-y: auto;
+	padding: 0;
+}
+
+.scene-preview-errors li {
+	cursor: pointer;
+	display: flex;
+	gap: 8px;
+	padding: 2px 8px;
+}
+
+.scene-preview-errors li:hover {
+	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+}
+
+.scene-preview-errors li.error .line {
+	color: #b00020;
+}
+
+.scene-preview-errors li.warning .line {
+	color: #96700a;
+}
+
+.scene-preview-errors .line {
+	font-variant-numeric: tabular-nums;
+	min-width: 3em;
+	text-align: right;
+}
+
+.scene-preview-errors .hint {
+	opacity: 0.7;
+}

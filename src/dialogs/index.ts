@@ -6,6 +6,8 @@ export * from './context/dialogs';
 export * from './dialogs.types';
 export * from './passage-edit';
 export * from './passage-tags';
+export * from './sliders-assets';
+export * from './sliders-characters';
 export * from './story-import';
 export * from './story-javascript';
 export * from './story-details';

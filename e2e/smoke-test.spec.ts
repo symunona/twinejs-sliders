@@ -18,6 +18,47 @@ async function createStory(page: Page, name = 'E2E Test Story') {
 	await page.getByRole('button', {name: 'Create'}).click();
 }
 
+/** Switch the open story to a named story format via Story > Details. */
+async function useStoryFormat(page: Page, formatName: string) {
+	await page.getByRole('tab', {name: 'Story'}).click();
+	await page.getByRole('button', {name: 'Details'}).click();
+
+	const select = page.getByRole('combobox', {name: /story format/i});
+
+	await select.waitFor({timeout: 10000});
+	await expect
+		.poll(async () => (await select.locator('option').allTextContents()).join('|'), {
+			timeout: 15000
+		})
+		.toContain(formatName);
+	const labels = await select.locator('option').allTextContents();
+	const match = labels.find(l => l.includes(formatName));
+
+	if (!match) {
+		throw new Error(`No story format option matching "${formatName}" in: ${labels.join(', ')}`);
+	}
+
+	// selectOption needs a literal label, not a regex.
+	await select.selectOption({label: match});
+
+	// Close the details dialog; leaving it open shadows later "Close" clicks.
+	for (let i = 0; i < 4; i++) {
+		const close = page.getByRole('button', {name: 'Close', exact: true});
+
+		if ((await close.count()) === 0) {
+			break;
+		}
+
+		await close
+			.last()
+			.click({timeout: 3000})
+			.catch(() => undefined);
+		await page.waitForTimeout(150);
+	}
+
+	await page.getByRole('tab', {name: 'Passage'}).click();
+}
+
 async function openPassageEditor(page: Page, name: string) {
 	await page.getByRole('button', {name}).click();
 	await expect(page.getByRole('button', {name})).toHaveAttribute(
@@ -101,6 +142,11 @@ test('Persists passage renames', async ({page}) => {
 
 test('Creates a simple story and plays it', async ({context, page}) => {
 	await createStory(page, 'Publish test');
+
+	// This test asserts against Harlowe's rendered output, so pin the format rather
+	// than relying on whatever the app default happens to be.
+	await useStoryFormat(page, 'Harlowe');
+
 	await openPassageEditor(page, 'Untitled Passage');
 	await page
 		.getByLabel('Passage Text')

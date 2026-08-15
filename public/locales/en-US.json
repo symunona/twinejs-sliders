@@ -203,11 +203,96 @@
 			"sizeLarge": "Large",
 			"sizeSmall": "Small",
 			"sizeTall": "Tall",
-			"sizeWide": "Wide"
+			"sizeWide": "Wide",
+			"scenePreview": {
+				"title": "Preview",
+				"toggle": "Toggle scene preview",
+				"errorCount": "{{count}} error",
+				"errorCount_plural": "{{count}} errors",
+				"warningCount": "{{count}} warning",
+				"warningCount_plural": "{{count}} warnings",
+				"previousBeat": "Previous beat",
+				"nextBeat": "Next beat",
+				"play": "Play beats",
+				"fullScreen": "Full screen"
+			}
 		},
 		"passageTags": {
 			"noTags": "No tags have been added to passages in this story.",
 			"title": "Passage Tags"
+		},
+		"slidersAssets": {
+			"allTags": "All Tags",
+			"animated": "Animated",
+			"animatedNotice": "Kept {{names}} as-is because it's animated—converting it would flatten it to a single frame.",
+			"assetDetail": "{{width}}×{{height}}, {{size}}, {{format}}",
+			"backend": "Storing assets with: {{backend}}",
+			"backgrounds": "Backgrounds",
+			"characters": "Characters",
+			"copied": "Copied",
+			"deleteCharacterPrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
+			"deletePrompt": "Are you sure you want to delete “{{name}}”? This cannot be undone.",
+			"dropHint": "Drop image files here to add them to {{kind}}.",
+			"duplicateWarning": "You already uploaded {{names}}, so it wasn't added again.",
+			"editCharacter": "Edit Character",
+			"editTags": "Tags",
+			"editTagsPrompt": "Tags for this asset, separated by commas",
+			"empty": "Nothing here yet. Drop image files onto this tab to add some.",
+			"frameCount": "{{count}} frame",
+			"frameCount_plural": "{{count}} frames",
+			"fx": "FX",
+			"objects": "Objects",
+			"openCharacter": "Open {{name}} in the character editor",
+			"search": "Search",
+			"title": "Assets",
+			"upload": "Add Files",
+			"uploadError": "Could not add {{names}}.",
+			"newCharacter": "New Character",
+			"newCharacterPrompt": "What should this character be called?"
+		},
+		"slidersCharacters": {
+			"addAnchor": "Add Anchor",
+			"addAnchorPrompt": "What should this anchor be called?",
+			"addFrames": "Add Frames",
+			"changeId": "ID: {{id}}",
+			"changeIdPrompt": "New ID for this character. Passages that already reference the old ID will not be updated.",
+			"deleteFrame": "Delete Frame",
+			"deleteFramePrompt": "Are you sure you want to remove the frame “{{name}}”?",
+			"deletePrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
+			"dropFrames": "Drop image files here to add frames.",
+			"frames": "Frames",
+			"height": "Height",
+			"loops": "Loops",
+			"name": "Name",
+			"newCharacter": "New Character",
+			"newCharacterPrompt": "What should this character be called?",
+			"noFrame": "Add a frame to see it here.",
+			"noOnionSkin": "None",
+			"none": "No characters yet. Create one to start placing anchors.",
+			"onionSkin": "Onion Skin",
+			"origin": "Origin",
+			"playsOnce": "Plays Once",
+			"previewAlt": "Selected frame",
+			"removeAnchor": "Remove the {{name}} anchor",
+			"renameFrame": "Rename Frame",
+			"renameFramePrompt": "What should this frame be called? This is what frame: refers to in scene text.",
+			"title": "Characters",
+			"width": "Width"
+		},
+		"storyDetails": {
+			"storyFormatExplanation": "What's a story format?",
+			"snapToGrid": "Snap To Grid",
+			"stats": {
+				"brokenLinks": "Broken Links",
+				"characters": "Characters",
+				"title": "Story Statistics",
+				"ifid": "The IFID of this story is {{ifid}}.",
+				"ifidExplanation": "What's an IFID?",
+				"lastUpdate": "This story was last changed on {{date}}.",
+				"links": "Links",
+				"passages": "Passages",
+				"words": "Words"
+			}
 		},
 		"storyFormats": {
 			"addStoryFormatButton": {
@@ -235,21 +320,6 @@
 			"storiesPrompt": "Choose which stories to import:",
 			"title": "Import Stories",
 			"willReplaceExisting": "A story with the same name in your library will be replaced."
-		},
-		"storyDetails": {
-			"storyFormatExplanation": "What's a story format?",
-			"snapToGrid": "Snap To Grid",
-			"stats": {
-				"brokenLinks": "Broken Links",
-				"characters": "Characters",
-				"title": "Story Statistics",
-				"ifid": "The IFID of this story is {{ifid}}.",
-				"ifidExplanation": "What's an IFID?",
-				"lastUpdate": "This story was last changed on {{date}}.",
-				"links": "Links",
-				"passages": "Passages",
-				"words": "Words"
-			}
 		},
 		"storyJavaScript": {
 			"editorLabel": "Story JavaScript",
@@ -338,6 +408,8 @@
 				"goTo": "Go To",
 				"javaScript": "JavaScript",
 				"passageTags": "Passage Tags",
+				"slidersAssets": "Assets",
+				"slidersCharacters": "Characters",
 				"snapToGrid": "Snap to Grid",
 				"startStoryHere": "Start Story Here",
 				"stylesheet": "Stylesheet",

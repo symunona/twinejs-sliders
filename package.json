@@ -51,7 +51,8 @@
 		"segseg": "^1.0.0",
 		"semver": "^7.3.4",
 		"ua-parser-js": "^0.7.33",
-		"use-error-boundary": "^2.0.6"
+		"use-error-boundary": "^2.0.6",
+		"yaml": "^2.9.0"
 	},
 	"devDependencies": {
 		"@electron/notarize": "^2.1.0",

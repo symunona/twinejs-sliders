@@ -9,3 +9,7 @@ docs/en/book/*
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Nested package caches (the render-dom harness runs its own vite).
+**/node_modules/
+**/.vite/

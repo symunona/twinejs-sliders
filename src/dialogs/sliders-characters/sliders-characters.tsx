@@ -1,0 +1,273 @@
+import {defaultCharacter, nameFromFilename, slugify} from '@sliders/asset-store';
+import {AssetMeta, Character} from '@sliders/scene-types';
+import {IconTag, IconTrash, IconUserPlus} from '@tabler/icons';
+import * as React from 'react';
+import {useTranslation} from 'react-i18next';
+import {Tab, TabList, TabPanel, Tabs} from 'react-tabs';
+import {ButtonBar} from '../../components/container/button-bar';
+import {CardContent} from '../../components/container/card';
+import {DialogCard} from '../../components/container/dialog-card';
+import {ConfirmButton} from '../../components/control/confirm-button';
+import {PromptButton} from '../../components/control/prompt-button';
+import {DialogComponentProps} from '../dialogs.types';
+import {useAssetLibrary} from '../sliders-assets/asset-store-context';
+import {CharacterEditor} from './character-editor';
+import './sliders-characters.css';
+
+/** How long a change sits before it's written to the asset store. */
+const SAVE_DELAY = 400;
+
+function uniqueFrameName(
+	preferred: string,
+	frames: Character['frames']
+): string {
+	if (!frames[preferred]) {
+		return preferred;
+	}
+
+	let suffix = 2;
+
+	while (frames[`${preferred}-${suffix}`]) {
+		suffix++;
+	}
+
+	return `${preferred}-${suffix}`;
+}
+
+export interface SlidersCharactersDialogProps extends DialogComponentProps {
+	/** Character to open on. Set when the asset manager launches this dialog. */
+	characterId?: string;
+}
+
+export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = props => {
+	const {characterId, ...other} = props;
+	const library = useAssetLibrary();
+	const [draft, setDraft] = React.useState<Character>();
+	const [newCharacterName, setNewCharacterName] = React.useState('');
+	const [newId, setNewId] = React.useState('');
+	const [selectedId, setSelectedId] = React.useState(characterId);
+	const {t} = useTranslation();
+
+	const {characters, refresh, store} = library;
+	const activeId = selectedId ?? characters[0]?.id;
+
+	// Load the selected character into a local draft. Everything the editor does happens
+	// on the draft; the store gets it back on a debounce.
+
+	React.useEffect(() => {
+		if (activeId && draft?.id !== activeId) {
+			const found = characters.find(character => character.id === activeId);
+
+			if (found) {
+				setDraft(found);
+			}
+		} else if (!activeId && draft) {
+			setDraft(undefined);
+		}
+	}, [activeId, characters, draft]);
+
+	// Held in a ref so `commit()` can write the newest draft without being re-created on
+	// every keystroke.
+	const latest = React.useRef(draft);
+
+	latest.current = draft;
+
+	const commit = React.useCallback(async () => {
+		if (latest.current) {
+			await store.putCharacter(latest.current);
+			refresh();
+		}
+	}, [refresh, store]);
+
+	React.useEffect(() => {
+		if (!draft) {
+			return;
+		}
+
+		const timeout = window.setTimeout(commit, SAVE_DELAY);
+
+		return () => window.clearTimeout(timeout);
+	}, [commit, draft]);
+
+	// Flush on unmount. The debounce above CANCELS its pending write on cleanup, so
+	// closing the dialog within SAVE_DELAY of an edit would otherwise discard it — a
+	// rename made just before closing was silently lost.
+	//
+	// Writes through the store directly rather than `commit()`, because `refresh()`
+	// would set state on an unmounted component.
+	const storeRef = React.useRef(store);
+
+	storeRef.current = store;
+
+	React.useEffect(
+		() => () => {
+			if (latest.current) {
+				void storeRef.current.putCharacter(latest.current);
+			}
+		},
+		[]
+	);
+
+	const assets = React.useMemo(
+		() =>
+			library.all.reduce<Record<string, AssetMeta>>((result, asset) => {
+				result[asset.id] = asset;
+				return result;
+			}, {}),
+		[library.all]
+	);
+
+	async function handleCreate(name: string) {
+		const id = slugify(name);
+
+		setNewCharacterName('');
+		await store.putCharacter(defaultCharacter(id, name.trim() || id));
+		setSelectedId(id);
+		refresh();
+	}
+
+	async function handleDelete() {
+		if (!draft) {
+			return;
+		}
+
+		await store.removeCharacter(draft.id);
+		setDraft(undefined);
+		setSelectedId(undefined);
+		refresh();
+	}
+
+	/**
+	 * Renaming an ID does NOT rewrite passage references — that needs the scene index,
+	 * which doesn't exist yet (spec 04). The prompt says so.
+	 */
+	async function handleChangeId(value: string) {
+		if (!draft) {
+			return;
+		}
+
+		const id = slugify(value);
+
+		setNewId('');
+
+		if (!id || id === draft.id || characters.some(other => other.id === id)) {
+			return;
+		}
+
+		const renamed = {...draft, id};
+
+		await store.putCharacter(renamed);
+		await store.removeCharacter(draft.id);
+		setDraft(renamed);
+		setSelectedId(id);
+		refresh();
+	}
+
+	async function handleUploadFrames(files: File[]) {
+		if (!draft) {
+			return;
+		}
+
+		const frames = {...draft.frames};
+
+		for (const file of files) {
+			try {
+				const result = await store.putAsset(file, {
+					kind: 'frame',
+					ownerCharacter: draft.id
+				});
+
+				frames[uniqueFrameName(slugify(nameFromFilename(file.name)), frames)] = {
+					asset: result.id
+				};
+			} catch (error) {
+				console.error(`Could not add ${file.name} as a frame`, error);
+			}
+		}
+
+		const updated = {...draft, frames};
+
+		setDraft(updated);
+		await store.putCharacter(updated);
+		refresh();
+	}
+
+	const tabIndex = Math.max(
+		0,
+		characters.findIndex(character => character.id === activeId)
+	);
+
+	return (
+		<DialogCard
+			{...other}
+			className="sliders-characters-dialog"
+			headerLabel={t('dialogs.slidersCharacters.title')}
+			maximizable
+		>
+			<ButtonBar>
+				<PromptButton
+					icon={<IconUserPlus />}
+					label={t('dialogs.slidersCharacters.newCharacter')}
+					onChange={event => setNewCharacterName(event.target.value)}
+					onSubmit={handleCreate}
+					prompt={t('dialogs.slidersCharacters.newCharacterPrompt')}
+					value={newCharacterName}
+					variant="create"
+				/>
+				{draft && (
+					<>
+						<PromptButton
+							icon={<IconTag />}
+							label={t('dialogs.slidersCharacters.changeId', {id: draft.id})}
+							onChange={event => setNewId(event.target.value)}
+							onSubmit={handleChangeId}
+							prompt={t('dialogs.slidersCharacters.changeIdPrompt')}
+							value={newId}
+						/>
+						<ConfirmButton
+							confirmVariant="danger"
+							icon={<IconTrash />}
+							label={t('common.delete')}
+							onConfirm={handleDelete}
+							prompt={t('dialogs.slidersCharacters.deletePrompt', {
+								name: draft.name
+							})}
+						/>
+					</>
+				)}
+			</ButtonBar>
+			{characters.length === 0 ? (
+				<CardContent>
+					<p>{t('dialogs.slidersCharacters.none')}</p>
+				</CardContent>
+			) : (
+				<Tabs
+					onSelect={index => setSelectedId(characters[index]?.id)}
+					selectedIndex={tabIndex}
+					selectedTabClassName="selected"
+				>
+					<TabList className="sliders-tablist">
+						{characters.map(character => (
+							<Tab className="sliders-tab" key={character.id}>
+								{character.name}
+							</Tab>
+						))}
+					</TabList>
+					{characters.map(character => (
+						<TabPanel key={character.id}>
+							{draft && draft.id === character.id && (
+								<CharacterEditor
+									assets={assets}
+									character={draft}
+									onChange={setDraft}
+									onCommit={commit}
+									onUploadFrames={handleUploadFrames}
+								/>
+							)}
+						</TabPanel>
+					))}
+				</Tabs>
+			)}
+		</DialogCard>
+	);
+};

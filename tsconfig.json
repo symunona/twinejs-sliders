@@ -15,7 +15,11 @@
 		"skipLibCheck": true,
 		"strict": true,
 		"target": "ESNext",
-		"types": ["jest", "vite/client"]
+		"types": ["jest", "vite/client"],
+		"baseUrl": ".",
+		"paths": {
+			"@sliders/*": ["packages/*/src"]
+		}
 	},
-	"include": ["src"]
+	"include": ["src", "packages/*/src"]
 }

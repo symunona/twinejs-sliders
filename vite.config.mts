@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react-swc';
 import browserslistToEsbuild from 'browserslist-to-esbuild';
 import {defineConfig} from 'vite';
+import * as path from 'node:path';
 import checker from 'vite-plugin-checker';
 import {nodePolyfills} from 'vite-plugin-node-polyfills';
 import {VitePWA} from 'vite-plugin-pwa';
@@ -8,6 +9,15 @@ import packageJson from './package.json';
 
 export default defineConfig({
 	base: './',
+	resolve: {
+		alias: [
+			// Sliders monorepo packages, consumed as source (see ADR-3).
+			{
+				find: /^@sliders\/(.*)$/,
+				replacement: path.resolve(__dirname, 'packages') + '/$1/src'
+			}
+		]
+	},
 	build: {
 		outDir: 'dist/web',
 		target: browserslistToEsbuild(['>0.2%', 'not dead', 'not op_mini all'])

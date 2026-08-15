@@ -10,6 +10,8 @@ import {
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
+import {ScenePreview} from './scene-preview/scene-preview';
+import {usePreviewResolver} from './scene-preview/use-preview-resolver';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
 import {usePrefsContext} from '../../store/prefs';
@@ -32,6 +34,7 @@ export const PassageEditContents: React.FC<
 	const {prefs} = usePrefsContext();
 	const {dispatch, stories} = useUndoableStoriesContext();
 	const {formats} = useStoryFormatsContext();
+	const previewAssets = usePreviewResolver();
 	const passage = passageWithId(stories, storyId, passageId);
 	const story = storyWithId(stories, storyId);
 	const storyFormat = formatWithNameAndVersion(
@@ -117,6 +120,12 @@ export const PassageEditContents: React.FC<
 					storyFormatExtensionsDisabled={!storyFormatExtensionsEnabled}
 				/>
 			</ErrorBoundary>
+			<ScenePreview
+				assets={previewAssets}
+				onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
+				passages={story.passages}
+				text={passage.text}
+			/>
 		</div>
 	);
 };

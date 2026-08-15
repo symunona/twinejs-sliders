@@ -30,6 +30,11 @@ export const builtins = () => [
 		version: '1.0.0'
 	},
 	{
+		name: 'Sliders',
+		url: 'story-formats/sliders-0.1.0/format.js',
+		version: '0.1.0'
+	},
+	{
 		name: 'Snowman',
 		url: 'story-formats/snowman-1.5.0/format.js',
 		version: '1.5.0'

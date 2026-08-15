@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="250" height="250" viewBox="0 0 250 250" role="img" aria-label="Sliders">
+	<title>Sliders</title>
+	<!--
+		Three plates sliding apart: back, mid, front. That is the whole layer
+		model (spec 02, D11), and the reason for the name.
+
+		Deliberately unlike Chapbook's logo. Sliders is a fork of Chapbook by
+		Chris Klimas, but the two must be tellable apart in Twine's format list.
+	-->
+	<rect width="250" height="250" fill="#16161d" />
+
+	<!-- back plate -->
+	<g opacity="0.4">
+		<rect x="34" y="52" width="150" height="94" rx="6" fill="#3d5a80" />
+		<circle cx="152" cy="82" r="12" fill="#98c1d9" />
+	</g>
+
+	<!-- mid plate -->
+	<g opacity="0.7">
+		<rect x="56" y="78" width="150" height="94" rx="6" fill="#5c7fa8" />
+		<rect x="72" y="122" width="26" height="34" rx="4" fill="#e0fbfc" />
+		<rect x="132" y="112" width="26" height="44" rx="4" fill="#e0fbfc" />
+	</g>
+
+	<!-- front plate, with a speech bubble: dialogue is DOM, above every layer -->
+	<g>
+		<rect x="78" y="104" width="150" height="94" rx="6" fill="#98c1d9" />
+		<path
+			d="M96 122h84a6 6 0 0 1 6 6v28a6 6 0 0 1-6 6h-46l-14 14v-14H96a6 6 0 0 1-6-6v-28a6 6 0 0 1 6-6z"
+			fill="#16161d"
+		/>
+		<rect x="102" y="134" width="60" height="7" rx="3.5" fill="#e0fbfc" />
+		<rect x="102" y="148" width="40" height="7" rx="3.5" fill="#ee6c4d" />
+	</g>
+</svg>

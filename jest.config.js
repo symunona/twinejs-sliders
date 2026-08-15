@@ -4,11 +4,16 @@ module.exports = {
 	moduleNameMapper: {
 		'\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
 			'<rootDir>/src/__mocks__/fileMock.js',
-		'\\.(css|less)$': '<rootDir>/src/__mocks__/styleMock.js'
+		'\\.(css|less)$': '<rootDir>/src/__mocks__/styleMock.js',
+		// Sliders monorepo packages, consumed as source (see ADR-3).
+		'^@sliders/(.*)$': '<rootDir>/packages/$1/src',
+		// `yaml`'s export map sends the jsdom environment to its ESM browser build,
+		// which jest can't parse. Pin it to the CJS build.
+		'^yaml$': '<rootDir>/node_modules/yaml/dist/index.js'
 	},
 	preset: 'ts-jest/presets/js-with-ts',
 	resetMocks: true,
-	roots: ['<rootDir>/src'],
+	roots: ['<rootDir>/src', '<rootDir>/packages'],
 	setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
 	testEnvironment: 'jest-environment-jsdom',
 	// segseg is a ESM-only module.

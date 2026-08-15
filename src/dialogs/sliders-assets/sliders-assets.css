@@ -1,0 +1,199 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.sliders-assets-dialog .button-bar {
+	flex-wrap: wrap;
+}
+
+.sliders-assets-dialog .sliders-note {
+	/* Must not compete with the tab panel for vertical space. */
+	flex: 0 0 auto;
+	padding: 0 var(--grid-size) var(--control-inner-padding);
+}
+
+.sliders-assets-dialog .react-tabs {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.sliders-assets-dialog .react-tabs__tab-panel {
+	display: none;
+}
+
+.sliders-assets-dialog .react-tabs__tab-panel--selected {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.sliders-tablist {
+	border-bottom: 1px solid var(--light-gray);
+	display: flex;
+	gap: var(--control-inner-padding);
+	list-style: none;
+	margin: 0;
+	padding: 0 var(--grid-size);
+}
+
+.sliders-tab {
+	border-bottom: 3px solid transparent;
+	cursor: pointer;
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.sliders-tab.selected {
+	border-bottom-color: var(--blue);
+	color: var(--black);
+	font-weight: bold;
+}
+
+.sliders-tab:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+/* Upload button hides its native input but keeps it operable. */
+
+.upload-button input[type='file'] {
+	height: 1px;
+	opacity: 0;
+	position: absolute;
+	width: 1px;
+}
+
+.upload-drop-zone {
+	border: 2px dashed transparent;
+	border-radius: var(--corner-round);
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: calc(var(--grid-size) * 12);
+	overflow-y: auto;
+	padding: var(--grid-size);
+}
+
+.upload-drop-zone.drag-over {
+	background: var(--faint-blue);
+	border-color: var(--blue);
+}
+
+.upload-drop-zone-hint {
+	color: var(--gray);
+	font-size: 85%;
+	padding-top: var(--grid-size);
+	text-align: center;
+}
+
+.sliders-tiles {
+	display: grid;
+	gap: var(--grid-size);
+	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.sliders-tile {
+	background: var(--faint-gray);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding);
+}
+
+.sliders-tile .button-bar {
+	margin-top: auto;
+}
+
+.sliders-tile-open {
+	background: none;
+	border: none;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	font: inherit;
+	gap: var(--control-inner-padding);
+	padding: 0;
+	text-align: left;
+	width: 100%;
+}
+
+.sliders-tile-open:hover .sliders-tile-name {
+	text-decoration: underline;
+}
+
+.asset-preview {
+	align-items: center;
+	background: repeating-conic-gradient(
+			var(--light-gray) 0% 25%,
+			transparent 0% 50%
+		)
+		50% / 16px 16px;
+	border-radius: var(--corner-round);
+	display: flex;
+	height: calc(var(--grid-size) * 10);
+	justify-content: center;
+	overflow: hidden;
+	width: 100%;
+}
+
+.asset-preview img {
+	max-height: 100%;
+	max-width: 100%;
+	object-fit: contain;
+}
+
+.asset-preview-empty {
+	height: 100%;
+	width: 100%;
+}
+
+.sliders-tile-name {
+	color: var(--black);
+	font-weight: bold;
+	overflow-wrap: anywhere;
+}
+
+.sliders-tile-detail {
+	color: var(--gray);
+	font-size: 85%;
+}
+
+.sliders-tile-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--control-inner-padding);
+}
+
+.copy-fragment-button .icon-button {
+	height: auto;
+	max-width: 100%;
+	min-height: var(--control-height);
+	text-align: left;
+	white-space: normal;
+}
+
+.sliders-fragment {
+	font-family: var(--font-monospaced, monospace);
+	overflow-wrap: anywhere;
+}
+
+.sliders-empty {
+	color: var(--gray);
+	padding: var(--grid-size);
+	text-align: center;
+}
+
+.sliders-upload-report {
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	margin: 0;
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.sliders-backend {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
