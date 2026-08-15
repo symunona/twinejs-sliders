@@ -133,14 +133,44 @@ test.describe('Sliders asset editor', () => {
 		).toBeDisabled();
 	});
 
-	test('removes the background on this machine', async ({page}) => {
-		// The model and the ONNX runtime are both fetched on first use.
+	test('removes the background, or says plainly why it cannot', async ({
+		page
+	}) => {
+		// The model is fetched on first use.
 		test.setTimeout(300000);
 		await createStory(page, 'Background removal test');
 
 		const editor = await openEditor(page, 'mira-idle.png', 'mira-idle');
+		const remove = editor.getByRole('button', {name: 'Remove Background'});
 
-		await editor.getByRole('button', {name: 'Remove Background'}).click();
+		// There is no CPU fallback on purpose: without WebGPU the feature has to
+		// disable itself and explain, not fail halfway through. And
+		// `navigator.gpu` existing proves nothing--headless Chromium exposes it
+		// and then hands back no adapter. Ask the same way the app does.
+		const webGpu = await page.evaluate(async () => {
+			const {gpu} = navigator as unknown as {
+				gpu?: {requestAdapter(): Promise<unknown>};
+			};
+
+			if (!gpu) {
+				return false;
+			}
+
+			try {
+				return (await gpu.requestAdapter()) !== null;
+			} catch (error) {
+				return false;
+			}
+		});
+
+		if (!webGpu) {
+			await expect(remove).toBeDisabled();
+			await expect(editor.getByText(/WebGPU/)).toBeVisible();
+			await shot(page, '23-asset-editor-no-webgpu');
+			return;
+		}
+
+		await remove.click();
 		await expect(
 			editor.getByRole('button', {name: 'Restore Background'})
 		).toBeVisible({timeout: 240000});

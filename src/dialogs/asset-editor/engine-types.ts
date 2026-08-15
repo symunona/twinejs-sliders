@@ -1,0 +1,79 @@
+/**
+ * The contract between the asset editor and whatever actually cuts backgrounds
+ * out. Engines only ever produce a mask; upsampling, edge refinement and
+ * compositing all live above them, so every engine gets the same quality work
+ * for free and can be swapped without touching the editor.
+ */
+
+/** A soft mask, 0 to 1, at whatever resolution the engine reasons at. */
+export interface BackgroundMask {
+	data: Float32Array;
+	width: number;
+	height: number;
+}
+
+export interface EngineSupport {
+	supported: boolean;
+	/** Locale key explaining why not, for the UI to show. */
+	reasonKey?: string;
+}
+
+export interface EngineProgress {
+	stage: 'download' | 'start' | 'run' | 'refine';
+	/** 0 to 1. Only meaningful while downloading. */
+	progress?: number;
+}
+
+export interface MaskOptions {
+	onProgress?: (progress: EngineProgress) => void;
+	signal?: AbortSignal;
+}
+
+/** What an engine module has to export. */
+export type MaskFunction = (
+	source: HTMLCanvasElement,
+	options?: MaskOptions
+) => Promise<BackgroundMask>;
+
+interface NavigatorGpu {
+	gpu?: {requestAdapter(): Promise<unknown>};
+}
+
+let webGpuProbe: Promise<boolean> | undefined;
+
+/**
+ * WebGPU is a hard requirement for the models worth running. There's no CPU
+ * fallback on purpose: the wasm path can't allocate a 1024² transformer's
+ * activations, so pretending otherwise would only produce a hang.
+ *
+ * Asking for an adapter rather than just looking for `navigator.gpu` is the
+ * whole point. Plenty of browsers expose the object and then hand back no
+ * adapter at all--headless Chromium, blocklisted drivers, a Linux box with no
+ * Vulkan. Those have to end up disabled-and-explained, not enabled-then-broken.
+ */
+export function hasWebGpu(): Promise<boolean> {
+	if (!webGpuProbe) {
+		webGpuProbe = (async () => {
+			const {gpu} = navigator as NavigatorGpu;
+
+			if (!gpu) {
+				return false;
+			}
+
+			try {
+				return (await gpu.requestAdapter()) !== null;
+			} catch (error) {
+				return false;
+			}
+		})();
+	}
+
+	return webGpuProbe;
+}
+
+/** Throws if the caller has given up on us. */
+export function checkAborted(signal?: AbortSignal) {
+	if (signal?.aborted) {
+		throw new DOMException('Background removal was cancelled.', 'AbortError');
+	}
+}

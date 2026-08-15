@@ -1,3 +1,4 @@
 export * from './asset-editor';
-export * from './background-model';
+export * from './background-engine';
+export * from './engine-types';
 export * from './image-edits';

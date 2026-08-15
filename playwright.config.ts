@@ -51,7 +51,27 @@ const config: PlaywrightTestConfig = {
 		{
 			name: 'chromium',
 			use: {
-				...devices['Desktop Chrome']
+				...devices['Desktop Chrome'],
+				/* Background removal needs a real WebGPU adapter, which headless
+				   Chromium does not have--it exposes `navigator.gpu` and then hands
+				   back nothing. Run those paths with:
+
+				     SLIDERS_WEBGPU=1 xvfb-run -a npx playwright test
+
+				   Without the flag the suite still passes: the app is supposed to
+				   disable the feature and say why, and that's asserted too. */
+				...(process.env.SLIDERS_WEBGPU
+					? {
+							headless: false,
+							launchOptions: {
+								args: [
+									'--use-angle=vulkan',
+									'--enable-unsafe-webgpu',
+									'--enable-features=Vulkan'
+								]
+							}
+					  }
+					: {})
 			}
 		}
 

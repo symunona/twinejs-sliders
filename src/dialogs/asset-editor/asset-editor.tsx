@@ -4,7 +4,8 @@ import {
 	IconDeviceFloppy,
 	IconEraser,
 	IconLink,
-	IconWand
+	IconWand,
+	IconX
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -19,7 +20,13 @@ import {
 	slidersAssetStore
 } from '../sliders-assets/asset-store-context';
 import {AdjustSlider} from './adjust-slider';
-import {BACKGROUND_MODEL, BackgroundProgress} from './background-model';
+import {
+	BackgroundSupport,
+	backgroundSupport,
+	BackgroundUnsupportedError,
+	removeBackground
+} from './background-engine';
+import {EngineProgress} from './engine-types';
 import {
 	canvasBlob,
 	CropRect,
@@ -48,6 +55,8 @@ function megabytes(bytes: number): string {
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId} = props;
 	const store = React.useMemo(() => slidersAssetStore(), []);
+	const [background, setBackground] = React.useState<BackgroundSupport>();
+	const cancel = React.useRef<AbortController>();
 	const preview = React.useRef<HTMLCanvasElement>(null);
 	const [dragFrom, setDragFrom] = React.useState<{x: number; y: number}>();
 	const [edits, setEdits] = React.useState<ImageEdits>();
@@ -57,10 +66,27 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [name, setName] = React.useState('');
 	/** Kept so removing the background can be undone. */
 	const [original, setOriginal] = React.useState<HTMLCanvasElement>();
-	const [progress, setProgress] = React.useState<BackgroundProgress>();
+	const [progress, setProgress] = React.useState<EngineProgress>();
 	const [saving, setSaving] = React.useState(false);
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	const {t} = useTranslation();
+
+	// Whether this machine can cut backgrounds out at all. Asking costs a GPU
+	// adapter request, so it happens once, here.
+
+	React.useEffect(() => {
+		let current = true;
+
+		backgroundSupport().then(result => {
+			if (current) {
+				setBackground(result);
+			}
+		});
+
+		return () => {
+			current = false;
+		};
+	}, []);
 
 	// Load the asset's pixels into a canvas we can work on.
 
@@ -262,18 +288,30 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			return;
 		}
 
+		const controller = new AbortController();
+
+		cancel.current = controller;
 		setError(undefined);
 		setProgress({stage: 'download'});
 
 		try {
-			// Loaded on demand: the runtime is far too big to sit in the main bundle.
-			const {removeBackground} = await import('./remove-background');
-
-			setSource(await removeBackground(source, setProgress));
+			setSource(
+				await removeBackground(source, {
+					onProgress: setProgress,
+					signal: controller.signal
+				})
+			);
 		} catch (removeError) {
-			console.error('Could not remove the background', removeError);
-			setError(t('dialogs.assetEditor.backgroundError'));
+			if ((removeError as Error)?.name === 'AbortError') {
+				// The author asked for this; nothing to report.
+			} else if (removeError instanceof BackgroundUnsupportedError) {
+				setError(t(removeError.reasonKey));
+			} else {
+				console.error('Could not remove the background', removeError);
+				setError(t('dialogs.assetEditor.backgroundError'));
+			}
 		} finally {
+			cancel.current = undefined;
 			setProgress(undefined);
 		}
 	}
@@ -441,12 +479,19 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 							<h3>{t('dialogs.assetEditor.background')}</h3>
 							<ButtonBar>
 								<IconButton
-									disabled={busy || backgroundRemoved}
+									disabled={busy || backgroundRemoved || !background?.engine}
 									icon={<IconWand />}
 									label={t('dialogs.assetEditor.removeBackground')}
 									onClick={handleRemoveBackground}
 								/>
-								{backgroundRemoved && (
+								{progress && (
+									<IconButton
+										icon={<IconX />}
+										label={t('common.cancel')}
+										onClick={() => cancel.current?.abort()}
+									/>
+								)}
+								{backgroundRemoved && !progress && (
 									<IconButton
 										disabled={busy}
 										icon={<IconEraser />}
@@ -457,19 +502,24 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 							</ButtonBar>
 							{progress ? (
 								<p className="asset-editor-detail" role="status">
-									{progress.stage === 'download'
-										? t('dialogs.assetEditor.downloadingModel', {
-												percent: Math.round((progress.progress ?? 0) * 100)
-										  })
-										: t('dialogs.assetEditor.removingBackground')}
+									{t(`dialogs.assetEditor.stage.${progress.stage}`, {
+										percent: Math.round((progress.progress ?? 0) * 100)
+									})}
 								</p>
 							) : (
 								<p className="asset-editor-detail">
-									{t('dialogs.assetEditor.modelNote', {
-										license: BACKGROUND_MODEL.license,
-										name: BACKGROUND_MODEL.name,
-										size: megabytes(BACKGROUND_MODEL.bytes)
-									})}
+									{background?.engine
+										? t('dialogs.assetEditor.engineNote', {
+												license: background.engine.license,
+												name: background.engine.label,
+												resolution: background.engine.resolution,
+												size: megabytes(background.engine.bytes)
+										  })
+										: background &&
+										  t(
+												background.support.reasonKey ??
+													'dialogs.assetEditor.needsWebGpu'
+										  )}
 								</p>
 							)}
 						</section>
