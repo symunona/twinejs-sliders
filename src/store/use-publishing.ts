@@ -13,13 +13,25 @@ import {
 } from './story-formats';
 import {storyWithId, useStoriesContext} from './stories';
 import {getAppInfo} from '../util/app-info';
+import {slidersAssetStore} from '../dialogs/sliders-assets/asset-store-context';
+import {SlidersUrlFlavor, withSlidersManifests} from '../util/sliders-manifest';
+
+export interface StoryPublishOptions extends PublishOptions {
+	/**
+	 * How the Sliders asset manifests address their bytes. Defaults to `data`, which is
+	 * the only flavour that survives the HTML leaving this origin — a download or an
+	 * Electron scratch file. Callers that replace the DOM of the tab doing the publishing
+	 * should pass `blob` instead; see `util/sliders-manifest`.
+	 */
+	slidersUrls?: SlidersUrlFlavor;
+}
 
 export interface UsePublishingProps {
 	proofStory: (storyId: string) => Promise<string>;
 	publishArchive: (storyIds?: string[]) => Promise<string>;
 	publishStory: (
 		storyId: string,
-		publishOptions?: PublishOptions
+		publishOptions?: StoryPublishOptions
 	) => Promise<string>;
 	publishStoryData: (storyId: string) => string;
 }
@@ -88,8 +100,13 @@ export function usePublishing(): UsePublishingProps {
 					throw new Error(`Couldn't load story format properties`);
 				}
 
+				// The Sliders manifests ride only on this path. The archive, the proofing
+				// format and Electron's save-on-change all publish elsewhere, and none of
+				// them should carry a copy of the story's art.
 				return publishStoryWithFormat(
-					story,
+					await withSlidersManifests(story, slidersAssetStore(), {
+						urls: publishOptions?.slidersUrls ?? 'data'
+					}),
 					formatProperties.source,
 					getAppInfo(),
 					publishOptions

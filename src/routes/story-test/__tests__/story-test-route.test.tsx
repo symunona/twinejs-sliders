@@ -37,7 +37,7 @@ describe('<StoryTestRoute>', () => {
 			expect(document.body.textContent).toBe('mock-published-story')
 		);
 		expect(publishStory.mock.calls).toEqual([
-			['123', {formatOptions: 'debug', startId: undefined}]
+			['123', {formatOptions: 'debug', slidersUrls: 'blob', startId: undefined}]
 		]);
 	});
 
@@ -52,7 +52,7 @@ describe('<StoryTestRoute>', () => {
 			expect(document.body.textContent).toBe('mock-published-story')
 		);
 		expect(publishStory.mock.calls).toEqual([
-			['123', {formatOptions: 'debug', startId: '456'}]
+			['123', {formatOptions: 'debug', slidersUrls: 'blob', startId: '456'}]
 		]);
 	});
 

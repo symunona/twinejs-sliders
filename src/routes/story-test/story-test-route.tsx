@@ -19,6 +19,9 @@ export const StoryTestRoute: React.FC = () => {
 				replaceDom(
 					await publishStory(storyId, {
 						formatOptions: 'debug',
+						// See story-play-route: replaceDom keeps this tab's Window, so
+						// object URLs survive it.
+						slidersUrls: 'blob',
 						startId: passageId
 					})
 				);

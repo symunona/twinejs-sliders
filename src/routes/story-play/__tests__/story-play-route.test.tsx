@@ -33,7 +33,8 @@ describe('<StoryPlayRoute>', () => {
 		await waitFor(() =>
 			expect(document.body.textContent).toBe('mock-published-story')
 		);
-		expect(publishStory.mock.calls).toEqual([['123']]);
+		// blob URLs, because replaceDom keeps this tab's Window alive.
+		expect(publishStory.mock.calls).toEqual([['123', {slidersUrls: 'blob'}]]);
 	});
 
 	it('shows an error message if publishing fails', async () => {

@@ -13,7 +13,10 @@ export const StoryPlayRoute: React.FC = () => {
 	React.useEffect(() => {
 		async function load() {
 			try {
-				replaceDom(await publishStory(storyId));
+				// `blob`, not `data`: replaceDom rewrites this tab's document but keeps its
+				// Window, so object URLs minted while publishing stay resolvable — and
+				// playing a story should not wait on base64ing its whole art library.
+				replaceDom(await publishStory(storyId, {slidersUrls: 'blob'}));
 			} catch (error) {
 				setPublishError(error as Error);
 			}
