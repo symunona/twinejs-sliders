@@ -64,7 +64,6 @@ function character(overrides: Partial<Character> = {}): Character {
 		name: 'Mira',
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
-		anchors: {bubble: {x: 0.5, y: 0.15}},
 		frames: {},
 		tags: [],
 		...overrides

@@ -47,12 +47,26 @@ export interface StubResolver extends AssetResolver {
 	define(id: string, spec: StubAssetSpec): void;
 }
 
-const DEFAULT_ANCHORS: Record<string, Frac2> = {
+const STUB_ANCHORS: Record<string, Frac2> = {
 	bubble: {x: 0.62, y: 0.18},
 	mouth: {x: 0.5, y: 0.22},
 	head: {x: 0.5, y: 0.12},
 	hand: {x: 0.78, y: 0.52}
 };
+
+/** Anchors live on frames, so every stub frame gets the same rig unless told otherwise. */
+function stubFrames(
+	id: string,
+	frames: string[],
+	anchors: Record<string, Frac2> = STUB_ANCHORS
+): Character['frames'] {
+	return Object.fromEntries(
+		frames.map(frame => [
+			frame,
+			{anchors: {...anchors}, asset: `a_${id}_${frame}`}
+		])
+	);
+}
 
 function character(
 	id: string,
@@ -65,10 +79,7 @@ function character(
 		name,
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
-		anchors: {...DEFAULT_ANCHORS},
-		frames: Object.fromEntries(
-			frames.map(frame => [frame, {asset: `a_${id}_${frame}`}])
-		),
+		frames: stubFrames(id, frames),
 		tags: ['stub'],
 		...overrides
 	};
@@ -79,8 +90,11 @@ export function defaultStubCast(): Record<string, Character> {
 	return {
 		mira: character('mira', 'Mira', ['idle', 'arms-crossed', 'angry', 'wave']),
 		joren: character('joren', 'Joren', ['idle', 'angry'], {
-			size: {w: 600, h: 1024},
-			anchors: {...DEFAULT_ANCHORS, bubble: {x: 0.38, y: 0.16}}
+			frames: stubFrames('joren', ['idle', 'angry'], {
+				...STUB_ANCHORS,
+				bubble: {x: 0.38, y: 0.16}
+			}),
+			size: {w: 600, h: 1024}
 		})
 	};
 }

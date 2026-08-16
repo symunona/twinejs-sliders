@@ -180,7 +180,6 @@ async function seedSource(): Promise<Seeded> {
 	);
 	const character: Character = {
 		...defaultCharacter('mira', 'Mira'),
-		anchors: {bubble: {x: 0.5, y: 0.12}, mouth: {x: 0.48, y: 0.3}},
 		origin: {x: 0.42, y: 0.98},
 		size: {w: 400, h: 900},
 		tags: ['cast', 'chapter-one']
@@ -192,7 +191,16 @@ async function seedSource(): Promise<Seeded> {
 			{kind: 'frame', name: `mira/${frameName}`, ownerCharacter: 'mira'}
 		);
 
-		character.frames[frameName] = {asset, loop: index === 0};
+		// Anchors are per frame, and deliberately different between the two: a round trip
+		// that flattened them back onto the character would still pass with one rig.
+		character.frames[frameName] = {
+			anchors: {
+				bubble: {x: 0.5, y: index === 0 ? 0.12 : 0.17},
+				mouth: {x: 0.48, y: 0.3}
+			},
+			asset,
+			loop: index === 0
+		};
 	}
 
 	// Never referenced by any passage -- a 40 MB library must not follow a two-passage story.
@@ -338,8 +346,12 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 		expect(stored!.name).toBe('Mira');
 		expect(stored!.size).toEqual({w: 400, h: 900});
 		expect(stored!.origin).toEqual({x: 0.42, y: 0.98});
-		expect(stored!.anchors).toEqual({
+		expect(stored!.frames.idle.anchors).toEqual({
 			bubble: {x: 0.5, y: 0.12},
+			mouth: {x: 0.48, y: 0.3}
+		});
+		expect(stored!.frames.smile.anchors).toEqual({
+			bubble: {x: 0.5, y: 0.17},
 			mouth: {x: 0.48, y: 0.3}
 		});
 		expect(stored!.tags).toEqual(['cast', 'chapter-one']);

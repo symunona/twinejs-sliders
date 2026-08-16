@@ -1,4 +1,9 @@
-import {defaultCharacter, nameFromFilename, slugify} from '@sliders/asset-store';
+import {
+	defaultCharacter,
+	nameFromFilename,
+	newFrameAnchors,
+	slugify
+} from '@sliders/asset-store';
 import {AssetMeta, Character} from '@sliders/scene-types';
 import {IconTag, IconTrash, IconUserPlus} from '@tabler/icons';
 import * as React from 'react';
@@ -183,7 +188,12 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 					ownerCharacter: draft.id
 				});
 
+				// A new frame comes in rigged, copying whatever the character's other frames
+				// already use — the poses of one sprite sheet are variations on one drawing,
+				// so that is far closer to right than the bare defaults, and the author
+				// nudges the anchors that actually moved.
 				frames[uniqueFrameName(slugify(nameFromFilename(file.name)), frames)] = {
+					anchors: newFrameAnchors({frames}),
 					asset: result.id
 				};
 			} catch (error) {

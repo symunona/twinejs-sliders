@@ -29,7 +29,6 @@ function asset(
 
 function character(id: string, frames: string[]): Character {
 	return {
-		anchors: {},
 		frames: Object.fromEntries(
 			frames.map(frame => [frame, {asset: `a_${id}-${frame}`}])
 		),

@@ -339,6 +339,8 @@
 			"deletePrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
 			"dropFrames": "Drop image files here to add frames.",
 			"fitToAllFrames": "Apply This Fit To All Frames",
+				"anchorsToAllFrames": "Apply This Frame\u2019s Anchors To All Frames",
+				"anchorUnplaced": "not on this frame",
 			"frameZoom": "Frame zoom",
 			"frames": "Frames",
 			"height": "Height",

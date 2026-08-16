@@ -71,6 +71,9 @@ interface EntityRecord {
 	entity: StageEntity;
 	/** Resolved manifest for cast entities. Undefined for props and unknown characters. */
 	character?: Character;
+	/** Which of that character's frames is on screen. The rig hangs off it, not off the
+	    character: anchors are per frame, so a pose change moves the bubble with it. */
+	frameName?: string;
 	metrics: SpriteMetrics;
 	/** Target rect in BOX pixels. */
 	rect: Rect;
@@ -93,6 +96,8 @@ interface ResolvedEntity {
 	meta?: AssetMeta;
 	/** The cast frame's registration transform, if it has one. */
 	fit?: FrameFit;
+	/** The frame being drawn, so its anchors are the ones `measure` reports. */
+	frameName?: string;
 	/** Set when we cannot draw the real thing — render a labelled placeholder instead. */
 	placeholderLabel?: string;
 	/** The id that failed to resolve. Exposed as `data-asset-id` for tests to assert on. */
@@ -395,6 +400,7 @@ export class DomRenderer implements Renderer {
 				assetId: frame.asset,
 				url,
 				fit: frame.fit,
+				frameName,
 				placeholderId: url ? undefined : frame.asset,
 				placeholderLabel: url ? undefined : `? asset\n${frame.asset}`
 			};
@@ -509,6 +515,7 @@ export class DomRenderer implements Renderer {
 			el,
 			entity: res.entity,
 			character: res.character,
+			frameName: res.frameName,
 			metrics: this.metricsFor(res),
 			rect: {left: 0, top: 0, width: 0, height: 0},
 			exiting: false
@@ -545,6 +552,7 @@ export class DomRenderer implements Renderer {
 
 		rec.entity = res.entity;
 		rec.character = res.character;
+		rec.frameName = res.frameName;
 		rec.metrics = this.metricsFor(res);
 
 		if (prev.layer !== res.entity.layer) {
@@ -920,8 +928,20 @@ export class DomRenderer implements Renderer {
 		this.notify();
 	}
 
+	/**
+	 * Where an anchor sits on the frame currently drawn.
+	 *
+	 * Read off the FRAME, because that is where the pose is: a character who turns away has
+	 * their mouth somewhere else, and a rig shared by every frame would leave the bubble
+	 * pointing at the back of their head. A frame that was never rigged falls through to
+	 * `DEFAULT_ANCHORS`, so a bubble is never homeless.
+	 */
 	private anchorFraction(rec: EntityRecord, anchor: string): Frac2 | undefined {
-		return rec.character?.anchors?.[anchor] ?? DEFAULT_ANCHORS[anchor];
+		const frame = rec.frameName
+			? rec.character?.frames?.[rec.frameName]
+			: undefined;
+
+		return frame?.anchors?.[anchor] ?? DEFAULT_ANCHORS[anchor];
 	}
 
 	private notify(): void {

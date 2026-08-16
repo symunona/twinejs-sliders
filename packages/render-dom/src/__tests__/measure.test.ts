@@ -164,6 +164,64 @@ describe('measure', () => {
 		expect(renderer.measure('joren', 'bubble')!.x).toBeLessThan(800);
 	});
 
+	/**
+	 * The reason anchors live on frames at all. A character who turns to face away has their
+	 * mouth on the other side of the box, and a rig shared by every frame would leave the
+	 * bubble pointing at the back of their head.
+	 */
+	it('follows the frame on screen, not the character', async () => {
+		const mount = makeMount(1600, 900);
+		const renderer = new DomRenderer();
+
+		await renderer.mount(
+			mount,
+			createStubResolver({
+				characters: {
+					mira: {
+						frames: {
+							away: {anchors: {bubble: {x: 0.2, y: 0.2}}, asset: 'a_mira_away'},
+							idle: {anchors: {bubble: {x: 0.8, y: 0.2}}, asset: 'a_mira_idle'}
+						}
+					}
+				}
+			})
+		);
+
+		await renderer.apply(
+			stage([entity({frame: 'idle', id: 'mira', ref: 'mira'})]),
+			[]
+		);
+
+		const facing = renderer.measure('mira', 'bubble')!;
+
+		await renderer.apply(
+			stage([entity({frame: 'away', id: 'mira', ref: 'mira'})]),
+			[]
+		);
+
+		const turned = renderer.measure('mira', 'bubble')!;
+
+		expect(facing.x).toBeGreaterThan(800);
+		expect(turned.x).toBeLessThan(800);
+	});
+
+	it('falls back to the defaults for a frame nobody rigged', async () => {
+		const mount = makeMount(1600, 900);
+		const renderer = new DomRenderer();
+
+		await renderer.mount(
+			mount,
+			createStubResolver({
+				characters: {mira: {frames: {idle: {asset: 'a_mira_idle'}}}}
+			})
+		);
+
+		await renderer.apply(stage([entity({id: 'mira', ref: 'mira'})]), []);
+
+		// A bubble must never be homeless, however unfinished the character is.
+		expect(renderer.measure('mira', 'bubble')).not.toBeNull();
+	});
+
 	it('still measures an entity drawn as a placeholder', async () => {
 		const {mount} = await mounted();
 		const renderer = new DomRenderer();

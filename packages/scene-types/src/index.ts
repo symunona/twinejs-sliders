@@ -269,8 +269,9 @@ export interface Transition {
  * This nudges each frame until they line up, which is what the editor's onion skin is
  * for seeing.
  *
- * The rig does NOT move with it. `origin` and `anchors` stay character-level and stay in
- * box space, so a speech bubble does not jitter as frames swap.
+ * The rig does NOT move with it: `fit` nudges the ART, and a frame's `anchors` describe
+ * where the rig points sit in the BOX. Registration and rigging are separate jobs, and a
+ * frame that has been nudged into place must not drag its bubble along with it.
  *
  * Fractions of the character box, never pixels — `replace` re-derives an asset's `w`/`h`
  * from new bytes, so a pixel offset would silently shift every aligned frame the moment
@@ -285,11 +286,32 @@ export interface FrameFit {
 
 export const DEFAULT_FIT: FrameFit = {offset: {x: 0, y: 0}, scale: 1};
 
+/**
+ * What a brand-new frame's rig starts as: a bubble above the shoulder, a mouth below it.
+ *
+ * Only a starting point. The whole reason anchors are per frame is that these two move —
+ * a character who turns to face away, sits down, or is drawn in profile has their mouth
+ * somewhere else, and a bubble pinned to one pose points at nothing in the next.
+ */
+export const DEFAULT_FRAME_ANCHORS: Readonly<Record<string, Frac2>> = {
+	bubble: {x: 0.5, y: 0.15},
+	mouth: {x: 0.5, y: 0.25}
+};
+
 export interface CharacterFrame {
 	asset: AssetId;
 	loop?: boolean;
 	/** Absent means identity — every frame drawn before this existed. */
 	fit?: FrameFit;
+	/**
+	 * Fractions of the character box. `bubble` is required for speech (D2).
+	 *
+	 * Per FRAME, not per character: the pose is what decides where a speech bubble belongs,
+	 * and one rig for every pose puts the bubble over the back of a character's head the
+	 * moment they turn around. Absent means the renderer's own fallbacks stand in, so a
+	 * frame added and never rigged still draws a bubble somewhere sane.
+	 */
+	anchors?: Record<string, Frac2>;
 }
 
 export interface Character {
@@ -298,8 +320,6 @@ export interface Character {
 	size: {w: number; h: number};
 	/** Fraction of the frame. Default {x:0.5,y:1} = feet, bottom centre. */
 	origin: Frac2;
-	/** Fractions of the frame. `bubble` is required for speech (D2). */
-	anchors: Record<string, Frac2>;
 	frames: Record<string, CharacterFrame>;
 	tags: string[];
 }

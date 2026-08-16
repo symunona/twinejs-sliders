@@ -4,6 +4,7 @@ export * from './backends/indexeddb-backend';
 export * from './backends/memory-backend';
 export * from './backends/opfs-backend';
 export * from './blob-bytes';
+export * from './characters';
 export * from './create-asset-store';
 export * from './fragment';
 export * from './ids';

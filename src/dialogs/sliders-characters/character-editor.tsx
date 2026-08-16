@@ -1,4 +1,4 @@
-import {slugify} from '@sliders/asset-store';
+import {anchorNames, slugify} from '@sliders/asset-store';
 import {
 	AssetId,
 	AssetMeta,
@@ -64,30 +64,92 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	}, [character.frames, frameNames, selectedFrame]);
 
 	const activeFrame = selectedFrame ? character.frames[selectedFrame] : undefined;
+	// What the sprite preview draws and what the readout lists: this FRAME's rig. The
+	// character has no rig of its own — a pose is what decides where a mouth is.
+	const activeAnchors = activeFrame?.anchors ?? {};
 
 	useCommand({
+		enabled: !!selectedFrame,
 		id: 'slidersCharacters.addAnchor',
 		label: t('hotkeys.commands.slidersCharacters.addAnchor'),
 		run: () => setNewAnchorOpen(true),
 		scope: 'sliders-characters'
 	});
 
+	/** Dragging an anchor moves it on the SELECTED frame and nowhere else. */
 	function handleChangeAnchor(name: string, value: Frac2) {
-		onChange({...character, anchors: {...character.anchors, [name]: value}});
+		if (!selectedFrame || !activeFrame) {
+			return;
+		}
+
+		onChange({
+			...character,
+			frames: {
+				...character.frames,
+				[selectedFrame]: {
+					...activeFrame,
+					anchors: {...activeAnchors, [name]: value}
+				}
+			}
+		});
+	}
+
+	/**
+	 * Adding and removing, unlike dragging, apply to EVERY frame.
+	 *
+	 * Positions are per frame; the set of names is not. A scene that says `mouth` has no
+	 * idea which frame will be showing when it is drawn, so an anchor that existed on the
+	 * idle pose and not on the angry one would work until the character got angry.
+	 */
+	function forEachFrameAnchors(
+		change: (anchors: Record<string, Frac2>) => Record<string, Frac2>
+	) {
+		const frames: Character['frames'] = {};
+
+		for (const [name, frame] of Object.entries(character.frames)) {
+			frames[name] = {...frame, anchors: change({...(frame.anchors ?? {})})};
+		}
+
+		onChange({...character, frames});
 	}
 
 	function handleAddAnchor(name: string) {
 		const key = slugify(name);
 
 		setNewAnchor('');
-		handleChangeAnchor(key, {x: 0.5, y: 0.5});
+
+		if (!key) {
+			return;
+		}
+
+		// Seeded at the middle of the box on every frame. Placing it once per pose is the
+		// point of the feature, so there is nothing better to guess.
+		forEachFrameAnchors(anchors => ({...anchors, [key]: {x: 0.5, y: 0.5}}));
 	}
 
 	function handleRemoveAnchor(name: string) {
-		const anchors = {...character.anchors};
+		forEachFrameAnchors(anchors => {
+			delete anchors[name];
 
-		delete anchors[name];
-		onChange({...character, anchors});
+			return anchors;
+		});
+	}
+
+	/**
+	 * The rig that fitted one pose is usually close for the rest — the same favour
+	 * `fitToAllFrames` does for registration.
+	 */
+	function handleApplyAnchorsToAll() {
+		if (!activeFrame) {
+			return;
+		}
+
+		forEachFrameAnchors(() =>
+			Object.fromEntries(
+				Object.entries(activeAnchors).map(([name, value]) => [name, {...value}])
+			)
+		);
+		onCommit();
 	}
 
 	function handleRenameFrame(name: string, newName: string) {
@@ -188,7 +250,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 				/>
 				<div className="character-editor-stage">
 					<SpritePreview
-						anchors={character.anchors}
+						anchors={activeAnchors}
 						assetId={activeFrame?.asset}
 						fit={activeFrame?.fit}
 						onChangeAnchor={handleChangeAnchor}
@@ -244,6 +306,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 							{t('dialogs.slidersCharacters.onionSkin')}
 						</TextSelect>
 						<PromptButton
+							disabled={!activeFrame}
 							icon={<IconCrosshair />}
 							label={t('dialogs.slidersCharacters.addAnchor')}
 							onChange={event => setNewAnchor(event.target.value)}
@@ -252,6 +315,12 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 							open={newAnchorOpen}
 							prompt={t('dialogs.slidersCharacters.addAnchorPrompt')}
 							value={newAnchor}
+						/>
+						<IconButton
+							disabled={!activeFrame || frameNames.length < 2}
+							icon={<IconCopy />}
+							label={t('dialogs.slidersCharacters.anchorsToAllFrames')}
+							onClick={handleApplyAnchorsToAll}
 						/>
 					</ButtonBar>
 				</div>
@@ -316,20 +385,28 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					<dd data-readout="origin">
 						{character.origin.x.toFixed(3)}, {character.origin.y.toFixed(3)}
 					</dd>
-					{Object.entries(character.anchors).map(([name, value]) => (
-						<React.Fragment key={name}>
-							<dt>{name}</dt>
-							<dd data-readout={`anchor:${name}`}>
-								{value.x.toFixed(3)}, {value.y.toFixed(3)}
-								<IconButton
-									icon={<IconTrash />}
-									iconOnly
-									label={t('dialogs.slidersCharacters.removeAnchor', {name})}
-									onClick={() => handleRemoveAnchor(name)}
-								/>
-							</dd>
-						</React.Fragment>
-					))}
+					{/* This frame's rig. Another frame's `mouth` is somewhere else, which is
+					    the whole point of anchors living on frames. */}
+					{anchorNames(character).map(name => {
+						const value = activeAnchors[name];
+
+						return (
+							<React.Fragment key={name}>
+								<dt>{name}</dt>
+								<dd data-readout={`anchor:${name}`}>
+									{value
+										? `${value.x.toFixed(3)}, ${value.y.toFixed(3)}`
+										: t('dialogs.slidersCharacters.anchorUnplaced')}
+									<IconButton
+										icon={<IconTrash />}
+										iconOnly
+										label={t('dialogs.slidersCharacters.removeAnchor', {name})}
+										onClick={() => handleRemoveAnchor(name)}
+									/>
+								</dd>
+							</React.Fragment>
+						);
+					})}
 				</dl>
 			</CardContent>
 		</div>

@@ -47,7 +47,6 @@ const library = {
 	] as AssetMeta[],
 	characters: [
 		{
-			anchors: {},
 			frames: {idle: {asset: 'a_mira-idle'}},
 			id: 'mira',
 			name: 'mira',

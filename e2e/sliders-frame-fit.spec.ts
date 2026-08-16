@@ -32,6 +32,30 @@ async function clearAssetLibrary(page: Page) {
 	});
 }
 
+/** Drags a handle to a fraction of the sprite frame. */
+async function dragHandle(
+	editor: import('@playwright/test').Locator,
+	page: Page,
+	handle: string,
+	to: {x: number; y: number}
+) {
+	const target = editor.locator(`[data-handle="${handle}"]`);
+
+	await editor.locator('.sprite-preview').scrollIntoViewIfNeeded();
+
+	const box = (await target.boundingBox())!;
+	const frame = (await editor.locator('.sprite-preview-frame').boundingBox())!;
+
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(
+		frame.x + frame.width * to.x,
+		frame.y + frame.height * to.y,
+		{steps: 12}
+	);
+	await page.mouse.up();
+}
+
 async function openCharacterWithFrames(page: Page, name: string) {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
@@ -158,6 +182,66 @@ test.describe('Per-frame fit', () => {
 		// The frame it was copied from keeps its fit -- reset is per frame too.
 		await reopened.locator('[data-frame="mira-idle"] .frame-list-select').click();
 		await expect.poll(() => spriteTransform(page)).toContain('scale(1.4)');
+	});
+
+	/**
+	 * Anchors belong to the frame, not the character.
+	 *
+	 * A character drawn in profile, sitting, or turned away has their mouth somewhere else,
+	 * and one rig shared by every pose leaves the speech bubble pointing at the back of
+	 * their head. Dragging on one frame therefore has to leave the others alone.
+	 */
+	test('rigs each frame separately, and applies one rig to all on request', async ({
+		page
+	}) => {
+		test.setTimeout(180000);
+		await clearAssetLibrary(page);
+		await createStory(page, 'Per-frame anchors');
+
+		const editor = await openCharacterWithFrames(page, 'Mira');
+		const bubble = editor.locator('[data-handle="anchor:bubble"]');
+		const bubbleX = async () => Number(await bubble.getAttribute('data-x'));
+
+		await expect(bubble).toBeVisible();
+
+		const before = await bubbleX();
+
+		await dragHandle(editor, page, 'anchor:bubble', {x: 0.8, y: 0.12});
+		await expect.poll(bubbleX).toBeCloseTo(0.8, 1);
+
+		// The other frame still has the rig it started with.
+		await editor.locator('[data-frame="mira-angry"] .frame-list-select').click();
+		await expect.poll(bubbleX).toBeCloseTo(before, 2);
+
+		// ...and going back shows the drag, so this is two rigs, not one being reset.
+		await editor.locator('[data-frame="mira-idle"] .frame-list-select').click();
+		await expect.poll(bubbleX).toBeCloseTo(0.8, 1);
+
+		// Copying a rig across is the escape hatch for a sheet whose poses do line up.
+		await editor
+			.getByRole('button', {name: 'Apply This Frame\u2019s Anchors To All Frames'})
+			.click();
+		await editor.locator('[data-frame="mira-angry"] .frame-list-select').click();
+		await expect.poll(bubbleX).toBeCloseTo(0.8, 1);
+
+		// Straight through the store, not just React state.
+		await page.waitForTimeout(1500);
+		await page.reload();
+		await page.getByRole('tab', {name: 'Story'}).click();
+		await page.getByRole('button', {name: 'Assets', exact: true}).click();
+		await assetDialog(page).getByRole('tab', {name: 'Characters'}).click();
+		await assetDialog(page).getByRole('button', {name: 'Edit'}).first().click();
+		await expect(characterDialog(page)).toBeVisible({timeout: 10000});
+		await characterDialog(page).getByRole('button', {name: 'Maximize'}).click();
+		await expect
+			.poll(async () =>
+				Number(
+					await characterDialog(page)
+						.locator('[data-handle="anchor:bubble"]')
+						.getAttribute('data-x')
+				)
+			)
+			.toBeCloseTo(0.8, 1);
 	});
 
 	test('opens the asset editor on a frame image', async ({page}) => {

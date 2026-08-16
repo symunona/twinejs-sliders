@@ -13,17 +13,22 @@ import {
 	StorageBackend
 } from './asset-store.types';
 import {blobBytes} from './blob-bytes';
+import {migrateCharacter} from './characters';
 import {contentHash, nameFromFilename, uniqueAssetId} from './ids';
 import {prepareUpload} from './transcode';
 
-/** A character with spec 04's defaults: origin at the feet, a bubble anchor to drag. */
+/**
+ * A character with spec 04's defaults: origin at the feet, and no frames yet.
+ *
+ * No rig either, because there is nothing to rig — anchors belong to frames, and the first
+ * frame added brings its own (`newFrameAnchors`).
+ */
 export function defaultCharacter(id: string, name?: string): Character {
 	return {
 		id,
 		name: name ?? id,
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
-		anchors: {bubble: {x: 0.5, y: 0.15}, mouth: {x: 0.5, y: 0.25}},
 		frames: {},
 		tags: []
 	};
@@ -260,7 +265,11 @@ export class BackedAssetStore implements AssetStore {
 
 	async putCharacter(character: Character): Promise<Character> {
 		return await this.mutate(manifest => {
-			const stored: Character = JSON.parse(JSON.stringify(character));
+			// Migrated on the way in as well as on the way out, so the first save after an
+			// upgrade is what actually cleans the manifest up.
+			const stored: Character = migrateCharacter(
+				JSON.parse(JSON.stringify(character))
+			);
 
 			manifest.characters[stored.id] = stored;
 
@@ -281,7 +290,11 @@ export class BackedAssetStore implements AssetStore {
 	}
 
 	async getCharacter(id: string): Promise<Character | undefined> {
-		return (await this.load()).characters[id];
+		const stored = (await this.load()).characters[id];
+
+		// Anchors used to live on the character. Everything downstream — the renderer, the
+		// editor, the bundle writer — sees only today's shape.
+		return stored && migrateCharacter(stored);
 	}
 
 	async character(id: string): Promise<Character | undefined> {
@@ -291,9 +304,9 @@ export class BackedAssetStore implements AssetStore {
 	async listCharacters(): Promise<Character[]> {
 		const manifest = await this.load();
 
-		return Object.values(manifest.characters).sort((a, b) =>
-			a.name.localeCompare(b.name)
-		);
+		return Object.values(manifest.characters)
+			.map(migrateCharacter)
+			.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
 	async removeCharacter(id: string): Promise<void> {

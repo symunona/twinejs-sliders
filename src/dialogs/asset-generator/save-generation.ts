@@ -1,4 +1,9 @@
-import {AssetStore, defaultCharacter, slugify} from '@sliders/asset-store';
+import {
+	AssetStore,
+	defaultCharacter,
+	newFrameAnchors,
+	slugify
+} from '@sliders/asset-store';
 import {Character} from '@sliders/scene-types';
 import {Generation} from './generation-store';
 
@@ -81,7 +86,9 @@ export async function saveGeneration(
 	});
 	const character: Character = {
 		...defaultCharacter(id, name),
-		frames: {idle: {asset: frame.id}},
+		// Anchors are per frame, and this is the character's only one, so it carries the
+		// starting rig the character editor would have given it.
+		frames: {idle: {anchors: newFrameAnchors(undefined), asset: frame.id}},
 		// Measured from the image, so the character's origin and anchors land where
 		// the editor draws them rather than on the 512x1024 placeholder.
 		size: {h: frame.meta.h, w: frame.meta.w}

@@ -17,7 +17,6 @@ const passage = [
 const stage: Stage = parseSceneText(passage).states[0];
 
 const mira: Character = {
-	anchors: {},
 	frames: {angry: {asset: 'a_2'}, idle: {asset: 'a_1'}},
 	id: 'mira',
 	name: 'Mira',
