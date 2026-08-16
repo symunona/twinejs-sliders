@@ -77,6 +77,12 @@ export function mergePatch(
 		next.at = cloneVec(patch.at);
 	}
 
+	// The one key a patch can also clear: `of: ~` detaches a child that `from:` handed down.
+	// Every other key here is set-or-inherit, so `undefined` has to keep meaning "untouched".
+	if (patch.of !== undefined) {
+		next.of = patch.of ?? undefined;
+	}
+
 	if (patch.frame !== undefined) {
 		next.frame = patch.frame;
 	}
@@ -113,6 +119,9 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		id,
 		kind: patch.kind,
 		layer: patch.layer ?? ENTITY_DEFAULTS.layer,
+		// No default: an entity with no `of` is in world space, and `of: ~` on a brand-new
+		// entity says the same thing.
+		of: patch.of ?? undefined,
 		opacity: patch.opacity ?? ENTITY_DEFAULTS.opacity,
 		ref: patch.ref,
 		scale: patch.scale ?? ENTITY_DEFAULTS.scale,

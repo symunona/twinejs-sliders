@@ -37,6 +37,8 @@ import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import {StageSelectionControls} from './stage-selection-controls';
 import {roundCoord} from './stage-geometry';
+import {parseLinks} from '../../../util/parse-links';
+import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import {useSceneParse} from './use-scene-parse';
 import {useStageSelection} from './use-stage-selection';
 import {
@@ -76,6 +78,11 @@ export interface ScenePreviewProps {
 	editor?: CodeMirror.Editor;
 	/** Called when the user clicks an error, so the editor can jump to that line. */
 	onGoToLine?: (line: number) => void;
+	/**
+	 * Ctrl/cmd-click on a `[[link]]` inside a bubble, with the passage the link points at.
+	 * Absent means the preview shows links but cannot open them.
+	 */
+	onOpenPassage?: (name: string) => void;
 }
 
 const OPEN_KEY = 'sliders.preview.open';
@@ -89,6 +96,9 @@ const SEEN_KEY = 'sliders.preview.seen';
  * would find out it had by moving a character.
  */
 const LOCKED_KEY = 'sliders.preview.locked';
+
+/** How long each beat holds the screen while playing. */
+const AUTO_ADVANCE_MS = 3000;
 
 /** Arrow-key nudge, in scene units. Shift multiplies it. */
 const NUDGE_STEP = 0.01;
@@ -133,7 +143,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	editor,
 	text,
 	passages,
-	onGoToLine
+	onGoToLine,
+	onOpenPassage
 }) => {
 	const {t} = useTranslation();
 	const parse = useSceneParse(text, passages);
@@ -167,10 +178,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const block = React.useMemo(() => extractSceneBlock(text), [text]);
 	const lastBeat = Math.max(0, parse.states.length - 1);
 	const parsedStage = parse.states[Math.min(beat, lastBeat)];
-	const stage = React.useMemo(
+	/**
+	 * The stage in AUTHORED space: `at` is the number in the YAML, `of` intact. The drag
+	 * patch paints onto this one, because a gesture writes the author's coordinate.
+	 */
+	const localStage = React.useMemo(
 		() => applyCameraPatch(applyStagePatch(parsedStage, patch), cameraPatch),
 		[cameraPatch, parsedStage, patch]
 	);
+	/**
+	 * The stage as DRAWN: `of` resolved into absolute coordinates. Everything downstream of
+	 * here — renderer, differ, hit testing, handles — speaks absolute only.
+	 */
+	const stage = React.useMemo(() => resolveStage(localStage), [localStage]);
+	/**
+	 * Where each child's `at` is measured from. The overlay drags in absolute space, because
+	 * that is where the pointer is, and subtracts this to get the offset it writes back.
+	 */
+	const offsets = React.useMemo(() => parentOffsets(localStage), [localStage]);
 	const stageIds = React.useMemo(
 		() => Object.keys(stage.entities ?? {}),
 		[stage]
@@ -207,6 +232,22 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			mounted.current = false;
 		},
 		[]
+	);
+
+	/**
+	 * A `[[link]]` in a bubble, clicked in the preview.
+	 *
+	 * Plain click is left alone: in the editor the preview is a picture of one scene, and
+	 * following a link would throw away the beat the author is staging. Ctrl/cmd-click is the
+	 * same "go to the definition" gesture the story map uses, so it opens the target passage.
+	 */
+	const handleLink = React.useCallback(
+		(name: string, target?: string, event?: MouseEvent) => {
+			if (event?.ctrlKey || event?.metaKey) {
+				onOpenPassage?.(target ?? name);
+			}
+		},
+		[onOpenPassage]
 	);
 
 	const handleRenderer = React.useCallback((next?: DomRenderer) => {
@@ -496,6 +537,41 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		clear();
 	}, [clear, commit, selection, stage]);
 
+	/**
+	 * The passages this scene can reach: every `links:` target, plus any `[[link]]` written
+	 * outside the block — prose under the scene is a way out too.
+	 *
+	 * A `[[stay]]` inside bubble text is NOT one of them: it is a link NAME that `links:`
+	 * routes to a passage, and counting it as well would make a one-way scene look like two.
+	 * Names that no `links:` entry claims are counted, because in a scene without a `links:`
+	 * block that is exactly what a plain Twine link is.
+	 */
+	const forward = React.useMemo(() => {
+		const links = parse.result?.scene.links ?? {};
+		const names = new Set<string>();
+
+		for (const link of Object.values(links)) {
+			if (link.to) {
+				names.add(link.to);
+			}
+		}
+
+		for (const name of parseLinks(text, true)) {
+			if (!(name in links)) {
+				names.add(name);
+			}
+		}
+
+		// Only passages that exist can be opened. `passages` is absent in a bare preview, and
+		// then the name is taken on trust.
+		return passages
+			? [...names].filter(name => passages.some(p => p.name === name))
+			: [...names];
+	}, [parse.result, passages, text]);
+
+	/** The single way out, if there is exactly one and we can open it. */
+	const nextScene = onOpenPassage && forward.length === 1 ? forward[0] : undefined;
+
 	const selectedEntities = React.useMemo(
 		() =>
 			selection
@@ -542,7 +618,19 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	function goToNextBeat() {
 		setPlaying(false);
-		setBeat(b => Math.min(lastBeat, b + 1));
+
+		// Past the last beat the scene is over, and a scene with exactly one way out has
+		// only one place "next" could mean: the passage that link goes to. Two or more and
+		// the author has to say which, so the button stops here.
+		if (beat >= lastBeat) {
+			if (nextScene) {
+				onOpenPassage?.(nextScene);
+			}
+
+			return;
+		}
+
+		setBeat(b => b + 1);
 	}
 
 	function togglePlaying() {
@@ -572,7 +660,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
-		const timer = window.setTimeout(() => setBeat(b => b + 1), 900);
+		const timer = window.setTimeout(() => setBeat(b => b + 1), AUTO_ADVANCE_MS);
 
 		return () => window.clearTimeout(timer);
 	}, [beat, lastBeat, playing]);
@@ -622,7 +710,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && beat < lastBeat && selection.length === 0,
+		enabled: open && (beat < lastBeat || !!nextScene) && selection.length === 0,
 		id: 'scene.nextBeat',
 		label: t('hotkeys.commands.scene.nextBeat'),
 		run: goToNextBeat,
@@ -814,10 +902,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							{beat} / {lastBeat}
 						</span>
 						<IconButton
-							disabled={beat >= lastBeat}
+							disabled={beat >= lastBeat && !nextScene}
 							icon={<IconChevronRight />}
 							iconOnly
-							label={t('dialogs.passageEdit.scenePreview.nextBeat')}
+							label={
+								beat >= lastBeat && nextScene
+									? t('dialogs.passageEdit.scenePreview.nextScene', {
+											name: nextScene
+									  })
+									: t('dialogs.passageEdit.scenePreview.nextBeat')
+							}
 							onClick={goToNextBeat}
 						/>
 						<IconButton
@@ -872,6 +966,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						onDropAsset={handleDropAsset}
 						onDropFiles={handleDropFiles}
 						onPatch={setPatch}
+						parentOffsets={offsets}
 						onSelect={select}
 						onToggleFullScreen={() => setFullScreen(f => !f)}
 						renderer={renderer}
@@ -884,6 +979,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							assets={assets}
 							// State N is produced by beat N-1; S0 has no beat.
 							beat={beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined}
+							onLink={handleLink}
 							onRenderer={handleRenderer}
 							stage={stage}
 						/>

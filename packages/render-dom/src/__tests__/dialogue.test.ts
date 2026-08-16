@@ -1,5 +1,70 @@
-import {DialogueLayer, parseLinkText} from '../dialogue';
+import {DialogueLayer, parseLinkText, placeBubble, preferredSide} from '../dialogue';
 import type {MeasuringRenderer} from '../dialogue';
+
+describe('preferredSide', () => {
+	const box = {left: 0, top: 0, width: 1600, height: 900};
+
+	it('reads the side off the mouth -> anchor vector', () => {
+		const mouth = {x: 800, y: 500};
+
+		expect(preferredSide(mouth, {x: 900, y: 480})).toBe('right');
+		expect(preferredSide(mouth, {x: 700, y: 480})).toBe('left');
+		expect(preferredSide(mouth, {x: 810, y: 300})).toBe('above');
+		expect(preferredSide(mouth, {x: 810, y: 700})).toBe('below');
+	});
+
+	it('falls back to above with no mouth to compare against', () => {
+		expect(preferredSide(null, {x: 800, y: 500})).toBe('above');
+	});
+
+	it('hangs the bubble off the anchor in that direction', () => {
+		const p = placeBubble({
+			anchor: {x: 900, y: 480},
+			mouth: {x: 800, y: 500},
+			box,
+			w: 200,
+			h: 100,
+			gap: 12,
+			margin: 12
+		});
+
+		expect(p.side).toBe('right');
+		expect(p.left).toBe(912);
+		expect(p.top).toBe(430);
+		// Tail rides the left edge, level with the anchor.
+		expect(p.tail).toBe(50);
+	});
+
+	it('flips to the opposite side when the preferred one has no room', () => {
+		const p = placeBubble({
+			anchor: {x: 1580, y: 480},
+			mouth: {x: 1500, y: 500},
+			box,
+			w: 400,
+			h: 100,
+			gap: 12,
+			margin: 12
+		});
+
+		expect(p.side).toBe('left');
+		expect(p.left).toBe(1168);
+	});
+
+	it('goes to the cross axis when neither horizontal side fits', () => {
+		const narrow = {left: 0, top: 0, width: 500, height: 900};
+		const p = placeBubble({
+			anchor: {x: 250, y: 400},
+			mouth: {x: 200, y: 410},
+			box: narrow,
+			w: 400,
+			h: 100,
+			gap: 12,
+			margin: 12
+		});
+
+		expect(p.side).toBe('below');
+	});
+});
 
 describe('parseLinkText', () => {
 	it('passes plain text straight through', () => {
@@ -107,6 +172,22 @@ describe('DialogueLayer', () => {
 
 		links[0].click();
 		expect(clicked).toEqual(['stay']);
+	});
+
+	it('hands the click event to onLink, so a host can read its modifiers', () => {
+		const {mount, dialogue} = setup();
+		const events: (MouseEvent | undefined)[] = [];
+
+		dialogue.onLink = (_name, _target, event) => events.push(event);
+		dialogue.say('mira', 'Will you [[stay]]?');
+
+		const link = mount.querySelector('a.sliders-link') as HTMLElement;
+
+		link.dispatchEvent(
+			new MouseEvent('click', {bubbles: true, ctrlKey: true})
+		);
+
+		expect(events[0]?.ctrlKey).toBe(true);
 	});
 
 	it('never injects markup from scene text', () => {

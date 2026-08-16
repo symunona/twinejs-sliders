@@ -46,6 +46,7 @@ export const TOP_LEVEL_KEYS = [
 /** Keys accepted inside a `cast:` / `props:` entry. */
 export const ENTITY_KEYS = [
 	'at',
+	'of',
 	'scale',
 	'frame',
 	'flip',
@@ -82,6 +83,8 @@ interface Ctx {
 	linkNodes: Map<string, unknown>;
 	/** `mira: ~` nodes, legal only once we know whether `from:` was set. */
 	pendingRemovals: {id: string; node: unknown}[];
+	/** `of:` edges declared in THIS block, with the node to point an error at. */
+	ofEdges: {id: string; parent: string; node: unknown}[];
 }
 
 // ---------------------------------------------------------------------------
@@ -284,10 +287,21 @@ function checkRange(ctx: Ctx, value: number, axis: 'x' | 'y', node: unknown): vo
 /**
  * `at: -0.4` (bare number, x only) or `at: [x, y]`.
  *
- * A bare number leaves y at the layer baseline, which is y = 0 — the type contract keeps
- * Vec2 fully populated, so "y omitted" is materialized as 0 here rather than left absent.
+ * A bare number leaves y at `baseline` — the type contract keeps Vec2 fully populated, so
+ * "y omitted" has to be materialized as a concrete number here rather than left absent.
+ *
+ * `baseline` is the layer baseline for an ordinary entity: the floor, not the vertical
+ * centre. For an `of:` child it is ZERO, because the number is an OFFSET — "0.4 to my
+ * parent's right", not "0.4 across and 0.85 below it". Baking the floor into an offset
+ * drops every child a stage-height under its parent, which is off-screen for anything
+ * standing on the floor already.
  */
-function parseAt(ctx: Ctx, node: unknown, what = 'at'): Vec2 | undefined {
+function parseAt(
+	ctx: Ctx,
+	node: unknown,
+	what = 'at',
+	baseline = LAYER_BASELINE
+): Vec2 | undefined {
 	if (isScalar(node)) {
 		const value = scalarValue(node);
 
@@ -295,7 +309,7 @@ function parseAt(ctx: Ctx, node: unknown, what = 'at'): Vec2 | undefined {
 			checkRange(ctx, value, 'x', node);
 			// A bare number is x only; y snaps to the layer baseline (spec 02), which is
 			// the floor, not the vertical centre.
-			return {x: value, y: LAYER_BASELINE};
+			return {x: value, y: baseline};
 		}
 
 		addError(
@@ -351,15 +365,34 @@ interface EntityBody {
 	ref?: string;
 	say?: string;
 	sayNode?: unknown;
+	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
+	ofNode?: unknown;
 }
 
 /**
  * The shared body of `cast:`/`props:` entries and of beat patches. `allowSay` is what
  * separates the two: `say:` is only meaningful inside a beat.
  */
-function parseEntityBody(ctx: Ctx, map: YAMLMap, allowSay: boolean): EntityBody {
+function parseEntityBody(
+	ctx: Ctx,
+	map: YAMLMap,
+	allowSay: boolean,
+	selfId?: string
+): EntityBody {
 	const body: EntityBody = {patch: {}};
 	const valid = allowSay ? [...ENTITY_KEYS, 'say'] : ENTITY_KEYS;
+	/**
+	 * Scanned up front because YAML map order is the author's, not ours: `{at: 0.4, of: table}`
+	 * has to read the same as `{of: table, at: 0.4}`, and `at` is otherwise parsed before the
+	 * `of` that changes what it means.
+	 */
+	const relative = (map.items as Pair<unknown, unknown>[]).some(
+		pair =>
+			keyName(pair) === 'of' &&
+			!isNullNode(pair.value) &&
+			typeof scalarValue(pair.value) === 'string'
+	);
+	const baseline = relative ? 0 : LAYER_BASELINE;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
 		const key = keyName(pair);
@@ -371,12 +404,43 @@ function parseEntityBody(ctx: Ctx, map: YAMLMap, allowSay: boolean): EntityBody 
 
 		switch (key) {
 			case 'at': {
-				const at = parseAt(ctx, pair.value);
+				const at = parseAt(ctx, pair.value, 'at', baseline);
 
 				if (at) {
 					body.patch.at = at;
 				}
 
+				break;
+			}
+
+			case 'of': {
+				// `of: ~` detaches. Only a patch scene has anything to detach FROM, but that
+				// is `mergePatch`'s business — writing it in a snapshot is harmless and says
+				// exactly what is true, so it is not worth an error of its own.
+				if (isNullNode(pair.value)) {
+					body.patch.of = null;
+					break;
+				}
+
+				const parent = asString(ctx, pair.value, 'of');
+
+				if (parent === undefined) {
+					break;
+				}
+
+				if (parent === selfId) {
+					addError(
+						ctx,
+						'of-cycle',
+						`'${parent}' cannot be positioned relative to itself.`,
+						pair.value,
+						{hint: 'of: names a DIFFERENT entity to move with.'}
+					);
+					break;
+				}
+
+				body.patch.of = parent;
+				body.ofNode = pair.value;
 				break;
 			}
 
@@ -560,8 +624,12 @@ function parseEntityMap(
 			continue;
 		}
 
-		const body = parseEntityBody(ctx, pair.value as YAMLMap, false);
+		const body = parseEntityBody(ctx, pair.value as YAMLMap, false, id);
 		const patch: EntityPatch = {kind, ref: body.ref ?? id, ...body.patch};
+
+		if (typeof body.patch.of === 'string') {
+			ctx.ofEdges.push({id, node: body.ofNode, parent: body.patch.of});
+		}
 
 		scene.entities[id] = patch;
 	}
@@ -748,7 +816,7 @@ function parseBeat(
 			}
 
 			if (isMap(pair.value)) {
-				const body = parseEntityBody(ctx, pair.value as YAMLMap, true);
+				const body = parseEntityBody(ctx, pair.value as YAMLMap, true, who);
 				const hasPatch = Object.keys(body.patch).length > 0;
 
 				if (body.say !== undefined) {
@@ -886,6 +954,66 @@ export function emptyScene(): Scene {
 	return {beats: [], entities: {}, links: {}};
 }
 
+/**
+ * What the parser can say about `of:` once the whole block has been read.
+ *
+ * Both checks are SOUND but INCOMPLETE, on purpose. One block is not the whole graph: with
+ * `from:`, an entity's parent may be inherited from another passage entirely, and the
+ * parser has no index. So it reports only what is certain from this text alone, and
+ * `resolveStage` carries the net for everything else — an unresolvable parent there just
+ * leaves the entity in world space rather than breaking the render.
+ */
+function checkOfEdges(ctx: Ctx, scene: Scene): void {
+	// A snapshot scene IS its whole cast, so a parent that is not in it is definitely a typo.
+	// A patch scene inherits, so silence is the only correct answer there.
+	if (scene.from === undefined) {
+		for (const edge of ctx.ofEdges) {
+			const parent = scene.entities[edge.parent];
+
+			if (parent === undefined || parent === null) {
+				addError(
+					ctx,
+					'unknown-parent',
+					`'${edge.id}' is positioned relative to '${edge.parent}', which is not on stage.`,
+					edge.node,
+					{
+						hint: keyHint(
+							edge.parent,
+							Object.keys(scene.entities).filter(id => id !== edge.id)
+						)
+					}
+				);
+			}
+		}
+	}
+
+	// Cycles among the edges written HERE. Following them into inherited entities is not
+	// possible without the index, but a loop closed inside one block survives any merge —
+	// a patch overrides the key it names — so flagging it is never a false positive.
+	const edgeOf = new Map(ctx.ofEdges.map(edge => [edge.id, edge]));
+
+	for (const edge of ctx.ofEdges) {
+		const seen = new Set<string>([edge.id]);
+		let cursor: string | undefined = edge.parent;
+
+		while (cursor !== undefined) {
+			if (seen.has(cursor)) {
+				addError(
+					ctx,
+					'of-cycle',
+					`'${edge.id}' is positioned relative to itself, through '${cursor}'.`,
+					edge.node,
+					{hint: 'of: chains must not loop. One of them has to sit in world space.'}
+				);
+				break;
+			}
+
+			seen.add(cursor);
+			cursor = edgeOf.get(cursor)?.parent;
+		}
+	}
+}
+
 export function parseScene(text: string): ParseResult {
 	const scene = emptyScene();
 	const lineCounter = new LineCounter();
@@ -894,6 +1022,7 @@ export function parseScene(text: string): ParseResult {
 		inlineLinks: new Map(),
 		linkNodes: new Map(),
 		lineCounter,
+		ofEdges: [],
 		pendingLinks: [],
 		pendingRemovals: []
 	};
@@ -1135,6 +1264,8 @@ export function parseScene(text: string): ParseResult {
 			);
 		}
 	}
+
+	checkOfEdges(ctx, scene);
 
 	if (scene.from === undefined) {
 		for (const removal of ctx.pendingRemovals) {

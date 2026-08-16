@@ -303,9 +303,28 @@ export function setEntityKey(
 		parsed,
 		located.pair,
 		key,
-		formatValue(key, value),
+		formatValue(key, value, {relative: hasParent(located.pair)}),
 		target.beat !== undefined
 	);
+}
+
+/**
+ * Does this entry declare an `of:` parent? That changes what a bare `at:` means, so it
+ * changes how one is written.
+ *
+ * Read off the entry being written rather than passed in by the caller: the text is the
+ * source of truth, and a caller's idea of the graph is one more thing that can disagree
+ * with it. An `of` inherited through `from:` is invisible here, which is why the editor
+ * writes an explicit pair for those — see spec 02.
+ */
+function hasParent(pair: Pair<unknown, unknown>): boolean {
+	if (!isMap(pair.value)) {
+		return false;
+	}
+
+	const of = findPair(pair.value as YAMLMap, 'of');
+
+	return !!of && typeof (of.value as Scalar | undefined)?.value === 'string';
 }
 
 /** Remove one key from an entity entry — how `scale: 1` and `flip: false` go away. */
@@ -340,6 +359,9 @@ export function removeEntityKey(
 function formatEntityBody(id: EntityId, patch: EntityPatch): string {
 	const source = patch as unknown as Record<string, unknown>;
 	const parts: string[] = [];
+	// A new entry carries its own `of:`, so unlike `setEntityKey` this can be read straight
+	// off the patch rather than out of the text.
+	const relative = typeof source.of === 'string';
 
 	for (const key of ENTITY_KEY_ORDER) {
 		const value = source[key];
@@ -353,7 +375,7 @@ function formatEntityBody(id: EntityId, patch: EntityPatch): string {
 			continue;
 		}
 
-		parts.push(`${key}: ${formatValue(key, value)}`);
+		parts.push(`${key}: ${formatValue(key, value, {relative})}`);
 	}
 
 	return `{${parts.join(', ')}}`;

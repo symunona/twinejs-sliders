@@ -31,10 +31,10 @@ export function formatNumber(value: number): string {
  * burn the baseline constant into every author's file — the moment LAYER_BASELINE moves,
  * or a character's height changes, those scenes are pinned to the old floor.
  */
-export function formatAt(at: Vec2): string {
+export function formatAt(at: Vec2, baseline = LAYER_BASELINE): string {
 	const x = formatNumber(at.x);
 
-	if (formatNumber(at.y) === formatNumber(LAYER_BASELINE)) {
+	if (formatNumber(at.y) === formatNumber(baseline)) {
 		return x;
 	}
 
@@ -80,10 +80,21 @@ function formatScalar(value: unknown): string {
 	return stringify(value, {lineWidth: 0}).trim();
 }
 
-/** The written form of one entity key's value. `at` is the only key with its own shape. */
-export function formatValue(key: string, value: unknown): string {
+/**
+ * The written form of one entity key's value. `at` is the only key with its own shape.
+ *
+ * `relative` says this entity has an `of:` parent, which moves the baseline a bare number
+ * is measured against from the floor to zero. Without it a child whose y offset happened to
+ * be exactly the layer baseline would be written bare and read back as zero — the sprite
+ * would jump a stage-height on the next parse.
+ */
+export function formatValue(
+	key: string,
+	value: unknown,
+	options: {relative?: boolean} = {}
+): string {
 	if (key === 'at' && isVec2(value)) {
-		return formatAt(value);
+		return formatAt(value, options.relative ? 0 : LAYER_BASELINE);
 	}
 
 	if (Array.isArray(value)) {

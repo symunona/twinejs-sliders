@@ -51,7 +51,26 @@ export interface StageEntity {
 	kind: EntityKind;
 	/** Character id (cast) or asset id (prop). */
 	ref: string;
+	/**
+	 * Position. ABSOLUTE stage coordinates — unless `of` is set, and then it is an offset
+	 * from that entity's resolved position.
+	 */
 	at: Vec2;
+	/**
+	 * Parent entity id. `at` becomes relative to it, so moving the parent moves this too.
+	 *
+	 * Translation ONLY, deliberately (D17): the parent's `scale`, `flip` and `frame` do not
+	 * reach the child. That is what keeps resolution a vector add with no sprite metrics in
+	 * it, and therefore keeps it in `scene-core` — where the differ can see it, so a child
+	 * glides when its parent moves instead of snapping.
+	 *
+	 * A `Stage` carries this UNRESOLVED: `at` is what the author wrote. `resolveStage()`
+	 * turns a stage into absolute coordinates and strips this key. Resolve at the draw and
+	 * diff boundary, never before `from:` inheritance or a beat patch — those merge the
+	 * author's local numbers, and merging one onto a resolved absolute is how a child ends
+	 * up double-offset.
+	 */
+	of?: EntityId;
 	/** Named frame for cast; ignored for simple props. */
 	frame?: string;
 	flip: boolean;
@@ -110,7 +129,17 @@ export interface BeatBase {
  * listed by hand, so adding an entity key (`scale`, and whatever follows it) does not mean
  * hunting down three separate Pick lists that then quietly disagree.
  */
-export type EntityPatchBody = Partial<Omit<StageEntity, 'id' | 'kind' | 'ref'>>;
+export type EntityPatchBody = Partial<
+	Omit<StageEntity, 'id' | 'kind' | 'ref' | 'of'>
+> & {
+	/**
+	 * `of` is the one key a patch can also CLEAR. Everything else is set-or-inherit, but a
+	 * patch scene that wants a child back in world space has no other way to say so — an
+	 * absent key means "inherited" under `from:`, so omitting it keeps the parent. `null` is
+	 * `of: ~` in the YAML, and detaches.
+	 */
+	of?: EntityId | null;
+};
 
 export interface SayBeat extends BeatBase {
 	kind: 'say';
@@ -209,6 +238,8 @@ export type SceneErrorCode =
 	| 'unknown-character'
 	| 'unknown-frame'
 	| 'unknown-link'
+	| 'unknown-parent'
+	| 'of-cycle'
 	| 'dupe-scene-id'
 	| 'unknown-from'
 	| 'from-cycle'

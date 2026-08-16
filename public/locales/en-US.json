@@ -271,6 +271,7 @@
 				"warningCount_plural": "{{count}} warnings",
 				"previousBeat": "Previous beat",
 				"nextBeat": "Next beat",
+				"nextScene": "Next scene: {{name}}",
 				"play": "Play beats",
 				"fullScreen": "Full screen",
 				"lock": "Lock the stage so gestures cannot edit the scene",

@@ -31,9 +31,20 @@ export interface BubbleSpec {
 	anchor?: string;
 }
 
+/**
+ * Fired when a `[[link]]` in bubble or box text is activated.
+ *
+ * `event` is the click that did it, so a host can tell a plain follow-the-link from a
+ * modified one — the editor preview opens the target passage on ctrl/cmd-click.
+ */
+export type LinkHandler = (
+	name: string,
+	target?: string,
+	event?: MouseEvent
+) => void;
+
 export interface DialogueLayerOptions {
-	/** Fired when a `[[link]]` in bubble or box text is activated. */
-	onLink?: (name: string, target?: string) => void;
+	onLink?: LinkHandler;
 	/** Gap in px between the anchor point and the tail tip. */
 	tailGap?: number;
 	/** Inset in px kept between a bubble and the stage box edge when clamping. */
@@ -47,6 +58,12 @@ const TAIL_HALF = 9;
 /** Keep the tail this far from the bubble's rounded corners. */
 const TAIL_INSET = 8;
 
+/** Which side of the anchor the bubble hangs off. The tail sits on the opposite edge. */
+export type BubbleSide = 'above' | 'below' | 'left' | 'right';
+
+/** The anchor every character defines for "where the words come out". */
+const MOUTH_ANCHOR = 'mouth';
+
 interface BubbleRecord {
 	el: HTMLDivElement;
 	body: HTMLDivElement;
@@ -58,7 +75,7 @@ interface BubbleRecord {
 
 export class DialogueLayer {
 	/** Assignable after construction, matching the `onLink(name)` requirement. */
-	onLink?: (name: string, target?: string) => void;
+	onLink?: LinkHandler;
 
 	private opts: DialogueLayerOptions;
 	private doc?: Document;
@@ -254,31 +271,23 @@ export class DialogueLayer {
 		el.dataset.anchored = 'true';
 		rec.tail.style.display = '';
 
-		// Prefer above the anchor; drop below only when there is genuinely no room.
-		let side: 'above' | 'below' = 'above';
-		let top = anchor.y - h - gap;
+		// The mouth is what the tail points back at, so the mouth -> anchor vector is the
+		// author's statement of which way the bubble leans. A flipped character mirrors both
+		// anchors, so it leans the other way for free.
+		const mouth = this.renderer?.measure(rec.spec.who, MOUTH_ANCHOR) ?? null;
+		const place = placeBubble({anchor, mouth, box, w, h, gap, margin});
+		const along = place.tail - TAIL_HALF;
 
-		if (top < box.top + margin) {
-			side = 'below';
-			top = anchor.y + gap;
-		}
+		el.dataset.side = place.side;
+		el.style.transform = `translate(${place.left}px, ${place.top}px)`;
 
-		let left = anchor.x - w / 2;
+		// The tail rides the edge facing the anchor: horizontally under/over a bubble that sits
+		// above/below, vertically beside one that sits left/right. Clear the other axis or a
+		// leftover inline value fights the stylesheet after a side change.
+		const horizontal = place.side === 'above' || place.side === 'below';
 
-		// Clamp inside the stage box. The bubble moves; the tail does not — it slides along
-		// the bubble's edge so it keeps pointing at the anchor.
-		left = clamp(left, box.left + margin, box.left + box.width - w - margin);
-		top = clamp(top, box.top + margin, box.top + box.height - h - margin);
-
-		const tailX = clamp(
-			anchor.x - left,
-			TAIL_HALF + TAIL_INSET,
-			Math.max(TAIL_HALF + TAIL_INSET, w - TAIL_HALF - TAIL_INSET)
-		);
-
-		el.dataset.side = side;
-		el.style.transform = `translate(${left}px, ${top}px)`;
-		rec.tail.style.left = `${tailX - TAIL_HALF}px`;
+		rec.tail.style.left = horizontal ? `${along}px` : '';
+		rec.tail.style.top = horizontal ? '' : `${along}px`;
 	}
 
 	private positionBox(): void {
@@ -389,9 +398,143 @@ export class DialogueLayer {
 		event.preventDefault();
 		this.onLink?.(
 			link.dataset.slidersLink ?? '',
-			link.dataset.slidersTarget || undefined
+			link.dataset.slidersTarget || undefined,
+			event
 		);
 	};
+}
+
+// ---------------------------------------------------------------------------
+// Placement
+// ---------------------------------------------------------------------------
+
+export interface PlaceBubbleInput {
+	/** The bubble anchor, in MOUNT px. */
+	anchor: Vec2;
+	/** The mouth anchor, in MOUNT px. `null` falls back to the old above/below rule. */
+	mouth: Vec2 | null;
+	box: StageBox;
+	w: number;
+	h: number;
+	gap: number;
+	margin: number;
+}
+
+export interface BubblePlacement {
+	side: BubbleSide;
+	left: number;
+	top: number;
+	/** Tail tip offset along the edge it sits on, from the bubble's left (or top) edge. */
+	tail: number;
+}
+
+/**
+ * The side the author asked for: whichever way the anchor lies from the mouth, taking the
+ * dominant axis. A `bubble` anchor over the head reads as `above`, one off the shoulder as
+ * `left`/`right`. No mouth to compare against means no direction, so keep the old default.
+ */
+export function preferredSide(mouth: Vec2 | null, anchor: Vec2): BubbleSide {
+	if (!mouth) {
+		return 'above';
+	}
+
+	const dx = anchor.x - mouth.x;
+	const dy = anchor.y - mouth.y;
+
+	if (Math.abs(dx) > Math.abs(dy)) {
+		return dx >= 0 ? 'right' : 'left';
+	}
+
+	// y is screen-down: an anchor above the mouth has the smaller y.
+	return dy <= 0 ? 'above' : 'below';
+}
+
+/**
+ * Where the bubble box lands. The preferred side wins whenever it fits; otherwise the opposite
+ * side, then the cross axis, roomier half first. The last resort is the preferred side clamped,
+ * because a clamped bubble in the right direction still reads better than a stray one.
+ */
+export function placeBubble(input: PlaceBubbleInput): BubblePlacement {
+	const {anchor, mouth, box, w, h, gap, margin} = input;
+	const first = preferredSide(mouth, anchor);
+	const side =
+		candidateSides(first, anchor, box).find(s => fitsOn(s, input)) ?? first;
+	const raw = rectFor(side, anchor, w, h, gap);
+	const left = clamp(raw.left, box.left + margin, box.left + box.width - w - margin);
+	const top = clamp(raw.top, box.top + margin, box.top + box.height - h - margin);
+
+	// The bubble moves when clamped; the tail slides along its edge to keep pointing home.
+	const horizontal = side === 'above' || side === 'below';
+	const span = horizontal ? w : h;
+	const lo = TAIL_HALF + TAIL_INSET;
+	const tail = clamp(
+		horizontal ? anchor.x - left : anchor.y - top,
+		lo,
+		Math.max(lo, span - lo)
+	);
+
+	return {side, left, top, tail};
+}
+
+const OPPOSITE: Record<BubbleSide, BubbleSide> = {
+	above: 'below',
+	below: 'above',
+	left: 'right',
+	right: 'left'
+};
+
+function candidateSides(
+	first: BubbleSide,
+	anchor: Vec2,
+	box: StageBox
+): BubbleSide[] {
+	const vertical = first === 'above' || first === 'below';
+	const cross: BubbleSide[] = vertical ? ['right', 'left'] : ['below', 'above'];
+	const roomFirst = vertical
+		? box.left + box.width - anchor.x >= anchor.x - box.left
+		: box.top + box.height - anchor.y >= anchor.y - box.top;
+
+	return [
+		first,
+		OPPOSITE[first],
+		...(roomFirst ? cross : [cross[1], cross[0]])
+	];
+}
+
+function rectFor(
+	side: BubbleSide,
+	anchor: Vec2,
+	w: number,
+	h: number,
+	gap: number
+): {left: number; top: number} {
+	switch (side) {
+		case 'above':
+			return {left: anchor.x - w / 2, top: anchor.y - h - gap};
+		case 'below':
+			return {left: anchor.x - w / 2, top: anchor.y + gap};
+		case 'left':
+			return {left: anchor.x - w - gap, top: anchor.y - h / 2};
+		default:
+			return {left: anchor.x + gap, top: anchor.y - h / 2};
+	}
+}
+
+/** Only the tail's own axis has to fit — the cross axis is always clamped. */
+function fitsOn(side: BubbleSide, input: PlaceBubbleInput): boolean {
+	const {anchor, box, w, h, gap, margin} = input;
+	const r = rectFor(side, anchor, w, h, gap);
+
+	switch (side) {
+		case 'above':
+			return r.top >= box.top + margin;
+		case 'below':
+			return r.top + h <= box.top + box.height - margin;
+		case 'left':
+			return r.left >= box.left + margin;
+		default:
+			return r.left + w <= box.left + box.width - margin;
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -16,12 +16,16 @@
 export {DomRenderer, ENTER_RISE} from './dom-renderer';
 export type {DomRendererOptions} from './dom-renderer';
 
-export {DialogueLayer, parseLinkText} from './dialogue';
+export {DialogueLayer, parseLinkText, placeBubble, preferredSide} from './dialogue';
 export type {
+	BubblePlacement,
+	BubbleSide,
 	BubbleSpec,
 	DialogueLayerOptions,
+	LinkHandler,
 	LinkToken,
-	MeasuringRenderer
+	MeasuringRenderer,
+	PlaceBubbleInput
 } from './dialogue';
 
 export {createStubResolver, defaultStubCast, colorFor} from './stub-resolver';

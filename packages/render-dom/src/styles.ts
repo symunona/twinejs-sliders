@@ -207,22 +207,39 @@ export const DIALOGUE_CSS = `
 	color: #7a6cff;
 }
 
+/* data-side names where the BUBBLE sits, so the tail hangs off the opposite edge. */
 .sliders-bubble-tail {
 	position: absolute;
 	width: 0;
 	height: 0;
-	border-left: 9px solid transparent;
-	border-right: 9px solid transparent;
 }
 
 .sliders-bubble[data-side='above'] .sliders-bubble-tail {
 	bottom: -11px;
+	border-left: 9px solid transparent;
+	border-right: 9px solid transparent;
 	border-top: 12px solid #fdfdfb;
 }
 
 .sliders-bubble[data-side='below'] .sliders-bubble-tail {
 	top: -11px;
+	border-left: 9px solid transparent;
+	border-right: 9px solid transparent;
 	border-bottom: 12px solid #fdfdfb;
+}
+
+.sliders-bubble[data-side='left'] .sliders-bubble-tail {
+	right: -11px;
+	border-top: 9px solid transparent;
+	border-bottom: 9px solid transparent;
+	border-left: 12px solid #fdfdfb;
+}
+
+.sliders-bubble[data-side='right'] .sliders-bubble-tail {
+	left: -11px;
+	border-top: 9px solid transparent;
+	border-bottom: 9px solid transparent;
+	border-right: 12px solid #fdfdfb;
 }
 
 .sliders-box {

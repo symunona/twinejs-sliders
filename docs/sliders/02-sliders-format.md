@@ -91,6 +91,7 @@ links:
 | Key | Meaning |
 |---|---|
 | `at` | position. See Coordinates. |
+| `of` | another entity's id. Makes `at` relative to it. See Relative placement. |
 | `scale` | uniform size multiplier. 1 = natural size. Scales about the origin, so a character keeps its feet on the floor. Must be > 0. |
 | `frame` | which named frame of the character/prop (D5) |
 | `flip` | mirror horizontally |
@@ -108,6 +109,71 @@ links:
 | y | **UP is positive.** |
 | Units | normalized, never pixels. Resolution-independent, maps to a 3D camera plane. |
 | Character origin | its **feet**. `at: 0` = standing centre, not floating centre. |
+
+## Relative placement — `of:` (D17)
+
+`of:` names another entity. `at:` is then an **offset from it** instead of a stage position.
+Move the parent and everything hanging off it comes along.
+
+```yaml
+props:
+  table:  {at: -0.3}
+  candle: {of: table, at: [0.1, 0.2], layer: front}   # 0.1 right of the table, 0.2 above
+  plate:  {of: table, at: 0.15}
+```
+
+| Rule | |
+|---|---|
+| Bare `at: 0.4` on a child | x offset only, **y level with the parent**. Not the layer baseline — see below. |
+| What inherits | **position only.** |
+| What does NOT | `scale`, `flip`, `frame`, `layer`, `z` — a child keeps its own. |
+| Chains | allowed, any depth. `of:` edges must form a DAG. |
+| Id space | `cast:` and `props:` share one, so a prop may hang off a character. |
+| Unknown parent | error in a snapshot scene; ignored in a patch scene, where it may be inherited. |
+| Cycle | error. At runtime the loop is broken and the entity falls back to world space. |
+| `of: ~` | detach. The one key a patch scene can CLEAR — see below. |
+
+Translation only is deliberate. It keeps resolution a vector add with no sprite metrics in
+it, which is what lets it live in `scene-core` where the **differ** can see it: a child
+glides when its parent moves, rather than teleporting while the parent animates. Attaching a
+prop to a character's *hand* is a different feature (an anchor socket), not this one.
+
+### ⚠️ A bare `at:` on a child is measured from ZERO, not from the floor
+
+Everywhere else, `at: 0.4` means "x = 0.4, y at the layer baseline" — the floor. For an
+`of:` child that would read *"0.4 across and 0.85 **below** my parent"*, which drops a
+candle a stage-height under its table and off the screen entirely.
+
+So on an entity that declares `of:`, a bare number is **x offset only, y level with the
+parent**:
+
+```yaml
+props:
+  table:  {at: -0.3}                  # y = -0.85, the floor
+  candle: {of: table, at: 0.4}        # y = 0, i.e. level with the table
+  candle: {of: table, at: [0.4, 0.2]} # explicit, 0.2 above it
+```
+
+One gap: if `of:` is **inherited** through `from:` and the patch writes a bare `at:`, the
+parser cannot see the parent and falls back to the floor. Write an explicit pair in that
+case. The editor always does.
+
+### `of: ~`
+
+Under `from:` an absent key means *inherited*, so omitting `of:` keeps the parent. Detaching
+needs to be said out loud:
+
+```yaml
+from: tavern-night
+props:
+  candle: {of: ~}      # back to world space, at whatever `at:` it inherited
+```
+
+### Where it resolves
+
+A `Stage` holds what the author wrote — `at` local, `of` intact. Absolute coordinates are
+derived at the point of drawing (`resolveStage()`), never before. That is what keeps a beat
+patch and a `from:` merge operating on the author's own numbers.
 
 ## Layers (D11)
 

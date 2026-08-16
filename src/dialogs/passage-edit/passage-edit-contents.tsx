@@ -8,6 +8,7 @@ import {
 	useStoryFormatsContext
 } from '../../store/story-formats';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
+import {addPassageEditors, useDialogsContext} from '../context';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
 import {ScenePreview} from './scene-preview/scene-preview';
@@ -38,6 +39,7 @@ export const PassageEditContents: React.FC<
 	const {ErrorBoundary, error, reset: resetError} = useErrorBoundary();
 	const {prefs} = usePrefsContext();
 	const {dispatch, stories} = useUndoableStoriesContext();
+	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {formats} = useStoryFormatsContext();
 	const previewAssets = usePreviewResolver();
 	const passage = passageWithId(stories, storyId, passageId);
@@ -73,6 +75,22 @@ export const PassageEditContents: React.FC<
 	// after the debounced commit the two agree, and when the text changed from somewhere
 	// else entirely — find and replace, undo — the store is the one that is right.
 	React.useEffect(() => setLiveText(undefined), [passage.text]);
+
+	/**
+	 * Ctrl/cmd-click on a link inside a scene bubble. Opens the passage it points at, the
+	 * same editor stack a double click on the story map opens. A link to a passage that does
+	 * not exist yet does nothing — this gesture navigates, it does not author.
+	 */
+	const handleOpenPassage = React.useCallback(
+		(name: string) => {
+			const target = story.passages.find(passage => passage.name === name);
+
+			if (target) {
+				dialogsDispatch(addPassageEditors(story.id, [target.id]));
+			}
+		},
+		[dialogsDispatch, story]
+	);
 
 	const handlePassageTextChange = React.useCallback(
 		(text: string) => {
@@ -139,6 +157,7 @@ export const PassageEditContents: React.FC<
 				assets={previewAssets}
 				editor={cmEditor}
 				onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
+				onOpenPassage={handleOpenPassage}
 				passages={story.passages}
 				text={liveText ?? passage.text}
 			/>

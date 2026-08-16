@@ -504,6 +504,7 @@ describe('half-typed and malformed input', () => {
 			frame: 'idle',
 			kind: 'prop',
 			layer: 'front',
+			of: 'table',
 			opacity: 0.5,
 			ref: 'tankard',
 			scale: 0.8,

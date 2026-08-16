@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {DialogueLayer, DomRenderer} from '@sliders/render-dom';
+import {DialogueLayer, DomRenderer, LinkHandler} from '@sliders/render-dom';
 import {AssetResolver, Beat, Stage, Transition} from '@sliders/scene-types';
 import {diffStages} from '@sliders/scene-core';
 
@@ -10,7 +10,7 @@ export interface SceneStageProps {
 	beat?: Beat;
 	/** When true, play the derived transitions. When false, snap. */
 	animate?: boolean;
-	onLink?: (name: string, target?: string) => void;
+	onLink?: LinkHandler;
 	/**
 	 * Hands the renderer out once it is mounted, and `undefined` on teardown.
 	 *
@@ -58,7 +58,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 		const renderer = new DomRenderer();
 		const dialogue = new DialogueLayer({
-			onLink: (name, target) => onLinkRef.current?.(name, target)
+			onLink: (name, target, event) => onLinkRef.current?.(name, target, event)
 		});
 
 		rendererRef.current = renderer;

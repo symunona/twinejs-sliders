@@ -101,8 +101,18 @@ interface Gesture {
 export interface StageEditorOverlayProps {
 	children: React.ReactNode;
 	renderer?: DomRenderer;
-	/** The stage as drawn, drag patch included. */
+	/**
+	 * The stage as drawn, drag patch included, `of:` already RESOLVED — every `at` in here is
+	 * absolute, which is the only space a pointer can be compared against.
+	 */
 	stage: Stage;
+	/**
+	 * Where each `of:` child's `at` is measured from, absolute. Missing id = world space.
+	 *
+	 * A drag lands on an absolute point; the YAML holds an offset. This is the difference
+	 * between the two, and the only place the overlay has to know `of:` exists at all.
+	 */
+	parentOffsets?: Record<EntityId, Vec2>;
 	selection: EntityId[];
 	/** False when there is no CodeMirror to write to — selection still works. */
 	editable: boolean;
@@ -214,6 +224,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onDropFiles,
 		onPatch,
 		onSelect,
+		parentOffsets,
 		onToggleFullScreen,
 		renderer,
 		seal,
@@ -248,10 +259,19 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onCameraPatch,
 		onCommit,
 		onPatch,
+		parentOffsets,
 		stage
 	});
 
-	latest.current = {box, editable, onCameraPatch, onCommit, onPatch, stage};
+	latest.current = {
+		box,
+		editable,
+		onCameraPatch,
+		onCommit,
+		onPatch,
+		parentOffsets,
+		stage
+	};
 
 	// Rects are cached rather than asked for per pointermove: `rectOf` is cheap, but not
 	// cheap enough to call once per entity per frame, and `subscribe` already fires after
@@ -440,10 +460,19 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							snapTargetsY: snapTargetsY(others.map(e => e.at.y))
 						}
 					);
+					// Back into the space the YAML is written in. The drag, the snap lines and
+					// the pointer are all absolute; an `of:` child's `at` is an offset. The
+					// SCREEN position is what snapped, so the subtraction happens after it —
+					// a child snapped onto the centre line sits on the centre line, whatever
+					// that makes its offset read as.
+					const offset = current.parentOffsets?.[id];
+					const local = offset
+						? {x: result.at.x - offset.x, y: result.at.y - offset.y}
+						: result.at;
 					// Rounded here and not only on write, so the optimistic patch holds
 					// exactly the value the text will get and the two can be compared for
 					// equality when the parse catches up.
-					const at = {x: roundCoord(result.at.x), y: roundCoord(result.at.y)};
+					const at = {x: roundCoord(local.x), y: roundCoord(local.y)};
 
 					snappedX = snappedX ?? result.snappedX;
 					snappedY = snappedY ?? result.snappedY;

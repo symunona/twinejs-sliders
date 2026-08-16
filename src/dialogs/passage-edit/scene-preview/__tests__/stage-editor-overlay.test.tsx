@@ -201,6 +201,70 @@ describe('<StageEditorOverlay>', () => {
 		]);
 	});
 
+	/**
+	 * `of:` write-back. The stage the overlay is handed is already resolved, so the drag
+	 * itself is unchanged — what differs is the number that reaches the text, which has to
+	 * be the OFFSET from the parent rather than the absolute position the pointer landed on.
+	 */
+	it('writes a drag on an of: child as an offset from its parent', () => {
+		const {frame, onCommit, onPatch} = renderOverlay({
+			parentOffsets: {mira: {x: -0.3, y: 0}},
+			selection: ['mira']
+		});
+
+		fireEvent(frame, pointer('pointerdown', 100, 300));
+		fireEvent(window, pointer('pointermove', 160, 300));
+
+		// Same absolute landing point as the plain drag above (-0.213), minus the parent.
+		const patched = onPatch.mock.calls[onPatch.mock.calls.length - 1][0];
+
+		expect(patched.mira.at.x).toBeCloseTo(0.087, 3);
+
+		fireEvent(window, pointer('pointerup', 160, 300));
+
+		expect(onCommit.mock.calls[0][0]).toEqual([
+			{
+				id: 'mira',
+				key: 'at',
+				kind: 'cast',
+				ref: 'mira',
+				value: {x: 0.087, y: -0.85}
+			}
+		]);
+	});
+
+	/**
+	 * The snap lines are absolute, and so is the sprite the author is looking at. A child
+	 * dropped on the centre line must SIT on the centre line — its offset reading as the
+	 * inverse of its parent's position is the correct consequence, not a bug.
+	 */
+	it('snaps an of: child in absolute space, not in its parent space', () => {
+		const {frame, onCommit} = renderOverlay({
+			parentOffsets: {mira: {x: -0.3, y: 0}},
+			selection: ['mira']
+		});
+
+		// 128 px right of -0.4 lands on 0.0 exactly: 128 / 320 = 0.4.
+		fireEvent(frame, pointer('pointerdown', 100, 300));
+		fireEvent(window, pointer('pointermove', 228, 300));
+		fireEvent(window, pointer('pointerup', 228, 300));
+
+		expect(onCommit.mock.calls[0][0][0].value).toEqual({x: 0.3, y: -0.85});
+	});
+
+	it('leaves a world-space entity alone when other entities have parents', () => {
+		const {frame, onCommit} = renderOverlay({
+			parentOffsets: {candle: {x: 0.9, y: 0.9}},
+			selection: ['mira']
+		});
+
+		fireEvent(frame, pointer('pointerdown', 100, 300));
+		fireEvent(window, pointer('pointermove', 160, 300));
+		fireEvent(window, pointer('pointerup', 160, 300));
+
+		expect(onCommit.mock.calls[0][0][0].value).toEqual({x: -0.213, y: -0.85});
+	});
+
 	it('does not write when the pointer barely moved', () => {
 		const {frame, onCommit, onPatch} = renderOverlay({selection: ['mira']});
 

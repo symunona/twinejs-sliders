@@ -38,6 +38,9 @@ export const BEAT_COMMANDS = ['box', 'wait', 'fx', 'mark'] as const;
  */
 export const ENTITY_KEY_ORDER = [
 	'ref',
+	// Before `at`, because it says what `at` is measured from — reading `{of: table, at: …}`
+	// in the other order means re-reading the coordinate once you reach the parent.
+	'of',
 	'at',
 	'scale',
 	'frame',

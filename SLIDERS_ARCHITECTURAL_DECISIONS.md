@@ -65,6 +65,51 @@ YAML. Plan and the shipped key bindings: [`docs/sliders/10-visual-editor-plan.md
 | 15 | Where does the editor's inverse geometry live? | `src/.../stage-geometry.ts`, importing the renderer's forward functions and inverting them | In `packages/` it would ship to play mode; inside a component it would be untestable. Importing rather than copying is what keeps handles on top of sprites under zoom |
 | 16 | How is an entity hit-tested? | By rect, from `DomRenderer.rectOf()` | `.sliders-entity` is `pointer-events: none`, and rects survive the camera transform that DOM hit-testing would fight |
 
+## Relative placement (`of:`) — built
+
+`candle: {of: table, at: [0.1, 0.2]}`. Moving the table moves the candle.
+
+| # | Question | Chose | Why |
+|---|---|---|---|
+| 17 | How do objects tie to each other, given a one-level format? | A single `of:` key, **translation only** | A parent's `scale`/`flip`/`frame` reaching the child would make resolution need sprite metrics — an asset resolver and a stage box — and it could then only run in the renderer. Keeping it a vector add keeps it in `scene-core`, which is what makes the differ correct (below). Sockets on a character's hand are a different feature and want anchors, not this |
+| 18 | Where does relative → absolute happen? | `resolveStage()`, called at the **draw and diff boundary** only | A `Stage` has to keep the author's local numbers, because that is what a beat patch and a `from:` merge shallow-merge onto. Resolve any earlier and a child is double-offset the first time anything patches it. `scene-index` therefore stores UNRESOLVED states |
+| 19 | Diff local or absolute? | Absolute — resolve both sides, then `diffStages` | In authored space a child's `at` does not change when its parent moves, so **no `move` transition is emitted for it**: the parent would glide and the child would teleport. Diffing resolved stages fixes that with zero knowledge of the graph in the differ. This is the single reason D17 chose translation-only |
+| 20 | What stops a double offset? | `resolveStage` **strips `of`**, so it is idempotent | A second resolve further down the pipeline is then a no-op instead of a silent bug. The editor needs the parent anyway, so that is exposed as `parentOffsets()` rather than by leaving `of` on a resolved entity |
+| 21 | How does a patch scene detach a child? | `of: ~` | Absent means *inherited* under `from:`, so there is no other way to say it. `of` is the only entity key a patch can clear |
+| 22 | Which space does a drag write in? | Snap in absolute, subtract the parent, write the offset | The pointer, the snap lines and the sprite are all absolute; only the YAML is relative. A child dropped on the centre line must SIT on the centre line, whatever that makes its offset read as |
+
+### The bug the first browser run caught
+
+**A candle on a table rendered a stage-height below it, off the screen.** A bare `at: 0.4`
+materializes y as `LAYER_BASELINE` (−0.85) — correct for a stage position, and nonsense for
+an *offset*, where it reads "0.85 below my parent". Every child written the idiomatic way
+fell through the floor.
+
+Fixed by moving the baseline: on an entity that declares `of:`, a bare `at:` is x-only with
+**y = 0**. The parser scans the entity body for `of` before parsing `at`, because YAML map
+order is the author's and `{at: 0.4, of: table}` has to read the same as the other way round.
+`formatAt` takes the same baseline, or a child whose offset happened to be exactly −0.85
+would be written bare and read back as 0 — a sprite that jumps a stage-height on reparse.
+
+Worth recording because **no unit test would have found it**. Every layer was individually
+correct; the defect only exists where "y omitted means the floor" meets "at is an offset",
+and that seam is only visible once something draws it.
+
+### What the parser can and cannot catch
+
+Both `of:` checks are **sound but incomplete**, on purpose. One block is not the whole graph:
+with `from:`, a parent may be inherited from another passage and the parser has no index.
+
+- **Unknown parent** — reported only in a snapshot scene, which *is* its whole cast. Silent in
+  a patch scene.
+- **Cycles** — reported only for loops closed inside one block. Those survive any merge, so
+  flagging them is never a false positive.
+
+`resolveStage` is the net for everything else: an unresolvable parent, a self-reference or a
+cycle drops that edge and leaves the entity in world space. Never throws, never recurses
+forever, never deletes art — a typo must not make a sprite disappear. Cycle-breaking walks
+ids in sorted order so the same stage always resolves the same way.
+
 ### The bug integration caught
 
 **A drag computed a correct splice, called `replaceRange`, and the document silently
