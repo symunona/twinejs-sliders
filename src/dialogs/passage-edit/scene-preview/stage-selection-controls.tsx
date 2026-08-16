@@ -90,8 +90,18 @@ export const StageSelectionControls: React.FC<
 		single?.kind === 'cast' ? single.ref : undefined
 	);
 
+	// The row is always in the layout, even with nothing to put in it. It sits directly
+	// above the stage, and in full screen the stage takes whatever height is left — so a row
+	// that appeared with the selection would resize the stage under the pointer and the whole
+	// scene would jump on the click that selected it.
 	if (entities.length === 0 || !editable) {
-		return null;
+		return (
+			<div
+				aria-hidden
+				className="scene-preview-selection empty"
+				data-testid="scene-preview-selection"
+			/>
+		);
 	}
 
 	const layers = new Set(entities.map(entity => entity.layer));

@@ -98,6 +98,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'scene.togglePreview', scope: 'scene-preview'},
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},
+	{id: 'scene.toggleLock', scope: 'scene-preview'},
 	{id: 'scene.deselect', scope: 'scene-preview'},
 
 	// The scrubber and the nudges share the arrow keys. Nudging requires a selection and

@@ -3,6 +3,8 @@ import {
 	IconChevronDown,
 	IconChevronLeft,
 	IconChevronRight,
+	IconLock,
+	IconLockOpen,
 	IconMaximize,
 	IconMinimize,
 	IconPlayerPause,
@@ -27,6 +29,10 @@ import {
 	layerWrites,
 	zWrites
 } from './scene-gestures';
+import {
+	refreshAssetLibrary,
+	slidersAssetStore
+} from '../../sliders-assets/asset-store-context';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import {StageSelectionControls} from './stage-selection-controls';
@@ -53,7 +59,12 @@ import {
 import './scene-preview.css';
 
 export interface ScenePreviewProps {
-	assets: AssetResolver;
+	/**
+	 * `invalidate` is optional because the type belongs to the story format, which has no
+	 * uploads: the app's own resolver caches a name index, and an image dropped onto the
+	 * stage would otherwise render as a placeholder until the window regained focus.
+	 */
+	assets: AssetResolver & {invalidate?: () => void};
 	text: string;
 	/** The whole story. Needed only so `from:` can resolve across passages. */
 	passages?: IndexedPassage[];
@@ -70,9 +81,45 @@ export interface ScenePreviewProps {
 const OPEN_KEY = 'sliders.preview.open';
 const SEEN_KEY = 'sliders.preview.seen';
 
+/**
+ * The lock survives the dialog, the passage and the session.
+ *
+ * An author who locked the stage did so because they are writing rather than staging, and
+ * a lock that let go every time the passage editor closed would be worse than none: they
+ * would find out it had by moving a character.
+ */
+const LOCKED_KEY = 'sliders.preview.locked';
+
 /** Arrow-key nudge, in scene units. Shift multiplies it. */
 const NUDGE_STEP = 0.01;
 const NUDGE_SHIFT_MULTIPLIER = 10;
+
+/** How far apart a multi-file drop stacks its props, in scene x. */
+const DROP_STACK_STEP = 0.08;
+
+/** How long a queued drop waits for its entry to reach the document before giving up. */
+const TEXT_SETTLE_TIMEOUT_MS = 1000;
+const TEXT_SETTLE_POLL_MS = 25;
+
+/**
+ * Resolves once the passage text is no longer `before`, or on timeout.
+ *
+ * Polling rather than a promise from the writer: the write goes through CodeMirror, out to
+ * react-codemirror2, and back in as a prop, and nothing along that path hands back a
+ * signal. The timeout is what stops a write that changed nothing from hanging the drop.
+ */
+async function textChanged(
+	ref: React.MutableRefObject<string>,
+	before: string
+): Promise<void> {
+	const deadline = Date.now() + TEXT_SETTLE_TIMEOUT_MS;
+
+	while (ref.current === before && Date.now() < deadline) {
+		await new Promise(resolve =>
+			window.setTimeout(resolve, TEXT_SETTLE_POLL_MS)
+		);
+	}
+}
 
 /**
  * Live scene preview under the passage text (spec 06), and the visual editor on top of it
@@ -94,6 +141,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => window.localStorage.getItem(OPEN_KEY) !== 'false'
 	);
 	const [fullScreen, setFullScreen] = React.useState(false);
+	const [locked, setLocked] = React.useState(
+		() => window.localStorage.getItem(LOCKED_KEY) === 'true'
+	);
 	const [beat, setBeat] = React.useState(0);
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
@@ -312,6 +362,69 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[commit, parse.result, stage]
 	);
 
+	/**
+	 * The current text and the current drop handler, for the async file drop below.
+	 *
+	 * Its loop outlives the render it started in, and every closure it captured — `commit`,
+	 * the block offsets, the parsed scene — describes the document as it was before the first
+	 * entry was written. Reading both through refs is what lets the second file be placed
+	 * into the text the first one produced.
+	 */
+	const textRef = React.useRef(text);
+	const dropAssetRef = React.useRef(handleDropAsset);
+
+	textRef.current = text;
+	dropAssetRef.current = handleDropAsset;
+
+	/**
+	 * Image files dragged onto the stage from outside the app.
+	 *
+	 * They go through the library rather than into the scene directly, because scene YAML
+	 * addresses assets by NAME and a name only exists once the store has one: dropping a PNG
+	 * here and adding it in the asset manager have to produce the same entry. Uploading is
+	 * the whole reason this is asynchronous, and the reason a drop is not a gesture — there
+	 * is nothing optimistic to paint while the bytes are being read.
+	 *
+	 * Files are placed one at a time, each waiting for the previous entry to reach the
+	 * document: a gesture is one edit built against one snapshot of the block, so two entries
+	 * spliced from the same snapshot would both claim the same offset. The first lands where
+	 * it was dropped and the rest stack to its right, so a five-file drop is five props the
+	 * author can pull apart rather than one pile to dig through.
+	 */
+	const handleDropFiles = React.useCallback(
+		async (files: File[], at: Vec2) => {
+			const store = slidersAssetStore();
+			let placed = 0;
+
+			for (const file of files) {
+				try {
+					const {meta} = await store.putAsset(file, {kind: 'object'});
+					const before = textRef.current;
+
+					// Dropped straight onto the stage, so the entry is a prop: the author
+					// pointed at a spot, and a background has no spot to point at.
+					dropAssetRef.current(
+						{label: meta.name, ref: meta.name, target: 'prop'},
+						{x: roundCoord(at.x + placed * DROP_STACK_STEP), y: at.y}
+					);
+					placed++;
+
+					if (placed < files.length) {
+						await textChanged(textRef, before);
+					}
+				} catch (error) {
+					console.error('Could not add a dropped image to the library', error);
+				}
+			}
+
+			// The resolver caches assets by name, and the asset dialogs cache the list. Both
+			// were built before this file existed.
+			assets.invalidate?.();
+			refreshAssetLibrary();
+		},
+		[assets]
+	);
+
 	/** Arrow-key move. Reads the CURRENT position each time, so it cannot drift. */
 	const nudge = React.useCallback(
 		(dx: number, dy: number) => {
@@ -390,6 +503,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				.filter((entity): entity is NonNullable<typeof entity> => !!entity),
 		[selection, stage]
 	);
+
+	/**
+	 * Everything that would change the text is off while the lock is on.
+	 *
+	 * One flag, checked in one place: the overlay already treats "not editable" as "select
+	 * and look, write nothing" for the case where there is no CodeMirror at all, so the lock
+	 * reuses that path rather than inventing a second one the gestures would have to learn.
+	 */
+	const editable = !!editor && !locked;
+
+	function toggleLock() {
+		setLocked(value => {
+			window.localStorage.setItem(LOCKED_KEY, String(!value));
+
+			return !value;
+		});
+	}
 
 	// The first time the user opens the preview it comes up full screen (D12). Tied to
 	// the click rather than to "a scene appeared", which would hijack the screen while
@@ -515,6 +645,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		scope: 'scene-preview'
 	});
 
+	// Deselecting is not an edit, so it survives the lock.
 	useCommand({
 		enabled: open && selection.length > 0,
 		id: 'scene.deselect',
@@ -524,8 +655,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
+		enabled: open,
+		id: 'scene.toggleLock',
+		label: t('hotkeys.commands.scene.toggleLock'),
+		run: toggleLock,
+		scope: 'scene-preview'
+	});
+
+	useCommand({
 		allowRepeat: true,
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.nudgeLeft',
 		label: t('hotkeys.commands.scene.nudgeLeft'),
 		run: () => nudge(-1, 0),
@@ -534,7 +673,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.nudgeRight',
 		label: t('hotkeys.commands.scene.nudgeRight'),
 		run: () => nudge(1, 0),
@@ -545,7 +684,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.nudgeUp',
 		label: t('hotkeys.commands.scene.nudgeUp'),
 		run: () => nudge(0, 1),
@@ -554,7 +693,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.nudgeDown',
 		label: t('hotkeys.commands.scene.nudgeDown'),
 		run: () => nudge(0, -1),
@@ -565,7 +704,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// through the same one-gesture-one-edit path the drag uses.
 
 	useCommand({
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.flip',
 		label: t('hotkeys.commands.scene.flip'),
 		run: flip,
@@ -573,7 +712,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.delete',
 		label: t('hotkeys.commands.scene.delete'),
 		run: remove,
@@ -581,7 +720,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.layerBack',
 		label: t('hotkeys.commands.scene.layerBack'),
 		run: () => stepLayer(-1),
@@ -589,7 +728,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.layerFront',
 		label: t('hotkeys.commands.scene.layerFront'),
 		run: () => stepLayer(1),
@@ -598,7 +737,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.zBack',
 		label: t('hotkeys.commands.scene.zBack'),
 		run: () => stepZ(-1),
@@ -607,7 +746,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && selection.length > 0,
+		enabled: open && editable && selection.length > 0,
 		id: 'scene.zFront',
 		label: t('hotkeys.commands.scene.zFront'),
 		run: () => stepZ(1),
@@ -687,6 +826,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							label={t('dialogs.passageEdit.scenePreview.play')}
 							onClick={togglePlaying}
 						/>
+						{/* Always here, selection or not: the lock is how the author stops
+						    the stage editing the file, so it cannot be a control that only
+						    appears once something has been grabbed. */}
+						<IconButton
+							icon={locked ? <IconLock /> : <IconLockOpen />}
+							iconOnly
+							label={t(
+								locked
+									? 'dialogs.passageEdit.scenePreview.unlock'
+									: 'dialogs.passageEdit.scenePreview.lock'
+							)}
+							onClick={toggleLock}
+							selectable
+							selected={locked}
+						/>
 						<IconButton
 							icon={fullScreen ? <IconMinimize /> : <IconMaximize />}
 							iconOnly
@@ -703,7 +857,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					    path, and `scene.fullScreen` still works. */}
 					<StageSelectionControls
 						assets={assets}
-						editable={!!editor}
+						editable={editable}
 						entities={selectedEntities}
 						onDelete={remove}
 						onFlip={flip}
@@ -711,11 +865,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						onLayer={setLayer}
 					/>
 					<StageEditorOverlay
-						editable={!!editor}
+						editable={editable}
 						onCameraPatch={setCamera}
 						onCancel={handleCancel}
 						onCommit={handleCommit}
 						onDropAsset={handleDropAsset}
+						onDropFiles={handleDropFiles}
 						onPatch={setPatch}
 						onSelect={select}
 						onToggleFullScreen={() => setFullScreen(f => !f)}

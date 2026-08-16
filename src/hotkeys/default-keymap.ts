@@ -76,6 +76,11 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'scene.play': {bindings: ['k']},
 	// `f` belongs to flip (spec 07's gesture table), so full screen took the shifted key.
 	'scene.fullScreen': {bindings: ['shift+f']},
+	// `mod+l` is what a lock wants to be and the one thing it cannot be: Chrome keeps it for
+	// the address bar and will not let a page have it (§2.1 of the hotkey defaults doc), so
+	// the chord is the shifted one. The bare `l` is the key that actually gets used, in the
+	// same family as `f`, `k` and `p` above.
+	'scene.toggleLock': {bindings: ['l', 'mod+shift+l']},
 
 	// Visual editor. The nudges take the arrow keys back off the scrubber while something
 	// is selected, and Escape hands them over again. Both variants of each arrow are bound

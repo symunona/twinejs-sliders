@@ -1,3 +1,9 @@
+/*
+A transient popup has to outrank the panels it opens over, not tie with them. 1000 is also
+what the route toolbar and the scene preview's full-screen panel use, and a tie is decided
+by DOM order — which a card that opens inside a dialog loses to anything portalled to the
+body afterwards. 2000 is the popup tier, shared with `.menu-button-menu`.
+*/
 .card-button-card {
-	z-index: 1000;
+	z-index: 2000;
 }

@@ -1,3 +1,5 @@
+@import '../../../styles/metrics.css';
+
 .scene-preview {
 	border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
 	display: flex;
@@ -15,10 +17,14 @@
 	z-index: 1000;
 }
 
+/* Pinned: in full screen the stage takes the rest of the column, so the bar has to keep its
+   height whatever lands in it — an error badge appearing must not push the stage down. */
 .scene-preview-bar {
 	align-items: center;
 	display: flex;
+	flex-shrink: 0;
 	gap: 2px;
+	min-height: var(--control-height);
 	padding: 2px 4px;
 }
 
@@ -49,14 +55,19 @@
 	background: #f3c8c8;
 }
 
-/* Only visible with something selected. The keyboard is the fast path; this row is how the
-   gestures are found in the first place. */
+/* Only FILLED with something selected, but always present: the stage below it grows into
+   whatever height is left, so a row that came and went would resize the stage — and the
+   whole scene would jump — on the very click that selected a sprite. The keyboard is the
+   fast path; this row is how the gestures are found in the first place. */
 .scene-preview-selection {
 	align-items: center;
 	border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
+	box-sizing: content-box;
 	display: flex;
+	flex-shrink: 0;
 	flex-wrap: wrap;
 	gap: 6px;
+	min-height: var(--control-height);
 	padding: 2px 4px;
 }
 
@@ -94,6 +105,7 @@
 }
 
 .scene-preview-errors {
+	flex-shrink: 0;
 	font-family: var(--font-monospaced, monospace);
 	list-style: none;
 	margin: 0;

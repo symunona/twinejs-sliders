@@ -6,7 +6,7 @@ import {ButtonBar} from '../../components/container/button-bar';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
 import {TextSelect} from '../../components/control/text-select';
-import {useCommand} from '../../hotkeys';
+import {keyStringTokens, useCommand, useHotkeysContext} from '../../hotkeys';
 import {setPref, usePrefsContext} from '../../store/prefs';
 import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
@@ -36,6 +36,37 @@ import './asset-generator.css';
 
 export type AssetGeneratorDialogProps = DialogComponentProps;
 
+/**
+ * Where an unsent prompt waits.
+ *
+ * Closing the dialog is how the author gets back to the story to look something up, and a
+ * paragraph of description that vanishes when they do is a paragraph they have to write
+ * twice. Kept out of prefs deliberately: this is a scratch draft, not a setting, and it has
+ * no business riding along in a preferences export.
+ */
+const PROMPT_DRAFT_KEY = 'sliders.generator.draft';
+
+function readPromptDraft(): string {
+	try {
+		return window.localStorage.getItem(PROMPT_DRAFT_KEY) ?? '';
+	} catch {
+		// Private-mode storage. A missing draft is not worth failing the dialog over.
+		return '';
+	}
+}
+
+function writePromptDraft(prompt: string): void {
+	try {
+		if (prompt) {
+			window.localStorage.setItem(PROMPT_DRAFT_KEY, prompt);
+		} else {
+			window.localStorage.removeItem(PROMPT_DRAFT_KEY);
+		}
+	} catch {
+		// See above.
+	}
+}
+
 export const AssetGeneratorDialog: React.FC<
 	AssetGeneratorDialogProps
 > = props => {
@@ -48,11 +79,27 @@ export const AssetGeneratorDialog: React.FC<
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState<string>();
 	const [notice, setNotice] = React.useState<string>();
-	const [prompt, setPrompt] = React.useState('');
+	const [prompt, setPrompt] = React.useState(readPromptDraft);
 	const [saving, setSaving] = React.useState<string>();
 	const [selection, setSelection] = React.useState<GeneratorSelection>();
 	const library = useAssetLibrary();
+	const {keymap, platform} = useHotkeysContext();
 	const {t} = useTranslation();
+
+	// The draft follows the box rather than the close button: a dialog can go away without
+	// unmounting cleanly--the whole stack is dismissed at once--and a save that only ran on
+	// the way out would be the one that never ran.
+	React.useEffect(() => writePromptDraft(prompt), [prompt]);
+
+	/**
+	 * The shortcut as the author's keyboard actually spells it, read from the resolved
+	 * keymap rather than written into the string: rebinding Generate has to rewrite the hint
+	 * that advertises it, or the hint becomes a lie the moment anyone touches the keymap.
+	 */
+	const generateKeys = keyStringTokens(
+		keymap['assetGenerator.generate']?.bindings?.[0] ?? '',
+		platform
+	).join(platform === 'mac' ? '' : '+');
 
 	// Assets live in the store rather than in memory, so the preview has to resolve
 	// its own URL; generations already hold one per blob.
@@ -303,7 +350,13 @@ export const AssetGeneratorDialog: React.FC<
 						<span>{t('dialogs.assetGenerator.prompt')}</span>
 						<textarea
 							onChange={event => setPrompt(event.target.value)}
-							placeholder={t('dialogs.assetGenerator.promptPlaceholder')}
+							placeholder={
+								generateKeys
+									? t('dialogs.assetGenerator.promptPlaceholderWithKey', {
+											keys: generateKeys
+									  })
+									: t('dialogs.assetGenerator.promptPlaceholder')
+							}
 							rows={5}
 							value={prompt}
 						/>

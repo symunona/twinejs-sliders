@@ -1,4 +1,6 @@
 import {expect, Page, test} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+import * as path from 'node:path';
 import {
 	closeDialogs,
 	createStory,
@@ -54,7 +56,10 @@ async function openSceneEditor(page: Page, storyName: string) {
 
 /** Drag from the centre of an entity's rect by a pixel offset. */
 async function dragEntity(page: Page, id: string, dx: number, dy: number) {
-	const box = (await page.locator(`[data-entity-id="${id}"]`).boundingBox())!;
+	// `.sliders-entity`, not the bare attribute: the selection marker carries the same id.
+	const box = (await page
+		.locator(`.sliders-entity[data-entity-id="${id}"]`)
+		.boundingBox())!;
 	const x = box.x + box.width / 2;
 	const y = box.y + box.height / 2;
 
@@ -135,6 +140,181 @@ test.describe('visual scene editor', () => {
 		await page.waitForTimeout(500);
 
 		expect(await cmText(page)).toEqual(beforeResize);
+	});
+
+	/**
+	 * The regression this file exists to keep out.
+	 *
+	 * A resize is a press-and-move over the stage, and without a `preventDefault` the browser
+	 * treats it as a text selection. The next press then lands INSIDE that selection, which
+	 * starts a native drag, which makes the browser take the pointer away and fire
+	 * `pointercancel` — so the drag in flight was thrown away and the sprite snapped back to
+	 * where it started. Three gestures in a row is the shortest sequence that shows it.
+	 */
+	test('a drag still works after a resize', async ({page}) => {
+		test.setTimeout(180000);
+		await openSceneEditor(page, 'Visual Editor Drag After Resize ' + Date.now());
+
+		const mira = page.locator('.sliders-entity[data-entity-id="mira"]');
+
+		await mira.waitFor({timeout: 20000});
+
+		const box = (await mira.boundingBox())!;
+
+		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+		await page.waitForTimeout(300);
+
+		await dragEntity(page, 'mira', 100, 0);
+
+		const handles = page.locator('[data-handle]');
+
+		await expect(handles).toHaveCount(4);
+
+		const handle = (await handles.first().boundingBox())!;
+
+		await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(handle.x - 40, handle.y - 40, {steps: 10});
+		await page.mouse.up();
+		await page.waitForTimeout(700);
+
+		const afterResize = await cmText(page);
+
+		expect(afterResize).toMatch(/scale: [0-9.]+/);
+
+		await dragEntity(page, 'mira', 80, 0);
+
+		// The third gesture has to reach the document. Comparing whole documents rather than
+		// just looking for `at:` — the pointercancel bug wrote nothing at all.
+		expect(await cmText(page)).not.toEqual(afterResize);
+	});
+
+	test('the lock stops the stage editing the file, and survives a reload', async ({
+		page
+	}) => {
+		test.setTimeout(180000);
+		await openSceneEditor(page, 'Visual Editor Lock ' + Date.now());
+
+		const mira = page.locator('.sliders-entity[data-entity-id="mira"]');
+
+		await mira.waitFor({timeout: 20000});
+
+		const lock = page.getByRole('button', {name: /^Lock the stage/});
+
+		await lock.click();
+		await page.waitForTimeout(300);
+
+		const locked = await cmText(page);
+
+		// Selection still works — the lock is about writing, not about looking.
+		const box = (await mira.boundingBox())!;
+
+		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+		await page.waitForTimeout(300);
+
+		// No resize handles, because there is nothing to resize into.
+		await expect(page.locator('[data-handle]')).toHaveCount(0);
+
+		await dragEntity(page, 'mira', 120, 0);
+		expect(await cmText(page)).toEqual(locked);
+
+		// Keyboard gestures are off too.
+		await page.keyboard.press('f');
+		await page.waitForTimeout(500);
+		expect(await cmText(page)).toEqual(locked);
+
+		// The lock is a working posture, not a per-dialog toggle, so it is remembered.
+		expect(
+			await page.evaluate(() => window.localStorage.getItem('sliders.preview.locked'))
+		).toEqual('true');
+
+		await page.getByRole('button', {name: 'Unlock the stage'}).click();
+		await page.waitForTimeout(300);
+		await dragEntity(page, 'mira', 120, 0);
+		expect(await cmText(page)).not.toEqual(locked);
+	});
+
+	/**
+	 * The selection toolbar is always in the layout, empty or not. In full screen the stage
+	 * takes whatever height is left, so a row that appeared with the selection would resize
+	 * the stage — and the whole scene would jump — on the very click that selected a sprite.
+	 */
+	test('selecting a sprite in full screen does not move the stage', async ({
+		page
+	}) => {
+		test.setTimeout(180000);
+		await openSceneEditor(page, 'Visual Editor Full Screen ' + Date.now());
+
+		await page.locator('.sliders-entity[data-entity-id="mira"]').waitFor({
+			timeout: 20000
+		});
+		await page.getByRole('button', {name: 'Full screen'}).click();
+		await page.waitForTimeout(500);
+
+		const stage = page.locator('.scene-stage');
+		const before = (await stage.boundingBox())!;
+		const mira = page.locator('.sliders-entity[data-entity-id="mira"]');
+		const sprite = (await mira.boundingBox())!;
+
+		await page.mouse.click(sprite.x + sprite.width / 2, sprite.y + sprite.height / 2);
+		await page.waitForTimeout(400);
+
+		await expect(page.getByTestId('scene-preview-selection')).toBeVisible();
+
+		const after = (await stage.boundingBox())!;
+
+		expect(after.height).toEqual(before.height);
+		expect(after.y).toEqual(before.y);
+	});
+
+	test('an image file dropped on the stage becomes a prop', async ({page}) => {
+		test.setTimeout(180000);
+		await openSceneEditor(page, 'Visual Editor File Drop ' + Date.now());
+
+		const stage = page.locator('.stage-editor');
+
+		await stage.waitFor({timeout: 20000});
+
+		const png = readFileSync(
+			path.join(__dirname, 'fixtures', 'assets', 'table.png')
+		).toString('base64');
+		const box = (await stage.boundingBox())!;
+
+		// Playwright cannot synthesize an OS drag, so the drop is dispatched by hand — the
+		// `DataTransfer` and the `File` on it are exactly what a real drop carries.
+		await stage.evaluate(
+			(element, {base64, clientX, clientY}) => {
+				const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+				const file = new File([bytes], 'dropped-table.png', {type: 'image/png'});
+				const data = new DataTransfer();
+
+				data.items.add(file);
+
+				for (const type of ['dragover', 'drop']) {
+					element.dispatchEvent(
+						new DragEvent(type, {
+							bubbles: true,
+							cancelable: true,
+							clientX,
+							clientY,
+							dataTransfer: data
+						})
+					);
+				}
+			},
+			{
+				base64: png,
+				clientX: Math.round(box.x + box.width * 0.35),
+				clientY: Math.round(box.y + box.height * 0.7)
+			}
+		);
+
+		await expect
+			.poll(() => cmText(page), {timeout: 20000})
+			.toMatch(/props:\s*\n\s*dropped-table: \{at:/);
+
+		// It went through the library, so it is a real asset with a name scenes can use.
+		expect(await cmText(page)).toContain('# keep this comment');
 	});
 
 	test('keyboard gestures on the selection write their own keys', async ({

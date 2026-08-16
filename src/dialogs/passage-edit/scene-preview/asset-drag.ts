@@ -48,6 +48,42 @@ export function isAssetDrag(types: readonly string[] | undefined): boolean {
 	return !!types && Array.prototype.includes.call(types, ASSET_DRAG_MIME);
 }
 
+/**
+ * Image types the stage will take off the desktop.
+ *
+ * The list is the upload pipeline's, not the renderer's: PNG, JPEG and GIF are what people
+ * actually have on disk, and `prepareUpload` already knows which of them to re-encode and
+ * which to store verbatim (spec 03). SVG has no header magic worth trusting, so it is
+ * matched by extension as well as by type.
+ */
+const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
+
+function isImageFile(file: File): boolean {
+	return (
+		file.type.startsWith('image/') ||
+		(!file.type && IMAGE_EXTENSIONS.test(file.name))
+	);
+}
+
+/**
+ * Is this drag carrying files from outside the app?
+ *
+ * `dragover` refuses to hand over the files themselves, so — exactly as with our own MIME —
+ * the type list is all there is to go on until the drop actually happens.
+ */
+export function isFileDrag(types: readonly string[] | undefined): boolean {
+	return !!types && Array.prototype.includes.call(types, 'Files');
+}
+
+/** The dropped images, in drop order. Empty when the drag carried none. */
+export function imageFilesFrom(dataTransfer: DataTransfer | null): File[] {
+	if (!dataTransfer) {
+		return [];
+	}
+
+	return Array.from(dataTransfer.files ?? []).filter(isImageFile);
+}
+
 /** The payload, or undefined for anything that is not ours or has been mangled. */
 export function readAssetDragData(
 	dataTransfer: DataTransfer | null

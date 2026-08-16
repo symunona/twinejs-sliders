@@ -63,14 +63,26 @@ function selects() {
 }
 
 describe('<StageSelectionControls>', () => {
-	it('renders nothing without a selection', () => {
+	// The row itself always exists — it holds the stage's height steady, which is why the
+	// scene no longer jumps on the click that selects a sprite. What must not appear is any
+	// control inside it.
+
+	it('keeps the row but offers no controls without a selection', () => {
 		renderControls([]);
-		expect(screen.queryByTestId('scene-preview-selection')).toBeNull();
+
+		const row = screen.getByTestId('scene-preview-selection');
+
+		expect(row).toHaveAttribute('aria-hidden', 'true');
+		expect(row).toBeEmptyDOMElement();
 	});
 
-	it('renders nothing when there is no editor to write to', () => {
+	it('keeps the row but offers no controls when there is no editor to write to', () => {
 		renderControls(['mira'], {editable: false});
-		expect(screen.queryByTestId('scene-preview-selection')).toBeNull();
+
+		const row = screen.getByTestId('scene-preview-selection');
+
+		expect(row).toHaveAttribute('aria-hidden', 'true');
+		expect(row).toBeEmptyDOMElement();
 	});
 
 	it('offers the character manifest frames, plus automatic', async () => {

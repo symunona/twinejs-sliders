@@ -25,7 +25,12 @@ import type {
 } from '@sliders/scene-types';
 import {sortByZ} from '@sliders/render-dom';
 import type {DomRenderer, Rect, StageBox} from '@sliders/render-dom';
-import {isAssetDrag, readAssetDragData} from './asset-drag';
+import {
+	imageFilesFrom,
+	isAssetDrag,
+	isFileDrag,
+	readAssetDragData
+} from './asset-drag';
 import type {AssetDragPayload} from './asset-drag';
 import {cameraWrite, panCamera, wheelZoomFactor, zoomCamera} from './scene-gestures';
 import {
@@ -113,6 +118,12 @@ export interface StageEditorOverlayProps {
 	onCameraPatch?: (camera: Camera | undefined) => void;
 	/** A tile from the asset panel landed on the stage, at this scene position. */
 	onDropAsset?: (payload: AssetDragPayload, at: Vec2) => void;
+	/**
+	 * Image FILES landed on the stage — dragged in from the desktop rather than from the
+	 * asset panel. They have to be uploaded before anything can be written, which is why
+	 * this is a separate door from `onDropAsset` rather than a payload variant.
+	 */
+	onDropFiles?: (files: File[], at: Vec2) => void;
 }
 
 /**
@@ -200,6 +211,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onCancel,
 		onCommit,
 		onDropAsset,
+		onDropFiles,
 		onPatch,
 		onSelect,
 		onToggleFullScreen,
@@ -607,14 +619,22 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			return;
 		}
 
-		// The stage takes the keyboard, so that the arrows nudge instead of moving the
-		// caret and so the `scene-preview` hotkey scope resolves from focus.
+		// The browser's own press-and-move gestures — text selection, and the native drag
+		// that starts when a press lands INSIDE an existing selection — must not run on the
+		// stage. A native drag makes the browser take the pointer away and fire
+		// `pointercancel`, so the gesture in flight is thrown away and the sprite snaps back
+		// to where it started. That is what made a drag right after a resize look broken: the
+		// resize left a text selection behind, and the next press landed in it.
+		event.preventDefault();
+
+		// preventDefault also cancels the focus that a press would have moved, so the stage
+		// takes the keyboard by hand — that is how the arrows nudge instead of moving the
+		// caret, and how the `scene-preview` hotkey scope resolves from focus.
 		frameRef.current?.focus();
 
 		// Middle drag pans from anywhere, including from on top of a sprite — the escape
 		// hatch for a stage so full that there is no empty ground left to grab.
 		if (event.button === 1) {
-			event.preventDefault();
 			beginGesture(event, 'pan', []);
 
 			return;
@@ -673,8 +693,20 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		);
 	}
 
+	/** Does this drag carry something the stage knows how to land? */
+	function acceptsDrag(types: readonly string[] | undefined): boolean {
+		if (!editable) {
+			return false;
+		}
+
+		return (
+			(!!onDropAsset && isAssetDrag(types)) ||
+			(!!onDropFiles && isFileDrag(types))
+		);
+	}
+
 	function handleDragOver(event: React.DragEvent) {
-		if (!onDropAsset || !editable || !isAssetDrag(event.dataTransfer?.types)) {
+		if (!acceptsDrag(event.dataTransfer?.types)) {
 			return;
 		}
 
@@ -693,11 +725,19 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}
 
 	function handleDrop(event: React.DragEvent) {
-		const payload = readAssetDragData(event.dataTransfer);
-
 		setDropActive(false);
 
-		if (!payload || !onDropAsset || !editable) {
+		if (!editable) {
+			return;
+		}
+
+		const payload = readAssetDragData(event.dataTransfer);
+		// Images dragged in from the desktop, a file manager, or another tab. Only read when
+		// the drag is not one of ours: a panel tile also sets `text/plain`, and a browser
+		// that decided to synthesize a file out of that would place the wrong thing.
+		const files = payload ? [] : imageFilesFrom(event.dataTransfer);
+
+		if (!payload && files.length === 0) {
 			return;
 		}
 
@@ -708,13 +748,15 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			x: event.clientX - frame.left,
 			y: event.clientY - frame.top
 		};
+		const at = box
+			? snapDropPoint(box, camera, stage, mountToScene(box, camera, point))
+			: {x: 0, y: 0};
 
-		onDropAsset(
-			payload,
-			box
-				? snapDropPoint(box, camera, stage, mountToScene(box, camera, point))
-				: {x: 0, y: 0}
-		);
+		if (payload) {
+			onDropAsset?.(payload, at);
+		} else {
+			onDropFiles?.(files, at);
+		}
 	}
 
 	function handleDoubleClick(event: React.MouseEvent) {
@@ -813,6 +855,9 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							key={handle}
 							onPointerDown={event => {
 								event.stopPropagation();
+								// Same bargain as the frame's own handler: no browser
+								// selection, so the next press cannot land inside one.
+								event.preventDefault();
 								frameRef.current?.focus();
 								beginGesture(event, 'scale', [single], handle as HandleId);
 							}}
