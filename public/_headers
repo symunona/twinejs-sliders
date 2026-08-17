@@ -1,0 +1,60 @@
+# Cache rules for Cloudflare Pages. Vite copies this file to the site root,
+# where Pages picks it up.
+#
+# THE PROBLEM
+#
+# Pages serves every asset with `public, max-age=14400, must-revalidate`.
+# `must-revalidate` only applies once those 4 hours are up, so for 4 hours after
+# a deploy a browser does not even ASK whether a file changed. Two files here
+# have fixed names and are rewritten in place, so they went stale silently:
+#
+#   story-formats/*/format.js  -- a played story kept running the old runtime
+#   sw.js                      -- worse: a stale service worker means a stale
+#                                 precached copy of everything else, which is
+#                                 why reloading did not help either
+#
+# WHAT PAGES ACTUALLY HONOURS (measured against this project, 2026-08-17)
+#
+#   public, max-age=31536000, immutable  -> passes through verbatim
+#   no-store                             -> passes through verbatim
+#   no-cache                             -> REWRITTEN to max-age=14400
+#   max-age=0, must-revalidate           -> REWRITTEN to max-age=14400
+#   max-age=60                           -> REWRITTEN to max-age=14400
+#
+# So Pages clamps any TTL below 4 hours back up to 4 hours, and `no-store` is
+# the only way to say "always ask". That is what the fixed-name files below get.
+# `no-store` bans the HTTP cache, not the Cache API: the service worker still
+# precaches format.js, so pressing Play still serves it from disk. The network
+# trip only happens while the worker is updating its precache.
+#
+# Custom headers other than Cache-Control do pass through, if you ever need one.
+
+# Content-hashed by vite -- the name changes whenever the bytes do, so these can
+# be cached forever. This is the half Pages' 4-hour default was too SHORT for.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/workbox-*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+# The service worker decides what every other asset is allowed to be, so it is
+# the one file that must never be stale itself. With this, a deploy reaches an
+# open tab on its next navigation instead of up to 4 hours later.
+/sw.js
+  Cache-Control: no-store
+
+/registerSW.js
+  Cache-Control: no-store
+
+/manifest.webmanifest
+  Cache-Control: no-store
+
+# Fetched by URL when a story is published, played or previewed, and rewritten
+# in place on every format rebuild -- `sliders-0.1.0/format.js` keeps its name
+# forever. This is the one that made a Play show the previous player.
+/story-formats/*
+  Cache-Control: no-store
+
+# index.html is deliberately NOT no-store: the service worker serves it from
+# precache anyway, and no-store on a navigation response costs back/forward
+# cache. Everything it references is hash-named.

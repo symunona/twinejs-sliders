@@ -65,6 +65,7 @@ Consumed by **both** repos. Publish as real packages day one or they drift.
 | D13 | Publish public GitHub fork, MIT. Do not PR upstream. |
 | D14 | Assets work in Electron **and** web. Convert all uploads to high-quality WebP. |
 | D15 | Visual scene editor on top of the preview. |
+| D16 | The player's default format: a scene passage is full screen, and only its YAML is drawn. `sliders.fullScreen` / `sliders.sceneOnly` opt out. |
 
 Later, not now: package sync to a standalone viewer, web-app URLs, Capacitor native wrap.
 

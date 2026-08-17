@@ -19,14 +19,36 @@ beats:
 
 [note]
 Director: she should feel cornered. Not rendered.
-
-[continued]
-Normal Chapbook Markdown still works down here.
 ```
 
 - Chapbook's vars section (`--`) stays as-is. Flat JS `key: value`. Don't put scene data there.
 - `[scene]` is our modifier. `processRaw` hands us the block verbatim, before Markdown.
 - `[note]` is Chapbook's existing comment modifier = the director's-notes slot, free.
+
+## How the player draws it (D16)
+
+**A passage with a `[scene]` in it IS the scene.** Both halves are the default:
+
+| | |
+|---|---|
+| Full screen | The stage fills the viewport, the way the editor's preview does in full screen (D12). `#page`'s column, margin, header and footer step aside; the scene's `links:` overlay the bottom. |
+| Scene only | Everything outside the YAML is dropped before render: prose, `[note]`, `[continued]`, any other modifier. The vars section still runs — it sets state, it doesn't draw. |
+
+Consequence worth stating out loud: **every way out of a scene passage must be in
+its `links:`.** A `[[link]]` written under the block is not drawn.
+
+Both are variables, so a passage or a story can opt out:
+
+```
+sliders.sceneOnly: false     # draw the text around the scene too
+sliders.fullScreen: false    # stage stays a 16:9 box inside the page
+```
+
+A passage with no `[scene]` in it is untouched — still an ordinary Chapbook passage.
+
+Where it lives in the fork: `src/runtime/sliders/cinema.ts` (the block filter and the
+`sliders-cinema` body class) and `cinema.css`. The filter runs in `renderParsed`, after
+vars are dispatched, so a passage can turn it off in its own vars section.
 
 ## The one design rule
 

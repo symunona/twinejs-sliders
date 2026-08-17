@@ -7,6 +7,11 @@
 # Requires CLOUDFLARE_API_TOKEN. Put it in ~/.config/cloudflare.env
 # (see cloudflare.env.example next to it) so it does not have to live in your
 # interactive shell environment.
+#
+# Cache headers live in public/_headers, which vite copies to the site root.
+# Read it before wondering why a deploy has not reached a browser: Pages puts a
+# 4-hour floor under every Cache-Control it is given, and that file says which
+# ones actually get through.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
