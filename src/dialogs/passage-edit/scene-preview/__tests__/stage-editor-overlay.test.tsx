@@ -172,6 +172,61 @@ describe('<StageEditorOverlay>', () => {
 		expect(onToggleFullScreen).toHaveBeenCalled();
 	});
 
+	it('steps forward on a tap on empty stage in the player', () => {
+		const onAdvance = jest.fn();
+		const {frame} = renderOverlay({onAdvance, player: true});
+
+		fireEvent(frame, pointer('pointerdown', 500, 20));
+		expect(onAdvance).not.toHaveBeenCalled();
+
+		fireEvent(window, pointer('pointerup', 500, 20));
+		expect(onAdvance).toHaveBeenCalledTimes(1);
+	});
+
+	it('pans instead of stepping forward when the tap became a drag', () => {
+		const onAdvance = jest.fn();
+		const {frame, onCameraPatch} = renderOverlay({onAdvance, player: true});
+
+		fireEvent(frame, pointer('pointerdown', 500, 20));
+		fireEvent(window, pointer('pointermove', 420, 20));
+		fireEvent(window, pointer('pointerup', 420, 20));
+
+		expect(onCameraPatch).toHaveBeenCalled();
+		expect(onAdvance).not.toHaveBeenCalled();
+	});
+
+	it('spends the first tap on the selection, not on the next beat', () => {
+		const onAdvance = jest.fn();
+		const {frame, onSelect} = renderOverlay({
+			onAdvance,
+			player: true,
+			selection: ['mira']
+		});
+
+		fireEvent(frame, pointer('pointerdown', 500, 20));
+		fireEvent(window, pointer('pointerup', 500, 20));
+
+		expect(onSelect).toHaveBeenCalledWith([]);
+		expect(onAdvance).not.toHaveBeenCalled();
+	});
+
+	it('does not step forward on a tap on a sprite', () => {
+		const onAdvance = jest.fn();
+		const {frame} = renderOverlay({onAdvance, player: true});
+
+		fireEvent(frame, pointer('pointerdown', 120, 120));
+		fireEvent(window, pointer('pointerup', 120, 120));
+
+		expect(onAdvance).not.toHaveBeenCalled();
+	});
+
+	it('leaves full screen alone on a double click in the player', () => {
+		const {frame, onToggleFullScreen} = renderOverlay({player: true});
+
+		fireEvent.doubleClick(frame);
+		expect(onToggleFullScreen).not.toHaveBeenCalled();
+	});
+
 	it('patches while dragging and commits one write on release', () => {
 		const {frame, onCommit, onPatch} = renderOverlay({selection: ['mira']});
 

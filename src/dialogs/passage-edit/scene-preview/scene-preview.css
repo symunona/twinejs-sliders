@@ -104,6 +104,69 @@
 	max-height: none;
 }
 
+/* The player's step controls, absolute against `.stage-editor` — the frame the stage is
+   drawn in, which is already `position: relative`. Pinned to the corner the scene needs
+   least: characters stand centred on the floor, and a bubble's tail never reaches the
+   bottom right. */
+.scene-preview-nav {
+	align-items: center;
+	background: rgba(16, 16, 20, 0.55);
+	border-radius: 999px;
+	bottom: 16px;
+	color: #fff;
+	display: flex;
+	gap: 2px;
+	opacity: 0.28;
+	padding: 2px;
+	position: absolute;
+	right: 16px;
+	transition: opacity 150ms ease;
+	z-index: 2;
+}
+
+/* Faint until wanted. `focus-within` is the keyboard's version of reaching for it — the
+   controls have to be visible while they are being tabbed through. */
+.scene-preview-nav:hover,
+.scene-preview-nav:focus-within {
+	opacity: 0.92;
+}
+
+.scene-preview-nav button {
+	align-items: center;
+	background: none;
+	border: none;
+	border-radius: 999px;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	height: 28px;
+	justify-content: center;
+	padding: 0;
+	width: 28px;
+}
+
+.scene-preview-nav button:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.scene-preview-nav button:disabled {
+	cursor: default;
+	opacity: 0.35;
+}
+
+.scene-preview-nav button svg {
+	height: 18px;
+	width: 18px;
+}
+
+.scene-preview-nav-count {
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	min-width: 3.5em;
+	opacity: 0.85;
+	text-align: center;
+}
+
 .scene-preview-errors {
 	flex-shrink: 0;
 	font-family: var(--font-monospaced, monospace);

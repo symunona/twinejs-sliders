@@ -18,6 +18,7 @@ import {IconButton} from '../../../components/control/icon-button';
 import {useCommand} from '../../../hotkeys';
 import {extractSceneBlock, IndexedPassage} from '@sliders/scene-index';
 import {AssetResolver, Camera, EntityId, Layer, Vec2} from '@sliders/scene-types';
+import {parseLinkText} from '@sliders/render-dom';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {AssetDragPayload} from './asset-drag';
 import {
@@ -200,6 +201,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => Object.keys(stage.entities ?? {}),
 		[stage]
 	);
+	// State N is produced by beat N-1; S0 has no beat.
+	const shownBeat = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
+
+	/**
+	 * Does the beat on screen ask the reader to choose?
+	 *
+	 * A tap steps forward only when it does not. Links are the one thing on the stage a
+	 * click already means something to, and a stage that advanced under them would take
+	 * the choice away on the way to pressing one.
+	 */
+	const beatHasLink = React.useMemo(() => {
+		if (shownBeat?.kind !== 'say' && shownBeat?.kind !== 'box') {
+			return false;
+		}
+
+		return parseLinkText(shownBeat.text).some(token => token.kind === 'link');
+	}, [shownBeat]);
 	const kindOf = React.useCallback(
 		(id: EntityId) => stage.entities?.[id]?.kind ?? 'cast',
 		[stage]
@@ -848,6 +866,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const errors = parse.errors.filter(e => e.severity === 'error');
 	const warnings = parse.errors.filter(e => e.severity === 'warning');
 
+	/**
+	 * Full screen is the player: there is nothing else on the screen to click, so a tap on
+	 * the stage is the reader asking for the next beat. Small screen keeps the plain
+	 * editor behaviour — a click there is aimed at the passage the preview sits under.
+	 *
+	 * Same reach as the next button, link guard aside: past the last beat a scene with one
+	 * way out steps into it, and one with several stops and lets the reader pick.
+	 */
+	const canAdvance = fullScreen && !beatHasLink && (beat < lastBeat || !!nextScene);
+
 	const body = (
 		<div
 			className={classNames('scene-preview', {
@@ -960,6 +988,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					/>
 					<StageEditorOverlay
 						editable={editable}
+						onAdvance={canAdvance ? goToNextBeat : undefined}
 						onCameraPatch={setCamera}
 						onCancel={handleCancel}
 						onCommit={handleCommit}
@@ -969,6 +998,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						parentOffsets={offsets}
 						onSelect={select}
 						onToggleFullScreen={() => setFullScreen(f => !f)}
+						player={fullScreen}
 						renderer={renderer}
 						seal={seal}
 						selection={selection}
@@ -977,12 +1007,45 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						<SceneStage
 							animate={playing}
 							assets={assets}
-							// State N is produced by beat N-1; S0 has no beat.
-							beat={beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined}
+							beat={shownBeat}
 							onLink={handleLink}
 							onRenderer={handleRenderer}
 							stage={stage}
 						/>
+						{/* The player's own controls, in the corner the stage needs least.
+						    Faint until asked for: full screen exists so the scene can fill
+						    the screen, and a bar of chrome across it would undo that. Inside
+						    the stage rather than under it, so the error list — which is the
+						    author's, not the reader's — never pushes it off the corner. */}
+						{fullScreen && lastBeat > 0 && (
+							<div className="scene-preview-nav" data-testid="scene-preview-nav">
+								<button
+									aria-label={t('dialogs.passageEdit.scenePreview.previousBeat')}
+									disabled={beat <= 0}
+									onClick={goToPreviousBeat}
+									type="button"
+								>
+									<IconChevronLeft />
+								</button>
+								<span className="scene-preview-nav-count">
+									{beat} / {lastBeat}
+								</span>
+								<button
+									aria-label={
+										beat >= lastBeat && nextScene
+											? t('dialogs.passageEdit.scenePreview.nextScene', {
+													name: nextScene
+											  })
+											: t('dialogs.passageEdit.scenePreview.nextBeat')
+									}
+									disabled={beat >= lastBeat && !nextScene}
+									onClick={goToNextBeat}
+									type="button"
+								>
+									<IconChevronRight />
+								</button>
+							</div>
+						)}
 					</StageEditorOverlay>
 					{parse.errors.length > 0 && (
 						<ul className="scene-preview-errors" data-testid="scene-preview-errors">

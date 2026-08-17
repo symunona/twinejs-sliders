@@ -75,6 +75,19 @@ animation. Transitions play only when: stepping beats, pressing play, or hitting
 Same component, same state, `position: fixed`. Esc exits. Keep the beat scrubber.
 Also the surface the [visual editor](07-twinejs-visual-editor.md) builds on.
 
+Full screen is also **the player** — nothing else is on the screen, so it is read rather
+than edited:
+
+| Rule | Why |
+|---|---|
+| Tap empty stage → next beat | reading is a page turn, and there is no scrubber to aim at |
+| A tap with a selection clears it instead | same escalation as Esc: let go of the stage, then read on |
+| A tap on a sprite still selects | the visual editor does not stop existing at full size |
+| No advance while the beat shows links | the click belongs to the choice (D3) |
+| No advance on the last beat | passage-to-passage flow is Twine's Play, not ours |
+| Double click does **not** leave full screen | two page turns are two page turns; Esc and `⛶` are the way out |
+| Corner navigator, bottom right, faint until hovered | steps both ways without laying chrome across the scene |
+
 ## Out of scope
 
 Playing the actual story (that's Twine's Play/Test). Audio. Save/load. Multi-passage flow.

@@ -96,6 +96,13 @@ interface Gesture {
 	origin: Vec2;
 	handle?: HandleId;
 	moved: boolean;
+	/**
+	 * This press steps the scene forward if it turns out to be a tap.
+	 *
+	 * Decided at pointerdown, when what the press landed on is still known, and spent on
+	 * pointerup — a press that grew into a pan is a pan and nothing else.
+	 */
+	advance?: boolean;
 }
 
 export interface StageEditorOverlayProps {
@@ -124,6 +131,17 @@ export interface StageEditorOverlayProps {
 	onCommit: (writes: SceneWrite[], origin?: string) => void;
 	onCancel: () => void;
 	onToggleFullScreen: () => void;
+	/**
+	 * True while the stage IS the full screen player rather than the strip under the passage
+	 * text. Clicks there are read as a reader's, not an author's.
+	 */
+	player?: boolean;
+	/**
+	 * A tap on empty stage steps the scene forward. Absent when it must not — on the last
+	 * beat, or while the beat on screen offers links, which are the reader's own click to
+	 * spend.
+	 */
+	onAdvance?: () => void;
 	/** The camera a live pan or zoom is painting with. `undefined` drops it. */
 	onCameraPatch?: (camera: Camera | undefined) => void;
 	/** A tile from the asset panel landed on the stage, at this scene position. */
@@ -217,6 +235,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const {
 		children,
 		editable,
+		onAdvance,
 		onCameraPatch,
 		onCancel,
 		onCommit,
@@ -226,6 +245,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onSelect,
 		parentOffsets,
 		onToggleFullScreen,
+		player,
 		renderer,
 		seal,
 		selection,
@@ -256,6 +276,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const latest = React.useRef({
 		box,
 		editable,
+		onAdvance,
 		onCameraPatch,
 		onCommit,
 		onPatch,
@@ -266,6 +287,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	latest.current = {
 		box,
 		editable,
+		onAdvance,
 		onCameraPatch,
 		onCommit,
 		onPatch,
@@ -364,6 +386,12 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			) {
 				if (commit) {
 					endGesture();
+
+					// The press never became a drag, so it was a tap on empty stage: in the
+					// full screen player that is how the reader turns the page.
+					if (gesture.advance) {
+						current.onAdvance?.();
+					}
 				}
 
 				return;
@@ -640,10 +668,12 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 	function handlePointerDown(event: React.PointerEvent) {
 		// Links inside bubbles are real anchors (D3) and the marker layer does not cover
-		// them, so a click on one is a click on the link, not on the stage.
+		// them, so a click on one is a click on the link, not on the stage. The player's
+		// corner controls sit inside the stage for the same reason and are read the same
+		// way: a press on them is theirs, and must not also pan or turn the page.
 		if (
 			(event.button !== 0 && event.button !== 1) ||
-			(event.target as HTMLElement).closest?.('a')
+			(event.target as HTMLElement).closest?.('a, .scene-preview-nav')
 		) {
 			return;
 		}
@@ -681,6 +711,13 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			// grab hand, and a press that never passes the drag threshold is still just the
 			// click that cleared the selection.
 			beginGesture(event, 'pan', []);
+
+			// Clearing a selection is what the tap was FOR when there was one, so stepping
+			// forward waits for the next tap. Same escalation Escape has: let go of the
+			// stage first, then read on.
+			if (gestureRef.current) {
+				gestureRef.current.advance = selection.length === 0;
+			}
 
 			return;
 		}
@@ -789,7 +826,14 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}
 
 	function handleDoubleClick(event: React.MouseEvent) {
-		if ((event.target as HTMLElement).closest?.('a')) {
+		if ((event.target as HTMLElement).closest?.('a, .scene-preview-nav')) {
+			return;
+		}
+
+		// In the player a click is a page turn, so two of them are two page turns — leaving
+		// full screen under the reader mid-sentence is not what they asked for. Escape and
+		// the toolbar button are the way out; double click is only the way IN.
+		if (player) {
 			return;
 		}
 
