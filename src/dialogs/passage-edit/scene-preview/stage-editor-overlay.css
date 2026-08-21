@@ -132,3 +132,70 @@
 .stage-editor-handle.sw {
 	cursor: nesw-resize;
 }
+
+/* The measuring grid. Sits at the bottom of the marker layer — selection boxes, guides and
+   handles all draw over it — and inherits `pointer-events: none` from it. */
+.stage-editor-grid {
+	overflow: hidden;
+	position: absolute;
+}
+
+.stage-editor-grid-line {
+	background: rgba(255, 255, 255, 0.16);
+	position: absolute;
+}
+
+.stage-editor-grid-line.x {
+	bottom: 0;
+	top: 0;
+	width: 1px;
+}
+
+.stage-editor-grid-line.y {
+	height: 1px;
+	left: 0;
+	right: 0;
+}
+
+/* The lines a drag actually snaps to are the ones worth reading at a glance. */
+.stage-editor-grid-line.third {
+	background: rgba(255, 255, 255, 0.34);
+}
+
+.stage-editor-grid-line.centre {
+	background: rgba(74, 212, 255, 0.4);
+}
+
+/* The floor. Warm, so it is never confused with a centre axis. */
+.stage-editor-grid-line.baseline {
+	background: rgba(255, 216, 74, 0.45);
+}
+
+/* Scene (0, 0), drawn as an X so it cannot be mistaken for the two centre lines crossing
+   behind it. */
+.stage-editor-grid-centre {
+	height: 15px;
+	margin-left: -7px;
+	margin-top: -7px;
+	position: absolute;
+	width: 15px;
+}
+
+.stage-editor-grid-centre::before,
+.stage-editor-grid-centre::after {
+	background: rgba(74, 212, 255, 0.9);
+	content: '';
+	height: 15px;
+	left: 7px;
+	position: absolute;
+	top: 0;
+	width: 1px;
+}
+
+.stage-editor-grid-centre::before {
+	transform: rotate(45deg);
+}
+
+.stage-editor-grid-centre::after {
+	transform: rotate(-45deg);
+}

@@ -35,6 +35,8 @@ import type {AssetDragPayload} from './asset-drag';
 import {cameraWrite, panCamera, wheelZoomFactor, zoomCamera} from './scene-gestures';
 import {
 	dragTo,
+	gridCentre,
+	gridLines,
 	handlePoints,
 	hitTest,
 	mountToScene,
@@ -152,6 +154,13 @@ export interface StageEditorOverlayProps {
 	 * this is a separate door from `onDropAsset` rather than a payload variant.
 	 */
 	onDropFiles?: (files: File[], at: Vec2) => void;
+	/**
+	 * Draw the measuring grid — the centre point and the lines a drag snaps to.
+	 *
+	 * A view aid and nothing else: it is inside the marker layer, so it never takes a
+	 * pointer and turning it on cannot change what a click does.
+	 */
+	grid?: boolean;
 }
 
 /**
@@ -235,6 +244,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const {
 		children,
 		editable,
+		grid,
 		onAdvance,
 		onCameraPatch,
 		onCancel,
@@ -840,6 +850,15 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onToggleFullScreen();
 	}
 
+	// Recomputed only when the grid is on: the lines move with the camera and with every
+	// relayout, and computing them while they are hidden would be per-keystroke work for
+	// nothing.
+	const gridMarks = React.useMemo(
+		() => (grid && box ? gridLines(box, camera) : []),
+		[box, camera, grid]
+	);
+	const centre = grid && box ? gridCentre(box, camera) : undefined;
+
 	const single = selection.length === 1 ? selection[0] : undefined;
 	const singleRect = single === undefined ? undefined : rects.get(single);
 
@@ -863,6 +882,41 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		>
 			{children}
 			<div className="stage-editor-markers">
+				{/* Clipped to the stage box: zoomed in, the lines run past the letterbox,
+				    and a grid drawn over the black bars claims stage where there is none. */}
+				{grid && box && (
+					<div
+						className="stage-editor-grid"
+						data-testid="stage-editor-grid"
+						style={{
+							height: box.height,
+							left: box.left,
+							top: box.top,
+							width: box.width
+						}}
+					>
+						{gridMarks.map(line => (
+							<div
+								className={`stage-editor-grid-line ${line.axis} ${line.kind}`}
+								data-kind={line.kind}
+								data-scene={line.scene}
+								key={`${line.axis}:${line.scene}`}
+								style={
+									line.axis === 'x'
+										? {left: line.at - box.left}
+										: {top: line.at - box.top}
+								}
+							/>
+						))}
+						{centre && (
+							<div
+								className="stage-editor-grid-centre"
+								data-testid="stage-editor-grid-centre"
+								style={{left: centre.x - box.left, top: centre.y - box.top}}
+							/>
+						)}
+					</div>
+				)}
 				{guides.x !== undefined && (
 					<div
 						className="stage-editor-guide vertical"

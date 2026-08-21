@@ -488,3 +488,91 @@ export function scaleFrom(
 
 	return Math.min(max, Math.max(min, base * factor));
 }
+
+// ---------------------------------------------------------------------------
+// Grid
+// ---------------------------------------------------------------------------
+
+/**
+ * Scene-unit spacing of the optional grid, half a third.
+ *
+ * Chosen so the rule-of-thirds lines — the ones a drag actually snaps to — ARE grid lines
+ * rather than falling between two of them. A 0.25 grid would look tidier and lie about
+ * where sprites land.
+ */
+export const GRID_STEP = THIRD / 2;
+
+/** `minor` is spacing; the rest are lines the editor already treats as meaningful. */
+export type GridLineKind = 'minor' | 'third' | 'centre' | 'baseline';
+
+export interface GridLine {
+	/** `x` is a vertical line at this MOUNT x; `y` is a horizontal one at this MOUNT y. */
+	axis: 'x' | 'y';
+	kind: GridLineKind;
+	/** MOUNT px. */
+	at: number;
+	/** Scene units, so a test can say which line it is looking at. */
+	scene: number;
+}
+
+function gridKind(axis: 'x' | 'y', value: number): GridLineKind {
+	if (Math.abs(value) < EPSILON) {
+		return 'centre';
+	}
+
+	if (axis === 'x' && Math.abs(Math.abs(value) - THIRD) < EPSILON) {
+		return 'third';
+	}
+
+	return 'minor';
+}
+
+/**
+ * The grid over the stage, in MOUNT px, camera included.
+ *
+ * Lines are laid out in SCENE units and then pushed through the same forward chain the
+ * sprites use, so panning and zooming carry the grid with the scene instead of pinning it
+ * to the screen — a grid that stayed put while the camera moved would be measuring the
+ * wrong thing. Lines can therefore fall outside the stage box; the caller clips.
+ */
+export function gridLines(box: StageBox, camera: Camera): GridLine[] {
+	if (isDegenerate(box)) {
+		return [];
+	}
+
+	const lines: GridLine[] = [];
+	const steps = Math.round(1 / GRID_STEP);
+
+	for (let i = -steps; i <= steps; i++) {
+		const scene = i * GRID_STEP;
+
+		lines.push({
+			axis: 'x',
+			kind: gridKind('x', scene),
+			at: sceneToMount(box, camera, {x: scene, y: 0}).x,
+			scene
+		});
+		lines.push({
+			axis: 'y',
+			kind: gridKind('y', scene),
+			at: sceneToMount(box, camera, {x: 0, y: scene}).y,
+			scene
+		});
+	}
+
+	// The floor characters stand on. Not on the step grid, and the one horizontal an
+	// author staging a scene actually aims at.
+	lines.push({
+		axis: 'y',
+		kind: 'baseline',
+		at: sceneToMount(box, camera, {x: 0, y: LAYER_BASELINE}).y,
+		scene: LAYER_BASELINE
+	});
+
+	return lines;
+}
+
+/** Scene (0, 0) in MOUNT px — where the centre marker goes. */
+export function gridCentre(box: StageBox, camera: Camera): Vec2 {
+	return sceneToMount(box, camera, ORIGIN);
+}

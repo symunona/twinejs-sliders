@@ -140,6 +140,32 @@ describe('<StageEditorOverlay>', () => {
 		};
 	}
 
+	describe('the grid', () => {
+		it('is off unless asked for', () => {
+			renderOverlay();
+			expect(screen.queryByTestId('stage-editor-grid')).not.toBeInTheDocument();
+		});
+
+		it('draws its lines and the centre X inside the stage box', () => {
+			renderOverlay({grid: true});
+
+			const grid = screen.getByTestId('stage-editor-grid');
+
+			// 13 verticals and 13 horizontals on a 1/6 step, plus the floor.
+			expect(grid.querySelectorAll('.stage-editor-grid-line')).toHaveLength(27);
+			expect(grid.querySelectorAll('[data-kind="third"]')).toHaveLength(2);
+			expect(grid.querySelectorAll('[data-kind="baseline"]')).toHaveLength(1);
+			expect(screen.getByTestId('stage-editor-grid-centre')).toBeInTheDocument();
+		});
+
+		it('never takes the pointer away from the hit test', () => {
+			const {frame, onSelect} = renderOverlay({grid: true});
+
+			fireEvent(frame, pointer('pointerdown', 120, 120));
+			expect(onSelect).toHaveBeenCalledWith(['candle']);
+		});
+	});
+
 	it('selects the topmost entity under the pointer', () => {
 		const {frame, onSelect} = renderOverlay();
 

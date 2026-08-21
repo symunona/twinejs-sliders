@@ -4,6 +4,8 @@ import type {Camera, Vec2} from '@sliders/scene-types';
 import {
 	DEFAULT_SNAP_TOLERANCE_PX,
 	dragTo,
+	gridCentre,
+	gridLines,
 	handlePoints,
 	hitTest,
 	mountToScene,
@@ -13,7 +15,8 @@ import {
 	sceneToMount,
 	sceneTolerance,
 	snapTargetsX,
-	snapTargetsY
+	snapTargetsY,
+	THIRD
 } from '../stage-geometry';
 
 const BOX = computeStageBox(1600, 900);
@@ -630,5 +633,49 @@ describe('scaleFrom', () => {
 
 	it('clamps a start scale that was already out of bounds', () => {
 		expect(scaleFrom('nw', 40, rect, feet, {x: 200, y: 500}, nw)).toBe(10);
+	});
+});
+
+describe('gridLines', () => {
+	const box = {left: 0, top: 0, width: 640, height: 360};
+
+	it('puts the centre line at the middle of the box', () => {
+		const centre = gridLines(box, CAMERAS.identity).find(
+			line => line.axis === 'x' && line.kind === 'centre'
+		);
+
+		expect(centre?.at).toBeCloseTo(320);
+	});
+
+	it('lands its thirds on the same values a drag snaps to', () => {
+		const thirds = gridLines(box, CAMERAS.identity)
+			.filter(line => line.axis === 'x' && line.kind === 'third')
+			.map(line => line.scene)
+			.sort((a, b) => a - b);
+
+		expect(thirds).toHaveLength(2);
+		expect(thirds[0]).toBeCloseTo(-THIRD);
+		expect(thirds[1]).toBeCloseTo(THIRD);
+	});
+
+	it('draws the floor at LAYER_BASELINE', () => {
+		const floor = gridLines(box, CAMERAS.identity).find(line => line.kind === 'baseline');
+
+		expect(floor?.scene).toBe(LAYER_BASELINE);
+		expect(floor?.at).toBeCloseTo(sceneToMount(box, CAMERAS.identity, {x: 0, y: LAYER_BASELINE}).y);
+	});
+
+	it('moves with the camera', () => {
+		const panned = {...CAMERAS.identity, at: {x: 0.5, y: 0}};
+		const centre = gridLines(box, panned).find(
+			line => line.axis === 'x' && line.kind === 'centre'
+		);
+
+		expect(centre?.at).toBeCloseTo(gridCentre(box, panned).x);
+		expect(centre?.at).not.toBeCloseTo(320);
+	});
+
+	it('has nothing to draw in a degenerate box', () => {
+		expect(gridLines({left: 0, top: 0, width: 0, height: 0}, CAMERAS.identity)).toEqual([]);
 	});
 });

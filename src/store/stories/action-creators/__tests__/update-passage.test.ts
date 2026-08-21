@@ -162,6 +162,55 @@ describe('updatePassage action creator', () => {
 			]);
 		});
 
+		it('follows a rename into scene YAML, which holds no wiki links', () => {
+			story = fakeStory(3);
+			story.passages[0].name = 'Tavern';
+			story.passages[1].text = [
+				'[scene]',
+				'from: Tavern',
+				'links:',
+				'  go: {to: Tavern}',
+				'',
+				'say mira: Bye [[Tavern]]'
+			].join('\n');
+			story.passages[2].text = 'unlinked';
+			updatePassage(
+				story,
+				story.passages[0],
+				{name: 'Inn'},
+				{dontUpdateOthers: true}
+			)(dispatch, getState);
+
+			// One write for the passage holding both kinds of reference, not two.
+			expect(dispatchMock.mock.calls).toEqual([
+				[
+					{
+						passageId: story.passages[0].id,
+						props: {name: 'Inn'},
+						storyId: story.id,
+						type: 'updatePassage'
+					}
+				],
+				[
+					{
+						passageId: story.passages[1].id,
+						props: {
+							text: [
+								'[scene]',
+								'from: Inn',
+								'links:',
+								'  go: {to: Inn}',
+								'',
+								'say mira: Bye [[Inn]]'
+							].join('\n')
+						},
+						storyId: story.id,
+						type: 'updatePassage'
+					}
+				]
+			]);
+		});
+
 		it("throws an error if the passage doesn't belong to the story", () =>
 			expect(() =>
 				updatePassage(

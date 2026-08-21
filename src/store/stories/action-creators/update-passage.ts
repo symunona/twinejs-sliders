@@ -2,6 +2,7 @@ import escapeRegExp from 'lodash/escapeRegExp';
 import {Thunk} from 'react-hook-thunk-reducer';
 import {storyWithId} from '../getters';
 import {Passage, StoriesAction, StoriesState, Story} from '../stories.types';
+import {renameSceneTargets} from '../../../util/rename-scene-targets';
 import {createNewlyLinkedPassages} from './create-newly-linked-passages';
 import {deleteOrphanedPassages} from './delete-orphaned-passages';
 
@@ -82,13 +83,13 @@ export function updatePassage(
 			);
 
 			story.passages.forEach(relinkedPassage => {
+				let newText = relinkedPassage.text;
+
 				if (
 					simpleLinkRegexp.test(relinkedPassage.text) ||
 					compoundLinkRegexp.test(relinkedPassage.text) ||
 					reverseLinkRegexp.test(relinkedPassage.text)
 				) {
-					let newText = relinkedPassage.text;
-
 					newText = newText.replace(
 						simpleLinkRegexp,
 						'[[' + newNameEscaped + '$1]]'
@@ -101,7 +102,14 @@ export function updatePassage(
 						reverseLinkRegexp,
 						'[[' + newNameEscaped + '$1$2]]'
 					);
+				}
 
+				// A scene block names passages in YAML too — `links:` targets and `from:` —
+				// and no wiki-link regexp can see those. Runs on the already-relinked text
+				// so a passage holding both kinds is written once, as one undo step.
+				newText = renameSceneTargets(newText, oldName, props.name!);
+
+				if (newText !== relinkedPassage.text) {
 					updatePassage(
 						story,
 						relinkedPassage,

@@ -281,6 +281,7 @@
 				"nextScene": "Next scene: {{name}}",
 				"play": "Play beats",
 				"fullScreen": "Full screen",
+				"grid": "Show the stage grid: centre point, thirds and the floor line",
 				"lock": "Lock the stage so gestures cannot edit the scene",
 				"unlock": "Unlock the stage",
 				"dropFiles": "Drop images here to add them to the scene",
@@ -347,8 +348,8 @@
 			"deletePrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
 			"dropFrames": "Drop image files here to add frames.",
 			"fitToAllFrames": "Apply This Fit To All Frames",
-				"anchorsToAllFrames": "Apply This Frame\u2019s Anchors To All Frames",
-				"anchorUnplaced": "not on this frame",
+			"anchorsToAllFrames": "Apply This Frame’s Anchors To All Frames",
+			"anchorUnplaced": "not on this frame",
 			"frameZoom": "Frame zoom",
 			"frames": "Frames",
 			"height": "Height",
@@ -540,7 +541,7 @@
 			"preview": "Preview",
 			"prompt": "Prompt",
 			"promptPlaceholder": "A rain-slick tavern street at night, warm windows, no people",
-				"promptPlaceholderWithKey": "A rain-slick tavern street at night, warm windows, no people — {{keys}} to generate",
+			"promptPlaceholderWithKey": "A rain-slick tavern street at night, warm windows, no people — {{keys}} to generate",
 			"requestError": "The request failed: {{message}}",
 			"reuse": "Reuse Prompt",
 			"saveAsBackground": "Save as Background",
@@ -557,6 +558,10 @@
 			"tileTitle": "Click to preview, double-click to edit",
 			"title": "Asset Generator",
 			"working": "Asking {{model}} for an image…"
+		},
+		"sceneHelp": {
+			"title": "Scene Help",
+			"open": "Scene help"
 		}
 	},
 	"electron": {

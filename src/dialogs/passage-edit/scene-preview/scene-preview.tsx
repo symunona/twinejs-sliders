@@ -2,6 +2,7 @@ import {
 	IconChevronDown,
 	IconChevronLeft,
 	IconChevronRight,
+	IconGridDots,
 	IconLock,
 	IconLockOpen,
 	IconMaximize,
@@ -101,6 +102,12 @@ const SEEN_KEY = 'sliders.preview.seen';
  */
 const LOCKED_KEY = 'sliders.preview.locked';
 
+/**
+ * The grid survives the dialog too, for the same reason the lock does: an author who turned
+ * it on is staging, and staging outlasts one passage.
+ */
+const GRID_KEY = 'sliders.preview.grid';
+
 /** How long each beat holds the screen while playing. */
 const AUTO_ADVANCE_MS = 3000;
 
@@ -157,6 +164,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [fullScreen, setFullScreen] = React.useState(false);
 	const [locked, setLocked] = React.useState(
 		() => window.localStorage.getItem(LOCKED_KEY) === 'true'
+	);
+	const [grid, setGrid] = React.useState(
+		() => window.localStorage.getItem(GRID_KEY) === 'true'
 	);
 	const [beat, setBeat] = React.useState(0);
 	const [playing, setPlaying] = React.useState(false);
@@ -609,6 +619,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const editable = !!editor && !locked;
 
+	function toggleGrid() {
+		setGrid(value => {
+			window.localStorage.setItem(GRID_KEY, String(!value));
+
+			return !value;
+		});
+	}
+
 	function toggleLock() {
 		setLocked(value => {
 			window.localStorage.setItem(LOCKED_KEY, String(!value));
@@ -930,6 +948,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							label={t('dialogs.passageEdit.scenePreview.play')}
 							onClick={togglePlaying}
 						/>
+						{/* Sits beside the lock rather than in the selection row: the grid
+						    is how the author reads the stage, and nothing has to be
+						    selected to want to read it. */}
+						<IconButton
+							icon={<IconGridDots />}
+							iconOnly
+							label={t('dialogs.passageEdit.scenePreview.grid')}
+							onClick={toggleGrid}
+							selectable
+							selected={grid}
+						/>
 						{/* Always here, selection or not: the lock is how the author stops
 						    the stage editing the file, so it cannot be a control that only
 						    appears once something has been grabbed. */}
@@ -970,6 +999,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					/>
 					<StageEditorOverlay
 						editable={editable}
+						grid={grid}
 						onAdvance={canAdvance ? goToNextBeat : undefined}
 						onCameraPatch={setCamera}
 						onCancel={handleCancel}
