@@ -23,3 +23,11 @@
 	margin-left: 0;
 	padding-left: 0;
 }
+
+/* Which bundle is on screen -- present, but not competing with the credits. */
+.about-twine-dialog .build-stamp {
+	font-family: var(--font-monospaced);
+	font-size: 80%;
+	opacity: 0.6;
+	text-align: center;
+}

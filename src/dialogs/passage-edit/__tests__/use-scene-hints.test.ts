@@ -138,6 +138,36 @@ describe('sceneHintContext()', () => {
 		});
 	});
 
+	describe('links:', () => {
+		it('offers passages after a link name in block form', () => {
+			expect(contextAt('[scene]\nlinks:\n  back: |')).toMatchObject({
+				slot: {kind: 'passage'},
+				typed: ''
+			});
+		});
+
+		it('brings its own space when the cursor is on the link name colon', () => {
+			expect(contextAt('[scene]\nlinks:\n  back:|')).toMatchObject({
+				needsSpace: true,
+				slot: {kind: 'passage'}
+			});
+		});
+
+		it('offers passages after a link name in flow form', () => {
+			expect(contextAt('[scene]\nlinks: {stay: Street, back: Tav|}')).toMatchObject({
+				slot: {kind: 'passage'},
+				typed: 'Tav'
+			});
+		});
+
+		it('still offers passages after to:', () => {
+			expect(contextAt('[scene]\nlinks:\n  back:\n    to: Tav|')).toMatchObject({
+				slot: {kind: 'passage'},
+				typed: 'Tav'
+			});
+		});
+	});
+
 	describe('staying quiet', () => {
 		it('says nothing outside a scene block', () => {
 			expect(contextAt('Just some prose |here.')).toBeUndefined();

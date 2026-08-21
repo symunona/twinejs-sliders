@@ -13,6 +13,14 @@ export const AboutTwineDialog: React.FC<DialogComponentProps> = props => {
 	const {t} = useTranslation();
 	const info = getAppInfo();
 
+	// Which bundle is actually on screen. Worth showing: the service worker can
+	// serve a previous build out of its precache, and without this the only way
+	// to tell was to guess.
+	const builtAt = new Date(info.buildTime);
+	const buildTime = isNaN(builtAt.getTime())
+		? info.buildTime
+		: builtAt.toLocaleString();
+
 	return (
 		<DialogCard
 			{...props}
@@ -29,6 +37,14 @@ export const AboutTwineDialog: React.FC<DialogComponentProps> = props => {
 						__html: t('dialogs.aboutTwine.license')
 					}}
 				/>
+				<p className="build-stamp">
+					{info.commitHash
+						? t('dialogs.aboutTwine.build', {
+								buildTime,
+								commitHash: info.commitHash
+							})
+						: t('dialogs.aboutTwine.buildWithoutCommit', {buildTime})}
+				</p>
 				<div className="credits">
 					<div className="code">
 						<h3>{t('dialogs.aboutTwine.codeHeader')}</h3>

@@ -62,6 +62,11 @@ export default defineConfig({
 		),
 		react(),
 		VitePWA({
+			// The app registers the worker itself, in src/util/service-worker.ts.
+			// The script this would otherwise inject only calls register() -- it
+			// never reloads the page when a new worker takes over, which is what
+			// made a deploy need several refreshes to appear.
+			injectRegister: null,
 			manifest: {
 				icons: [
 					{
@@ -78,9 +83,23 @@ export default defineConfig({
 				]
 			},
 			registerType: 'autoUpdate',
-			includeAssets: ['locales/**', 'pwa/**', 'story-formats/**'],
+			includeAssets: ['locales/**', 'pwa/**'],
 			workbox: {
-				globPatterns: ['**/*.{js,css,html,svg,woff,woff2}']
+				globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+				// Story formats are 3.8MB of a 5.7MB build, and precaching them
+				// meant the new worker could not activate until all of it had
+				// downloaded -- which is the window a deploy spends still serving
+				// the old build. They are fetched by URL when a story is played or
+				// previewed, so a runtime cache is enough: the first play of a
+				// given format needs the network, every play after it does not.
+				globIgnores: ['story-formats/**'],
+				runtimeCaching: [
+					{
+						urlPattern: /\/story-formats\//,
+						handler: 'StaleWhileRevalidate',
+						options: {cacheName: 'story-formats'}
+					}
+				]
 			}
 		})
 	],

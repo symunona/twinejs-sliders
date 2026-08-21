@@ -350,8 +350,14 @@ export function sceneHintContext(
 					: undefined;
 			}
 
+			// Shorthand `back: Street`. The key is the link's own NAME, so it says
+			// nothing; the enclosing `links:` -- block form above, flow form on the
+			// same line -- is what makes the value a passage target.
 			default:
-				return undefined;
+				return enclosingKeys(lines, blockStart, cursor.line)[0] === 'links' ||
+					/(?:^|[\s[{,])links\s*:/.test(line.slice(0, start))
+					? found({kind: 'passage'})
+					: undefined;
 		}
 	}
 

@@ -43,15 +43,17 @@
 /sw.js
   Cache-Control: no-store
 
-/registerSW.js
-  Cache-Control: no-store
-
 /manifest.webmanifest
   Cache-Control: no-store
 
 # Fetched by URL when a story is published, played or previewed, and rewritten
 # in place on every format rebuild -- `sliders-0.1.0/format.js` keeps its name
 # forever. This is the one that made a Play show the previous player.
+#
+# These are no longer precached (they were 3.8MB of a 5.7MB precache, and the
+# new worker could not activate until all of it had downloaded). A runtime
+# StaleWhileRevalidate cache holds them instead, so `no-store` here is what
+# lets that cache notice a rebuilt format.
 /story-formats/*
   Cache-Control: no-store
 
