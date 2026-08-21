@@ -135,6 +135,31 @@ describe('<StoryFormatToolbar>', () => {
 		expect(onExecCommand.mock.calls).toEqual([['mock-command']]);
 	});
 
+	it("adds a Scene Help item to the format's scene menu", () => {
+		useFormatToolbarMock.mockReturnValue(() => [
+			{
+				type: 'menu',
+				disabled: true,
+				icon: 'mock-menu-icon-src',
+				label: 'Scene',
+				items: [{command: 'insertScene', label: 'Insert Scene', type: 'button'}]
+			}
+		]);
+
+		renderComponent();
+
+		// The menu itself stays enabled so help is reachable, but the format's own
+		// item inherits the disabling.
+
+		expect(screen.getByTestId('mock-menu-button-Scene').dataset.disabled).toBe(
+			'false'
+		);
+		expect(screen.getByRole('button', {name: 'Insert Scene'})).toBeDisabled();
+		expect(
+			screen.getByRole('button', {name: 'dialogs.sceneHelp.open'})
+		).toBeEnabled();
+	});
+
 	// Needs a more accurate mock of <MenuButton>.
 	it.todo('displays icon-only menu buttons properly');
 

@@ -1,13 +1,27 @@
 import * as React from 'react';
 import CodeMirror from 'codemirror';
+import {useTranslation} from 'react-i18next';
 import {usePrefsContext} from '../../store/prefs';
 import {StoryFormat, StoryFormatToolbarItem} from '../../store/story-formats';
 import {useComputedTheme} from '../../store/prefs/use-computed-theme';
 import {useFormatCodeMirrorToolbar} from '../../store/use-format-codemirror-toolbar';
 import {ButtonBar} from '../../components/container/button-bar';
 import {IconButton} from '../../components/control/icon-button';
-import {MenuButton} from '../../components/control/menu-button';
+import {
+	LabeledMenuItem,
+	MenuButton,
+	MenuSeparator
+} from '../../components/control/menu-button';
+import {useDialogsContext} from '../context';
+import {SceneHelpDialog} from '../scene-help';
 import './story-format-toolbar.css';
+
+/**
+ * Label of the Sliders format's scene menu. Scene Help is the app's dialog, not
+ * one of the format's commands, but it belongs beside them--so it is appended to
+ * this menu as it goes by.
+ */
+const sceneMenuLabel = 'Scene';
 
 export interface StoryFormatToolbarProps {
 	disabled?: boolean;
@@ -20,7 +34,9 @@ export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
 	const {disabled, editor, onExecCommand, storyFormat} = props;
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const appTheme = useComputedTheme();
+	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {prefs} = usePrefsContext();
+	const {t} = useTranslation();
 	const toolbarFactory = useFormatCodeMirrorToolbar(
 		storyFormat.name,
 		storyFormat.version
@@ -100,27 +116,49 @@ export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
 							);
 
 						case 'menu': {
+							const sceneMenu = item.label === sceneMenuLabel;
+							const items: (LabeledMenuItem | MenuSeparator)[] = item.items
+								.filter(subitem =>
+									['button', 'separator'].includes(subitem.type)
+								)
+								.map(subitem => {
+									if (subitem.type === 'button') {
+										return {
+											type: 'button',
+											// The format disables the whole scene menu when
+											// something is selected. Push that down onto its own
+											// items so Scene Help stays reachable.
+											disabled: sceneMenu
+												? item.disabled || subitem.disabled
+												: subitem.disabled,
+											label: subitem.label,
+											onClick: () => execCommand(subitem.command)
+										};
+									}
+
+									return {separator: true};
+								});
+
+							if (sceneMenu) {
+								items.push(
+									{separator: true},
+									{
+										label: t('dialogs.sceneHelp.open'),
+										onClick: () =>
+											dialogsDispatch({
+												type: 'addDialog',
+												component: SceneHelpDialog
+											})
+									}
+								);
+							}
+
 							return (
 								<MenuButton
-									disabled={disabled || item.disabled}
+									disabled={disabled || (!sceneMenu && item.disabled)}
 									icon={<img src={item.icon} alt="" />}
 									iconOnly={item.iconOnly}
-									items={item.items
-										.filter(subitem =>
-											['button', 'separator'].includes(subitem.type)
-										)
-										.map(subitem => {
-											if (subitem.type === 'button') {
-												return {
-													type: 'button',
-													disabled: subitem.disabled,
-													label: subitem.label,
-													onClick: () => execCommand(subitem.command)
-												};
-											}
-
-											return {separator: true};
-										})}
+									items={items}
 									key={index}
 									label={item.label}
 								/>

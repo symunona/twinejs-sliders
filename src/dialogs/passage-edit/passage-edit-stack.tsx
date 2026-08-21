@@ -1,12 +1,16 @@
 import classNames from 'classnames';
 import * as React from 'react';
+import {useTranslation} from 'react-i18next';
+import {IconLayoutNavbarCollapse, IconLayoutNavbarExpand} from '@tabler/icons';
 import {
 	BackgroundDialogCard,
 	DialogCard
 } from '../../components/container/dialog-card';
 import {DialogStack} from '../../components/container/dialog-card/dialog-stack';
+import {IconButton} from '../../components/control/icon-button';
 import {TagGrid} from '../../components/tag';
 import {VisibleWhitespace} from '../../components/visible-whitespace';
+import {setPref, usePrefsContext} from '../../store/prefs';
 import {
 	passageWithId,
 	storyWithId,
@@ -31,7 +35,9 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 	const {onChangeProps, onClose, passageIds, storyId, ...managementProps} =
 		props;
 	const {dispatch} = useDialogsContext();
+	const {dispatch: prefsDispatch, prefs} = usePrefsContext();
 	const {stories} = useStoriesContext();
+	const {t} = useTranslation();
 	const storyTagColors = storyWithId(stories, storyId).tagColors;
 	const passageInfo = passageIds.map(passageId => {
 		const passage = passageWithId(stories, storyId, passageId);
@@ -59,6 +65,33 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 			dispatch(removePassageEditors([passageId]));
 		}
 	}
+
+	// Lives in the title bar next to maximize, because it is about how much
+	// room the editor gets--the same kind of thing maximizing is.
+
+	const toolbarToggle = (
+		<IconButton
+			icon={
+				prefs.passageEditorToolbars ? (
+					<IconLayoutNavbarCollapse />
+				) : (
+					<IconLayoutNavbarExpand />
+				)
+			}
+			iconOnly
+			label={t(
+				prefs.passageEditorToolbars
+					? 'dialogs.passageEdit.hideToolbars'
+					: 'dialogs.passageEdit.showToolbars'
+			)}
+			onClick={() =>
+				prefsDispatch(
+					setPref('passageEditorToolbars', !prefs.passageEditorToolbars)
+				)
+			}
+			tooltipPosition="bottom"
+		/>
+	);
 
 	return (
 		<div
@@ -101,6 +134,7 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 					return (
 						<DialogCard
 							{...managementProps}
+							headerControls={toolbarToggle}
 							headerDisplayLabel={
 								<>
 									<TagGrid

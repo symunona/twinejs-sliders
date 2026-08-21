@@ -15,7 +15,8 @@ export const defaults = (): PrefsState => ({
 	hotkeyOverrides: {},
 	lastUpdateSeen: '',
 	lastUpdateCheckTime: new Date().getTime(),
-	locale: (window.navigator as any).userLanguage ||
+	locale:
+		(window.navigator as any).userLanguage ||
 		window.navigator.language ||
 		(window.navigator as any).browserLanguage ||
 		(window.navigator as any).systemLanguage ||
@@ -23,6 +24,7 @@ export const defaults = (): PrefsState => ({
 	openAiApiKey: '',
 	passageEditorFontFamily: 'var(--font-system)',
 	passageEditorFontScale: 1,
+	passageEditorToolbars: true,
 	passageTagDisplay: 'color',
 	proofingFormat: {
 		name: 'Paperthin',
@@ -37,5 +39,5 @@ export const defaults = (): PrefsState => ({
 	storyListTagFilter: [],
 	storyTagColors: {},
 	useCodeMirror: true,
-	welcomeSeen: false,
+	welcomeSeen: false
 });

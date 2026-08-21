@@ -154,20 +154,24 @@ export const PassageEditContents: React.FC<
 
 	return (
 		<div className="passage-edit-contents" aria-hidden={disabled}>
-			<PassageToolbar
-				disabled={disabled}
-				editor={cmEditor}
-				passage={passage}
-				story={story}
-				useCodeMirror={prefs.useCodeMirror}
-			/>
-			{prefs.useCodeMirror && storyFormatExtensionsEnabled && (
-				<StoryFormatToolbar
-					disabled={disabled}
-					editor={cmEditor}
-					onExecCommand={handleExecCommand}
-					storyFormat={storyFormat}
-				/>
+			{prefs.passageEditorToolbars && (
+				<>
+					<PassageToolbar
+						disabled={disabled}
+						editor={cmEditor}
+						passage={passage}
+						story={story}
+						useCodeMirror={prefs.useCodeMirror}
+					/>
+					{prefs.useCodeMirror && storyFormatExtensionsEnabled && (
+						<StoryFormatToolbar
+							disabled={disabled}
+							editor={cmEditor}
+							onExecCommand={handleExecCommand}
+							storyFormat={storyFormat}
+						/>
+					)}
+				</>
 			)}
 			<ErrorBoundary>
 				<PassageText

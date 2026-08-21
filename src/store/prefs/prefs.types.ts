@@ -101,6 +101,11 @@ export interface PrefsState {
 	 */
 	passageEditorFontScale: number;
 	/**
+	 * Show the toolbars above the passage editor? Turning them off gives the
+	 * text and scene preview the vertical space instead.
+	 */
+	passageEditorToolbars: boolean;
+	/**
 	 * Whether to show just tag colors (thin colored stripes; ignore tags without
 	 * colors) or tag names (list all tags, even uncolored tags) of tags on passage
 	 * cards in the story map.

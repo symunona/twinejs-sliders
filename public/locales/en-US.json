@@ -265,6 +265,8 @@
 				"showWarnings": "Show Warnings ({{count}})",
 				"showWarnings_plural": "Show Warnings ({{count}})"
 			},
+			"hideToolbars": "Hide toolbars",
+			"showToolbars": "Show toolbars",
 			"setAsStart": "Start Story Here",
 			"size": "Size",
 			"sizeLarge": "Large",

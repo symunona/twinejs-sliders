@@ -21,6 +21,12 @@ export interface DialogCardProps {
 	fixedSize?: boolean;
 	headerLabel: string;
 	headerDisplayLabel?: React.ReactNode;
+	/**
+	 * Extra buttons for the header, shown before the maximize control. A dialog
+	 * uses this for a control that belongs in the title bar rather than in its
+	 * own contents--see the passage editor's toolbar toggle.
+	 */
+	headerControls?: React.ReactNode;
 	highlighted?: boolean;
 	/**
 	 * Hotkey scope commands inside this dialog register in. Dialogs with
@@ -50,6 +56,7 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 		collapsed,
 		fixedSize,
 		focusOnOpen,
+		headerControls,
 		headerDisplayLabel,
 		headerLabel,
 		highlighted,
@@ -169,6 +176,7 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 						{headerDisplayLabel ?? headerLabel}
 					</div>
 					<div className="dialog-card-header-controls">
+						{headerControls}
 						{maximizable && (
 							<IconButton
 								icon={maximized ? <IconMinimize /> : <IconMaximize />}

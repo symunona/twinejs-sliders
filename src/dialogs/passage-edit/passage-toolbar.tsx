@@ -1,11 +1,10 @@
-import {IconHelp, IconResize} from '@tabler/icons';
+import {IconResize} from '@tabler/icons';
 import {Editor} from 'codemirror';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {UndoRedoButtons} from '../../components/codemirror';
 import {ButtonBar} from '../../components/container/button-bar';
 import {MenuButton} from '../../components/control/menu-button';
-import {IconButton} from '../../components/control/icon-button';
 import {RenamePassageButton} from '../../components/passage/rename-passage-button';
 import {TestPassageButton} from '../../routes/story-edit/toolbar/passage/test-passage-button';
 import {
@@ -20,8 +19,6 @@ import {
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {Color} from '../../util/color';
 import {TagCardButton} from '../../components/tag/tag-card-button';
-import {useDialogsContext} from '../context';
-import {SceneHelpDialog} from '../scene-help';
 
 export interface PassageToolbarProps {
 	disabled?: boolean;
@@ -34,7 +31,6 @@ export interface PassageToolbarProps {
 export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
 	const {disabled, editor, passage, story, useCodeMirror} = props;
 	const {dispatch} = useUndoableStoriesContext();
-	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {t} = useTranslation();
 	const passageTags = storyPassageTags(story);
 
@@ -120,13 +116,6 @@ export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
 				story={story}
 			/>
 			<TestPassageButton hotkeyScope={null} passage={passage} story={story} />
-			<IconButton
-				icon={<IconHelp />}
-				label={t('dialogs.sceneHelp.open')}
-				onClick={() =>
-					dialogsDispatch({type: 'addDialog', component: SceneHelpDialog})
-				}
-			/>
 		</ButtonBar>
 	);
 };
