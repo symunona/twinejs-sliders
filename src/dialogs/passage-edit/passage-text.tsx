@@ -165,6 +165,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 			// means anything with the cursor in the text, and routing it through
 			// the app dispatcher would fight the editor for the keystroke.
 			extraKeys: {'Ctrl-Space': autocompleteSceneNames},
+			lineNumbers: true,
 			lineWrapping: true,
 			placeholder: t('dialogs.passageEdit.passageTextPlaceholder'),
 			prefixTrigger: {

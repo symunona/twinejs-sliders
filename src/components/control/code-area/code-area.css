@@ -83,3 +83,15 @@ li.CodeMirror-hint.sliders-hint-recent {
 	color: var(--dark-blue);
 	font-weight: 600;
 }
+
+/* Line number gutter. Only the passage editor turns line numbers on, but keep
+the styling with the rest of the CodeMirror theming. */
+
+.code-area .CodeMirror-gutters {
+	background: transparent;
+	border-right: 1px solid var(--faint-gray);
+}
+
+.code-area .CodeMirror-linenumber {
+	color: var(--gray);
+}
