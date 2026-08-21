@@ -25,6 +25,7 @@ import {
 	type SceneError,
 	type SceneErrorCode,
 	type SceneLink,
+	type SceneSpan,
 	type StageFx,
 	type Vec2
 } from '@sliders/scene-types';
@@ -81,6 +82,12 @@ interface Ctx {
 	inlineLinks: Map<string, string>;
 	/** Where each links: entry was written, so a late error can point at it. */
 	linkNodes: Map<string, unknown>;
+	/**
+	 * Where each link's TARGET was written -- the `to:` value, or the beat text that
+	 * carried an inline `[[name -> Target]]`. Reported as `linkSpans` so the editor can
+	 * mark a target that names no passage; the parser itself has no story to check against.
+	 */
+	linkTargetNodes: Map<string, unknown>;
 	/** `mira: ~` nodes, legal only once we know whether `from:` was set. */
 	pendingRemovals: {id: string; node: unknown}[];
 	/** `of:` edges declared in THIS block, with the node to point an error at. */
@@ -701,6 +708,10 @@ function collectLinks(ctx: Ctx, text: string, node: unknown): void {
 			if (!ctx.inlineLinks.has(link.name)) {
 				ctx.inlineLinks.set(link.name, link.target);
 			}
+
+			if (!ctx.linkTargetNodes.has(link.name)) {
+				ctx.linkTargetNodes.set(link.name, node);
+			}
 		} else {
 			ctx.pendingLinks.push({name: link.name, node});
 		}
@@ -873,6 +884,7 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 
 			if (to !== undefined) {
 				scene.links[name] = {name, to};
+				ctx.linkTargetNodes.set(name, pair.value);
 			}
 
 			continue;
@@ -903,6 +915,10 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 
 				if (value !== undefined) {
 					link[key as 'to' | 'if' | 'icon' | 'transition'] = value;
+
+					if (key === 'to') {
+						ctx.linkTargetNodes.set(name, prop.value);
+					}
 				}
 			} else {
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, prop.key, {
@@ -1021,6 +1037,7 @@ export function parseScene(text: string): ParseResult {
 		errors: [],
 		inlineLinks: new Map(),
 		linkNodes: new Map(),
+		linkTargetNodes: new Map(),
 		lineCounter,
 		ofEdges: [],
 		pendingLinks: [],
@@ -1281,5 +1298,13 @@ export function parseScene(text: string): ParseResult {
 		}
 	}
 
-	return {errors: ctx.errors, scene};
+	const linkSpans: Record<string, SceneSpan> = {};
+
+	for (const [name, node] of ctx.linkTargetNodes) {
+		if (scene.links[name]) {
+			linkSpans[name] = spanOf(ctx, node);
+		}
+	}
+
+	return {errors: ctx.errors, linkSpans, scene};
 }

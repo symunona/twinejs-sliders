@@ -14,3 +14,14 @@
 	box-shadow: inset 0 0 0px 2px var(--blue);
 	outline: none;
 }
+/*
+The text the author is typing in never gets squeezed out.
+
+Everything under it -- the error accordion, the preview -- keeps its own height, and in a
+small dialog they would otherwise take the whole column: the editor is the one child that
+is allowed to shrink, and `flex: 1` on its own shrinks it to nothing.
+*/
+
+.passage-edit-contents .dialog-editor {
+	min-height: 6em;
+}

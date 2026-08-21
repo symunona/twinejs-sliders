@@ -93,8 +93,11 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 		expect(skeleton).toContain(key);
 	}
 
-	// The badge renders only when the scene has errors or warnings.
-	await expect(page.getByTestId('scene-preview-badge')).toHaveCount(0);
+	// The skeleton's links: are a teaching example, pointing at passages that do not
+	// exist yet, and story validation says so.
+	await expect(page.getByTestId('scene-errors-header')).toHaveText(
+		/Show Errors \(2\)/
+	);
 
 	// --- Editing a scene makes it the last scene ---------------------------
 	await setPassageText(page, TAVERN_SCENE);
@@ -108,7 +111,7 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 	expect(copied).toContain('The last thing I edited.');
 	// A verbatim copy would be a duplicate id.
 	expect(copied).not.toMatch(/^id: e2e-tavern$/m);
-	await expect(page.getByTestId('scene-preview-badge')).toHaveCount(0);
+	await expect(page.getByTestId('scene-errors')).toHaveClass(/clean/);
 
 	// --- Overlay: a patch that names the scene it builds on -----------------
 	await newPassage(page, 'Untitled Passage 2');

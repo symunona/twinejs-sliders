@@ -238,6 +238,7 @@ export type SceneErrorCode =
 	| 'unknown-character'
 	| 'unknown-frame'
 	| 'unknown-link'
+	| 'unknown-passage'
 	| 'unknown-parent'
 	| 'of-cycle'
 	| 'dupe-scene-id'
@@ -264,6 +265,20 @@ export interface SceneError {
 export interface ParseResult {
 	scene: Scene;
 	errors: SceneError[];
+	/**
+	 * Where each link's target was written, keyed by link name. Block-relative, like an
+	 * error's own line. The editor validates targets against the story's passage list —
+	 * something the parser cannot see — and needs somewhere to point when one is wrong.
+	 */
+	linkSpans?: Record<string, SceneSpan>;
+}
+
+/** A place in the scene text. 1-indexed, same as `SceneError`. */
+export interface SceneSpan {
+	line: number;
+	col: number;
+	endLine?: number;
+	endCol?: number;
 }
 
 // ---------------------------------------------------------------------------

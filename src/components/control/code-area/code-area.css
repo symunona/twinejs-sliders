@@ -84,6 +84,16 @@ li.CodeMirror-hint.sliders-hint-recent {
 	font-weight: 600;
 }
 
+/*
+What a pick is about to overwrite. Ctrl-Space on a name already written replaces the
+whole of it, spaces included, and this is what says so before the author commits --
+a real selection cannot do the job, because show-hint closes as soon as one exists.
+*/
+
+.CodeMirror .sliders-hint-target {
+	background: rgba(74, 212, 255, 0.25);
+}
+
 /* Line number gutter. Only the passage editor turns line numbers on, but keep
 the styling with the rest of the CodeMirror theming. */
 

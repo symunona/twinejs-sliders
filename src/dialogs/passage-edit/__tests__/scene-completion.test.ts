@@ -57,8 +57,14 @@ const library: Library = {
 	]
 };
 
+const PASSAGES = ['Street', 'Tavern Fight', 'Cellar'];
+
 /** Drives the completion with `|` marking the cursor, as the classifier tests do. */
-function completeAt(passage: string, lib: Library = library) {
+function completeAt(
+	passage: string,
+	lib: Library = library,
+	passages: string[] = PASSAGES
+) {
 	const lines = passage.split('\n');
 	const line = lines.findIndex(one => one.includes('|'));
 	const ch = lines[line].indexOf('|');
@@ -70,12 +76,19 @@ function completeAt(passage: string, lib: Library = library) {
 		getValue: () => lines.join('\n')
 	} as unknown as Editor;
 
-	return sceneCompletion(editor, lib);
+	return sceneCompletion(editor, lib, passages);
 }
 
 /** Just the names, in the order they'd appear in the dropdown. */
 function names(passage: string, lib?: Library) {
 	return completeAt(passage, lib)?.list.map(one => one.displayText);
+}
+
+/** The range a pick would overwrite, on the line the cursor is on. */
+function range(passage: string) {
+	const completion = completeAt(passage)!;
+
+	return [completion.from.ch, completion.to.ch];
 }
 
 describe('sceneCompletion()', () => {
@@ -244,6 +257,83 @@ describe('sceneCompletion()', () => {
 
 			expect(completion.from).toEqual({ch: 4, line: 1});
 			expect(completion.to).toEqual({ch: 7, line: 1});
+		});
+	});
+	describe('overwriting a name already written', () => {
+		it('replaces the whole name from inside it', () => {
+			// `bg: tavern-night`, cursor after `tav`.
+			expect(range('[scene]\nbg: tav|ern-night')).toEqual([4, 16]);
+		});
+
+		it('replaces a name that has spaces in it', () => {
+			expect(range('[scene]\nbg: oak ta|ble here')).toEqual([4, 18]);
+		});
+
+		it('stops at the YAML around it', () => {
+			expect(range('[scene]\ncast:\n  mira: {frame: an|gry, layer: mid}')).toEqual(
+				[16, 21]
+			);
+		});
+
+		it('offers the whole list when the name is already complete', () => {
+			// Asking for the list on a finished name means wanting a different one.
+			expect(names('[scene]\nbg: street|')).toEqual([
+				'street',
+				'tavern-night',
+				'candle',
+				'table'
+			]);
+		});
+
+		it('offers the whole list when the name matches nothing', () => {
+			// A typo'd id is exactly when the author needs to see the options.
+			expect(names('[scene]\nbg: zzz|')).toEqual([
+				'street',
+				'tavern-night',
+				'candle',
+				'table'
+			]);
+		});
+	});
+
+	describe('passages', () => {
+		it('offers them after a link to:', () => {
+			expect(names('[scene]\nlinks:\n  stay: {to: |}')).toEqual([
+				'Cellar',
+				'Street',
+				'Tavern Fight'
+			]);
+		});
+
+		it('offers them inside a link in beat text', () => {
+			expect(
+				names('[scene]\nbeats:\n  - mira: "Go [[out -> Cel|]]"')
+			).toEqual(['Cellar']);
+		});
+
+		it('offers them inside a link in prose with no scene at all', () => {
+			expect(names('Walk to [[Str|]].')).toEqual(['Street']);
+		});
+
+		it('overwrites a whole target, spaces and all', () => {
+			expect(range('[scene]\nbeats:\n  - mira: "[[out -> Tavern Fi|ght]]"')).toEqual(
+				[20, 32]
+			);
+		});
+
+		it('closes a link the author left open', () => {
+			expect(completeAt('Walk to [[Str|')!.list[0]).toMatchObject({
+				displayText: 'Street',
+				text: 'Street]]'
+			});
+		});
+
+		it('says nothing for the label half of a link', () => {
+			expect(names('[scene]\nbeats:\n  - mira: "[[ou|t -> Cellar]]"')).toBeUndefined();
+		});
+
+		it('says nothing past the end of a link', () => {
+			expect(names('Walk to [[Street]] |now')).toBeUndefined();
 		});
 	});
 });

@@ -1,5 +1,4 @@
 import {
-	IconAlertTriangle,
 	IconChevronDown,
 	IconChevronLeft,
 	IconChevronRight,
@@ -40,7 +39,7 @@ import {StageSelectionControls} from './stage-selection-controls';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
-import {useSceneParse} from './use-scene-parse';
+import type {SceneParse} from './use-scene-parse';
 import {useStageSelection} from './use-stage-selection';
 import {
 	applyCameraPatch,
@@ -69,6 +68,12 @@ export interface ScenePreviewProps {
 	 */
 	assets: AssetResolver & {invalidate?: () => void};
 	text: string;
+	/**
+	 * The parse of `text`. Owned by the passage editor rather than by the preview: the
+	 * error list above the editor and the editor's own error marks read the same one, and
+	 * three parses of the same text would drift apart while the author types.
+	 */
+	parse: SceneParse;
 	/** The whole story. Needed only so `from:` can resolve across passages. */
 	passages?: IndexedPassage[];
 	/**
@@ -77,8 +82,6 @@ export interface ScenePreviewProps {
 	 * turned CodeMirror off in preferences: the stage is then selectable but read-only.
 	 */
 	editor?: CodeMirror.Editor;
-	/** Called when the user clicks an error, so the editor can jump to that line. */
-	onGoToLine?: (line: number) => void;
 	/**
 	 * Ctrl/cmd-click on a `[[link]]` inside a bubble, with the passage the link points at.
 	 * Absent means the preview shows links but cannot open them.
@@ -142,13 +145,12 @@ async function textChanged(
 export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	assets,
 	editor,
+	parse,
 	text,
 	passages,
-	onGoToLine,
 	onOpenPassage
 }) => {
 	const {t} = useTranslation();
-	const parse = useSceneParse(text, passages);
 	const [open, setOpen] = React.useState(
 		() => window.localStorage.getItem(OPEN_KEY) !== 'false'
 	);
@@ -863,9 +865,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		return null;
 	}
 
-	const errors = parse.errors.filter(e => e.severity === 'error');
-	const warnings = parse.errors.filter(e => e.severity === 'warning');
-
 	/**
 	 * Full screen is the player: there is nothing else on the screen to click, so a tap on
 	 * the stage is the reader asking for the next beat. Small screen keeps the plain
@@ -899,23 +898,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				<span className="scene-preview-title">
 					{t('dialogs.passageEdit.scenePreview.title')}
 				</span>
-				{(errors.length > 0 || warnings.length > 0) && (
-					<span
-						className={classNames('scene-preview-badge', {
-							error: errors.length > 0
-						})}
-						data-testid="scene-preview-badge"
-					>
-						<IconAlertTriangle />
-						{errors.length > 0
-							? t('dialogs.passageEdit.scenePreview.errorCount', {
-									count: errors.length
-							  })
-							: t('dialogs.passageEdit.scenePreview.warningCount', {
-									count: warnings.length
-							  })}
-					</span>
-				)}
 				<span className="scene-preview-spacer" />
 				{open && (
 					<>
@@ -974,21 +956,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			</div>
 			{open && (
 				<>
-					{parse.errors.length > 0 && (
-						<ul className="scene-preview-errors" data-testid="scene-preview-errors">
-							{parse.errors.map((error, index) => (
-								<li
-									className={error.severity}
-									key={`${error.code}-${index}`}
-									onClick={() => onGoToLine?.(error.line)}
-								>
-									<span className="line">{error.line}</span>
-									<span className="message">{error.message}</span>
-									{error.hint && <span className="hint">{error.hint}</span>}
-								</li>
-							))}
-						</ul>
-					)}
 					{/* A click on the stage selects, so full screen moved to a double
 					    click. The toolbar button above is still the keyboard-accessible
 					    path, and `scene.fullScreen` still works. */}

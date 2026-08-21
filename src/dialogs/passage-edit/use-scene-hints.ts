@@ -6,10 +6,10 @@
  * (see `scene-preview/use-preview-resolver.ts`), so the string the library
  * already holds is exactly the string the author needs typed.
  *
- * Fires on Ctrl-Space only, and only when the cursor is inside a `[scene]`
- * block -- the rest of a Chapbook passage is prose, and popping a dropdown
- * there would be noise. The passage-name completion in
- * `store/use-codemirror-passage-hints.ts` still owns `[[` and `->`.
+ * Fires on Ctrl-Space only, inside a `[scene]` block or inside a `[[link]]`
+ * anywhere in the passage -- plain prose has no names to offer, and popping a
+ * dropdown there would be noise. Typing `[[` or `->` still opens the passage
+ * completion in `store/use-codemirror-passage-hints.ts` by itself.
  */
 
 import CodeMirror, {Editor} from 'codemirror';
@@ -30,6 +30,7 @@ export const FX_IDS = ['cold', 'dark', 'flash', 'rain', 'warm'];
 /** What the cursor is sitting in, and therefore what to offer. */
 export type HintSlot =
 	| {kind: 'bg'}
+	| {kind: 'passage'}
 	| {kind: 'cast'}
 	| {kind: 'props'}
 	| {kind: 'frame'; entity: string}
@@ -42,6 +43,13 @@ export interface SceneHintContext {
 	typed: string;
 	/** Column where the completion starts replacing. */
 	start: number;
+	/**
+	 * Column where it stops replacing, which is the END of the name the cursor is in and
+	 * not the cursor itself. Standing anywhere in `tavern-night` and picking `street`
+	 * overwrites the whole thing, spaces and all -- an author asking for the list on a
+	 * name they already wrote is asking to change it, not to graft one onto the other.
+	 */
+	end: number;
 	/**
 	 * True when the cursor sits directly on the colon, with no space yet. YAML
 	 * reads `bg:tavern` as the plain scalar "bg:tavern" rather than a mapping,
@@ -57,6 +65,8 @@ export interface SceneHintContext {
 	 * line that already has `: {…}` after it would end up with two of them.
 	 */
 	scaffold: boolean;
+	/** Written after the picked name, to close a `[[link` the author left open. */
+	suffix?: string;
 }
 
 /**
@@ -72,11 +82,12 @@ const ENTITY_AT = '0';
 const ENTITY_SUFFIX = ', layer: mid}';
 
 /**
- * Characters an asset or character name can contain. Deliberately excludes
- * whitespace: it is what stops a token walking backwards out of `- mira` into
- * the list dash, and names like `tavern/night` need the slash.
+ * What ends a name, scanning outward from the cursor. Everything else belongs to it --
+ * INCLUDING spaces, because an asset called `oak table` and a passage called `Tavern
+ * Fight` are both one name. YAML structure and quotes are the boundaries; a list dash is
+ * stripped afterwards, since a name may legitimately contain one (`tavern-night`).
  */
-const NAME_CHAR = /[\w./-]/;
+const TOKEN_STOP = /[:,{}[\]#"']/;
 
 /** `key:` on a line, with an optional list dash: `mira:`, `- mira:`, `cast:`. */
 const KEY_LINE_RE = /^\s*(?:-\s*)?([A-Za-z0-9_][\w .-]*?)\s*:\s*(.*)$/;
@@ -88,15 +99,38 @@ function indentOf(line: string): number {
 	return /^[ \t]*/.exec(line)![0].length;
 }
 
-/** The name-ish token ending at the cursor, and where it starts. */
-function typedToken(before: string): {start: number; text: string} {
-	let start = before.length;
+/**
+ * The whole name the cursor sits in: where it starts, where it ends, and what has been
+ * typed up to the cursor. `end` never falls before the cursor, so trailing spaces the
+ * author is still typing in do not shrink the range out from under them.
+ */
+function tokenAround(
+	line: string,
+	ch: number
+): {start: number; end: number; text: string; typed: string} {
+	let start = Math.min(ch, line.length);
+	let end = start;
 
-	while (start > 0 && NAME_CHAR.test(before[start - 1])) {
+	while (start > 0 && !TOKEN_STOP.test(line[start - 1])) {
 		start--;
 	}
 
-	return {start, text: before.slice(start)};
+	while (end < line.length && !TOKEN_STOP.test(line[end])) {
+		end++;
+	}
+
+	// `- mira` is a name behind a list marker, not a name starting with a dash.
+	const marker = /^\s*-\s+/.exec(line.slice(start, end));
+
+	if (marker) {
+		start += marker[0].length;
+	}
+
+	start += /^\s*/.exec(line.slice(start, end))![0].length;
+	start = Math.min(start, ch);
+	end = Math.max(ch, end - /\s*$/.exec(line.slice(start, end))![0].length);
+
+	return {end, start, text: line.slice(start, end), typed: line.slice(start, ch)};
 }
 
 /**
@@ -177,6 +211,82 @@ function entityOfLine(
 }
 
 /**
+ * The cursor inside a `[[…]]`, if it is, and the part of it that names a passage.
+ *
+ * Runs on the raw line, in or out of the scene block, because a link is a link wherever
+ * it is written: in beat text, in the prose under the block, in a passage with no scene at
+ * all. Only the TARGET half offers anything -- the label half of `[[stay -> Street]]` is
+ * the author's own words.
+ */
+export function wikiLinkContext(
+	line: string,
+	ch: number
+): SceneHintContext | undefined {
+	const open = line.lastIndexOf('[[', ch);
+
+	if (open === -1) {
+		return undefined;
+	}
+
+	const close = line.indexOf(']]', open + 2);
+
+	// Past the closing brackets is outside the link, not at the end of it.
+	if (close !== -1 && ch > close) {
+		return undefined;
+	}
+
+	const bodyStart = open + 2;
+	const bodyEnd = close === -1 ? line.length : close;
+
+	if (ch < bodyStart) {
+		return undefined;
+	}
+
+	const body = line.slice(bodyStart, bodyEnd);
+	// `[[Target][setter]]` — the setter is code, and never a passage name.
+	const setter = body.indexOf('][');
+	const head = setter === -1 ? body : body.slice(0, setter);
+	const arrow = head.lastIndexOf('->');
+	const back = head.indexOf('<-');
+	const pipe = head.lastIndexOf('|');
+
+	let from = 0;
+	let to = head.length;
+
+	if (arrow !== -1) {
+		from = arrow + 2;
+	} else if (back !== -1) {
+		to = back;
+	} else if (pipe !== -1) {
+		from = pipe + 1;
+	}
+
+	const offset = ch - bodyStart;
+
+	if (offset < from || offset > to) {
+		return undefined; // The label half.
+	}
+
+	const target = head.slice(from, to);
+	const lead = /^\s*/.exec(target)![0].length;
+	const trail = /\s*$/.exec(target)![0].length;
+	const start = Math.min(bodyStart + from + lead, ch);
+	const end = Math.max(ch, bodyStart + to - trail);
+
+	return {
+		end,
+		needsSpace: false,
+		scaffold: false,
+		slot: {kind: 'passage'},
+		start,
+		// An unterminated link gets its brackets closed for it, the same way typing
+		// `[[` and picking from the dropdown already does.
+		suffix: close === -1 ? ']]' : undefined,
+		typed: line.slice(start, ch)
+	};
+}
+
+/**
  * Classifies the cursor position. `lines` is the whole passage, so line numbers
  * line up with CodeMirror's.
  */
@@ -191,12 +301,14 @@ export function sceneHintContext(
 	}
 
 	const line = lines[cursor.line] ?? '';
-	const before = line.slice(0, cursor.ch);
-	const {start, text: typed} = typedToken(before);
-	const key = valueKey(before, start);
-	const restIsEmpty = line.slice(cursor.ch).trim() === '';
+	const {end, start, typed} = tokenAround(line, cursor.ch);
+	const key = valueKey(line, start);
+	// Measured past the END of the name, not past the cursor: `mi|ra` on its own line is
+	// still an author writing one entity, and should still get a body written for it.
+	const restIsEmpty = line.slice(end).trim() === '';
 	const found = (slot: HintSlot, scaffold = false): SceneHintContext => ({
-		needsSpace: key !== undefined && before.slice(0, start).endsWith(':'),
+		end,
+		needsSpace: key !== undefined && line.slice(0, start).endsWith(':'),
 		scaffold: scaffold && restIsEmpty,
 		slot,
 		start,
@@ -219,6 +331,12 @@ export function sceneHintContext(
 
 				return entity ? found({kind: 'frame', entity}) : undefined;
 			}
+
+			// `to:` is a link target, which is a passage name. Nothing else in the
+			// subset uses the key, so the enclosing links: block need not be found --
+			// flow form (`links: {stay: {to: X}}`) included.
+			case 'to':
+				return found({kind: 'passage'});
 
 			case 'ref': {
 				// `ref:` names a character under `cast:` and an asset under
@@ -285,11 +403,15 @@ function namesForSlot(
 	slot: HintSlot,
 	all: AssetMeta[],
 	characters: Character[],
-	refs: Map<string, string>
+	refs: Map<string, string>,
+	passages: string[]
 ): string[] {
 	switch (slot.kind) {
 		case 'bg':
 			return assetNames(all, ['bg']);
+
+		case 'passage':
+			return [...passages].sort((a, b) => a.localeCompare(b));
 
 		case 'props':
 			return assetNames(all, ['object', 'fx']);
@@ -379,36 +501,48 @@ function insertEntity(name: string) {
  */
 export function sceneCompletion(
 	editor: Editor,
-	library: Pick<AssetLibrary, 'all' | 'characters'>
+	library: Pick<AssetLibrary, 'all' | 'characters'>,
+	passages: string[] = []
 ) {
 	const text = editor.getValue();
-	const block = extractSceneBlock(text);
-
-	if (!block) {
-		return undefined;
-	}
-
 	const lines = text.split('\n');
 	const cursor = editor.getCursor();
-	const context = sceneHintContext(
-		lines,
-		block.lineOffset,
-		block.lineOffset + block.text.split('\n').length,
-		cursor
-	);
+	const line = lines[cursor.line] ?? '';
+	const block = extractSceneBlock(text);
+	// A `[[link]]` is asked about first, and without needing a scene block: prose under
+	// the block, and a passage with no scene in it at all, both link the same way.
+	const context =
+		wikiLinkContext(line, cursor.ch) ??
+		(block
+			? sceneHintContext(
+					lines,
+					block.lineOffset,
+					block.lineOffset + block.text.split('\n').length,
+					cursor
+			  )
+			: undefined);
 
 	if (!context) {
 		return undefined;
 	}
 
-	const {needsSpace, scaffold, slot, start, typed} = context;
+	const {end, needsSpace, scaffold, slot, start, suffix, typed} = context;
 	const candidate = typed.toLowerCase();
-	const names = namesForSlot(
+	const all = namesForSlot(
 		slot,
 		library.all,
 		library.characters,
-		entityRefs(block.text)
-	).filter(name => name.toLowerCase().includes(candidate));
+		block ? entityRefs(block.text) : new Map(),
+		passages
+	);
+	const matched = all.filter(name => name.toLowerCase().includes(candidate));
+	// The whole name under the cursor, not just the part before it.
+	const written = line.slice(start, end);
+	// A name that is already complete is one the author asked to CHANGE, and a name that
+	// matches nothing is one they got wrong. Both want the full list; only a name in the
+	// middle of being typed wants it narrowed.
+	const exact = all.some(name => name.toLowerCase() === written.toLowerCase());
+	const names = exact || matched.length === 0 ? all : matched;
 
 	if (names.length === 0) {
 		return undefined;
@@ -417,7 +551,7 @@ export function sceneCompletion(
 	const bucket = slotKey(slot);
 	const completion = {
 		from: {ch: start, line: cursor.line},
-		to: {ch: cursor.ch, line: cursor.line},
+		to: {ch: end, line: cursor.line},
 		list: orderByRecent(names, bucket).map(({name, recent}) => ({
 			className: recent ? 'sliders-hint-recent' : undefined,
 			// The name is what shows and what gets remembered; `text` is only
@@ -426,9 +560,7 @@ export function sceneCompletion(
 			hint: scaffold ? insertEntity(name) : undefined,
 			text: scaffold
 				? `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
-				: needsSpace
-				? ` ${name}`
-				: name
+				: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
 		}))
 	};
 
@@ -444,20 +576,44 @@ export function sceneCompletion(
  * goes into the CodeMirror options object, and a changing options identity
  * would re-set every option on the editor, `prefixTrigger` included.
  */
-export function useSceneHints(): (editor: Editor) => void {
+export function useSceneHints(
+	passageNames: string[] = []
+): (editor: Editor) => void {
 	const library = useAssetLibrary();
 	const libraryRef = React.useRef(library);
+	const passagesRef = React.useRef(passageNames);
 
 	libraryRef.current = library;
+	passagesRef.current = passageNames;
 
 	return React.useCallback((editor: Editor) => {
-		if (!sceneCompletion(editor, libraryRef.current)) {
+		const complete = () =>
+			sceneCompletion(editor, libraryRef.current, passagesRef.current);
+		const opening = complete();
+
+		if (!opening) {
 			return;
 		}
 
-		editor.showHint({
-			completeSingle: false,
-			hint: () => sceneCompletion(editor, libraryRef.current)
-		});
+		// Show what a pick would overwrite. A real selection would say it better and
+		// cannot be used: show-hint refuses to open over one, and closes the moment one
+		// appears (`somethingSelected()` in the addon), so this is a marker instead.
+		const target =
+			opening.to.ch > opening.from.ch
+				? editor.markText(opening.from, opening.to, {
+						className: 'sliders-hint-target'
+				  })
+				: undefined;
+
+		if (target) {
+			const clear = () => {
+				target.clear();
+				editor.off('endCompletion', clear);
+			};
+
+			editor.on('endCompletion', clear);
+		}
+
+		editor.showHint({completeSingle: false, hint: complete});
 	}, []);
 }

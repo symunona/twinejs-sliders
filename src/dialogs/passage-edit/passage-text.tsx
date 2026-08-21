@@ -40,7 +40,11 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 	const [localText, setLocalText] = React.useState(passage.text);
 	const {prefs} = usePrefsContext();
 	const autocompletePassageNames = useCodeMirrorPassageHints(story);
-	const autocompleteSceneNames = useSceneHints();
+	const passageNames = React.useMemo(
+		() => story.passages.map(passage => passage.name),
+		[story.passages]
+	);
+	const autocompleteSceneNames = useSceneHints(passageNames);
 	const mode =
 		useFormatCodeMirrorMode(storyFormat.name, storyFormat.version) ?? 'text';
 	const codeAreaContainerRef = React.useRef<HTMLDivElement>(null);

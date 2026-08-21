@@ -11,7 +11,10 @@ import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {addPassageEditors, useDialogsContext} from '../context';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
+import {SceneErrors} from './scene-errors/scene-errors';
+import {useSceneErrorMarks} from './scene-errors/use-error-marks';
 import {ScenePreview} from './scene-preview/scene-preview';
+import {useSceneParse} from './scene-preview/use-scene-parse';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePreviewResolver} from './scene-preview/use-preview-resolver';
 import {StoryFormatToolbar} from './story-format-toolbar';
@@ -50,6 +53,16 @@ export const PassageEditContents: React.FC<
 		story.storyFormatVersion
 	);
 	const {t} = useTranslation();
+	// The scene text the author is looking at, undebounced (see `liveText` above).
+	const sceneText = liveText ?? passage.text;
+	/**
+	 * One parse for the whole dialog. The error list, the editor's own marks and the
+	 * preview all read it, and parsing three times would let them disagree about what the
+	 * scene currently says.
+	 */
+	const parse = useSceneParse(sceneText, story.passages);
+
+	useSceneErrorMarks(cmEditor, parse.errors);
 
 	// Keeps the story format's "Insert Last Scene" toolbar item pointed at
 	// whatever scene this author last worked on.
@@ -153,13 +166,19 @@ export const PassageEditContents: React.FC<
 					storyFormatExtensionsDisabled={!storyFormatExtensionsEnabled}
 				/>
 			</ErrorBoundary>
+			{parse.hasScene && (
+				<SceneErrors
+					errors={parse.errors}
+					onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
+				/>
+			)}
 			<ScenePreview
 				assets={previewAssets}
 				editor={cmEditor}
-				onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
 				onOpenPassage={handleOpenPassage}
+				parse={parse}
 				passages={story.passages}
-				text={liveText ?? passage.text}
+				text={sceneText}
 			/>
 		</div>
 	);

@@ -3,6 +3,7 @@ import {
 	closeDialogs,
 	createStory,
 	openPassage,
+	openSceneErrors,
 	setPassageText,
 	setStoryFormat
 } from './sliders-helpers';
@@ -156,8 +157,6 @@ test.describe('of: relative placement', () => {
 			'[scene]\nprops:\n  candle: {of: tabel, at: 0.4}\n'
 		);
 
-		await expect(
-			page.locator('[data-testid="scene-preview-errors"]')
-		).toContainText('tabel');
+		await expect(await openSceneErrors(page)).toContainText('tabel');
 	});
 });

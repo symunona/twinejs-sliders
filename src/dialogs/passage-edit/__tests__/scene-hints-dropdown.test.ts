@@ -75,13 +75,17 @@ beforeAll(() => {
 	Range.prototype.getClientRects = (() => ({item: () => null, length: 0})) as never;
 });
 
-function openHints(passage: string, cursor: {ch: number; line: number}) {
+function openHints(
+	passage: string,
+	cursor: {ch: number; line: number},
+	passages: string[] = ['Street', 'Tavern Fight']
+) {
 	const editor = CodeMirror(document.body, {value: passage});
 
 	editor.setCursor(cursor);
 	editor.showHint({
 		completeSingle: false,
-		hint: () => sceneCompletion(editor, library)
+		hint: () => sceneCompletion(editor, library, passages)
 	});
 
 	return editor;
@@ -157,5 +161,31 @@ describe('the scene hint dropdown', () => {
 		expect(
 			JSON.parse(window.localStorage.getItem('sliders-recent-names')!)
 		).toEqual({bg: ['tavern-night']});
+	});
+	it('overwrites a name the cursor is standing in', () => {
+		// Cursor at the front of `tavern-night`, which is therefore what a pick replaces.
+		const editor = openHints('[scene]\nbg: tavern-night', {ch: 4, line: 1});
+		const items = [...document.querySelectorAll('.CodeMirror-hint')];
+
+		(items.find(item => item.textContent === 'street') as HTMLElement).click();
+
+		expect(editor.getValue()).toBe('[scene]\nbg: street');
+	});
+
+	it('completes a passage inside a link, and closes it', () => {
+		const editor = openHints('Walk to [[Str', {ch: 13, line: 0});
+
+		(document.querySelector('.CodeMirror-hint') as HTMLElement).click();
+
+		expect(editor.getValue()).toBe('Walk to [[Street]]');
+	});
+
+	it('completes a link target that is already written', () => {
+		const editor = openHints('Walk to [[go -> Street]].', {ch: 18, line: 0});
+		const items = [...document.querySelectorAll('.CodeMirror-hint')];
+
+		(items.find(item => item.textContent === 'Tavern Fight') as HTMLElement).click();
+
+		expect(editor.getValue()).toBe('Walk to [[go -> Tavern Fight]].');
 	});
 });

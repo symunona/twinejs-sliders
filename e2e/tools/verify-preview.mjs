@@ -77,8 +77,13 @@ const info = await page.evaluate(() => {
 			e.getAttribute('data-asset-id')
 		),
 		beat: p.querySelector('[data-testid="scene-preview-beat"]')?.textContent,
-		errors: [...p.querySelectorAll('[data-testid="scene-preview-errors"] li')].map(e =>
-			e.textContent.trim()
+		// The error list left the preview: it now sits between the editor and the
+		// preview, behind an accordion that starts closed.
+		errorHeader: document
+			.querySelector('[data-testid="scene-errors-header"]')
+			?.textContent.trim(),
+		errors: [...document.querySelectorAll('[data-testid="scene-preview-errors"] li')].map(
+			e => e.textContent.trim()
 		)
 	};
 });

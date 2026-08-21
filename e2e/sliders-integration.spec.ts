@@ -10,6 +10,7 @@ import {
 	createStory,
 	closeDialogs,
 	openPassage,
+	openSceneErrors,
 	openStory,
 	renamePassage,
 	setPassageText,
@@ -278,7 +279,7 @@ test.describe('Sliders end to end', () => {
 			await openPassage(page, 'Street');
 			await setPassageText(page, BROKEN_PASSAGE.text);
 
-			const errors = page.getByTestId('scene-preview-errors');
+			const errors = await openSceneErrors(page);
 
 			await expect(errors).toBeVisible({timeout: 10000});
 			await expect(errors).toContainText('chast');

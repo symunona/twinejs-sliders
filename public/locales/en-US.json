@@ -256,6 +256,13 @@
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",
 			"passageTextEditorLabel": "Passage Text",
 			"passageTextPlaceholder": "Enter the body text of your passage here. To link to another passage, put two square brackets around its name, [[like this]].",
+			"sceneErrors": {
+				"valid": "Valid Scene ✅",
+				"showErrors": "Show Errors ({{count}})",
+				"showErrors_plural": "Show Errors ({{count}})",
+				"showWarnings": "Show Warnings ({{count}})",
+				"showWarnings_plural": "Show Warnings ({{count}})"
+			},
 			"setAsStart": "Start Story Here",
 			"size": "Size",
 			"sizeLarge": "Large",

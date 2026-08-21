@@ -1,0 +1,120 @@
+/*
+Sits between the passage text and the preview, so the error list grows downward into the
+preview rather than pushing the text the author is typing in.
+*/
+
+.scene-errors {
+	background: var(--dialog-background-color, #fff);
+	border-top: 1px solid var(--dialog-border-color, rgba(0, 0, 0, 0.15));
+	flex-shrink: 0;
+}
+
+.scene-errors-header {
+	align-items: center;
+	background: none;
+	border: none;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	font: inherit;
+	font-size: 12px;
+	gap: 6px;
+	padding: 4px 8px;
+	text-align: left;
+	width: 100%;
+}
+
+.scene-errors-header:disabled {
+	cursor: default;
+	opacity: 0.8;
+}
+
+.scene-errors:not(.clean) .scene-errors-header {
+	color: #b00020;
+}
+
+.scene-errors-header svg {
+	height: 16px;
+	width: 16px;
+}
+
+.scene-errors .scene-preview-errors {
+	border-top: 1px solid var(--dialog-border-color, rgba(0, 0, 0, 0.15));
+	font-family: var(--font-monospaced, monospace);
+	font-size: 12px;
+	list-style: none;
+	margin: 0;
+	max-height: min(10em, 25vh);
+	overflow-y: auto;
+	padding: 2px 0;
+}
+
+.scene-errors .scene-preview-errors li {
+	cursor: pointer;
+	display: flex;
+	gap: 8px;
+	padding: 2px 8px;
+}
+
+.scene-errors .scene-preview-errors li:hover {
+	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+}
+
+.scene-errors .scene-preview-errors li.error .line {
+	color: #b00020;
+}
+
+.scene-errors .scene-preview-errors li.warning .line {
+	color: #96700a;
+}
+
+.scene-errors .scene-preview-errors .line {
+	font-variant-numeric: tabular-nums;
+	min-width: 3em;
+	text-align: right;
+}
+
+.scene-errors .scene-preview-errors .hint {
+	opacity: 0.7;
+}
+
+/*
+Marks in the passage editor itself. The line tint says where, the underline says exactly
+which text, and the tooltip below says what.
+*/
+
+.CodeMirror .sliders-error-line {
+	background: rgba(176, 0, 32, 0.08);
+}
+
+.CodeMirror .sliders-warning-line {
+	background: rgba(150, 112, 10, 0.08);
+}
+
+.CodeMirror .sliders-scene-error {
+	text-decoration: underline wavy #b00020;
+	text-decoration-skip-ink: none;
+}
+
+.CodeMirror .sliders-scene-warning {
+	text-decoration: underline wavy #96700a;
+	text-decoration-skip-ink: none;
+}
+
+.sliders-error-tooltip {
+	background: #2b2b2b;
+	border-radius: 4px;
+	color: #fff;
+	font-size: 12px;
+	line-height: 1.4;
+	max-width: 32em;
+	padding: 4px 8px;
+	pointer-events: none;
+	position: fixed;
+	z-index: 1000;
+}
+
+.sliders-error-tooltip .hint {
+	display: block;
+	opacity: 0.75;
+}

@@ -152,6 +152,24 @@ export async function setPassageText(page: Page, text: string) {
 	await waitForPassageSave();
 }
 
+/**
+ * Open the scene error accordion under the passage text, and return its list.
+ *
+ * The accordion is closed by default -- a scene is broken for as long as it takes to
+ * type the next character, so the list stays out of the way until it is asked for.
+ */
+export async function openSceneErrors(page: Page) {
+	const header = page.getByTestId('scene-errors-header');
+
+	await header.waitFor({timeout: 20000});
+
+	if ((await header.getAttribute('aria-expanded')) !== 'true') {
+		await header.click();
+	}
+
+	return page.getByTestId('scene-preview-errors');
+}
+
 export async function renamePassage(page: Page, newName: string) {
 	// There are several Rename buttons (route toolbar, passage dialog) and the route
 	// one is disabled whenever no passage is selected. Take the first enabled one.
