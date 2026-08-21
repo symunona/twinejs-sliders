@@ -974,6 +974,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			</div>
 			{open && (
 				<>
+					{parse.errors.length > 0 && (
+						<ul className="scene-preview-errors" data-testid="scene-preview-errors">
+							{parse.errors.map((error, index) => (
+								<li
+									className={error.severity}
+									key={`${error.code}-${index}`}
+									onClick={() => onGoToLine?.(error.line)}
+								>
+									<span className="line">{error.line}</span>
+									<span className="message">{error.message}</span>
+									{error.hint && <span className="hint">{error.hint}</span>}
+								</li>
+							))}
+						</ul>
+					)}
 					{/* A click on the stage selects, so full screen moved to a double
 					    click. The toolbar button above is still the keyboard-accessible
 					    path, and `scene.fullScreen` still works. */}
@@ -1047,21 +1062,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							</div>
 						)}
 					</StageEditorOverlay>
-					{parse.errors.length > 0 && (
-						<ul className="scene-preview-errors" data-testid="scene-preview-errors">
-							{parse.errors.map((error, index) => (
-								<li
-									className={error.severity}
-									key={`${error.code}-${index}`}
-									onClick={() => onGoToLine?.(error.line)}
-								>
-									<span className="line">{error.line}</span>
-									<span className="message">{error.message}</span>
-									{error.hint && <span className="hint">{error.hint}</span>}
-								</li>
-							))}
-						</ul>
-					)}
 				</>
 			)}
 		</div>
