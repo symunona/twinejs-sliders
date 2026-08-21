@@ -24,6 +24,29 @@ export interface PrefsState {
 	 */
 	appTheme: 'dark' | 'light' | 'system';
 	/**
+	 * Does a story marked `sync` push itself to the backup server? (spec 11)
+	 */
+	backendAutosave: boolean;
+	/**
+	 * This browser's id on the backup server. Minted once, never shown.
+	 */
+	backendClientId: string;
+	/**
+	 * Bearer token for the backup server. Kept in local storage in the clear, like
+	 * every other preference.
+	 */
+	backendToken: string;
+	/**
+	 * Base URL of the backup server, e.g. `https://twine-story-store.tmpx.space`.
+	 * Empty disables all server syncing.
+	 */
+	backendUrl: string;
+	/**
+	 * Name shown to other editors in presence, locks and revision history. A label,
+	 * not a credential — everyone shares one token.
+	 */
+	backendUsername: string;
+	/**
 	 * Aspect ratio the asset generator last asked for.
 	 */
 	assetGeneratorAspect: string;

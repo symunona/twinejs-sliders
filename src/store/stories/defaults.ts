@@ -21,6 +21,7 @@ export const storyDefaults = (): Omit<Story, 'id'> => ({
 	script: '',
 	selected: false,
 	snapToGrid: true,
+	sync: false,
 	startPassage: '',
 	storyFormat: '',
 	storyFormatVersion: '',

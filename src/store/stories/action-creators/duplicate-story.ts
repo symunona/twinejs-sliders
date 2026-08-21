@@ -25,6 +25,8 @@ export function duplicateStory(
 			...story,
 			id,
 			ifid: uuid(),
+			// A copy is local until someone publishes it (spec 11).
+			sync: false,
 			name: unusedName(
 				story.name,
 				stories.map(story => story.name)

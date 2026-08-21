@@ -2,6 +2,11 @@ import {PrefsState} from './prefs.types';
 
 export const defaults = (): PrefsState => ({
 	appTheme: 'system',
+	backendAutosave: true,
+	backendClientId: '',
+	backendToken: '',
+	backendUrl: '',
+	backendUsername: '',
 	assetGeneratorAspect: '16:9',
 	assetGeneratorModel: 'gemini:gemini-2.5-flash-image',
 	codeEditorFontFamily: 'var(--font-monospaced)',

@@ -86,6 +86,11 @@ export interface Story {
 	 */
 	snapToGrid: boolean;
 	/**
+	 * Does this story push itself to the backup server? Local only: stripped from
+	 * anything sent to the server, so each editor decides for itself (spec 11).
+	 */
+	sync?: boolean;
+	/**
 	 * ID of the passage that the story begins at.
 	 */
 	startPassage: string;
