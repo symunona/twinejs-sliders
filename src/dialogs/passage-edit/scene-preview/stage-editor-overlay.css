@@ -59,7 +59,9 @@
 	position: absolute;
 }
 
-/* The origin — a character's feet. Read-only: anchors are global to the character. */
+/* The origin — a character's feet, and the point `at:` is measured from. Green at rest,
+   alone among the markers: cyan is the selection box and its handles, and the ref point has
+   to be findable in the middle of them. Read-only: anchors are global to the character. */
 .stage-editor-origin,
 .stage-editor-anchor {
 	height: 11px;
@@ -71,9 +73,62 @@
 
 .stage-editor-origin::before,
 .stage-editor-origin::after {
-	background: #4ad4ff;
+	background: #3ce88f;
 	content: '';
 	position: absolute;
+}
+
+/* The ref point of the entity being dragged or resized: bigger, ringed, ORANGE, and drawn
+   over everything else in the marker layer. The colour is the point — a resting origin is
+   green, and while a gesture runs the one origin the numbers are about has to be tellable
+   from the green crosses of everything else selected, at a glance, without counting sizes.
+   Orange is the only warm hue left: cyan is the selection box, green the resting origins,
+   yellow the bubble anchor, pink the snap guides. */
+.stage-editor-origin.active {
+	height: 19px;
+	margin-left: -9px;
+	margin-top: -9px;
+	width: 19px;
+	z-index: 2;
+}
+
+.stage-editor-origin.active::before,
+.stage-editor-origin.active::after {
+	background: #ff7a2f;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.stage-editor-origin.active::before {
+	height: 19px;
+	left: 9px;
+	top: 0;
+	width: 1px;
+}
+
+.stage-editor-origin.active::after {
+	height: 1px;
+	left: 0;
+	top: 9px;
+	width: 19px;
+}
+
+.stage-editor-origin.active .ring,
+.stage-editor-origin.active {
+	border-radius: 50%;
+}
+
+.stage-editor-origin.active {
+	box-shadow:
+		0 0 0 1px rgba(255, 122, 47, 0.95),
+		0 0 0 2px rgba(0, 0, 0, 0.45);
+}
+
+/* Alt-resize pivots on the rect centre, which is nobody's origin — dashed, so it reads as
+   a temporary pivot rather than as the entity having moved its feet. Same orange: it is
+   the point this gesture is about, which is what the colour means. */
+.stage-editor-origin.centre {
+	border: 1px dashed rgba(255, 122, 47, 0.95);
+	box-shadow: none;
 }
 
 .stage-editor-origin::before {
@@ -93,6 +148,43 @@
 .stage-editor-anchor {
 	border: 1px solid #ffd84a;
 	border-radius: 50%;
+}
+
+/* The numbers a live move or resize is producing. Pinned to the sprite rect rather than to
+   the pointer: the pointer is already on the sprite, and a label chasing it is unreadable
+   at the exact moment it is worth reading. Tabular figures so digits do not shuffle the
+   line sideways as they change. */
+.stage-editor-readout {
+	background: rgba(16, 20, 26, 0.86);
+	border: 1px solid rgba(255, 122, 47, 0.55);
+	border-radius: 3px;
+	color: #eaf6ef;
+	display: flex;
+	font-family: var(--font-monospaced, monospace);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	gap: 8px;
+	line-height: 1.4;
+	padding: 2px 6px;
+	position: absolute;
+	white-space: nowrap;
+	z-index: 3;
+}
+
+.stage-editor-readout .size {
+	color: #4ad4ff;
+}
+
+/* The numbers about the ref point wear the ref point's colour, so the readout and the
+   cross it is describing are read as one thing. Size is cyan: that is the selection box's
+   colour, and the size is the box. */
+.stage-editor-readout .scale,
+.stage-editor-readout .at {
+	color: #ff9d5c;
+}
+
+.stage-editor-readout .more {
+	color: rgba(234, 246, 239, 0.6);
 }
 
 .stage-editor-guide {

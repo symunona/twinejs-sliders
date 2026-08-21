@@ -99,11 +99,17 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// layers, which is the arrangement every drawing app has trained people on. Shift is
 	// not available here: `shift+[` reports the key as `{`, so the binding would never
 	// match what the keyboard actually sends.
+	//
+	// Mod + the up/down arrows are the second way to step layers, because that is the pair
+	// of keys that already means "the thing above / the thing below" on this stage: the bare
+	// arrows nudge, and holding mod lifts the whole entity a layer instead of moving it a
+	// hundredth. The bracket chords stay — a keyboard whose brackets are behind AltGr has
+	// the arrows, and one whose Ctrl+arrows the window manager eats has the brackets.
 
 	'scene.zBack': {bindings: ['[']},
 	'scene.zFront': {bindings: [']']},
-	'scene.layerBack': {bindings: ['mod+[']},
-	'scene.layerFront': {bindings: ['mod+]']},
+	'scene.layerBack': {bindings: ['mod+[', 'mod+down']},
+	'scene.layerFront': {bindings: ['mod+]', 'mod+up']},
 
 	// Asset manager.
 

@@ -132,6 +132,7 @@ export function fakePrefs(overrides?: Partial<PrefsState>): PrefsState {
 		openAiApiKey: '',
 		passageEditorFontFamily: faker.lorem.words(2),
 		passageEditorFontScale: 0.8 + faker.number.float(0.5),
+		passageEditorToolbars: true,
 		passageTagDisplay: 'color',
 		proofingFormat: {
 			name: faker.lorem.words(2),

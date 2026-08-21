@@ -490,6 +490,36 @@ export function scaleFrom(
 }
 
 // ---------------------------------------------------------------------------
+// Readout
+// ---------------------------------------------------------------------------
+
+export interface DisplaySize {
+	/** MOUNT px at zoom 1, rounded — a size to read, not a number to compute with. */
+	width: number;
+	height: number;
+}
+
+/**
+ * How big a sprite is drawn, with the camera's zoom taken back OUT.
+ *
+ * The rect the renderer reports is what is on the author's screen right now, zoom and all,
+ * so a readout that used it raw would count the wheel as a resize: scroll in, the number
+ * grows, and nothing in the scene changed. Dividing the zoom back out leaves the size the
+ * reader will get, which is the one worth putting next to a resize handle.
+ */
+export function displaySize(
+	rect: Rect | undefined,
+	camera: Camera
+): DisplaySize {
+	const zoom = safeZoom(camera?.zoom);
+
+	return {
+		width: Math.round(Math.max(0, finite(rect?.width)) / zoom),
+		height: Math.round(Math.max(0, finite(rect?.height)) / zoom)
+	};
+}
+
+// ---------------------------------------------------------------------------
 // Grid
 // ---------------------------------------------------------------------------
 

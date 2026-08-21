@@ -413,6 +413,123 @@ describe('<StageEditorOverlay>', () => {
 		]);
 	});
 
+	/**
+	 * The readout and the lit ref point. Both exist so a gesture can be read WITHOUT
+	 * looking away at the YAML: where the point `at:` is measured from now sits, and how
+	 * big the sprite is drawn. They are gesture-only — a resting selection is quiet.
+	 */
+	describe('the gesture readout', () => {
+		it('says nothing until a press becomes a drag', () => {
+			const {frame} = renderOverlay({selection: ['mira']});
+
+			expect(
+				screen.queryByTestId('stage-editor-readout')
+			).not.toBeInTheDocument();
+
+			fireEvent(frame, pointer('pointerdown', 100, 300));
+
+			expect(
+				screen.queryByTestId('stage-editor-readout')
+			).not.toBeInTheDocument();
+		});
+
+		it('shows the position and the drawn size while moving', () => {
+			const {frame} = renderOverlay({selection: ['mira']});
+
+			fireEvent(frame, pointer('pointerdown', 100, 300));
+			fireEvent(window, pointer('pointermove', 160, 300));
+
+			const readout = screen.getByTestId('stage-editor-readout');
+
+			expect(readout.querySelector('.at')).toBeInTheDocument();
+			// mira's rect, with the camera at zoom 1.
+			expect(readout.querySelector('.size')!.textContent).toBe('120 × 300');
+
+			fireEvent(window, pointer('pointerup', 160, 300));
+
+			expect(
+				screen.queryByTestId('stage-editor-readout')
+			).not.toBeInTheDocument();
+		});
+
+		it('shows the scale and the size while resizing', () => {
+			renderOverlay({selection: ['mira']});
+
+			const handle = document.querySelector('.stage-editor-handle.se')!;
+
+			fireEvent(handle, pointer('pointerdown', 200, 360));
+			fireEvent(window, pointer('pointermove', 216, 414));
+
+			const readout = screen.getByTestId('stage-editor-readout');
+
+			expect(readout.querySelector('.scale')).toBeInTheDocument();
+			expect(readout.querySelector('.size')).toBeInTheDocument();
+		});
+
+		it('counts the rest of a multi-select rather than stacking readouts', () => {
+			const {frame} = renderOverlay({selection: ['mira', 'candle']});
+
+			fireEvent(frame, pointer('pointerdown', 100, 300));
+			fireEvent(window, pointer('pointermove', 160, 300));
+
+			expect(screen.getAllByTestId('stage-editor-readout')).toHaveLength(1);
+			expect(
+				screen.getByTestId('stage-editor-readout').querySelector('.more')!
+					.textContent
+			).toBe('+1');
+		});
+
+		// The camera moved, the scene did not: there is no number about an entity to show.
+		it('says nothing while panning', () => {
+			const {frame} = renderOverlay();
+
+			fireEvent(frame, pointer('pointerdown', 500, 20));
+			fireEvent(window, pointer('pointermove', 564, 20));
+
+			expect(
+				screen.queryByTestId('stage-editor-readout')
+			).not.toBeInTheDocument();
+		});
+	});
+
+	describe('the ref point', () => {
+		it('lights up only the entity the gesture is about', () => {
+			const {frame} = renderOverlay({selection: ['mira', 'candle']});
+
+			expect(document.querySelectorAll('.stage-editor-origin.active')).toHaveLength(
+				0
+			);
+
+			fireEvent(frame, pointer('pointerdown', 100, 300));
+			fireEvent(window, pointer('pointermove', 160, 300));
+
+			const lit = screen.getByTestId('stage-editor-origin-active');
+
+			expect(lit).toHaveClass('active');
+			expect(document.querySelectorAll('.stage-editor-origin.active')).toHaveLength(
+				1
+			);
+		});
+
+		// Alt pivots the resize on the rect centre, so the highlight moves there — the
+		// marker follows the maths.
+		it('moves to the rect centre on an alt resize', () => {
+			renderOverlay({selection: ['mira']});
+
+			const handle = document.querySelector('.stage-editor-handle.se')!;
+
+			fireEvent(handle, pointer('pointerdown', 200, 360));
+			fireEvent(window, pointer('pointermove', 216, 414, {altKey: true}));
+
+			const pivot = screen.getByTestId('stage-editor-pivot-centre');
+
+			expect(pivot).toHaveStyle({left: '140px', top: '210px'});
+			expect(
+				screen.queryByTestId('stage-editor-origin-active')
+			).not.toHaveClass('active');
+		});
+	});
+
 	it('draws handles only for a single selection', () => {
 		renderOverlay({selection: ['mira']});
 		expect(document.querySelectorAll('.stage-editor-handle')).toHaveLength(4);

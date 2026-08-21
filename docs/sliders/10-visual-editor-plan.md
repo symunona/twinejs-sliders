@@ -234,10 +234,16 @@ so exactly one of the two owns the arrow keys and Escape hands them back.
 | `backspace` / `delete` | remove the entity, or `~` in a `from:` scene |
 | `[` `]` | nudge `z:` within the layer |
 | `mod+[` `mod+]` | step the layer back / front |
+| `mod+↓` `mod+↑` | step the layer back / front, same commands |
 
 `shift+[` and `shift+]` are **not usable** as bindings: the browser reports `event.key` as
 `{` and `}`, so a shift-bracket binding can never match. That is why the layer step is on
 `mod`, not shift.
+
+The arrows are the layer step's second chord because they already mean "the one above / the
+one below" on this stage: a bare arrow nudges by a hundredth, and the same arrow with `mod`
+lifts the whole entity a layer instead. Brackets stay bound as well — a keyboard that hides
+`[` behind AltGr has the arrows, and a desktop that eats `ctrl+↑` has the brackets.
 
 | Pointer | Does |
 |---|---|
@@ -251,6 +257,22 @@ so exactly one of the two owns the arrow keys and Escape hands them back.
 A bare wheel is deliberately left alone — the preview sits mid-column in a scrolling dialog
 and the pointer crosses it on the way elsewhere; a stage that swallowed plain scroll would
 read as broken. `ctrl`+wheel is also what a trackpad pinch reports, so pinch-to-zoom is free.
+
+### Reading a gesture without reading the YAML
+
+While a move or a resize is running — and only then — the stage says what it is doing:
+
+- **The readout**, pinned above the sprite rect (below it when the sprite is at the top of
+  the frame). A move shows the absolute `at`; a resize shows `×scale`. Both show the drawn
+  **size** in px with the camera's zoom divided back out, so scrolling the wheel never
+  changes the number. A multi-select move reports the entity that was grabbed plus `+n`.
+- **The ref point**, lit orange: the point `at:` is measured from and the point a resize
+  pivots on. Resting origins stay green, so in a group move the one the numbers are about
+  is the one that changed colour. Alt-resize pivots on the rect centre instead, and the
+  orange marker moves there, dashed — the marker follows the maths, it does not describe
+  an intention.
+
+Full screen is the same overlay, so both appear there too.
 
 ### Two rules that look inconsistent and are not
 

@@ -34,6 +34,7 @@ import {
 import type {AssetDragPayload} from './asset-drag';
 import {cameraWrite, panCamera, wheelZoomFactor, zoomCamera} from './scene-gestures';
 import {
+	displaySize,
 	dragTo,
 	gridCentre,
 	gridLines,
@@ -81,6 +82,18 @@ const WHEEL_COMMIT_DELAY_MS = 220;
 
 /** Feet, bottom centre — the fallback when there is no rect to invert an origin out of. */
 const DEFAULT_ORIGIN_FRAC = {x: 0.5, y: 1};
+
+/** Gap between the sprite rect and the readout pinned to it, in MOUNT px. */
+const READOUT_GAP_PX = 8;
+
+/**
+ * How much room the readout needs above a sprite before it stops fitting there.
+ *
+ * Roughly its own height plus the gap. A sprite whose top is higher than this on the mount
+ * gets the readout underneath instead, which is the only other side guaranteed to be inside
+ * the frame — the stage is always at least as tall as the tallest thing on it.
+ */
+const READOUT_HEIGHT_PX = 30;
 
 interface Gesture {
 	kind: 'move' | 'scale' | 'pan';
@@ -267,8 +280,22 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const [box, setBox] = React.useState<StageBox>();
 	const [guides, setGuides] = React.useState<{x?: number; y?: number}>({});
 	const [hover, setHover] = React.useState<EntityId>();
-	const [dragging, setDragging] = React.useState(false);
+	/**
+	 * Which gesture is on screen, once it has passed the drag threshold.
+	 *
+	 * Also the `dragging` flag the cursor reads — one piece of state rather than two, so a
+	 * grabbing cursor and a readout can never disagree about whether a drag is happening.
+	 */
+	const [active, setActive] = React.useState<Gesture['kind']>();
+	/**
+	 * Alt is held on a resize, so the pivot is the rect centre and not the sprite's origin.
+	 *
+	 * A plain boolean rather than part of `active`: it is written on every pointermove, and
+	 * React bails out of a re-render when a primitive is set to the value it already has.
+	 */
+	const [pivotCentre, setPivotCentre] = React.useState(false);
 	const [dropActive, setDropActive] = React.useState(false);
+	const dragging = active !== undefined;
 	const camera = stage.camera;
 
 	/**
@@ -346,7 +373,8 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 	const endGesture = React.useCallback(() => {
 		gestureRef.current = undefined;
-		setDragging(false);
+		setActive(undefined);
+		setPivotCentre(false);
 		setGuides({});
 	}, []);
 
@@ -409,7 +437,11 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 			if (!gesture.moved) {
 				gesture.moved = true;
-				setDragging(true);
+				setActive(gesture.kind);
+			}
+
+			if (gesture.kind === 'scale') {
+				setPivotCentre(event.altKey);
 			}
 
 			if (gesture.kind === 'pan') {
@@ -862,6 +894,19 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const single = selection.length === 1 ? selection[0] : undefined;
 	const singleRect = single === undefined ? undefined : rects.get(single);
 
+	// The entity a live move or resize is speaking for. A multi-select move reports the one
+	// that was grabbed first rather than four stacked readouts, and a pan reports nothing —
+	// the camera moved, the scene did not.
+	const readoutId =
+		active === 'move' || active === 'scale' ? selection[0] : undefined;
+	const readoutEntity =
+		readoutId === undefined ? undefined : stage.entities?.[readoutId];
+	const readoutRect = readoutId === undefined ? undefined : rects.get(readoutId);
+	const readoutSize = displaySize(readoutRect, camera);
+	// Above the sprite by default: a drag holds the pointer at the sprite, and the numbers
+	// are no use underneath the hand that is moving it.
+	const readoutAbove = (readoutRect?.top ?? 0) > READOUT_HEIGHT_PX;
+
 	return (
 		<div
 			className={classNames('stage-editor', {
@@ -957,8 +1002,31 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							/>
 							{origin && (
 								<div
-									className="stage-editor-origin"
+									className={classNames('stage-editor-origin', {
+										// The ref point of the thing being dragged: where its
+										// `at:` is measured from, and what a resize pivots on.
+										// Lit up only for the entity the gesture is about, so a
+										// group move does not turn into a field of crosses.
+										active:
+											id === readoutId && !(active === 'scale' && pivotCentre)
+									})}
+									data-testid={
+										id === readoutId ? 'stage-editor-origin-active' : undefined
+									}
 									style={{left: origin.x, top: origin.y}}
+								/>
+							)}
+							{/* Alt-resize pivots on the rect centre instead, so that is where
+							    the highlight goes — the marker follows the maths, it does not
+							    describe an intention. */}
+							{id === readoutId && active === 'scale' && pivotCentre && (
+								<div
+									className="stage-editor-origin active centre"
+									data-testid="stage-editor-pivot-centre"
+									style={{
+										left: rect.left + rect.width / 2,
+										top: rect.top + rect.height / 2
+									}}
 								/>
 							)}
 							{anchor && (
@@ -970,6 +1038,40 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						</React.Fragment>
 					);
 				})}
+				{/* What the gesture is doing, in numbers: where the ref point now sits, and
+				    how big the sprite is drawn. `at` is the ABSOLUTE position — the same
+				    space the grid and the snap guides are in — which for an `of:` child is
+				    not the offset its YAML line holds. */}
+				{readoutEntity && readoutRect && (
+					<div
+						className="stage-editor-readout"
+						data-testid="stage-editor-readout"
+						style={{
+							left: Math.max(0, readoutRect.left),
+							top: readoutAbove
+								? readoutRect.top - READOUT_GAP_PX
+								: readoutRect.top + readoutRect.height + READOUT_GAP_PX,
+							transform: readoutAbove ? 'translateY(-100%)' : undefined
+						}}
+					>
+						{active === 'scale' ? (
+							<span className="scale">
+								&times;{roundCoord(readoutEntity.scale ?? 1)}
+							</span>
+						) : (
+							<span className="at">
+								x {roundCoord(readoutEntity.at.x)} y{' '}
+								{roundCoord(readoutEntity.at.y)}
+							</span>
+						)}
+						<span className="size">
+							{readoutSize.width} &times; {readoutSize.height}
+						</span>
+						{selection.length > 1 && (
+							<span className="more">+{selection.length - 1}</span>
+						)}
+					</div>
+				)}
 				{/* Handles only for a single selection: a group resize would need an
 				    anchor that is nobody's origin. Multi-select gets move only. */}
 				{editable &&
