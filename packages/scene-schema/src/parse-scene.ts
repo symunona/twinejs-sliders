@@ -88,6 +88,11 @@ interface Ctx {
 	 * mark a target that names no passage; the parser itself has no story to check against.
 	 */
 	linkTargetNodes: Map<string, unknown>;
+	/**
+	 * Where each link's `if:` was written. Reported as `linkIfSpans` for the same reason
+	 * the target spans are: a condition names story variables, and the parser has no story.
+	 */
+	linkIfNodes: Map<string, unknown>;
 	/** `mira: ~` nodes, legal only once we know whether `from:` was set. */
 	pendingRemovals: {id: string; node: unknown}[];
 	/** `of:` edges declared in THIS block, with the node to point an error at. */
@@ -918,6 +923,8 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 
 					if (key === 'to') {
 						ctx.linkTargetNodes.set(name, prop.value);
+					} else if (key === 'if') {
+						ctx.linkIfNodes.set(name, prop.value);
 					}
 				}
 			} else {
@@ -1036,6 +1043,7 @@ export function parseScene(text: string): ParseResult {
 	const ctx: Ctx = {
 		errors: [],
 		inlineLinks: new Map(),
+		linkIfNodes: new Map(),
 		linkNodes: new Map(),
 		linkTargetNodes: new Map(),
 		lineCounter,
@@ -1306,5 +1314,13 @@ export function parseScene(text: string): ParseResult {
 		}
 	}
 
-	return {errors: ctx.errors, linkSpans, scene};
+	const linkIfSpans: Record<string, SceneSpan> = {};
+
+	for (const [name, node] of ctx.linkIfNodes) {
+		if (scene.links[name]) {
+			linkIfSpans[name] = spanOf(ctx, node);
+		}
+	}
+
+	return {errors: ctx.errors, linkIfSpans, linkSpans, scene};
 }

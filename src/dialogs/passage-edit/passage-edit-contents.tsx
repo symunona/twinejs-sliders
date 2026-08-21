@@ -13,6 +13,10 @@ import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
 import {SceneErrors} from './scene-errors/scene-errors';
 import {useSceneErrorMarks} from './scene-errors/use-error-marks';
+import {
+	interceptScenePrefill,
+	sceneLinkSeeds
+} from './scene-preview/prefill-links';
 import {ScenePreview} from './scene-preview/scene-preview';
 import {useSceneParse} from './scene-preview/use-scene-parse';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
@@ -124,11 +128,22 @@ export const PassageEditContents: React.FC<
 			throw new Error('No editor set');
 		}
 
+		// "Insert Scene" drops a skeleton whose links: are a worked example. Point that
+		// example at the links this passage already has. The rewrite has to wait for the
+		// document to catch up, so it rides the same deferral the selection does.
+		const prefill = interceptScenePrefill(
+			cmEditor,
+			sceneLinkSeeds(passage.name, sceneText, story.passages)
+		);
+
 		cmEditor.execCommand(name);
 
 		const selections = cmEditor.listSelections();
 
-		Promise.resolve().then(() => cmEditor.setSelections(selections));
+		Promise.resolve().then(() => {
+			prefill.finish();
+			cmEditor.setSelections(selections);
+		});
 	}
 
 	if (editorCrashed) {

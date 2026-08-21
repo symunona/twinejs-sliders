@@ -93,10 +93,12 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 		expect(skeleton).toContain(key);
 	}
 
-	// The skeleton's links: are a teaching example, pointing at passages that do not
-	// exist yet, and story validation says so.
+	// The skeleton's links: are a teaching example: two targets that name no passage,
+	// and one `if:` on a variable no vars section sets. Story validation says so, and
+	// nothing rewrote them, because this passage had no links of its own to borrow.
+	expect(skeleton).toContain('Next Passage');
 	await expect(page.getByTestId('scene-errors-header')).toHaveText(
-		/Show Errors \(2\)/
+		/Show Errors \(3\)/
 	);
 
 	// --- Editing a scene makes it the last scene ---------------------------

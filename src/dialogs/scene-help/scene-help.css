@@ -1,0 +1,121 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.scene-help {
+	padding: var(--grid-size);
+}
+
+/*
+Pinned above the tabs, not inside one: whichever section an author is reading, the
+completion key is the thing that stops them typing an asset name out by hand.
+*/
+.scene-help-hotkey {
+	background: var(--faint-gray);
+	border-radius: 4px;
+	margin: 0 0 var(--ui-gap) 0;
+	padding: var(--grid-size);
+}
+
+.scene-help kbd {
+	border: 1px solid;
+	border-radius: 3px;
+	font-family: var(--font-monospaced);
+	font-size: 90%;
+	padding: 0 4px;
+}
+
+.scene-help code {
+	font-family: var(--font-monospaced);
+	font-size: 90%;
+}
+
+.scene-help h3 {
+	margin-bottom: calc(var(--grid-size) / 2);
+	margin-top: var(--ui-gap);
+}
+
+.scene-help h3:first-child {
+	margin-top: 0;
+}
+
+.scene-help ol,
+.scene-help ul {
+	margin-left: 0;
+	padding-left: var(--ui-gap);
+}
+
+.scene-help li {
+	margin-bottom: calc(var(--grid-size) / 2);
+}
+
+/* Key tables: the key is the thing being looked up, so it gets the column. */
+.scene-help-keys {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+.scene-help-keys th {
+	font-family: var(--font-monospaced);
+	font-weight: normal;
+	padding: 2px var(--grid-size) 2px 0;
+	text-align: left;
+	vertical-align: top;
+	white-space: nowrap;
+}
+
+.scene-help-keys td {
+	padding: 2px 0;
+	vertical-align: top;
+}
+
+/*
+Samples scroll on their own rather than wrapping. Wrapped YAML reads as different YAML --
+indentation is the syntax -- and the dialog is narrow.
+*/
+.scene-help-sample {
+	background: var(--faint-gray);
+	border-radius: 4px;
+	font-size: 90%;
+	margin: var(--grid-size) 0;
+	overflow-x: auto;
+	padding: var(--grid-size);
+}
+
+.scene-help-sample code {
+	font-size: 100%;
+	white-space: pre;
+}
+
+.scene-help .sliders-tablist {
+	border-bottom: 1px solid var(--light-gray);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.scene-help .sliders-tab {
+	border-bottom: 3px solid transparent;
+	cursor: pointer;
+	padding: 4px var(--grid-size);
+}
+
+.scene-help .sliders-tab.selected {
+	border-bottom-color: var(--blue);
+	font-weight: bold;
+}
+
+.scene-help .sliders-tab:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
+.scene-help .react-tabs__tab-panel {
+	display: none;
+}
+
+.scene-help .react-tabs__tab-panel--selected {
+	display: block;
+	padding-top: var(--ui-gap);
+}

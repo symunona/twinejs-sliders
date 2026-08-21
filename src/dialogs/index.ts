@@ -9,6 +9,7 @@ export * from './dialogs.types';
 export * from './keyboard-shortcuts';
 export * from './passage-edit';
 export * from './passage-tags';
+export * from './scene-help';
 export * from './sliders-assets';
 export * from './sliders-characters';
 export * from './story-import';

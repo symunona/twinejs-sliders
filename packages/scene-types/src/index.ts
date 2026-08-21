@@ -239,6 +239,7 @@ export type SceneErrorCode =
 	| 'unknown-frame'
 	| 'unknown-link'
 	| 'unknown-passage'
+	| 'unknown-variable'
 	| 'unknown-parent'
 	| 'of-cycle'
 	| 'dupe-scene-id'
@@ -271,6 +272,12 @@ export interface ParseResult {
 	 * something the parser cannot see — and needs somewhere to point when one is wrong.
 	 */
 	linkSpans?: Record<string, SceneSpan>;
+	/**
+	 * Where each link's `if:` condition was written, keyed by link name. Same reason as
+	 * `linkSpans`: the variables a condition names are set in vars sections elsewhere in
+	 * the story, and only the editor can see those.
+	 */
+	linkIfSpans?: Record<string, SceneSpan>;
 }
 
 /** A place in the scene text. 1-indexed, same as `SceneError`. */
