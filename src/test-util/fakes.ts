@@ -114,6 +114,11 @@ export function fakePrefs(overrides?: Partial<PrefsState>): PrefsState {
 	return {
 		appTheme: faker.helpers.arrayElement(['light', 'dark', 'system']),
 		assetGeneratorAspect: '16:9',
+		backendAutosave: true,
+		backendClientId: '',
+		backendToken: '',
+		backendUrl: '',
+		backendUsername: '',
 		assetGeneratorModel: 'gemini:gemini-2.5-flash-image',
 		codeEditorFontFamily: faker.lorem.words(2),
 		codeEditorFontScale: 0.8 + faker.number.int(0.5),

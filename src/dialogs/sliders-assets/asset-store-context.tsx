@@ -6,14 +6,6 @@ import {
 import {AssetId, AssetMeta, Character} from '@sliders/scene-types';
 import * as React from 'react';
 
-/**
- * The library that predates per-story scoping: one shared pile of art every story could
- * see, which is exactly the leak scoping fixes. It is never written to any more — the
- * migration copies what each story actually uses into that story, and the asset manager's
- * Import tab offers the rest.
- */
-export const LEGACY_ASSET_SCOPE = '';
-
 const stores = new Map<string, AssetStore>();
 
 /**

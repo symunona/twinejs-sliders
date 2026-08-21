@@ -8,11 +8,7 @@ import {IconButton} from '../../components/control/icon-button';
 import {TextSelect} from '../../components/control/text-select';
 import {useStoriesContext} from '../../store/stories';
 import {AssetPreview} from './asset-preview';
-import {
-	LEGACY_ASSET_SCOPE,
-	useAssetLibrary,
-	useAssetStore
-} from './asset-store-context';
+import {useAssetLibrary, useAssetStore} from './asset-store-context';
 import {
 	assetIsPresent,
 	importAssetFromStory,
@@ -45,7 +41,6 @@ export const ImportTab: React.FC<ImportTabProps> = props => {
 	const {t} = useTranslation();
 	const {stories} = useStoriesContext();
 	const target = useAssetStore();
-	const legacy = useAssetLibrary(LEGACY_ASSET_SCOPE);
 	const [source, setSource] = React.useState('');
 	const [busyId, setBusyId] = React.useState<string>();
 	const [notice, setNotice] = React.useState<string>();
@@ -56,20 +51,11 @@ export const ImportTab: React.FC<ImportTabProps> = props => {
 			.map(story => ({label: story.name, scope: story.id}))
 			.sort((a, b) => a.label.localeCompare(b.label));
 
-		// The library every story used to share. It is not a story, so it has no name of
-		// its own, and it only exists for authors who were here before scoping.
-		if (legacy.all.length > 0 || legacy.characters.length > 0) {
-			list.unshift({
-				label: t('dialogs.slidersAssets.importLegacy'),
-				scope: LEGACY_ASSET_SCOPE
-			});
-		}
-
 		return list;
-	}, [legacy.all.length, legacy.characters.length, stories, t, target.scope]);
+	}, [stories, target.scope]);
 
-	// Whatever the picker is showing has to be a real choice: the legacy row appears once
-	// its library has loaded, and a story can be deleted while the dialog is open.
+	// Whatever the picker is showing has to be a real choice: a story can be deleted while
+	// the dialog is open.
 	const selected = sources.some(item => item.scope === source)
 		? source
 		: sources[0]?.scope;

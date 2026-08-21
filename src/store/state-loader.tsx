@@ -1,6 +1,5 @@
 import * as React from 'react';
 import {LoadingCurtain} from '../components/loading-curtain';
-import {migrateLegacyAssets} from './migrate-legacy-assets';
 import {usePersistence} from './persistence/use-persistence';
 import {usePrefsContext} from './prefs';
 import {useStoriesContext} from './stories';
@@ -13,8 +12,6 @@ export const StateLoader: React.FC = ({children}) => {
 	const [prefsRepaired, setPrefsRepaired] = React.useState(false);
 	const [formatsRepaired, setFormatsRepaired] = React.useState(false);
 	const [storiesRepaired, setStoriesRepaired] = React.useState(false);
-	const [assetsScoped, setAssetsScoped] = React.useState(false);
-	const scopingAssets = React.useRef(false);
 	const {dispatch: prefsDispatch, prefs: prefsState} = usePrefsContext();
 	const {dispatch: storiesDispatch, stories: storiesState} =
 		useStoriesContext();
@@ -90,35 +87,8 @@ export const StateLoader: React.FC = ({children}) => {
 		storiesRepaired
 	]);
 
-	// Assets used to live in one library shared by every story. Each story's share is
-	// copied into its own library before anything can open the asset manager and write to
-	// one — see migrate-legacy-assets. Runs once per browser and no-ops after that.
 
-	React.useEffect(() => {
-		if (!storiesRepaired || assetsScoped || scopingAssets.current) {
-			return;
-		}
-
-		scopingAssets.current = true;
-		migrateLegacyAssets(storiesState)
-			.then(report => {
-				if (report.assets > 0 || report.characters > 0) {
-					console.info(
-						`Sliders: copied ${report.assets} asset(s) and ${report.characters} character(s) from the old shared library into ${report.stories} story/stories.`
-					);
-				}
-			})
-			.catch(error =>
-				console.error('Sliders: could not scope the asset library', error)
-			)
-			.finally(() => setAssetsScoped(true));
-	}, [assetsScoped, storiesRepaired, storiesState]);
-
-	return inited &&
-		formatsRepaired &&
-		prefsRepaired &&
-		storiesRepaired &&
-		assetsScoped ? (
+	return inited && formatsRepaired && prefsRepaired && storiesRepaired ? (
 		<>{children}</>
 	) : (
 		<LoadingCurtain />
