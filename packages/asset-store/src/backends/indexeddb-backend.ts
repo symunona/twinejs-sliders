@@ -18,14 +18,30 @@ function promisify<T>(request: IDBRequest<T>): Promise<T> {
 	});
 }
 
-/** Fallback web backend, used when OPFS isn't available. */
+/**
+ * Fallback web backend, used when OPFS isn't available.
+ *
+ * Scopes share one database and are kept apart by key: `manifest:<scope>` and
+ * `<scope>/<asset id>`. The empty scope keeps the unprefixed keys the shared library used
+ * before scoping, so its art is still readable and can be imported forward.
+ */
 export class IndexedDbBackend implements StorageBackend {
 	readonly kind = 'indexeddb' as const;
 
 	private database?: Promise<IDBDatabase>;
 
+	constructor(private scope = '') {}
+
 	static available(): boolean {
 		return typeof indexedDB !== 'undefined';
+	}
+
+	private manifestKey(): string {
+		return this.scope ? `${MANIFEST_KEY}:${this.scope}` : MANIFEST_KEY;
+	}
+
+	private blobKey(id: AssetId): string {
+		return this.scope ? `${this.scope}/${id}` : id;
 	}
 
 	private open(): Promise<IDBDatabase> {
@@ -68,7 +84,7 @@ export class IndexedDbBackend implements StorageBackend {
 		const manifest = await this.transact<AssetManifest | undefined>(
 			MANIFEST_STORE,
 			'readonly',
-			store => store.get(MANIFEST_KEY)
+			store => store.get(this.manifestKey())
 		);
 
 		return manifest ?? emptyManifest();
@@ -77,21 +93,25 @@ export class IndexedDbBackend implements StorageBackend {
 	async writeManifest(manifest: AssetManifest): Promise<void> {
 		await this.transact(MANIFEST_STORE, 'readwrite', store =>
 			// Structured-cloned, so it must be a plain object.
-			store.put(JSON.parse(JSON.stringify(manifest)), MANIFEST_KEY)
+			store.put(JSON.parse(JSON.stringify(manifest)), this.manifestKey())
 		);
 	}
 
 	async readBlob(id: AssetId): Promise<Blob | undefined> {
 		return await this.transact<Blob | undefined>(BLOB_STORE, 'readonly', store =>
-			store.get(id)
+			store.get(this.blobKey(id))
 		);
 	}
 
 	async writeBlob(id: AssetId, blob: Blob): Promise<void> {
-		await this.transact(BLOB_STORE, 'readwrite', store => store.put(blob, id));
+		await this.transact(BLOB_STORE, 'readwrite', store =>
+			store.put(blob, this.blobKey(id))
+		);
 	}
 
 	async deleteBlob(id: AssetId): Promise<void> {
-		await this.transact(BLOB_STORE, 'readwrite', store => store.delete(id));
+		await this.transact(BLOB_STORE, 'readwrite', store =>
+			store.delete(this.blobKey(id))
+		);
 	}
 }

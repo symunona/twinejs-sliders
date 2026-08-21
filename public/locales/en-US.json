@@ -337,7 +337,17 @@
 			"newCharacterPrompt": "What should this character be called?",
 			"editImage": "Edit Image",
 			"editImageAnimated": "Animated images can't be edited",
-			"dragToStage": "Drag onto the scene preview to place it"
+			"dragToStage": "Drag onto the scene preview to place it",
+			"importTab": "Import…",
+			"import": "Import",
+			"importFrom": "Import from",
+			"importLegacy": "Shared library (before assets were per story)",
+			"importAlreadyHere": "Already in this story",
+			"importEmpty": "That story has no assets to import.",
+			"importNoStories": "There is no other story to import assets from.",
+			"imported": "Imported “{{name}}”.",
+			"importedNothing": "“{{name}}” was not copied.",
+			"importError": "Could not import “{{name}}”: {{message}}"
 		},
 		"slidersCharacters": {
 			"addAnchor": "Add Anchor",

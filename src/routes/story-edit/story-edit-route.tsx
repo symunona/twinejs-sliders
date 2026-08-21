@@ -3,6 +3,7 @@ import {useParams} from 'react-router-dom';
 import {MainContent} from '../../components/container/main-content';
 import {DocumentTitle} from '../../components/document-title/document-title';
 import {DialogsContextProvider} from '../../dialogs';
+import {AssetScopeProvider} from '../../dialogs/sliders-assets/asset-store-context';
 import { usePrefsContext } from '../../store/prefs';
 import {storyWithId} from '../../store/stories';
 import {
@@ -87,10 +88,18 @@ export const InnerStoryEditRoute: React.FC = () => {
 // This is a separate component so that the inner one can use
 // `useDialogsContext()` and `useUndoableStoriesContext()` inside it.
 
-export const StoryEditRoute: React.FC = () => (
-	<UndoableStoriesContextProvider>
-		<DialogsContextProvider>
-			<InnerStoryEditRoute />
-		</DialogsContextProvider>
-	</UndoableStoriesContextProvider>
-);
+export const StoryEditRoute: React.FC = () => {
+	const {storyId} = useParams<{storyId: string}>();
+
+	// Assets belong to the story being edited, and every asset dialog opens from this
+	// route, so the scope is set once, here, above the dialog stack.
+	return (
+		<AssetScopeProvider storyId={storyId}>
+			<UndoableStoriesContextProvider>
+				<DialogsContextProvider>
+					<InnerStoryEditRoute />
+				</DialogsContextProvider>
+			</UndoableStoriesContextProvider>
+		</AssetScopeProvider>
+	);
+};

@@ -32,7 +32,7 @@ import {
 } from './scene-gestures';
 import {
 	refreshAssetLibrary,
-	slidersAssetStore
+	useAssetStore
 } from '../../sliders-assets/asset-store-context';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
@@ -158,6 +158,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	onOpenPassage
 }) => {
 	const {t} = useTranslation();
+	const store = useAssetStore();
 	const [open, setOpen] = React.useState(
 		() => window.localStorage.getItem(OPEN_KEY) !== 'false'
 	);
@@ -464,7 +465,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const handleDropFiles = React.useCallback(
 		async (files: File[], at: Vec2) => {
-			const store = slidersAssetStore();
 			let placed = 0;
 
 			for (const file of files) {
@@ -493,7 +493,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			assets.invalidate?.();
 			refreshAssetLibrary();
 		},
-		[assets]
+		[assets, store]
 	);
 
 	/** Arrow-key move. Reads the CURRENT position each time, so it cannot drift. */

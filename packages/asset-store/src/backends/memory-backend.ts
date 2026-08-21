@@ -5,7 +5,12 @@ import {
 	StorageBackend
 } from '../asset-store.types';
 
-/** Non-persistent backend. Used by tests, and as a last resort if nothing else works. */
+/**
+ * Non-persistent backend. Used by tests, and as a last resort if nothing else works.
+ *
+ * Nothing to scope: one instance holds one scope's worth of assets, and
+ * `createAssetStore` makes one per scope.
+ */
 export class MemoryBackend implements StorageBackend {
 	readonly kind = 'indexeddb' as const;
 

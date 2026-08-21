@@ -52,6 +52,11 @@ export interface PutAssetResult {
  */
 export interface AssetStore extends AssetResolver {
 	readonly backend: BackendKind;
+	/**
+	 * The story id this library belongs to. Empty for the shared library that predates
+	 * per-story scoping.
+	 */
+	readonly scope: string;
 	put(file: File, options?: PutAssetOptions): Promise<AssetId>;
 	/** Same upload, with the duplicate/transcode report the UI needs. */
 	putAsset(file: File, options?: PutAssetOptions): Promise<PutAssetResult>;

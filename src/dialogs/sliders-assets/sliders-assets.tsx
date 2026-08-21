@@ -15,6 +15,7 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {SlidersCharactersDialog} from '../sliders-characters';
 import {useAssetLibrary} from './asset-store-context';
+import {ImportTab} from './import-tab';
 import {AssetTile} from './asset-tile';
 import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
@@ -29,6 +30,12 @@ const TABS: {kind?: AssetKind; labelKey: string}[] = [
 	{kind: 'fx', labelKey: 'dialogs.slidersAssets.fx'}
 ];
 
+/**
+ * The Import tab sits after them. It is not in TABS because it holds no kind of asset —
+ * it is the one place that reads a library other than this story's.
+ */
+const IMPORT_TAB = TABS.length;
+
 export type SlidersAssetsDialogProps = DialogComponentProps;
 
 export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => {
@@ -42,7 +49,8 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const searchField = React.useRef<HTMLInputElement>(null);
 	const {t} = useTranslation();
 
-	const {kind} = TABS[tabIndex];
+	const importing = tabIndex === IMPORT_TAB;
+	const {kind} = TABS[tabIndex] ?? {};
 	const searchText = search.trim().toLowerCase();
 
 	const matchingAssets = library.visible.filter(
@@ -95,7 +103,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	// field it just filled.
 
 	useCommand({
-		enabled: !kind,
+		enabled: !kind && !importing,
 		id: 'slidersAssets.newCharacter',
 		label: t('hotkeys.commands.slidersAssets.newCharacter'),
 		run: () => setNewCharacterOpen(true),
@@ -142,13 +150,15 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			maximizable
 		>
 			<ButtonBar>
-				<UploadButton
-					commandId="slidersAssets.upload"
-					commandScope="sliders-assets"
-					label={t('dialogs.slidersAssets.upload')}
-					onUpload={handleUpload}
-				/>
-				{!kind && (
+				{!importing && (
+					<UploadButton
+						commandId="slidersAssets.upload"
+						commandScope="sliders-assets"
+						label={t('dialogs.slidersAssets.upload')}
+						onUpload={handleUpload}
+					/>
+				)}
+				{!kind && !importing && (
 					<PromptButton
 						icon={<IconUserPlus />}
 						label={t('dialogs.slidersAssets.newCharacter')}
@@ -169,16 +179,18 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 				>
 					{t('dialogs.slidersAssets.search')}
 				</TextInput>
-				<TextSelect
-					onChange={event => setTagFilter(event.target.value)}
-					options={[
-						{label: t('dialogs.slidersAssets.allTags'), value: ''},
-						...library.tags.map(tag => ({label: tag, value: tag}))
-					]}
-					value={tagFilter}
-				>
-					{t('common.tag')}
-				</TextSelect>
+				{!importing && (
+					<TextSelect
+						onChange={event => setTagFilter(event.target.value)}
+						options={[
+							{label: t('dialogs.slidersAssets.allTags'), value: ''},
+							...library.tags.map(tag => ({label: tag, value: tag}))
+						]}
+						value={tagFilter}
+					>
+						{t('common.tag')}
+					</TextSelect>
+				)}
 			</ButtonBar>
 			{hasReport && (
 				<div className="sliders-note">
@@ -209,6 +221,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 							{t(tab.labelKey)}
 						</Tab>
 					))}
+					<Tab className="sliders-tab">
+						{t('dialogs.slidersAssets.importTab')}
+					</Tab>
 				</TabList>
 				{TABS.map(tab => (
 					<TabPanel key={tab.labelKey}>
@@ -249,6 +264,13 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						</UploadDropZone>
 					</TabPanel>
 				))}
+				<TabPanel>
+					<ImportTab
+						onImported={library.refresh}
+						present={library.all}
+						search={search}
+					/>
+				</TabPanel>
 			</Tabs>
 			<div className="sliders-note">
 				<p className="sliders-backend">

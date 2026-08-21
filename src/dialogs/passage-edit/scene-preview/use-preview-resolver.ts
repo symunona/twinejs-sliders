@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {AssetStore} from '@sliders/asset-store';
 import {AssetId, AssetMeta, AssetResolver, Character} from '@sliders/scene-types';
-import {slidersAssetStore} from '../../sliders-assets/asset-store-context';
+import {useAssetStore} from '../../sliders-assets/asset-store-context';
 
 /**
  * Bridges the gap between how authors write scenes and how the store keys things.
@@ -67,10 +67,8 @@ export function createNamedResolver(store: AssetStore): AssetResolver & {
  * the passage text changes (spec 06).
  */
 export function usePreviewResolver(): AssetResolver {
-	const resolver = React.useMemo(
-		() => createNamedResolver(slidersAssetStore()),
-		[]
-	);
+	const store = useAssetStore();
+	const resolver = React.useMemo(() => createNamedResolver(store), [store]);
 
 	// Uploads happen in another dialog, so drop the name index when the window regains
 	// focus rather than trying to observe the store.

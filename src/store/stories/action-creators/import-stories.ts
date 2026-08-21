@@ -7,12 +7,25 @@ import {
 } from '../stories.types';
 import {storyFileName} from '../../../electron/shared';
 
+export interface ImportStoriesOptions {
+	/**
+	 * Keep the ids of stories that are created, instead of minting new ones.
+	 *
+	 * Set by the bundle importer only. Assets are stored per story id, so the bundle's
+	 * art has to be written under the id the story will actually have — which means the
+	 * caller picks the id, before any of this runs. Stories that overwrite an existing one
+	 * keep the existing id regardless; there is nothing to choose there.
+	 */
+	keepIds?: boolean;
+}
+
 /**
  * Imports stories, overwriting any stories with the same name.
  */
 export function importStories(
 	toImport: Story[],
-	existingStories: Story[]
+	existingStories: Story[],
+	options: ImportStoriesOptions = {}
 ): Thunk<StoriesState, CreateStoryAction | UpdateStoryAction> {
 	toImport.forEach(importStory => {
 		if (
@@ -30,15 +43,17 @@ export function importStories(
 
 	return dispatch => {
 		toImport.forEach(importStory => {
-			// Remove the temp ID that was assigned to the new story.
-
 			const props: Partial<Story> = {...importStory};
-
-			delete props.id;
-
 			const existingStory = existingStories.find(
 				s => storyFileName(s) === storyFileName(importStory)
 			);
+
+			// Remove the temp ID that was assigned to the new story, unless the caller
+			// asked for it and the story is a new one.
+
+			if (existingStory || !options.keepIds) {
+				delete props.id;
+			}
 
 			// Do an update so that if something goes awry, we won't have deleted the
 			// story. We need to update passage props so that their parent story ID is

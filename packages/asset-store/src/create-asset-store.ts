@@ -22,10 +22,18 @@ function inElectron(): boolean {
  *
  * The Electron file backend is still a stub — see backends/electron-backend.ts. Until it's
  * wired up, Electron gets the web backends and a warning, rather than a broken dialog.
+ *
+ * `scope` is the story id the library belongs to: assets are per story, so art uploaded
+ * while editing one story is invisible from another. The empty scope is the shared library
+ * that predates scoping — read only by the migration and the "import from another story"
+ * tab, never written to.
  */
-export function createAssetStore(): AssetStore {
+export function createAssetStore(scope: string): AssetStore {
 	if (ElectronBackend.available()) {
-		return new BackedAssetStore(new ElectronBackend(ElectronBackend.bridge()!));
+		return new BackedAssetStore(
+			new ElectronBackend(ElectronBackend.bridge()!, scope),
+			scope
+		);
 	}
 
 	if (inElectron()) {
@@ -37,16 +45,16 @@ export function createAssetStore(): AssetStore {
 	}
 
 	if (OpfsBackend.available()) {
-		return new BackedAssetStore(new OpfsBackend());
+		return new BackedAssetStore(new OpfsBackend(scope), scope);
 	}
 
 	if (IndexedDbBackend.available()) {
-		return new BackedAssetStore(new IndexedDbBackend());
+		return new BackedAssetStore(new IndexedDbBackend(scope), scope);
 	}
 
 	console.warn(
 		'Sliders: no persistent storage is available, so assets will be lost when this ' +
 			'tab closes.'
 	);
-	return new BackedAssetStore(new MemoryBackend());
+	return new BackedAssetStore(new MemoryBackend(), scope);
 }

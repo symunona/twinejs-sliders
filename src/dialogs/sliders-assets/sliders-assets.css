@@ -207,3 +207,32 @@
 	font-size: 85%;
 	margin: 0;
 }
+
+/* Import tab. No drop zone: nothing here comes from a file, so it scrolls itself. */
+
+.sliders-import {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: var(--grid-size);
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--grid-size);
+}
+
+.sliders-import-bar {
+	flex: 0 0 auto;
+}
+
+.sliders-import-bar select {
+	font: inherit;
+	max-width: 100%;
+}
+
+.sliders-import-notice {
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	flex: 0 0 auto;
+	margin: 0;
+	padding: var(--control-inner-padding) var(--grid-size);
+}

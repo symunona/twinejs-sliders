@@ -7,12 +7,14 @@ export interface AssetPreviewProps {
 	alt: string;
 	assetId?: AssetId;
 	className?: string;
+	/** Another story's library. Set only by the Import tab; defaults to this story's. */
+	scope?: string;
 }
 
 /** Shows an asset's bytes. Animated files play, because they were never transcoded. */
 export const AssetPreview: React.FC<AssetPreviewProps> = props => {
-	const {alt, assetId, className} = props;
-	const url = useAssetUrl(assetId);
+	const {alt, assetId, className, scope} = props;
+	const url = useAssetUrl(assetId, scope);
 
 	return (
 		<span className={classNames('asset-preview', className)}>

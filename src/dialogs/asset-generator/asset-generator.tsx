@@ -13,8 +13,8 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
-	slidersAssetStore,
 	useAssetLibrary,
+	useAssetStore,
 	useAssetUrl
 } from '../sliders-assets/asset-store-context';
 import {AssetPicker} from './asset-picker';
@@ -72,7 +72,7 @@ export const AssetGeneratorDialog: React.FC<
 > = props => {
 	const {dispatch} = useDialogsContext();
 	const {dispatch: prefsDispatch, prefs} = usePrefsContext();
-	const store = React.useMemo(() => slidersAssetStore(), []);
+	const store = useAssetStore();
 	const history = useGenerations();
 	const cancel = React.useRef<AbortController>();
 	const [attachments, setAttachments] = React.useState<AssetId[]>([]);

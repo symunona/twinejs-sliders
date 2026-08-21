@@ -6,7 +6,15 @@ import {
 import {AssetId, AssetMeta, Character} from '@sliders/scene-types';
 import * as React from 'react';
 
-let singleton: AssetStore | undefined;
+/**
+ * The library that predates per-story scoping: one shared pile of art every story could
+ * see, which is exactly the leak scoping fixes. It is never written to any more — the
+ * migration copies what each story actually uses into that story, and the asset manager's
+ * Import tab offers the rest.
+ */
+export const LEGACY_ASSET_SCOPE = '';
+
+const stores = new Map<string, AssetStore>();
 
 /**
  * Both Sliders dialogs can be open at once, and an upload in one has to show up in the
@@ -37,15 +45,81 @@ function useLibraryVersion(): number {
 }
 
 /**
- * The app-wide asset library. Deliberately not part of the stories context: asset bytes
- * must not ride along with story text through undo, archive, and import/export (spec 03).
+ * A story's asset library. Deliberately not part of the stories context: asset bytes must
+ * not ride along with story text through undo, archive, and import/export (spec 03).
+ *
+ * One store per story id. Art uploaded while editing one story is invisible from another,
+ * so a `bg: forest` in two stories means two different pictures unless the author imports
+ * one into the other.
  */
-export function slidersAssetStore(): AssetStore {
-	if (!singleton) {
-		singleton = createAssetStore();
+export function slidersAssetStore(scope: string): AssetStore {
+	let store = stores.get(scope);
+
+	if (!store) {
+		store = createAssetStore(scope);
+		stores.set(scope, store);
 	}
 
-	return singleton;
+	return store;
+}
+
+/**
+ * Drops every cached store. Tests only — the stores hold open object URLs and an
+ * in-memory manifest, so a suite that reuses them starts with the last one's assets.
+ */
+export function resetAssetStoresForTests(): void {
+	stores.clear();
+}
+
+/**
+ * The story whose library the dialogs below this point read and write. Every asset dialog
+ * lives inside the story editor, so this is set once per route.
+ */
+const AssetScopeContext = React.createContext<string | undefined>(undefined);
+
+export interface AssetScopeProviderProps {
+	children: React.ReactNode;
+	storyId: string;
+}
+
+export const AssetScopeProvider: React.FC<AssetScopeProviderProps> = ({
+	children,
+	storyId
+}) => (
+	<AssetScopeContext.Provider value={storyId}>
+		{children}
+	</AssetScopeContext.Provider>
+);
+
+/**
+ * Which story's library we are in. Throws rather than falling back to the legacy shared
+ * one: silently writing an upload where every story can see it is the bug this exists to
+ * stop.
+ */
+export function useAssetScope(): string {
+	const scope = React.useContext(AssetScopeContext);
+
+	if (scope === undefined) {
+		throw new Error(
+			'Assets belong to a story, and this component is outside <AssetScopeProvider>.'
+		);
+	}
+
+	return scope;
+}
+
+/** The current story's asset library. */
+export function useAssetStore(scope?: string): AssetStore {
+	const current = React.useContext(AssetScopeContext);
+	const resolved = scope ?? current;
+
+	if (resolved === undefined) {
+		throw new Error(
+			'Assets belong to a story, and this component is outside <AssetScopeProvider>.'
+		);
+	}
+
+	return React.useMemo(() => slidersAssetStore(resolved), [resolved]);
 }
 
 export interface UploadReport {
@@ -76,9 +150,12 @@ export interface AssetLibrary {
 /**
  * Loads the library and keeps it in sync. Every dialog that touches assets uses this, so
  * uploads made in one show up in the other.
+ *
+ * `scope` reads another story's library instead of this one's — what the Import tab needs,
+ * and the only reason it is a parameter.
  */
-export function useAssetLibrary(): AssetLibrary {
-	const store = React.useMemo(() => slidersAssetStore(), []);
+export function useAssetLibrary(scope?: string): AssetLibrary {
+	const store = useAssetStore(scope);
 	const [all, setAll] = React.useState<AssetMeta[]>([]);
 	const [busy, setBusy] = React.useState(true);
 	const [characters, setCharacters] = React.useState<Character[]>([]);
@@ -176,8 +253,8 @@ export function useAssetLibrary(): AssetLibrary {
 }
 
 /** Resolves an asset id to a URL a preview can use. */
-export function useAssetUrl(id?: AssetId): string | undefined {
-	const store = React.useMemo(() => slidersAssetStore(), []);
+export function useAssetUrl(id?: AssetId, scope?: string): string | undefined {
+	const store = useAssetStore(scope);
 	const [url, setUrl] = React.useState<string>();
 	// An asset's bytes can change under a stable id--the editor can write an
 	// edit back over the original. The old object URL is revoked at that point,

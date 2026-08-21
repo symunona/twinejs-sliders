@@ -1,3 +1,4 @@
+import {v4 as uuid} from '@lukeed/uuid';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {CardContent} from '../../components/container/card';
@@ -19,6 +20,7 @@ import {
 	refreshAssetLibrary,
 	slidersAssetStore
 } from '../sliders-assets/asset-store-context';
+
 import {BundleReport} from './bundle-report';
 import {FileChooser} from './file-chooser';
 import {StoryChooser} from './story-chooser';
@@ -26,25 +28,48 @@ import './story-import.css';
 
 export type StoryImportDialogProps = Omit<DialogCardProps, 'headerLabel'>;
 
+/**
+ * Pins down the id each of a bundle's stories will have once imported.
+ *
+ * Assets live in a library per story id, so the bundle's art has to be written under the
+ * id the story is going to get — which means picking it here, before anything is written.
+ * A bundle that overwrites a story it recognises by filename inherits that story's id and
+ * therefore its library; anything else is a new story with a new id and an empty one.
+ */
+function withTargetIds(stories: Story[], existingStories: Story[]): Story[] {
+	return stories.map(story => {
+		const existing = existingStories.find(
+			candidate => storyFileName(candidate) === storyFileName(story)
+		);
+
+		return {...story, id: existing ? existing.id : uuid()};
+	});
+}
+
 export const StoryImportDialog: React.FC<StoryImportDialogProps> = props => {
 	const {onClose} = props;
 	const {t} = useTranslation();
 	const repairStories = useStoriesRepair();
 	const {dispatch, stories: existingStories} = useStoriesContext();
 	const [file, setFile] = React.useState<File>();
+	/**
+	 * The library the bundle's assets go into: the story it carries, not a shared pile.
+	 * Picked when the bundle is read, so the plan the author approves is the plan that runs.
+	 */
+	const [bundleScope, setBundleScope] = React.useState<string>();
 	const [stories, setStories] = React.useState<Story[]>([]);
 	const [bundle, setBundle] = React.useState<BundleContents>();
 	const [plan, setPlan] = React.useState<BundlePlan>();
 	const [bundleError, setBundleError] = React.useState<Error>();
 	const [busy, setBusy] = React.useState(false);
 
-	function handleImport(stories: Story[]) {
-		dispatch(importStories(stories, existingStories));
+	function handleImport(stories: Story[], keepIds = false) {
+		dispatch(importStories(stories, existingStories, {keepIds}));
 		repairStories();
 		onClose();
 	}
 
-	function handleFileChange(file: File, stories: Story[]) {
+	function handleFileChange(file: File, stories: Story[], keepIds = false) {
 		// If there are no conflicts in the stories, import them now. Otherwise, set
 		// them in state and let the user choose via <StoryChooser>.
 
@@ -59,13 +84,14 @@ export const StoryImportDialog: React.FC<StoryImportDialogProps> = props => {
 			setFile(file);
 			setStories(stories);
 		} else {
-			handleImport(stories);
+			handleImport(stories, keepIds);
 		}
 	}
 
 	function resetBundle() {
 		setBundle(undefined);
 		setBundleError(undefined);
+		setBundleScope(undefined);
 		setPlan(undefined);
 	}
 
@@ -78,11 +104,21 @@ export const StoryImportDialog: React.FC<StoryImportDialogProps> = props => {
 		// every clash before the library changes.
 
 		try {
-			const contents = await readStoryBundle(file);
-			const plan = await planBundle(slidersAssetStore(), contents);
+			const read = await readStoryBundle(file);
+			// readStoryBundle throws when a bundle carries no story, so there is always
+			// one here, and its library is the one the assets belong in. A bundle holds a
+			// single story by construction; if a future one ever holds more, the first is
+			// the one the manifest describes.
+			const contents = {
+				...read,
+				stories: withTargetIds(read.stories, existingStories)
+			};
+			const scope = contents.stories[0].id;
+			const plan = await planBundle(slidersAssetStore(scope), contents);
 
 			setFile(file);
 			setBundle(contents);
+			setBundleScope(scope);
 			setPlan(plan);
 		} catch (error) {
 			setBundleError(error as Error);
@@ -92,7 +128,7 @@ export const StoryImportDialog: React.FC<StoryImportDialogProps> = props => {
 	}
 
 	async function handleApplyBundle() {
-		if (!bundle || !plan || !file) {
+		if (!bundle || !plan || !file || bundleScope === undefined) {
 			return;
 		}
 
@@ -102,10 +138,10 @@ export const StoryImportDialog: React.FC<StoryImportDialogProps> = props => {
 			// Assets first: once the story lands, its scenes have to resolve against a
 			// library that already holds them.
 
-			await applyBundlePlan(slidersAssetStore(), plan);
+			await applyBundlePlan(slidersAssetStore(bundleScope), plan);
 			refreshAssetLibrary();
 			resetBundle();
-			handleFileChange(file, bundle.stories);
+			handleFileChange(file, bundle.stories, true);
 		} catch (error) {
 			setBundleError(error as Error);
 		} finally {

@@ -63,14 +63,16 @@ function matchesFilter(meta: AssetMeta, filter: AssetFilter): boolean {
  */
 export class BackedAssetStore implements AssetStore {
 	readonly backend: BackendKind;
+	readonly scope: string;
 
 	private manifest?: AssetManifest;
 	private urls = new Map<AssetId, string>();
 	/** Serializes manifest read-modify-write cycles. */
 	private queue: Promise<unknown> = Promise.resolve();
 
-	constructor(private storage: StorageBackend) {
+	constructor(private storage: StorageBackend, scope = '') {
 		this.backend = storage.kind;
+		this.scope = scope;
 	}
 
 	private async load(): Promise<AssetManifest> {

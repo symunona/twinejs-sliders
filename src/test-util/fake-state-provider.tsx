@@ -2,6 +2,7 @@ import * as React from 'react';
 import useThunkReducer from 'react-hook-thunk-reducer';
 import {fakeLoadedStoryFormat} from '.';
 import {DialogsContextProvider} from '../dialogs';
+import {AssetScopeProvider} from '../dialogs/sliders-assets/asset-store-context';
 import {HotkeysProvider} from '../hotkeys';
 import {PrefsContext, PrefsState} from '../store/prefs';
 import {reducer as prefsReducer} from '../store/prefs/reducer';
@@ -19,6 +20,11 @@ export interface FakeStateProviderProps {
 	 * does--<MainContent> focuses itself on mount.
 	 */
 	hotkeyScope?: string;
+	/**
+	 * Story whose asset library the dialogs use. Assets are stored per story, and every
+	 * asset dialog runs inside a story, so tests get the first fake story's by default.
+	 */
+	assetScope?: string;
 	prefs?: Partial<PrefsState>;
 	stories?: StoriesState;
 	storyFormats?: StoryFormatsState;
@@ -53,17 +59,21 @@ export const FakeStateProvider: React.FC<FakeStateProviderProps> = props => {
 					value={{dispatch: storiesDispatch, stories: storiesState}}
 				>
 					<UndoableStoriesContextProvider>
-						<HotkeysProvider>
-							<DialogsContextProvider>
-								{props.hotkeyScope ? (
-									<HotkeyScope scope={props.hotkeyScope}>
-										{props.children}
-									</HotkeyScope>
-								) : (
-									props.children
-								)}
-							</DialogsContextProvider>
-						</HotkeysProvider>
+						<AssetScopeProvider
+							storyId={props.assetScope ?? storiesState[0]?.id ?? 'test-story'}
+						>
+							<HotkeysProvider>
+								<DialogsContextProvider>
+									{props.hotkeyScope ? (
+										<HotkeyScope scope={props.hotkeyScope}>
+											{props.children}
+										</HotkeyScope>
+									) : (
+										props.children
+									)}
+								</DialogsContextProvider>
+							</HotkeysProvider>
+						</AssetScopeProvider>
 					</UndoableStoriesContextProvider>
 				</StoriesContext.Provider>
 			</StoryFormatsContext.Provider>

@@ -21,7 +21,7 @@ import {useCommand} from '../../hotkeys';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
-	slidersAssetStore
+	useAssetStore
 } from '../sliders-assets/asset-store-context';
 import {AdjustSlider} from './adjust-slider';
 import {
@@ -102,7 +102,7 @@ function elapsedLabel(seconds: number): string {
 
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId, source: sourceImage} = props;
-	const store = React.useMemo(() => slidersAssetStore(), []);
+	const store = useAssetStore();
 	const [background, setBackground] = React.useState<BackgroundSupport>();
 	const cancel = React.useRef<AbortController>();
 	const preview = React.useRef<HTMLCanvasElement>(null);

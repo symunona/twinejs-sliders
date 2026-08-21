@@ -32,6 +32,18 @@ interface AssetStore {
 **Rule: the asset library is a separate store from story text.** Story text goes through
 undo, archive, and import/export. You do not want 40 MB of sprites riding along.
 
+**Rule: one library per story.** The scope is the story id — an OPFS subdirectory, an
+IndexedDB key prefix, an Electron story folder. Art uploaded while writing one story is
+invisible from another, so `bg: forest` in two stories is two pictures. Reuse is deliberate:
+the asset manager's **Import…** tab reads another story's library and copies one asset (or
+one character, frames and all) at a time, through the same rules the bundle importer uses.
+
+The unscoped library that predates this is scope `''`. It is never written to again. On
+first load after the upgrade, each story is given the assets its own scenes reference —
+resolved exactly as the bundle exporter resolves them, ids kept so no scene needs rewriting
+(`src/store/migrate-legacy-assets.ts`). Whatever no story named stays put and shows up in
+the Import… tab as a source.
+
 ## Upload → WebP (D14)
 
 Convert on upload. High quality.

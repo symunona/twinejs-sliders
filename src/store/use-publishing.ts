@@ -104,7 +104,7 @@ export function usePublishing(): UsePublishingProps {
 				// format and Electron's save-on-change all publish elsewhere, and none of
 				// them should carry a copy of the story's art.
 				return publishStoryWithFormat(
-					await withSlidersManifests(story, slidersAssetStore(), {
+					await withSlidersManifests(story, slidersAssetStore(story.id), {
 						urls: publishOptions?.slidersUrls ?? 'data'
 					}),
 					formatProperties.source,

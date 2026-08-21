@@ -17,8 +17,8 @@ export interface ExportBundleButtonProps {
 /**
  * Exports a story as a `.sliders.zip` — the story plus the assets it references.
  *
- * The asset library is global and origin-bound, so a story exported as plain HTML arrives
- * on another machine with every `bg:` and every character unresolved. See
+ * The asset library is origin-bound, so a story exported as plain HTML arrives on another
+ * machine with every `bg:` and every character unresolved. See
  * docs/sliders/08-export-import-bundle.md.
  */
 export const ExportBundleButton: React.FC<ExportBundleButtonProps> = props => {
@@ -48,7 +48,7 @@ export const ExportBundleButton: React.FC<ExportBundleButtonProps> = props => {
 		try {
 			const bundle = await exportStoryBundle(
 				story,
-				slidersAssetStore(),
+				slidersAssetStore(story.id),
 				getAppInfo()
 			);
 
