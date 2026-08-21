@@ -92,6 +92,8 @@
 			"percentAvailable": "{percent}% space available"
 		},
 		"passageCard": {
+			"errors": "This passage has {{count}} scene error.",
+			"errors_plural": "This passage has {{count}} scene errors.",
 			"placeholderClick": "Double-click this passage to edit it.",
 			"placeholderTouch": "Tap this passage, then choose Edit from the Passage tab to edit it."
 		},

@@ -14,6 +14,7 @@ import {PassageFuzzyFinder} from './passage-fuzzy-finder';
 import {StoryEditToolbar} from './toolbar';
 import {useInitialPassageCreation} from './use-initial-passage-creation';
 import {usePassageChangeHandlers} from './use-passage-change-handlers';
+import {useStorySceneErrors} from './use-story-scene-errors';
 import {useViewCenter} from './use-view-center';
 import {useZoomShortcuts} from './use-zoom-shortcuts';
 import {useZoomTransition} from './use-zoom-transition';
@@ -35,6 +36,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 		handleSelectRect
 	} = usePassageChangeHandlers(story);
 	const visibleZoom = useZoomTransition(story.zoom, mainContent.current);
+	const sceneErrorCounts = useStorySceneErrors(story.passages);
 
 	useZoomShortcuts(story);
 	useInitialPassageCreation(story, getCenter);
@@ -55,6 +57,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 			>
 				<MarqueeablePassageMap
 					container={mainContent}
+					errorCounts={sceneErrorCounts}
 					formatName={story.storyFormat}
 					formatVersion={story.storyFormatVersion}
 					onDeselect={handleDeselectPassage}

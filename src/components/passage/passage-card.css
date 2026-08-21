@@ -95,3 +95,37 @@
 [data-app-theme='dark'] .passage-card.empty.selected .card {
 	background: hsla(212, 90%, 60%, 0.2);
 }
+
+/*
+A passage whose scene has errors. Dashed like the empty-passage card, because both mean
+"not finished yet" — but yellow, and the badge says which kind of unfinished it is.
+The border sits on .card rather than .passage-card so it follows the rounded corner and
+the drag transform; box-sizing is border-box globally, so it costs no layout.
+*/
+
+.passage-card.has-errors .card {
+	border: 2px dashed var(--yellow);
+}
+
+.passage-card.has-errors.selected .card {
+	border-color: var(--dark-yellow);
+}
+
+/*
+Sits over the card's top right corner, out of the title's way. The title wraps under it
+in compact mode because the badge is taken out of flow.
+*/
+
+.passage-card .passage-card-error-badge {
+	font-size: 110%;
+	line-height: 1;
+	pointer-events: none;
+	position: absolute;
+	right: calc(var(--grid-size) / 2);
+	top: calc(var(--grid-size) / 2);
+	z-index: 2;
+}
+
+.compact-passage-cards .passage-card .passage-card-error-badge {
+	font-size: 180%;
+}

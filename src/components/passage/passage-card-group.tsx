@@ -5,13 +5,15 @@ import {PassageCard, PassageCardProps} from './passage-card';
 import '../../styles/animations.css';
 
 export interface PassageCardGroupProps
-	extends Omit<PassageCardProps, 'passage'> {
+	extends Omit<PassageCardProps, 'errorCount' | 'passage'> {
+	/** Passage ID -> scene error count, for the cards that have any. */
+	errorCounts?: Record<string, number>;
 	passages: Passage[];
 }
 
 export const PassageCardGroup: React.FC<PassageCardGroupProps> = React.memo(
 	props => {
-		const {passages} = props;
+		const {errorCounts, passages} = props;
 
 		// Passages must be sorted so that tabbing around follows a logical pattern.
 
@@ -31,7 +33,11 @@ export const PassageCardGroup: React.FC<PassageCardGroupProps> = React.memo(
 			<TransitionGroup component={null}>
 				{sortedPassages.map(passage => (
 					<CSSTransition classNames="pop" key={passage.id} timeout={200}>
-						<PassageCard passage={passage} {...props} />
+						<PassageCard
+						errorCount={errorCounts?.[passage.id]}
+						passage={passage}
+						{...props}
+					/>
 					</CSSTransition>
 				))}
 			</TransitionGroup>

@@ -219,6 +219,30 @@ describe('<PassageCard>', () => {
 		expect(onSelect.mock.calls).toEqual([[passage, false]]);
 	});
 
+	describe('when the passage has scene errors', () => {
+		it('shows a warning badge', () => {
+			renderComponent({errorCount: 2});
+			expect(
+				screen.getByTestId('passage-card-error-badge')
+			).toBeInTheDocument();
+		});
+
+		it('marks the card so it can be outlined', () => {
+			const passage = fakePassage();
+
+			renderComponent({errorCount: 1, passage});
+			expect(
+				document.querySelector('.passage-card.has-errors')
+			).toBeInTheDocument();
+		});
+	});
+
+	it('shows no warning badge when the passage has no scene errors', () => {
+		renderComponent();
+		expect(screen.queryByTestId('passage-card-error-badge')).toBeNull();
+		expect(document.querySelector('.passage-card.has-errors')).toBeNull();
+	});
+
 	it.todo('passes through drag events');
 
 	it('is accessible', async () => {

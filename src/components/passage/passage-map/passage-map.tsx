@@ -8,6 +8,8 @@ import './passage-map.css';
 import classnames from 'classnames';
 
 export interface PassageMapProps {
+	/** Passage ID -> scene error count, for the cards that have any. */
+	errorCounts?: Record<string, number>;
 	formatName: string;
 	formatVersion: string;
 	onDeselect: (passage: Passage) => void;
@@ -72,6 +74,7 @@ const compactCardZoom = 0.6;
 
 export const PassageMap: React.FC<PassageMapProps> = props => {
 	const {
+		errorCounts,
 		formatName,
 		formatVersion,
 		onDeselect,
@@ -215,6 +218,7 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 				startPassageId={startPassageId}
 			/>
 			<PassageCardGroup
+				errorCounts={errorCounts}
 				onDeselect={onDeselect}
 				onDragStart={handleDragStart}
 				onDrag={handleDrag}

@@ -12,6 +12,8 @@ import './passage-card.css';
 import { TagBadges } from '../tag/tag-badges';
 
 export interface PassageCardProps {
+	/** How many scene errors this passage has, if any. */
+	errorCount?: number;
 	onEdit: (passage: Passage) => void;
 	onDeselect: (passage: Passage) => void;
 	onDragStart?: DraggableCoreProps['onStart'];
@@ -28,6 +30,7 @@ const excerptLength = 400;
 
 export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 	const {
+		errorCount,
 		onDeselect,
 		onDrag,
 		onDragStart,
@@ -43,10 +46,11 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 		() =>
 			classNames('passage-card', {
 				empty: passageIsEmpty(passage),
+				'has-errors': !!errorCount,
 				selected: passage.selected,
 				[`tag-display-${tagDisplay}`]: true
 			}),
-		[passage, tagDisplay]
+		[errorCount, passage, tagDisplay]
 	);
 	const container = React.useRef<HTMLDivElement>(null);
 	const excerpt = React.useMemo(() => {
@@ -120,6 +124,16 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 					selected={passage.selected}
 				>
 					{tagDisplay === 'color' && <TagStripe tagColors={tagColors} tags={passage.tags} />}
+					{!!errorCount && (
+						<span
+							className="passage-card-error-badge"
+							data-testid="passage-card-error-badge"
+							role="img"
+							title={t('components.passageCard.errors', {count: errorCount})}
+						>
+							{'\u26a0\ufe0f'}
+						</span>
+					)}
 					<h2>{passage.name}</h2>
 					<CardContent>{excerpt}</CardContent>
 					{tagDisplay === 'name' && <TagBadges tagColors={tagColors} tags={passage.tags} />}
