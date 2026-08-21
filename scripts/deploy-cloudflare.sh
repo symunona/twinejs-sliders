@@ -4,6 +4,13 @@
 #   ./scripts/deploy-cloudflare.sh
 #   npm run deploy-cloudflare
 #
+# WHERE it goes is one variable, DEPLOY_TARGET: the public hostname. The Pages
+# project is its first DNS label, so twine-ig.tmpx.space deploys to the project
+# "twine-ig". Set it in the repo's .env (or .env.local, which overrides .env and
+# is never committed), or pass it for one run:
+#
+#   DEPLOY_TARGET=twine-foo.tmpx.space npm run deploy-cloudflare
+#
 # Requires CLOUDFLARE_API_TOKEN. Put it in ~/.config/cloudflare.env
 # (see cloudflare.env.example next to it) so it does not have to live in your
 # interactive shell environment.
@@ -15,9 +22,33 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG_FILE="$HOME/.config/cloudflare.env"
-PROJECT_NAME="twine-sliders"
-PUBLIC_URL="https://twine.tmpx.space"
+CONFIG_FILE="${CLOUDFLARE_ENV_FILE:-$HOME/.config/cloudflare.env}"
+
+# One key out of the env files, last file wins. Read rather than sourced on
+# purpose: .env holds build vars like `REACT_APP_VERSION=$npm_package_version`,
+# and sourcing that under `set -u` outside npm aborts the script.
+env_file_value() {
+	local key="$1" value="" file line
+
+	for file in "$REPO_ROOT/.env" "$REPO_ROOT/.env.local"; do
+		[[ -f "$file" ]] || continue
+		line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" "$file" | tail -n 1 || true)"
+		[[ -n "$line" ]] || continue
+		value="${line#*=}"
+		value="${value%$'\r'}"
+		value="${value#"${value%%[![:space:]]*}"}"
+		value="${value%"${value##*[![:space:]]}"}"
+		value="${value%\"}"; value="${value#\"}"
+		value="${value%\'}"; value="${value#\'}"
+	done
+
+	printf '%s' "$value"
+}
+
+DEPLOY_TARGET="${DEPLOY_TARGET:-$(env_file_value DEPLOY_TARGET)}"
+DEPLOY_TARGET="${DEPLOY_TARGET:-twine-ig.tmpx.space}"
+PROJECT_NAME="${PROJECT_NAME:-${DEPLOY_TARGET%%.*}}"
+PUBLIC_URL="https://$DEPLOY_TARGET"
 
 # Load the token file first, so the check below can see it. set -a exports
 # everything the file defines, which is what wrangler needs.
@@ -46,6 +77,8 @@ fi
 
 cd "$REPO_ROOT"
 
+echo "==> Target:  $PUBLIC_URL"
+echo "==> Project: $PROJECT_NAME"
 echo "==> Building (npm run build:web)"
 npm run build:web
 

@@ -19,6 +19,8 @@ docs/en/book/*
 # being committed. The tracked .env (build vars only) is unaffected -- git does
 # not apply ignore rules to files already in the index.
 *.env
+# Per-box override of the tracked .env -- DEPLOY_TARGET and the like.
+.env.local
 
 
 tmp
