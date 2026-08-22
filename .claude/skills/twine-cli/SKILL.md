@@ -1,136 +1,107 @@
 ---
 name: twine-cli
-description: Read and edit Sliders/Twine stories on the story-store server from the terminal — list stories, walk passages, inspect and edit scene YAML, resolve which assets a scene needs, copy a story to a new one, lint before pushing. Use whenever a task touches a story that lives on the server (twine-story-store, twine-store.tmpx.space, "the story store", "the library") instead of a local .twee/.html file, or when asked to copy an episode, move a character, change a beat, swap a background, or find where an asset is used. Loads the ref grammar and the context-budget rules for the twine-cli tool.
+description: Work on Sliders/Twine stories that live on the story-store server — check one out as files, edit passages and scene YAML, resolve and read the assets a scene uses, lint, push. Use whenever a task touches a story on the server (twine-story-store, twine-store.tmpx.space, "the story store", "the library") rather than a local .twee/.html file, or when asked to copy an episode, move a character, change a beat, swap or generate a background, or find where an asset is used.
 ---
 
 # twine-cli
 
-Terminal client for the Sliders story store. Spec: `docs/sliders/12-story-cli.md`.
-Server API: `docs/sliders/11-server-storage.md`. Scene YAML: `docs/sliders/02-sliders-format.md`.
+Check the story out as files. Work on the files. Push. Spec: `docs/sliders/12-story-cli.md`.
+Server: `docs/sliders/11-server-storage.md`. Scene YAML: `docs/sliders/02-sliders-format.md`.
 
-## Size first, then read freely
-
-Most stories are small. A 40-passage episode is ~15k tokens — read it whole, that is the
-fastest way to understand it. Don't ritually summarise something that fits.
+## The loop
 
 ```sh
-twine-cli size .          # ep3  62 KB  40 passages  12 scenes  ~15k tokens  full
+twine-cli checkout ep3 tmp/ep3
+cat tmp/ep3/STORY.md          # the map: passages, scenes with file:line, assets, lint tally
+# ... Read / rg / Edit the files like any repo ...
+twine-cli lint tmp/ep3        # exit 5 = broken. Not optional.
+twine-cli push tmp/ep3
 ```
 
-| Estimate | Mode | What the CLI does by default |
-|---|---|---|
-| **< 50k tokens** | `full` | prints bodies — whole passages, whole scene YAML, unpaged lists. `story text` hands over the entire episode |
-| **≥ 50k tokens** | `brief` | summaries, cache paths instead of bodies, lists page at 40. `--full` on any call overrides |
+That is the job. The CLI has no command that prints a passage, a scene or a search result —
+`Read`, `rg` and `Edit` do that better, on the checkout.
 
-It decides for you and says so on stderr when it guards:
+## Two rules
 
-```
-note: ep3 ≈ 78k tokens (412 KB, 190 passages) — brief mode. --full for whole bodies.
-```
+1. **Never write into the server's `data/` directory.** Reading it is fine and fast; writing
+   skips the rev bump and the change notification, so an open browser editor will silently
+   overwrite you and the server will think nothing happened. Writes go through `push`,
+   `restore`, `copy`, `rm` — nothing else.
+2. **Lint before push.** Exit 5 means you broke a scene, a link or an asset reference. Don't
+   report success without a clean lint.
 
-Silence = full mode. `GET /stories` carries `bytes`, so `twine-cli ls` shows every story's
-estimate without downloading anything.
-
-**On a small story, just read it.** `twine-cli story text .` → the whole episode as
-readable text, `## Passage name` headers and bodies, no JSON noise. `twine-cli passage cat
-. --tag act1` for a slice.
-
-**On a large story, use the map**: `grep`, `graph --format tree`, `scene ls` to find the
-three passages that matter, then `passage show --full` on those, or `walk`/`next` to go
-node by node.
-
-Whatever the mode:
-
-- A single output never exceeds `--max-tokens` (default 6k, ≈600 lines). Past that it spills
-  to a cache file and prints the **path** — read the path.
-- Nothing truncates silently. `… 132 more — --offset 40` means there is more.
-- Every row starts with a **ref** that is valid input to the next command.
-- `--json` is JSONL: pipe it to `head`, `grep`, `jq -c`.
-
-Never `curl` the API or `jq .` a story body — that is the raw JSON, mostly passage
-positions and ids. `story text` is the same content at a third the size.
-
-## Refs
+## The working copy
 
 ```
-<story>                    ep3 · "Chapter 3" · .          . = the pinned story
-<story>/<passage>          .../Tavern Fight
-<story>#<scene>            .#tavern-night                  scene ids are unique per story
-<story>#<scene>/<path>     .#tavern-night/cast/mira/at     the path IS the YAML shape
-<story>@<rev>              .@41                            read-only
-<story>#<scene>@<mark>     .#tavern-night@tense            a compiled state
-<story>:<id>               .:a_8f21 (asset) · .:mira (character)
+tmp/ep3/
+  STORY.md                        generated map — read it first
+  passages/003-tavern-night.md    front matter + whole passage, scene YAML inside it
+  assets/bg/tavern-night.a_8f21.webp     symlinks to the real blobs
+  assets/char/desert-punk/idle.a_3450.webp
+  characters/desert-punk.yaml
+  .twine/                         rev, etag, the pulled body. Don't edit.
 ```
 
-Pin once with `twine-cli use <story>`, then say `.` everywhere. Quote refs containing
-spaces or `#`.
+A passage file:
 
-## Start every session this way
+```markdown
+---
+name: Tavern Night
+tags: [act1, scene]
+at: [420, 260]
+---
+mood: tense
+--
+[scene]
+id: tavern-night
+bg: tavern/night
+cast:
+  mira: {at: -0.4, frame: arms-crossed}
+```
+
+- Front matter is `name`, `tags`, `at`. Everything else about the passage is carried through
+  untouched — leave it alone.
+- **New file = new passage. Deleted file = deleted passage.** The filename is cosmetic;
+  `name:` is what renames, and push rewrites the links that pointed at the old name.
+- The `[scene]` block lives inside the passage. There is no separate scene file. `STORY.md`
+  gives you `file:line` for every scene id.
+
+## Assets are real paths
+
+`assets/` holds symlinks to the store's actual blobs. Read them directly — feed one to an
+image model, look at a background, compare two frames.
 
 ```sh
-twine-cli ping                     # server up? who else is connected?
-twine-cli ls                       # stories + their size estimates, no bodies fetched
-twine-cli use ep3                  # pin it
-twine-cli size .                   # full or brief? decides how you read
-twine-cli story show .             # counts, scene ids, lint tally
+twine-cli assets tmp/ep3 --scene tavern-night   # what this scene needs, resolved
+twine-cli assets tmp/ep3 --missing              # referenced but no blob
+twine-cli assets tmp/ep3 --unused               # in the manifest, nothing uses it
 ```
 
-Then pick a lane:
+`--scene` resolves `bg:` + props + only the character frames the scene actually names, and
+prints a path or the reason there isn't one.
 
-| You need to | Do |
-|---|---|
-| Read a small story | `twine-cli story text .` — the whole thing, readable |
-| Read a few passages | `twine-cli passage show <ref>` (full text) or `passage cat` |
-| Find something by text | `twine-cli grep 'mira' . --scope scene` → `story/passage:line` refs |
-| See the shape of the episode | `twine-cli graph . --format tree --depth 3` |
-| Go through a big one node by node | `twine-cli walk .` then `twine-cli next` |
-| Understand one scene | `twine-cli scene show '.#tavern-night'` — summary + its YAML |
-| Know what art it needs | `twine-cli asset ls --scene '.#tavern-night'` |
-| Look at that art | add `--paths`, then Read the printed paths |
+**Adding art:** write the file into `assets/<kind>/<name>.webp` — no id in the name. Push
+uploads it, assigns the id, renames the file, updates the manifest. Kind comes from the
+directory (`bg`, `obj`, `fx`, `char/<character>`).
 
-## Editing
+## How big is it
 
-One verb family over the whole ref space — `get`, `set`, `add`, `rm`, `mv`:
+`STORY.md`'s header has a token estimate. Under ~50k, reading the whole `passages/`
+directory is fine and usually fastest. Over it, use the tables in `STORY.md` — and
+`twine-cli graph tmp/ep3 --format tree` — to pick the few files that matter.
 
-```sh
-twine-cli set '.#tavern-night/cast/mira/at' -- -0.25
-twine-cli set '.#tavern-night/cast/mira' --json '{"at":-0.25,"frame":"angry"}'
-twine-cli add '.#tavern-night/beats' --json '{"mira":"And yet."}'
-twine-cli mv  '.#tavern-night/beats/5' '.#tavern-night/beats/2'
-twine-cli rm  '.#tavern-night/props/candle'
-```
+## Conflicts
 
-Edits are surgical text edits on the passage — comments and formatting survive. Rules:
-
-1. `--dry-run` first when the edit is structural (moving beats, removing entities). It
-   prints the diff and changes nothing.
-2. **`twine-cli lint .` after every batch of edits.** Exit 5 means you broke something.
-   That is the verification step; do not report success without it.
-3. Exit 3 = someone else moved the rev. Re-read, re-apply. Never `--force` unasked.
-4. For many edits in one story, `twine-cli checkout . tmp/ep3` → edit files with normal
-   tools → `twine-cli status` → `twine-cli push`. Cheaper than forty round trips.
-
-Put working copies and downloaded assets under `tmp/`.
-
-## Copying a story
-
-```sh
-twine-cli story copy ep3 --name "Episode 4"                    # full clone, assets copied
-twine-cli story copy ep3 --name "Ep4" --reid ep4- --assets copy
-twine-cli story copy ep3@37 --name "Ep3 rescue"                # from an old revision
-```
-
-New story id, new IFID, new passage ids. Scene ids are kept unless `--reid`, which also
-rewrites every `from:` and `@mark`. It prints the new ref and anything it could not
-rewrite — read that line.
+Push sends `If-Match`. Exit 3 means someone wrote while you worked; nothing was uploaded.
+Check the story out again into a second directory to compare, or `pull --force` to throw
+your copy away. Never force past a conflict unasked.
 
 ## Exit codes
 
-`0` ok · `1` not found · `2` bad usage or ambiguous ref · `3` conflict, rev moved ·
-`4` server unreachable or token rejected · `5` lint errors.
+`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict · `4` server unreachable
+or token rejected · `5` lint errors.
 
 ## More
 
-- `references/commands.md` — every command and flag
-- `references/refs.md` — the ref grammar in full, resolution order, sub-paths
-- `references/recipes.md` — walkthroughs: audit an episode, retheme a scene, find unused art, rescue an old rev
+- `references/commands.md` — all fifteen commands and their flags
+- `references/recipes.md` — copy an episode, retheme a scene, generate missing art, rescue an old rev

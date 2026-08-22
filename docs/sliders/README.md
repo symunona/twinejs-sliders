@@ -17,7 +17,7 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 09 | [twinejs-asset-generator.md](09-twinejs-asset-generator.md) | Gemini/OpenAI image generation. History, saving. |
 | 10 | [visual-editor-plan.md](10-visual-editor-plan.md) | Build plan for 07. Phases, blockers, shipped bindings. |
 | 11 | [server-storage.md](11-server-storage.md) | Go autosave backend. Token auth, story JSON + asset manifest. |
-| 12 | [story-cli.md](12-story-cli.md) | `twine-cli` — terminal client for the store. Refs, scene edits, assets per scene. |
+| 12 | [story-cli.md](12-story-cli.md) | `twine-cli` — check a story out as files, edit, lint, push. Local-mode reads. |
 
 Origin notes with the full Q&A history: [`../2026-08-14-twine-languages.md`](../2026-08-14-twine-languages.md).
 

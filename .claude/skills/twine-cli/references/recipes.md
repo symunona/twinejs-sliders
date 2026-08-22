@@ -1,108 +1,91 @@
 # Recipes
 
-Each one is a full loop: size it, read what you need, change, verify. Working files go in
-`tmp/`.
+Working copies go in `tmp/`.
 
 ## 1 — Read an episode
 
 ```sh
-twine-cli use ep3
-twine-cli size .                # ~15k tokens, full mode → just read it
-twine-cli story text .          # the whole episode, readable, no JSON noise
+twine-cli checkout ep3 tmp/ep3
+cat tmp/ep3/STORY.md
 ```
 
-If `size` says brief (≥50k tokens), don't fight it — map first, read the parts:
+The header says how many tokens the passages are. Under ~50k: read `tmp/ep3/passages/`
+outright. Over: use the passage and scene tables to pick files, and
+`twine-cli graph tmp/ep3 --format tree` for the shape.
+
+Before changing anything, know what was already broken:
 
 ```sh
-twine-cli story show .                       # counts + lint tally
-twine-cli graph . --format tree --depth 3    # the shape
-twine-cli scene ls .                         # every scene, one line
-twine-cli passage show '.../Tavern Fight'    # then read the ones that matter
+twine-cli lint tmp/ep3
 ```
 
-Either way, before you touch anything:
+## 2 — Move a character, change a line
+
+`STORY.md` gives the scene's `file:line`. Open it, edit the YAML in place, lint.
 
 ```sh
-twine-cli lint .                # exit 5 = already broken; the refs say where
-twine-cli passage ls . --orphans
-twine-cli asset ls . --missing
-```
-
-## 2 — Walk a big one node by node
-
-```sh
-twine-cli walk . --from Start
-twine-cli next          # one passage per call: text, beats, assets, outgoing links
-twine-cli next
-twine-cli goto '.#tavern-night'
-```
-
-For "go through the episode and check X" on a story too big to hold at once. The cursor
-persists between calls. `twine-cli walk --list` gives the itinerary as refs first.
-
-On a small story this is usually the slow way — `story text .` and read.
-
-## 3 — Move a character, change a line
-
-```sh
-twine-cli scene show '.#tavern-night'                 # summary + the YAML
-twine-cli get '.#tavern-night/cast/mira'              # {at: -0.4, frame: arms-crossed}
-twine-cli set '.#tavern-night/cast/mira/at' -- -0.25
-twine-cli scene beats '.#tavern-night'                # numbered
-twine-cli set '.#tavern-night/beats/2' --json '{"mira":"Get out. Now."}'
-twine-cli lint .                                      # ALWAYS
-```
-
-Never edit a beat by index without re-listing beats first if you already added or removed
-one — indices shift.
-
-## 4 — Retheme a scene's art
-
-```sh
-twine-cli asset ls --scene '.#tavern-night' --paths   # what it uses, on disk
-# Read the printed paths to actually look at them
-twine-cli asset put . tmp/tavern-dawn.webp --kind bg --name tavern-dawn
-twine-cli set '.#tavern-night/bg' tavern-dawn
-twine-cli asset where .:a_8f21                        # is the old bg used anywhere else?
-twine-cli asset gc . --dry-run                        # what would be reaped
-twine-cli lint .
-```
-
-## 5 — Copy an episode and strip it to a skeleton
-
-```sh
-twine-cli story copy ep3 --name "Episode 4" --reid ep4- --assets copy
-twine-cli use "Episode 4"
-twine-cli story show .                    # confirm counts and the new refs
-twine-cli size .                          # the copy's own estimate
-twine-cli scene ls .                      # ids should all carry the ep4- prefix
-twine-cli lint .                          # catches anything the reid failed to rewrite
-```
-
-`--assets link` shares blobs with the source and the janitor may reap them. Use `copy`
-unless someone explicitly asked otherwise.
-
-## 6 — Many edits at once
-
-```sh
-twine-cli checkout . tmp/ep3
-rg 'frame: angry' tmp/ep3/scenes/         # normal tools on normal files
-# edit tmp/ep3/passages/*.md or tmp/ep3/scenes/*.yaml — not both for the same scene
-twine-cli status tmp/ep3
+rg -n 'id: tavern-night' tmp/ep3/passages/     # or read the STORY.md row
+# Edit: cast.mira.at -0.4 -> -0.25, beats[2] text
+twine-cli lint tmp/ep3
 twine-cli push tmp/ep3
 ```
 
-Exit 3 on push = someone else wrote while you worked. `twine-cli pull --force` throws your
-copy away, so first: `twine-cli story diff .@<your rev> .` to see what you would lose.
+The scene block is plain YAML inside the passage file. Normal `Edit`. Keep the author's
+formatting and comments — you are editing their text, not regenerating it.
 
-## 7 — Rescue an old revision
+## 3 — Look at the art a scene uses
 
 ```sh
-twine-cli story revs .                          # newest first
-twine-cli story diff .@37 .                     # what changed since
-twine-cli story get .@37 -o tmp/ep3-r37.json    # a path, not a dump
-twine-cli story restore . --rev 37              # prints the new rev and missingAssets
+twine-cli assets tmp/ep3 --scene tavern-night
 ```
 
-Restoring makes a new revision; it never rewrites history. If `missingAssets` is non-empty,
-the art from that era is gone — `twine-cli asset diff .` confirms.
+Every row is a real path. Read them. `--missing` shows what the scene names but the store
+does not have; `--unused` shows manifest entries nothing references.
+
+## 4 — Generate the missing background
+
+```sh
+twine-cli assets tmp/ep3 --scene tavern-night --missing   # the gap, and where it goes
+# read a sibling bg for style, generate, write the result:
+#   tmp/ep3/assets/bg/tavern-dawn.webp      <- no id in the name
+twine-cli push tmp/ep3                                    # uploads it, assigns the id
+twine-cli assets tmp/ep3 | rg tavern-dawn                 # confirm the id it got
+# point the scene at it: bg: tavern-dawn
+twine-cli lint tmp/ep3 && twine-cli push tmp/ep3
+```
+
+Kind comes from the directory: `bg/`, `obj/`, `fx/`, `char/<character>/`.
+
+## 5 — Copy an episode
+
+```sh
+twine-cli copy ep3 --name "Episode 4" --reid ep4-
+twine-cli checkout "Episode 4" tmp/ep4
+twine-cli lint tmp/ep4          # catches anything --reid failed to rewrite
+```
+
+New story id, new IFID, new passage ids. `--reid` also rewrites every `from:` and `@mark`.
+
+## 6 — Rescue an old revision
+
+```sh
+twine-cli revs ep3                        # newest first
+twine-cli checkout ep3@37 tmp/ep3-r37     # the old one, as files, read-only history
+diff -ru tmp/ep3-r37/passages tmp/ep3/passages
+twine-cli restore ep3 --rev 37            # makes a NEW rev; never rewrites history
+```
+
+If `restore` reports `missingAssets`, the art from that era is gone — `twine-cli assets
+tmp/ep3 --missing` confirms after a fresh checkout.
+
+## 7 — Someone else wrote while you worked
+
+`push` exits 3 and uploads nothing.
+
+```sh
+twine-cli status tmp/ep3                  # your rev vs theirs, and who
+twine-cli checkout ep3 tmp/ep3-theirs     # their version, side by side
+diff -ru tmp/ep3-theirs/passages tmp/ep3/passages
+# merge by hand into tmp/ep3, then:
+twine-cli pull tmp/ep3 --force            # ONLY if you are discarding your copy
+```
