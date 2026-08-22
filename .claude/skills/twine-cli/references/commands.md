@@ -32,8 +32,8 @@ to another machine, or keep after the story changes.
 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
 | `lint [dir\|<story>] [--fix]` | `file:line: message`; exit 5 on errors |
 
-There is no command that prints a passage, a scene, a beat or a grep hit. Use `Read`, `rg`
-and `sed` on the working copy.
+Content lives in the working copy: `Read`, `rg` and `sed` cover passages, scenes, beats and
+searches.
 
 ## Changing the store
 
@@ -45,11 +45,11 @@ and `sed` on the working copy.
 | `restore <story> --rev N` | new revision from an old one; prints `missingAssets` |
 | `login [--server URL]` | store a token in the profile, 0600 |
 
-`--reid` rewrites scene ids **and** every `from:` and `@mark` that referenced them. Without
-it a copy keeps its scene ids, which is fine — ids are unique within a story, not across.
+`--reid` rewrites scene ids **and** every `from:` and `@mark` that referenced them. A copy
+keeps its scene ids by default, which is fine — ids are unique within a story, not across.
 
-`--assets link` shares blobs with the source and the janitor may reap them. Use `copy`
-unless told otherwise.
+`--assets copy` (the default) gives the new story its own blobs. `--assets link` shares the
+source's, which the janitor reclaims once nothing names them — use it when you mean it.
 
 ## Lint tiers
 
@@ -59,8 +59,8 @@ unless told otherwise.
    passage whose only exit is a `[[link]]` *outside* the block (spec 02: it is never drawn).
 4. **Assets** — references to unknown assets, manifest entries with no blob, orphan blobs.
 
-`--fix` only does the mechanical ones: prune unreferenced manifest entries, normalise `at:`
-formatting. It never guesses at a broken link.
+`--fix` handles the mechanical ones: prune unreferenced manifest entries, normalise `at:`
+formatting. Broken links stay for a human to decide.
 
 ## Refs
 

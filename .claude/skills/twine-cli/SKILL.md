@@ -18,17 +18,15 @@ twine-cli lint tmp/ep3        # exit 5 = broken. Not optional.
 twine-cli push tmp/ep3
 ```
 
-That is the job. The CLI has no command that prints a passage, a scene or a search result —
-`Read`, `rg` and `Edit` do that better, on the checkout.
+That is the job. Reading and editing happen in the checkout with `Read`, `rg` and `Edit`.
 
 ## Two rules
 
-1. **Never write into the server's `data/` directory.** Reading it is fine and fast; writing
-   skips the rev bump and the change notification, so an open browser editor will silently
-   overwrite you and the server will think nothing happened. Writes go through `push`,
-   `restore`, `copy`, `rm` — nothing else.
-2. **Lint before push.** Exit 5 means you broke a scene, a link or an asset reference. Don't
-   report success without a clean lint.
+1. **Writes go through the CLI** — `push`, `restore`, `copy`, `rm`. That is what bumps the
+   rev, snapshots the old version, and tells open browser editors to update. (Reading the
+   server's `data/` directory directly is fine and fast; the CLI does it for you.)
+2. **Lint before push.** Exit 5 means a scene, a link or an asset reference needs fixing.
+   A clean lint is what makes the work done.
 
 ## The working copy
 
@@ -59,12 +57,12 @@ cast:
   mira: {at: -0.4, frame: arms-crossed}
 ```
 
-- Front matter is `name`, `tags`, `at`. Everything else about the passage is carried through
-  untouched — leave it alone.
+- Front matter is `name`, `tags`, `at`. Everything else about the passage rides through
+  untouched from `.twine/story.json`.
 - **New file = new passage. Deleted file = deleted passage.** The filename is cosmetic;
-  `name:` is what renames, and push rewrites the links that pointed at the old name.
-- The `[scene]` block lives inside the passage. There is no separate scene file. `STORY.md`
-  gives you `file:line` for every scene id.
+  `name:` is what renames, and push follows the rename through every link that pointed at it.
+- The `[scene]` block lives inside the passage file. `STORY.md` gives you `file:line` for
+  every scene id, so opening one is a `Read` with an offset.
 
 ## Assets are real paths
 
@@ -92,9 +90,9 @@ directory is fine and usually fastest. Over it, use the tables in `STORY.md` —
 
 ## Conflicts
 
-Push sends `If-Match`. Exit 3 means someone wrote while you worked; nothing was uploaded.
-Check the story out again into a second directory to compare, or `pull --force` to throw
-your copy away. Never force past a conflict unasked.
+Push sends `If-Match`. Exit 3 means someone wrote while you worked, and the store is
+untouched. Check the story out again into a second directory to compare and merge by hand,
+or `pull --force` to take theirs. Forcing past a conflict is the user's call.
 
 ## Exit codes
 

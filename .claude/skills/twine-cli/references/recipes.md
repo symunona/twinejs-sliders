@@ -30,8 +30,8 @@ twine-cli lint tmp/ep3
 twine-cli push tmp/ep3
 ```
 
-The scene block is plain YAML inside the passage file. Normal `Edit`. Keep the author's
-formatting and comments — you are editing their text, not regenerating it.
+The scene block is plain YAML inside the passage file — normal `Edit`. Keep the author's
+formatting and comments; you are editing their text.
 
 ## 3 — Look at the art a scene uses
 
@@ -72,7 +72,7 @@ New story id, new IFID, new passage ids. `--reid` also rewrites every `from:` an
 twine-cli revs ep3                        # newest first
 twine-cli checkout ep3@37 tmp/ep3-r37     # the old one, as files, read-only history
 diff -ru tmp/ep3-r37/passages tmp/ep3/passages
-twine-cli restore ep3 --rev 37            # makes a NEW rev; never rewrites history
+twine-cli restore ep3 --rev 37            # makes a new rev on top; history stays intact
 ```
 
 If `restore` reports `missingAssets`, the art from that era is gone — `twine-cli assets
@@ -86,6 +86,6 @@ tmp/ep3 --missing` confirms after a fresh checkout.
 twine-cli status tmp/ep3                  # your rev vs theirs, and who
 twine-cli checkout ep3 tmp/ep3-theirs     # their version, side by side
 diff -ru tmp/ep3-theirs/passages tmp/ep3/passages
-# merge by hand into tmp/ep3, then:
-twine-cli pull tmp/ep3 --force            # ONLY if you are discarding your copy
+# merge by hand into tmp/ep3, then push again. Or take theirs wholesale:
+twine-cli pull tmp/ep3 --force            # discards your copy — ask first
 ```
