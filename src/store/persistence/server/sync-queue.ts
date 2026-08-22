@@ -211,6 +211,16 @@ export class SyncQueue {
 		const record = syncRecordOrNew(storyId);
 		const hash = storyHash(story);
 
+		// `push()` checks this too, but a queued entry can go stale between scheduling and
+		// firing: a publish or a pull writes the same body through another path first.
+		// Sending it again costs a rev, burns a slot of the keep-N history and credits the
+		// version to whoever merely received it.
+		if (hash === record.pushedHash) {
+			this.pending.delete(storyId);
+			this.write(storyId, {state: 'idle'});
+			return;
+		}
+
 		this.write(storyId, {state: 'pushing'});
 
 		const run = async () => {

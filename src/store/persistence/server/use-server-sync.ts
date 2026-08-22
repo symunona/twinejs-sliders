@@ -954,8 +954,12 @@ export function useServerSync(): ServerSyncContextProps {
 				});
 			}
 
+			// Claim the hash before the PUT, not after: `sync: true` has just gone into
+			// the store, so the watcher is about to see a change and queue a push. With a
+			// blank hash that push would send this very body a second time — a wasted rev,
+			// a burnt slot of the keep-N history, and a second row in the history dialog.
 			updateSyncRecord(target.id, {
-				pushedHash: '',
+				pushedHash: storyHash(target),
 				rev: 0,
 				state: 'pushing'
 			});
@@ -975,8 +979,10 @@ export function useServerSync(): ServerSyncContextProps {
 				setRecords({...allSyncRecords()});
 				await pushAssets(target);
 			} catch (error) {
+				// The claim above was optimistic; hand it back so the next edit retries.
 				updateSyncRecord(target.id, {
 					lastError: error instanceof Error ? error.message : String(error),
+					pushedHash: '',
 					state: 'error'
 				});
 				setRecords({...allSyncRecords()});

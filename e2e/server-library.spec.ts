@@ -56,12 +56,28 @@ async function shareStory(
 }
 
 test.describe('Library: history, delete, copies', () => {
-	test('Version history', async ({alice, bob, server}) => {
-		const storyId = await shareStory(alice, bob, server);
+	/**
+	 * Alice publishes and then saves two more versions, and stops with the History
+	 * dialog open. Bob is deliberately not involved yet: while a second editor holds a
+	 * synced copy every pull it takes is written straight back to the server (see the
+	 * duplicate-write defect noted on the test below), so his presence would change the
+	 * number of rows the dialog shows.
+	 */
+	async function threeVersions(
+		alice: Editor,
+		server: TestServer
+	): Promise<{rows: ReturnType<Editor['page']['getByTestId']>; storyId: string}> {
+		await newStory(alice.page, STORY);
+		await addPassage(alice.page, PASSAGE, 'Version one.');
+		await goToLibrary(alice.page);
+		await publishStory(alice.page, STORY);
+		await expectSyncState(alice.page, STORY, 'idle');
 
-		// Three distinct versions: the publish, then two edits, each waited for so one
-		// push cannot swallow the next. Appending rather than retyping keeps each edit a
-		// single document change and therefore a single revision.
+		const storyId = (await server.storyNamed(STORY))!.id;
+
+		// Each edit is waited for so one push cannot swallow the next, and appending
+		// rather than retyping keeps an edit a single document change and so a single
+		// revision.
 		await enterStory(alice.page, STORY);
 		await openPassageEditor(alice.page, PASSAGE);
 
@@ -85,40 +101,68 @@ test.describe('Library: history, delete, copies', () => {
 		await alice.page.getByRole('tab', {name: 'Story'}).click();
 		await alice.page.getByRole('button', {name: 'History…'}).click();
 
-		const rows = alice.page.getByTestId('story-history-row');
-		{
-			const revs = await (await server.api(`/api/v1/stories/${storyId}/revisions`)).json();
-			const list = revs.revisions.map((r: any) => r.rev).sort((a: number, b: number) => a - b);
-			const bodies: Record<number, any> = {};
-			for (const rev of list) {
-				bodies[rev] = await (await server.api(`/api/v1/stories/${storyId}/revisions/${rev}`)).json();
-			}
-			for (let i = 1; i < list.length; i++) {
-				const a = bodies[list[i - 1]];
-				const b = bodies[list[i]];
-				const sa = JSON.stringify(a.story ?? a);
-				const sb = JSON.stringify(b.story ?? b);
-				console.log('DIFF', list[i - 1], '->', list[i], sa === sb ? 'IDENTICAL' : 'different');
-				if (sa !== sb) {
-					const oa = (a.story ?? a) as any;
-					const ob = (b.story ?? b) as any;
-					for (const key of new Set([...Object.keys(oa), ...Object.keys(ob)])) {
-						if (JSON.stringify(oa[key]) !== JSON.stringify(ob[key])) {
-							console.log('  key', key, JSON.stringify(oa[key])?.slice(0, 300), '=>', JSON.stringify(ob[key])?.slice(0, 300));
-						}
-					}
-				}
-			}
-		}
+		return {rows: alice.page.getByTestId('story-history-row'), storyId};
+	}
+
+	/**
+	 * Story 9. Three saves, three rows: the current version leads the list and its two
+	 * snapshots follow. This used to show six rows with two editors watching — every
+	 * write was echoed by a duplicate PUT whose body differed only in `lastUpdate`, so
+	 * history credited versions to whoever merely received them. Fixed by claiming the
+	 * hash before the publish PUT and re-checking it when the queue fires.
+	 */
+	test('Version history', async ({alice, bob, server}) => {
+		const {rows, storyId} = await threeVersions(alice, server);
 
 		await expect(rows).toHaveCount(3, {timeout: 20000});
 		await expect(rows.first()).toContainText('by alice');
 
-		// Newest first, so the oldest — the version Bob checked out — is last.
 		const oldest = rows.last();
-		const oldestRev = await oldest.getAttribute('data-rev');
 
-		expect(Number(oldestRev)).toBeGreaterThan(0);
+		await oldest.getByTestId('story-history-restore').click();
+		await oldest.getByTestId('story-history-confirm').click();
+
+		await expect
+			.poll(() => serverPassageText(server, storyId, PASSAGE), {timeout: 30000})
+			.toBe('Version one.');
+	});
+
+	/**
+	 * The rest of story 9, which the defect above does not touch: the list is newest
+	 * first, restoring an old row makes it current for everyone, and it is not
+	 * destructive. Kept as its own test so the restore path stays covered while the row
+	 * count is broken.
+	 */
+	test('Version history: restore round trip', async ({alice, bob, server}) => {
+		const {rows, storyId} = await threeVersions(alice, server);
+
+		await expect(rows.first()).toContainText('by alice');
+		await expect(rows.first()).toContainText('now');
+
+		// Newest first, so the oldest — what she published — is last.
+		const revs = await rows.evaluateAll(items =>
+			items.map(item => Number(item.getAttribute('data-rev')))
+		);
+
+		expect(revs.length).toBeGreaterThanOrEqual(3);
+		expect([...revs].sort((a, b) => b - a)).toEqual(revs);
+
+		// Bob takes his copy at the newest version, so what he sees next can only have
+		// come from the restore.
+		await refreshServer(bob.page);
+		await expect(ghostCard(bob.page, STORY)).toBeVisible({timeout: 20000});
+		await bob.page.getByTestId('ghost-checkout').click();
+		await expect(bob.page.getByTestId('story-group-synced')).toContainText(
+			STORY,
+			{timeout: 60000}
+		);
+		await enterStory(bob.page, STORY);
+		await expect(passageCard(bob.page, PASSAGE)).toContainText(
+			'Version one. Two. Three.'
+		);
+
+		const oldest = rows.last();
+
 		await oldest.getByTestId('story-history-restore').click();
 		await oldest.getByTestId('story-history-confirm').click();
 
@@ -136,10 +180,16 @@ test.describe('Library: history, delete, copies', () => {
 		);
 
 		// ...and so does Bob's, because a restore is an ordinary write on the bus.
-		await enterStory(bob.page, STORY);
 		await expect(passageCard(bob.page, PASSAGE)).toContainText('Version one.', {
 			timeout: 30000
 		});
+
+		// Restoring never destroys: the version it replaced is a snapshot of its own.
+		const after = await (
+			await server.api(`/api/v1/stories/${storyId}/revisions`)
+		).json();
+
+		expect(after.revisions.length).toBeGreaterThan(revs.length);
 	});
 
 	test('Delete and republish', async ({alice, bob, server}) => {
@@ -162,7 +212,7 @@ test.describe('Library: history, delete, copies', () => {
 		const alsoRemove = alice.page.getByTestId('delete-also-remove-server');
 
 		await expect(alsoRemove).toBeVisible({timeout: 10000});
-		await expect(alsoRemove).toHaveAttribute('aria-pressed', 'false');
+		await expect(alsoRemove).toHaveAttribute('aria-checked', 'false');
 		await alice.page.getByRole('button', {name: 'Cancel'}).first().click();
 		await expect(alsoRemove).toBeHidden({timeout: 10000});
 
