@@ -495,14 +495,15 @@ func TestRevisionsAndRestore(t *testing.T) {
 	if revs.Current != 3 {
 		t.Fatalf("current = %d", revs.Current)
 	}
-	if len(revs.Revisions) != 2 {
+	// Three rows: the current version leads, then its two snapshots.
+	if len(revs.Revisions) != 3 {
 		t.Fatalf("revisions = %+v", revs.Revisions)
 	}
-	if revs.Revisions[0].Rev != 2 {
+	if revs.Revisions[0].Rev != 3 || revs.Revisions[1].Rev != 2 {
 		t.Fatal("revisions are not newest first")
 	}
-	if revs.Revisions[0].Client != "mira" || revs.Revisions[0].Passages != 1 || revs.Revisions[0].Hash == "" {
-		t.Fatalf("revision row = %+v", revs.Revisions[0])
+	if revs.Revisions[1].Client != "mira" || revs.Revisions[1].Passages != 1 || revs.Revisions[1].Hash == "" {
+		t.Fatalf("revision row = %+v", revs.Revisions[1])
 	}
 
 	res = h.do("GET", "/api/v1/stories/story-1/revisions/1", nil)

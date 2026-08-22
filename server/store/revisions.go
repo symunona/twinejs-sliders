@@ -28,9 +28,8 @@ type RevisionEntry struct {
 	RestoredFrom int `json:"restoredFrom,omitempty"`
 }
 
-// Revisions is RevisionsResponse in server.types.ts: the snapshot list, newest first,
-// plus the rev the story is at now. `current` is deliberately not in the list — it is not
-// a snapshot, it is story.json, and the UI marks that row "now" from this field.
+// Revisions is RevisionsResponse in server.types.ts: the version list, newest first, with
+// the current version as its first row, plus `current` so the UI knows which row is now.
 type Revisions struct {
 	Current   int             `json:"current"`
 	Revisions []RevisionEntry `json:"revisions"`
@@ -210,7 +209,21 @@ func (s *Store) Revisions(id string) (Revisions, error) {
 		return Revisions{}, err
 	}
 
-	out := make([]RevisionEntry, 0, len(index))
+	// The current version leads the list. It is not a snapshot — it is story.json — but
+	// the history dialog shows one list, and a version you cannot see is a version people
+	// assume was lost. `Current` tells the UI which row to mark "now".
+	out := make([]RevisionEntry, 0, len(index)+1)
+	if !m.Deleted {
+		out = append(out, RevisionEntry{
+			Rev:          m.Rev,
+			At:           m.UpdatedAt,
+			Client:       m.LastClient,
+			Bytes:        m.Bytes,
+			Hash:         m.Hash,
+			Passages:     m.PassageCount,
+			RestoredFrom: m.RestoredFrom,
+		})
+	}
 	for i := len(index) - 1; i >= 0; i-- {
 		out = append(out, index[i])
 	}

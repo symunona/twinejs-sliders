@@ -418,11 +418,12 @@ func TestRestoreSnapshotsWhatItReplacedAndReportsMissingAssets(t *testing.T) {
 	if revs.Current != 4 {
 		t.Fatalf("current = %d, want 4", revs.Current)
 	}
-	if revs.Revisions[0].Rev != 3 || revs.Revisions[0].RestoredFrom != 1 {
-		t.Fatalf("restore not recorded in history: %+v", revs.Revisions[0])
+	// Row 0 is the current version; the restore is the snapshot behind it.
+	if revs.Revisions[1].Rev != 3 || revs.Revisions[1].RestoredFrom != 1 {
+		t.Fatalf("restore not recorded in history: %+v", revs.Revisions[1])
 	}
-	if revs.Revisions[0].Client != "bob" {
-		t.Fatalf("history credits %q, want bob", revs.Revisions[0].Client)
+	if revs.Revisions[1].Client != "bob" {
+		t.Fatalf("history credits %q, want bob", revs.Revisions[1].Client)
 	}
 }
 
