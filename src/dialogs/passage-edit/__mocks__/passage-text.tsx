@@ -11,6 +11,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 	return (
 		<div
 			data-testid={`mock-passage-text-${props.passage.id}`}
+			data-disabled={props.disabled ? 'true' : 'false'}
 			data-story-format-extensions-disabled={
 				props.storyFormatExtensionsDisabled
 			}

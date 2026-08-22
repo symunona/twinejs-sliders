@@ -133,6 +133,7 @@
 		"deploy-cloudflare": "bash scripts/deploy-cloudflare.sh",
 		"deploy-tunnel-dev": "bash scripts/tunnel-dev.sh",
 		"e2e": "playwright test",
+		"e2e:sync": "playwright test --project=server-sync",
 		"lint": "eslint src",
 		"start": "vite",
 		"start:docs": "cd docs/en && mdbook serve",

@@ -1,0 +1,31 @@
+/*
+Empty most of the time, and empty must take no room and draw nothing -- an outline or a
+gap here would be a permanent reminder of a feature that is only occasionally in use.
+The initials themselves are small, low-contrast and never interactive: presence is
+information, not a control.
+*/
+
+.story-presence {
+	align-items: center;
+	display: inline-flex;
+	gap: 2px;
+	padding: 0 4px;
+}
+
+.story-presence:empty {
+	display: none;
+}
+
+.story-presence-initial {
+	align-items: center;
+	background: var(--light-blue);
+	border-radius: 50%;
+	color: var(--dark-blue);
+	display: inline-flex;
+	font-size: 10px;
+	font-weight: bold;
+	height: 18px;
+	justify-content: center;
+	line-height: 1;
+	width: 18px;
+}

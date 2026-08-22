@@ -35,7 +35,21 @@ import {
 	isServerError,
 	type ServerClient
 } from './client';
-import type {StoryIndexEntry} from './server.types';
+import {createEventsSocket, type EventsSocket} from './events';
+import {
+	clientsInStory,
+	emptyPresence,
+	passageLock,
+	presenceDisconnected,
+	presenceReducer,
+	type PassageLock,
+	type PresenceState
+} from './presence';
+import type {
+	PresenceClient,
+	ServerMessage,
+	StoryIndexEntry
+} from './server.types';
 import {SyncQueue} from './sync-queue';
 import {
 	allSyncRecords,
@@ -144,6 +158,15 @@ export interface ServerSyncActions {
 	setSync(story: Story, sync: boolean): void;
 }
 
+/**
+ * How often to poll `GET /stories` with no socket. Spec 11's fallback.
+ *
+ * With a socket the poll does not go away, it only slows down: the bus can miss a message
+ * — a reconnect straddling someone else's write — and a five-minute sweep is what notices.
+ */
+export const POLL_INTERVAL = 30000;
+export const SOCKET_POLL_INTERVAL = 300000;
+
 export interface ServerSyncContextProps {
 	/**
 	 * Undefined until the backend prefs are filled in. Dialogs that read one-off endpoints
@@ -161,6 +184,25 @@ export interface ServerSyncContextProps {
 	/** In-flight checkout or asset upload, by story id. Drives the progress bar. */
 	progress: Record<string, SyncProgress | undefined>;
 	actions: ServerSyncActions;
+
+	// -------------------------------------------------------------------
+	// Presence and soft locks — all of it optional, all of it silent when the socket is
+	// down. See `presence.ts`; these are the bound versions of its queries.
+	// -------------------------------------------------------------------
+
+	/** The last `welcome` / `presence` payload, plus who we are. */
+	presence: PresenceState;
+	/** The websocket, separately from `connected`, which is about HTTP. */
+	socketConnected: boolean;
+	/** Everyone else in a story. What the story-list card and the toolbar draw. */
+	clientsIn(storyId: string): PresenceClient[];
+	/** Who is holding this passage against us, and whether it has been taken over. */
+	lock(storyId: string, passageId: string): PassageLock | undefined;
+	/** Passage null means "in the story map, not in a passage". */
+	focusPassage(storyId: string, passageId: string | null): void;
+	blurPassage(storyId: string, passageId: string | null): void;
+	/** Take over: announces, does not kick. Both editors end up writable. */
+	stealPassage(storyId: string, passageId: string): void;
 }
 
 const noopActions: ServerSyncActions = {
@@ -176,11 +218,18 @@ const noopActions: ServerSyncActions = {
 
 export const ServerSyncContext = React.createContext<ServerSyncContextProps>({
 	actions: noopActions,
+	blurPassage: () => undefined,
+	clientsIn: () => [],
 	connected: false,
+	focusPassage: () => undefined,
 	ghosts: [],
 	index: [],
+	lock: () => undefined,
+	presence: emptyPresence(),
 	progress: {},
-	records: {}
+	records: {},
+	socketConnected: false,
+	stealPassage: () => undefined
 });
 
 ServerSyncContext.displayName = 'ServerSync';
@@ -301,6 +350,10 @@ export function useServerSync(): ServerSyncContextProps {
 	);
 	const [index, setIndex] = React.useState<StoryIndexEntry[]>([]);
 	const [connected, setConnected] = React.useState(false);
+	const [socketConnected, setSocketConnected] = React.useState(false);
+	const [presence, setPresence] = React.useState<PresenceState>(() =>
+		emptyPresence()
+	);
 	const [lastError, setLastError] = React.useState<string | undefined>();
 	const [progress, setProgress] = React.useState<
 		Record<string, SyncProgress | undefined>
@@ -312,6 +365,11 @@ export function useServerSync(): ServerSyncContextProps {
 	const storiesRef = React.useRef(stories);
 	const dispatchRef = React.useRef<StoriesDispatch>(dispatch);
 	const previousRef = React.useRef<Map<string, Story>>(new Map());
+	const socketRef = React.useRef<EventsSocket | undefined>(undefined);
+	/** What we last told the hub we were looking at, so `pagehide` can release it. */
+	const focusRef = React.useRef<
+		{story: string; passage: string | null} | undefined
+	>(undefined);
 
 	storiesRef.current = stories;
 	dispatchRef.current = dispatch;
@@ -455,32 +513,23 @@ export function useServerSync(): ServerSyncContextProps {
 		[client, setStoryProgress]
 	);
 
-	const refresh = React.useCallback(async () => {
-		if (!client || !queue) {
-			setConnected(false);
-			return;
-		}
+	/**
+	 * One story, one row of the decision table, applied.
+	 *
+	 * Both callers go through here: the poll, which learns `server` from an index entry,
+	 * and the websocket, which learns it from a `story` / `deleted` / `revived` message. A
+	 * second copy of this for the socket is exactly how the two paths would come to
+	 * disagree about what a stale-and-dirty story means.
+	 */
+	const reconcileStory = React.useCallback(
+		async (
+			story: Story,
+			server: {rev: number; deleted: boolean; lastClient?: string} | undefined
+		) => {
+			if (!queue) {
+				return;
+			}
 
-		let entries: StoryIndexEntry[];
-
-		try {
-			entries = await client.listStories();
-			setConnected(true);
-			setLastError(undefined);
-		} catch (error) {
-			setConnected(false);
-			setLastError(error instanceof Error ? error.message : String(error));
-			return;
-		}
-
-		setIndex(entries);
-
-		const byId = new Map(entries.map(entry => [entry.id, entry]));
-		const localStories = storiesRef.current;
-		const pulls: Promise<void>[] = [];
-
-		for (const story of localStories) {
-			const entry = byId.get(story.id);
 			const record = syncRecordOrNew(story.id);
 			const decision = reconcileDecision({
 				local: {
@@ -488,24 +537,24 @@ export function useServerSync(): ServerSyncContextProps {
 					rev: record.rev,
 					sync: story.sync === true
 				},
-				server: entry ? {deleted: entry.deleted, rev: entry.rev} : undefined
+				server: server ? {deleted: server.deleted, rev: server.rev} : undefined
 			});
 
 			switch (decision) {
 				case 'pull':
-					pulls.push(
-						pull(story.id).catch(error =>
-							setLastError(
-								error instanceof Error ? error.message : String(error)
-							)
-						)
-					);
+					try {
+						await pull(story.id);
+					} catch (error) {
+						setLastError(
+							error instanceof Error ? error.message : String(error)
+						);
+					}
 					break;
 
 				case 'conflict':
 					updateSyncRecord(story.id, {
-						conflictClient: entry?.lastClient,
-						conflictRev: entry?.rev,
+						conflictClient: server?.lastClient,
+						conflictRev: server?.rev,
 						state: 'conflict'
 					});
 					break;
@@ -531,16 +580,70 @@ export function useServerSync(): ServerSyncContextProps {
 				default:
 					break;
 			}
+		},
+		[backendAutosave, pull, queue]
+	);
+
+	const refresh = React.useCallback(async () => {
+		if (!client || !queue) {
+			setConnected(false);
+			return;
 		}
 
-		await Promise.all(pulls);
+		let entries: StoryIndexEntry[];
+
+		try {
+			entries = await client.listStories();
+			setConnected(true);
+			setLastError(undefined);
+		} catch (error) {
+			setConnected(false);
+			setLastError(error instanceof Error ? error.message : String(error));
+			return;
+		}
+
+		setIndex(entries);
+
+		const byId = new Map(entries.map(entry => [entry.id, entry]));
+
+		await Promise.all(
+			storiesRef.current.map(story => {
+				const entry = byId.get(story.id);
+
+				return reconcileStory(
+					story,
+					entry
+						? {
+								deleted: entry.deleted,
+								lastClient: entry.lastClient,
+								rev: entry.rev
+							}
+						: undefined
+				);
+			})
+		);
 		setRecords({...allSyncRecords()});
-	}, [backendAutosave, client, pull, queue]);
+	}, [client, queue, reconcileStory]);
 
 	// Connect on mount, and whenever the credentials change.
 	React.useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	// The polling fallback. It is not disabled when the socket is up, only slowed: a
+	// message lost across a reconnect would otherwise never be noticed.
+	React.useEffect(() => {
+		if (!client) {
+			return;
+		}
+
+		const timer = setInterval(
+			() => void refresh(),
+			socketConnected ? SOCKET_POLL_INTERVAL : POLL_INTERVAL
+		);
+
+		return () => clearInterval(timer);
+	}, [client, refresh, socketConnected]);
 
 	// Watch the store and queue pushes. This is the autosave path.
 	React.useEffect(() => {
@@ -589,6 +692,229 @@ export function useServerSync(): ServerSyncContextProps {
 		return () =>
 			document.removeEventListener('visibilitychange', onVisibilityChange);
 	}, [queue]);
+
+	// ---------------------------------------------------------------------
+	// The websocket: the fast path in front of the poll, plus presence
+	// ---------------------------------------------------------------------
+
+	/**
+	 * One message off the bus.
+	 *
+	 * A `story` for something we have locally goes straight through the same decision
+	 * table the poll uses — the message carries the rev, which is the only thing the index
+	 * row would have told us. A message about a story we do not have is a different
+	 * matter: the ghost list is built from the index, so that one needs the round trip.
+	 */
+	const handleServerEvent = React.useCallback(
+		(message: ServerMessage) => {
+			setPresence(current => presenceReducer(current, message));
+
+			const localStory = (id: string) =>
+				storiesRef.current.find(story => story.id === id);
+			const finish = (work: Promise<void>) =>
+				void work.then(() => setRecords({...allSyncRecords()}));
+
+			switch (message.t) {
+				case 'story':
+				case 'revived': {
+					const story = localStory(message.id);
+
+					setIndex(current =>
+						current.map(entry =>
+							entry.id === message.id
+								? {
+										...entry,
+										deleted: false,
+										lastClient: message.by,
+										rev: message.rev
+									}
+								: entry
+						)
+					);
+
+					if (!story) {
+						void refresh();
+						return;
+					}
+
+					finish(
+						reconcileStory(story, {
+							deleted: false,
+							lastClient: message.by,
+							rev: message.rev
+						})
+					);
+					break;
+				}
+
+				case 'deleted': {
+					const story = localStory(message.id);
+
+					setIndex(current =>
+						current.map(entry =>
+							entry.id === message.id ? {...entry, deleted: true} : entry
+						)
+					);
+
+					if (!story) {
+						void refresh();
+						return;
+					}
+
+					// A tombstone carries no rev, and none is needed: the decision table
+					// only looks at `deleted` once it is set.
+					finish(
+						reconcileStory(story, {
+							deleted: true,
+							lastClient: message.by,
+							rev: syncRecordOrNew(message.id).rev
+						})
+					);
+					break;
+				}
+
+				case 'assets':
+					// Asset bytes are not part of the story document, so there is nothing
+					// to reconcile — what changed is the index row's counts. Ask for it.
+					void refresh();
+					break;
+
+				default:
+					break;
+			}
+		},
+		[reconcileStory, refresh]
+	);
+
+	// A ref so the socket's listener never has to be torn down and rebuilt: reconnecting
+	// on every keystroke-driven re-render of the handler would be worse than useless.
+	const handlerRef = React.useRef(handleServerEvent);
+
+	handlerRef.current = handleServerEvent;
+
+	React.useEffect(() => {
+		setPresence(current =>
+			current.selfId === (backendClientId ?? '')
+				? current
+				: {...current, selfId: backendClientId ?? ''}
+		);
+	}, [backendClientId]);
+
+	React.useEffect(() => {
+		if (!backendUrl || !backendToken || !backendClientId) {
+			setSocketConnected(false);
+			setPresence(presenceDisconnected);
+			return;
+		}
+
+		const socket = createEventsSocket({
+			clientId: backendClientId,
+			clientName,
+			stories: () =>
+				storiesRef.current
+					.filter(story => story.sync === true)
+					.map(story => story.id),
+			token: backendToken,
+			url: backendUrl
+		});
+
+		socketRef.current = socket;
+
+		const offMessage = socket.onMessage(message => handlerRef.current(message));
+		const offStatus = socket.onStatus(next => {
+			setSocketConnected(next);
+
+			if (!next) {
+				// Presence that cannot be refreshed is worse than none: a banner naming
+				// someone who left twenty minutes ago is a lie the user cannot check.
+				setPresence(presenceDisconnected);
+				return;
+			}
+
+			// Say where we are again. The editor almost always opens a passage before the
+			// handshake finishes, and after a reconnect the hub has forgotten us entirely
+			// — either way, without this the author holds a lock nobody can see.
+			const focus = focusRef.current;
+
+			if (focus) {
+				socket.send({passage: focus.passage, story: focus.story, t: 'focus'});
+			}
+		});
+
+		socket.connect();
+
+		return () => {
+			offMessage();
+			offStatus();
+			socket.dispose();
+
+			if (socketRef.current === socket) {
+				socketRef.current = undefined;
+			}
+		};
+	}, [backendClientId, backendToken, backendUrl, clientName]);
+
+	const focusPassage = React.useCallback(
+		(storyId: string, passageId: string | null) => {
+			focusRef.current = {passage: passageId, story: storyId};
+			socketRef.current?.send({
+				passage: passageId,
+				story: storyId,
+				t: 'focus'
+			});
+		},
+		[]
+	);
+
+	const blurPassage = React.useCallback(
+		(storyId: string, passageId: string | null) => {
+			const focus = focusRef.current;
+
+			if (focus && focus.story === storyId && focus.passage === passageId) {
+				// Closing a passage leaves the author in the story map, and the hub reads
+				// it the same way. Forgetting the story here instead would cost this
+				// browser its place on the story-list card after any reconnect.
+				focusRef.current =
+					passageId === null ? undefined : {passage: null, story: storyId};
+			}
+
+			socketRef.current?.send({passage: passageId, story: storyId, t: 'blur'});
+		},
+		[]
+	);
+
+	const stealPassage = React.useCallback(
+		(storyId: string, passageId: string) => {
+			// No optimistic local state: the hub echoes `stolen` back to the stealer too,
+			// so both banners are driven by the same message on the same code path.
+			socketRef.current?.send({passage: passageId, story: storyId, t: 'steal'});
+		},
+		[]
+	);
+
+	// The hub expires a silent client after 60 s. That is the backstop for a closed
+	// laptop; for a closed tab, saying so is instant and costs one frame.
+	React.useEffect(() => {
+		const release = () => {
+			const focus = focusRef.current;
+
+			if (focus) {
+				socketRef.current?.send({
+					passage: focus.passage,
+					story: focus.story,
+					t: 'blur'
+				});
+			}
+		};
+
+		window.addEventListener('pagehide', release);
+		window.addEventListener('beforeunload', release);
+
+		return () => {
+			window.removeEventListener('pagehide', release);
+			window.removeEventListener('beforeunload', release);
+		};
+	}, []);
 
 	// ---------------------------------------------------------------------
 	// Actions
@@ -844,6 +1170,17 @@ export function useServerSync(): ServerSyncContextProps {
 		[index, stories]
 	);
 
+	const clientsIn = React.useCallback(
+		(storyId: string) => clientsInStory(presence, storyId),
+		[presence]
+	);
+
+	const lock = React.useCallback(
+		(storyId: string, passageId: string) =>
+			passageLock(presence, storyId, passageId),
+		[presence]
+	);
+
 	const value = React.useMemo<ServerSyncContextProps>(
 		() => ({
 			actions: {
@@ -856,21 +1193,33 @@ export function useServerSync(): ServerSyncContextProps {
 				resolveTakeTheirs,
 				setSync
 			},
+			blurPassage,
 			client,
+			clientsIn,
 			connected,
+			focusPassage,
 			ghosts,
 			index,
 			lastError,
+			lock,
+			presence,
 			progress,
-			records
+			records,
+			socketConnected,
+			stealPassage
 		}),
 		[
+			blurPassage,
 			checkout,
 			client,
+			clientsIn,
 			connected,
+			focusPassage,
 			ghosts,
 			index,
 			lastError,
+			lock,
+			presence,
 			progress,
 			publish,
 			records,
@@ -879,7 +1228,9 @@ export function useServerSync(): ServerSyncContextProps {
 			republish,
 			resolveKeepMine,
 			resolveTakeTheirs,
-			setSync
+			setSync,
+			socketConnected,
+			stealPassage
 		]
 	);
 
@@ -889,9 +1240,11 @@ export function useServerSync(): ServerSyncContextProps {
 		(globalThis as Record<string, unknown>).__slidersSync = {
 			connected,
 			ghosts,
-			records
+			presence: presence.clients,
+			records,
+			socketConnected
 		};
-	}, [connected, ghosts, records]);
+	}, [connected, ghosts, presence, records, socketConnected]);
 
 	return value;
 }

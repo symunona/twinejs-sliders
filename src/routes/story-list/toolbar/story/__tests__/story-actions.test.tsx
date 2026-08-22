@@ -13,29 +13,7 @@ import {
 	StoryInspector
 } from '../../../../../test-util';
 import {StoryActions} from '../story-actions';
-
-function fakeSyncContext(
-	props?: Partial<ServerSyncContextProps>
-): ServerSyncContextProps {
-	return {
-		actions: {
-			checkout: jest.fn().mockResolvedValue(undefined),
-			publish: jest.fn().mockResolvedValue(undefined),
-			refresh: jest.fn().mockResolvedValue(undefined),
-			removeFromServer: jest.fn().mockResolvedValue(undefined),
-			republish: jest.fn().mockResolvedValue(undefined),
-			resolveKeepMine: jest.fn().mockResolvedValue(undefined),
-			resolveTakeTheirs: jest.fn().mockResolvedValue(undefined),
-			setSync: jest.fn()
-		},
-		connected: true,
-		ghosts: [],
-		index: [],
-		progress: {},
-		records: {},
-		...props
-	};
-}
+import {testSyncContext} from '../../../../../store/persistence/server/test-fixtures';
 
 describe('<StoryActions>', () => {
 	async function renderComponent(
@@ -43,7 +21,7 @@ describe('<StoryActions>', () => {
 		sync?: Partial<ServerSyncContextProps>
 	) {
 		const result = render(
-			<ServerSyncContext.Provider value={fakeSyncContext(sync)}>
+			<ServerSyncContext.Provider value={testSyncContext(sync)}>
 				<FakeStateProvider>
 					<StoryActions selectedStory={story} />
 					<StoryInspector />

@@ -107,7 +107,7 @@ describe('<PassageCard>', () => {
 	});
 
 	describe("When the tagDisplay prop is 'color'", () => {
-		it("displays a <TagStripe> of passage tags", () => {
+		it('displays a <TagStripe> of passage tags', () => {
 			const passage = fakePassage({tags: ['mock-tag-1', 'mock-tag-2']});
 
 			renderComponent({passage});
@@ -125,7 +125,7 @@ describe('<PassageCard>', () => {
 	});
 
 	describe("When the tagDisplay prop is 'name'", () => {
-		it("displays <TagBadges> containing passage tags", () => {
+		it('displays <TagBadges> containing passage tags', () => {
 			const passage = fakePassage({tags: ['mock-tag-1', 'mock-tag-2']});
 
 			renderComponent({passage, tagDisplay: 'name'});
@@ -241,6 +241,26 @@ describe('<PassageCard>', () => {
 		renderComponent();
 		expect(screen.queryByTestId('passage-card-error-badge')).toBeNull();
 		expect(document.querySelector('.passage-card.has-errors')).toBeNull();
+	});
+
+	describe('when another editor holds the passage', () => {
+		it('marks the card with their initial', () => {
+			renderComponent({lockedBy: 'jules'});
+
+			const badge = screen.getByTestId('passage-card-lock');
+
+			expect(badge).toHaveAttribute('data-locked-by', 'jules');
+			expect(badge).toHaveTextContent('J');
+			expect(
+				document.querySelector('.passage-card.is-locked')
+			).toBeInTheDocument();
+		});
+	});
+
+	it('shows no lock badge when nobody else is in the passage', () => {
+		renderComponent();
+		expect(screen.queryByTestId('passage-card-lock')).toBeNull();
+		expect(document.querySelector('.passage-card.is-locked')).toBeNull();
 	});
 
 	it.todo('passes through drag events');

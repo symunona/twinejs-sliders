@@ -7,6 +7,7 @@ import {Point} from '../../../util/geometry';
 import {BuildInfo} from './build-info';
 import {PassageActions} from './passage/passage-actions';
 import {StoryActions} from './story/story-actions';
+import {StoryPresence} from './story-presence';
 import {UndoRedoButtons} from './undo-redo-buttons';
 import {ZoomButtons} from './zoom-buttons';
 
@@ -25,6 +26,7 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 			pinnedControls={
 				<>
 					<BuildInfo />
+					<StoryPresence storyId={story.id} />
 					<ZoomButtons story={story} />
 					<UndoRedoButtons />
 				</>

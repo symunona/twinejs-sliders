@@ -9,12 +9,16 @@ import {
 
 // The dialog itself talks to the server; this button's whole job is opening it.
 
-jest.mock('../../../../../dialogs/server-conflict/server-conflict', () => ({
-	ServerConflictDialog: (props: {storyId: string}) =>
-		require('react').createElement('div', {
-			'data-testid': `mock-server-conflict-dialog-${props.storyId}`
-		})
-}));
+jest.mock('../../../../../dialogs/server-conflict/server-conflict', () => {
+	const react = jest.requireActual('react');
+
+	return {
+		ServerConflictDialog: (props: {storyId: string}) =>
+			react.createElement('div', {
+				'data-testid': `mock-server-conflict-dialog-${props.storyId}`
+			})
+	};
+});
 
 describe('<ResolveConflictButton>', () => {
 	async function renderComponent(props?: Partial<ResolveConflictButtonProps>) {

@@ -50,6 +50,10 @@ const config: PlaywrightTestConfig = {
 	projects: [
 		{
 			name: 'chromium',
+			/* The server-sync suite is its own project: it spawns a Go binary per worker
+			   and needs a longer per-test timeout, and running it here as well would
+			   run every one of those tests twice. */
+			testIgnore: /server-[^/]*\.spec\.ts$/,
 			use: {
 				...devices['Desktop Chrome'],
 				/* Background removal needs a real WebGPU adapter, which headless
@@ -73,6 +77,18 @@ const config: PlaywrightTestConfig = {
 					  }
 					: {})
 			}
+		},
+
+		/* Two browser contexts against a real Go server (spec 11, testing layer 3).
+		   `e2e/server-helpers.ts` builds the binary once into the OS temp directory and
+		   spawns one process per worker on a port of the kernel's choosing, so this
+		   project needs no global setup -- only more patience per test. Conflicts wait
+		   out the push queue's 5s/15s/60s retry ladder. */
+		{
+			name: 'server-sync',
+			testMatch: /server-[^/]*\.spec\.ts$/,
+			timeout: 180 * 1000,
+			use: {...devices['Desktop Chrome']}
 		}
 
 		/* Test against mobile viewports. */

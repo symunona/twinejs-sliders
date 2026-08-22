@@ -4,7 +4,9 @@ import {MainContent} from '../../components/container/main-content';
 import {DocumentTitle} from '../../components/document-title/document-title';
 import {DialogsContextProvider} from '../../dialogs';
 import {AssetScopeProvider} from '../../dialogs/sliders-assets/asset-store-context';
-import { usePrefsContext } from '../../store/prefs';
+import {lockedPassages} from '../../store/persistence/server/presence';
+import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
+import {usePrefsContext} from '../../store/prefs';
 import {storyWithId} from '../../store/stories';
 import {
 	UndoableStoriesContextProvider,
@@ -38,6 +40,21 @@ export const InnerStoryEditRoute: React.FC = () => {
 	} = usePassageChangeHandlers(story);
 	const visibleZoom = useZoomTransition(story.zoom, mainContent.current);
 	const sceneErrorCounts = useStorySceneErrors(story.passages);
+	const {blurPassage, focusPassage, presence} = useServerSyncContext();
+	// Passage id -> the other editor holding it. Empty with no socket, and the map draws
+	// exactly as it always has.
+	const passageLocks = React.useMemo(
+		() => lockedPassages(presence, story.id),
+		[presence, story.id]
+	);
+
+	// Being in the story map at all is presence too -- it is what puts an initial on the
+	// story-list card. A null passage is what says "here, but not in anything".
+	React.useEffect(() => {
+		focusPassage(storyId, null);
+
+		return () => blurPassage(storyId, null);
+	}, [blurPassage, focusPassage, storyId]);
 
 	useZoomShortcuts(story);
 	useInitialPassageCreation(story, getCenter);
@@ -66,6 +83,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 					onEdit={handleEditPassage}
 					onSelect={handleSelectPassage}
 					onSelectRect={handleSelectRect}
+					passageLocks={passageLocks}
 					passages={story.passages}
 					startPassageId={story.startPassage}
 					tagColors={story.tagColors}

@@ -335,6 +335,11 @@
 				"layer_front": "Front",
 				"frame": "Frame",
 				"frameAuto": "Automatic"
+			},
+			"lock": {
+				"lockedBy": "{{name}} is editing this passage",
+				"shared": "You and {{name}} are both editing this passage",
+				"takeOver": "Take over"
 			}
 		},
 		"passageTags": {
@@ -732,6 +737,10 @@
 				"storyStructure": "Show Story Structure Only",
 				"passageNames": "Show Passage Names Only",
 				"passageNamesAndExcerpts": "Show Passage Names and Excerpts"
+			},
+			"presence": {
+				"editingPassage": "{{name}} is editing this passage",
+				"inStory": "Also in this story: {{names}}"
 			}
 		},
 		"storyList": {

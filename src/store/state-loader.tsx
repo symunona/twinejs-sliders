@@ -13,8 +13,7 @@ export const StateLoader: React.FC = ({children}) => {
 	const [formatsRepaired, setFormatsRepaired] = React.useState(false);
 	const [storiesRepaired, setStoriesRepaired] = React.useState(false);
 	const {dispatch: prefsDispatch, prefs: prefsState} = usePrefsContext();
-	const {dispatch: storiesDispatch, stories: storiesState} =
-		useStoriesContext();
+	const {dispatch: storiesDispatch} = useStoriesContext();
 	const {dispatch: formatsDispatch, formats: formatsState} =
 		useStoryFormatsContext();
 	const repairStories = useStoriesRepair();

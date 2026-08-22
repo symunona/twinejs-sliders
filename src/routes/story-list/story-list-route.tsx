@@ -8,6 +8,7 @@ import {
 	DialogsContextProvider,
 	useDialogsContext
 } from '../../dialogs';
+import {StoryCardPresence} from '../../components/story/story-card-sync-badge';
 import {useServerSyncContext} from '../../store/persistence/server';
 import {usePrefsContext} from '../../store/prefs';
 import {useDonationCheck} from '../../store/prefs/use-donation-check';
@@ -26,7 +27,7 @@ export const InnerStoryListRoute: React.FC = () => {
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {dispatch: storiesDispatch, stories} = useStoriesContext();
 	const {prefs} = usePrefsContext();
-	const {actions, connected, ghosts, progress, records} =
+	const {actions, connected, ghosts, presence, progress, records} =
 		useServerSyncContext();
 	const {shouldShowDonationPrompt} = useDonationCheck();
 	const {t} = useTranslation();
@@ -35,6 +36,25 @@ export const InnerStoryListRoute: React.FC = () => {
 		() => stories.filter(story => story.selected),
 		[stories]
 	);
+
+	// Story id -> everyone else in it. The card badge already had a slot for this; all
+	// that was missing was somebody to fill it in.
+	const storyPresence = React.useMemo(() => {
+		const out: Record<string, StoryCardPresence[]> = {};
+
+		for (const client of presence.clients) {
+			if (!client.story || client.id === presence.selfId) {
+				continue;
+			}
+
+			out[client.story] = [
+				...(out[client.story] ?? []),
+				{id: client.id, name: client.name}
+			];
+		}
+
+		return out;
+	}, [presence]);
 
 	const visibleStories = React.useMemo(() => {
 		const filteredStories =
@@ -128,6 +148,7 @@ export const InnerStoryListRoute: React.FC = () => {
 								onSelectStory={story =>
 									storiesDispatch(selectStory(story, true))
 								}
+								presence={storyPresence}
 								stories={localStories}
 								syncedStories={syncedStories}
 								syncRecords={records}

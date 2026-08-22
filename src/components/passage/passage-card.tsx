@@ -9,11 +9,13 @@ import {Passage, TagColors} from '../../store/stories';
 import {TagStripe} from '../tag/tag-stripe';
 import {passageIsEmpty} from '../../util/passage-is-empty';
 import './passage-card.css';
-import { TagBadges } from '../tag/tag-badges';
+import {TagBadges} from '../tag/tag-badges';
 
 export interface PassageCardProps {
 	/** How many scene errors this passage has, if any. */
 	errorCount?: number;
+	/** Another editor has this passage open. Their name, for a one-letter badge. */
+	lockedBy?: string;
 	onEdit: (passage: Passage) => void;
 	onDeselect: (passage: Passage) => void;
 	onDragStart?: DraggableCoreProps['onStart'];
@@ -31,6 +33,7 @@ const excerptLength = 400;
 export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 	const {
 		errorCount,
+		lockedBy,
 		onDeselect,
 		onDrag,
 		onDragStart,
@@ -47,10 +50,11 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 			classNames('passage-card', {
 				empty: passageIsEmpty(passage),
 				'has-errors': !!errorCount,
+				'is-locked': !!lockedBy,
 				selected: passage.selected,
 				[`tag-display-${tagDisplay}`]: true
 			}),
-		[errorCount, passage, tagDisplay]
+		[errorCount, lockedBy, passage, tagDisplay]
 	);
 	const container = React.useRef<HTMLDivElement>(null);
 	const excerpt = React.useMemo(() => {
@@ -115,7 +119,12 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 			onDrag={onDrag}
 			onStop={onDragStop}
 		>
-			<div className={className} ref={container} style={style} data-passage-tags={passage.tags.join(' ')}>
+			<div
+				className={className}
+				ref={container}
+				style={style}
+				data-passage-tags={passage.tags.join(' ')}
+			>
 				<SelectableCard
 					highlighted={passage.highlighted}
 					label={passage.name}
@@ -123,7 +132,9 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 					onSelect={handleSelect}
 					selected={passage.selected}
 				>
-					{tagDisplay === 'color' && <TagStripe tagColors={tagColors} tags={passage.tags} />}
+					{tagDisplay === 'color' && (
+						<TagStripe tagColors={tagColors} tags={passage.tags} />
+					)}
 					{!!errorCount && (
 						<span
 							className="passage-card-error-badge"
@@ -134,9 +145,23 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 							{'\u26a0\ufe0f'}
 						</span>
 					)}
+					{lockedBy && (
+						<span
+							className="passage-card-lock"
+							data-locked-by={lockedBy}
+							data-testid="passage-card-lock"
+							title={t('routes.storyEdit.presence.editingPassage', {
+								name: lockedBy
+							})}
+						>
+							{(lockedBy.trim()[0] ?? '?').toUpperCase()}
+						</span>
+					)}
 					<h2>{passage.name}</h2>
 					<CardContent>{excerpt}</CardContent>
-					{tagDisplay === 'name' && <TagBadges tagColors={tagColors} tags={passage.tags} />}
+					{tagDisplay === 'name' && (
+						<TagBadges tagColors={tagColors} tags={passage.tags} />
+					)}
 				</SelectableCard>
 			</div>
 		</DraggableCore>

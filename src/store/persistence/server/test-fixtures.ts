@@ -5,6 +5,9 @@
  */
 
 import type {Passage, Story} from '../../stories';
+import {emptyPresence} from './presence';
+import type {PresenceClient} from './server.types';
+import type {ServerSyncContextProps} from './use-server-sync';
 
 /**
  * A story with no random parts. `fakeStory()` randomises `selected` and `lastUpdate`,
@@ -64,4 +67,56 @@ export async function settle(turns = 6): Promise<void> {
 	for (let i = 0; i < turns; i++) {
 		await Promise.resolve();
 	}
+}
+
+/**
+ * A complete `ServerSyncContextProps` with every action stubbed.
+ *
+ * Shared rather than copied into each suite: the context grows — presence and locks were
+ * the last addition — and a per-file literal means every one of those files fails to
+ * compile for a reason that has nothing to do with what it tests.
+ */
+export function testSyncContext(
+	props?: Partial<ServerSyncContextProps>
+): ServerSyncContextProps {
+	return {
+		actions: {
+			checkout: jest.fn().mockResolvedValue(undefined),
+			publish: jest.fn().mockResolvedValue(undefined),
+			refresh: jest.fn().mockResolvedValue(undefined),
+			removeFromServer: jest.fn().mockResolvedValue(undefined),
+			republish: jest.fn().mockResolvedValue(undefined),
+			resolveKeepMine: jest.fn().mockResolvedValue(undefined),
+			resolveTakeTheirs: jest.fn().mockResolvedValue(undefined),
+			setSync: jest.fn(),
+			...props?.actions
+		},
+		blurPassage: jest.fn(),
+		clientsIn: () => [],
+		connected: true,
+		focusPassage: jest.fn(),
+		ghosts: [],
+		index: [],
+		lock: () => undefined,
+		presence: emptyPresence('self'),
+		progress: {},
+		records: {},
+		socketConnected: true,
+		stealPassage: jest.fn(),
+		...props
+	};
+}
+
+/** A presence entry with the fields nobody in a given test cares about filled in. */
+export function testPresenceClient(
+	overrides: Partial<PresenceClient> = {}
+): PresenceClient {
+	return {
+		id: 'other',
+		name: 'mira',
+		passage: null,
+		since: '2026-08-21T10:00:00.000Z',
+		story: null,
+		...overrides
+	};
 }

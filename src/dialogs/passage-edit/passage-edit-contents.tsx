@@ -2,6 +2,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import useErrorBoundary from 'use-error-boundary';
 import {ErrorMessage} from '../../components/error';
+import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {passageWithId, storyWithId, updatePassage} from '../../store/stories';
 import {
 	formatWithNameAndVersion,
@@ -21,6 +22,7 @@ import {ScenePreview} from './scene-preview/scene-preview';
 import {useSceneParse} from './scene-preview/use-scene-parse';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePreviewResolver} from './scene-preview/use-preview-resolver';
+import {PassageLockBanner} from './passage-lock-banner';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
 import {usePrefsContext} from '../../store/prefs';
@@ -45,6 +47,8 @@ export const PassageEditContents: React.FC<
 	const [liveText, setLiveText] = React.useState<string>();
 	const {ErrorBoundary, error, reset: resetError} = useErrorBoundary();
 	const {prefs} = usePrefsContext();
+	const {blurPassage, focusPassage, lock, stealPassage} =
+		useServerSyncContext();
 	const {dispatch, stories} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {formats} = useStoryFormatsContext();
@@ -65,8 +69,33 @@ export const PassageEditContents: React.FC<
 	 * scene currently says.
 	 */
 	const parse = useSceneParse(sceneText, story.passages);
+	/**
+	 * The soft lock (spec 11). `undefined` unless someone else has this passage open, and
+	 * always `undefined` with no server or no socket, which is what makes presence a thing
+	 * the editor can lose without noticing.
+	 */
+	const passageLock = lock(storyId, passageId);
+	/**
+	 * Read-only for two unrelated reasons, and they must not be conflated. `disabled` is
+	 * a background card in the dialog stack; the lock is somebody else typing. A locked
+	 * top card still holds its `focus` — it is open, just not writable.
+	 */
+	const readOnly = disabled || (!!passageLock && !passageLock.shared);
 
 	useSceneErrorMarks(cmEditor, parse.errors);
+
+	// Claim the passage while this editor is the one in front. Background cards in the
+	// stack are `disabled` and stay silent: claiming a lock on a passage the author is
+	// merely looking past would lock out someone who wants to work on it.
+	React.useEffect(() => {
+		if (disabled) {
+			return;
+		}
+
+		focusPassage(storyId, passageId);
+
+		return () => blurPassage(storyId, passageId);
+	}, [blurPassage, disabled, focusPassage, passageId, storyId]);
 
 	// Keeps the story format's "Insert Last Scene" toolbar item pointed at
 	// whatever scene this author last worked on.
@@ -157,7 +186,7 @@ export const PassageEditContents: React.FC<
 			{prefs.passageEditorToolbars && (
 				<>
 					<PassageToolbar
-						disabled={disabled}
+						disabled={readOnly}
 						editor={cmEditor}
 						passage={passage}
 						story={story}
@@ -165,7 +194,7 @@ export const PassageEditContents: React.FC<
 					/>
 					{prefs.useCodeMirror && storyFormatExtensionsEnabled && (
 						<StoryFormatToolbar
-							disabled={disabled}
+							disabled={readOnly}
 							editor={cmEditor}
 							onExecCommand={handleExecCommand}
 							storyFormat={storyFormat}
@@ -173,9 +202,15 @@ export const PassageEditContents: React.FC<
 					)}
 				</>
 			)}
+			{!disabled && (
+				<PassageLockBanner
+					lock={passageLock}
+					onTakeOver={() => stealPassage(storyId, passageId)}
+				/>
+			)}
 			<ErrorBoundary>
 				<PassageText
-					disabled={disabled}
+					disabled={readOnly}
 					onChange={handlePassageTextChange}
 					onEditorChange={setCmEditor}
 					onLiveChange={setLiveText}

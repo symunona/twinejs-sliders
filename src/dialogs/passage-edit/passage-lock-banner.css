@@ -1,0 +1,49 @@
+/*
+Sits directly above the editor, between the toolbars and the text, because it is a
+statement about the text: putting it in the dialog title bar would let an author scroll it
+out of sight while typing into a passage they cannot save.
+
+It must not move anything when it appears or goes away -- presence arrives asynchronously,
+and a banner that pushed the text down a line mid-sentence would move the caret under the
+author's hands. `flex-shrink: 0` keeps it out of the editor's own shrink budget.
+*/
+
+.passage-lock-banner {
+	align-items: center;
+	background: var(--dialog-background-color, #fff);
+	border-bottom: 1px solid var(--dialog-border-color, rgba(0, 0, 0, 0.15));
+	display: flex;
+	flex-shrink: 0;
+	font-size: 12px;
+	gap: 6px;
+	padding: 4px 8px;
+}
+
+.passage-lock-banner svg {
+	flex-shrink: 0;
+	height: 16px;
+	width: 16px;
+}
+
+.passage-lock-banner-text {
+	flex-grow: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Locked is the one that takes something away, so it is the one that gets a colour. */
+
+.passage-lock-banner.locked {
+	color: var(--dark-orange, #a15c00);
+}
+
+/* Shared is only a note: after a takeover both editors work, and this says why. */
+
+.passage-lock-banner.shared {
+	opacity: 0.8;
+}
+
+.passage-lock-banner .icon-button {
+	flex-shrink: 0;
+}

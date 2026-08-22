@@ -13,6 +13,7 @@ import {
 	fakeStory
 } from '../../../test-util';
 import {InnerStoryListRoute} from '../story-list-route';
+import {testSyncContext} from '../../../store/persistence/server/test-fixtures';
 
 jest.mock('../toolbar/story-list-toolbar');
 jest.mock('../story-cards');
@@ -36,29 +37,6 @@ function fakeGhost(props?: Partial<StoryIndexEntry>): StoryIndexEntry {
 	};
 }
 
-function fakeSyncContext(
-	props?: Partial<ServerSyncContextProps>
-): ServerSyncContextProps {
-	return {
-		actions: {
-			checkout: jest.fn().mockResolvedValue(undefined),
-			publish: jest.fn().mockResolvedValue(undefined),
-			refresh: jest.fn().mockResolvedValue(undefined),
-			removeFromServer: jest.fn().mockResolvedValue(undefined),
-			republish: jest.fn().mockResolvedValue(undefined),
-			resolveKeepMine: jest.fn().mockResolvedValue(undefined),
-			resolveTakeTheirs: jest.fn().mockResolvedValue(undefined),
-			setSync: jest.fn()
-		},
-		connected: true,
-		ghosts: [],
-		index: [],
-		progress: {},
-		records: {},
-		...props
-	};
-}
-
 describe('<StoryListRoute>', () => {
 	const useDonationCheckMock = useDonationCheck as jest.Mock;
 
@@ -75,7 +53,7 @@ describe('<StoryListRoute>', () => {
 		// Using the inner component so we can mock contexts around it.
 
 		return render(
-			<ServerSyncContext.Provider value={fakeSyncContext(sync)}>
+			<ServerSyncContext.Provider value={testSyncContext(sync)}>
 				<FakeStateProvider {...contexts}>
 					<InnerStoryListRoute />
 				</FakeStateProvider>

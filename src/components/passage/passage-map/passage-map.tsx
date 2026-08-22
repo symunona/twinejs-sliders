@@ -16,6 +16,8 @@ export interface PassageMapProps {
 	onDrag: (change: Point) => void;
 	onEdit: (passage: Passage) => void;
 	onSelect: (passage: Passage, exclusive: boolean) => void;
+	/** Passage ID -> the name of the other editor holding it. Soft locks, spec 11. */
+	passageLocks?: Record<string, string>;
 	passages: Passage[];
 	startPassageId: string;
 	tagColors: Story['tagColors'];
@@ -81,6 +83,7 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 		onDrag,
 		onEdit,
 		onSelect,
+		passageLocks,
 		passages,
 		startPassageId,
 		tagColors,
@@ -225,6 +228,7 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 				onDragStop={handleDragStop}
 				onEdit={onEdit}
 				onSelect={handleSelect}
+				passageLocks={passageLocks}
 				passages={passages}
 				tagColors={tagColors}
 				tagDisplay={tagDisplay}
