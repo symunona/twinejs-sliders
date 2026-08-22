@@ -40,6 +40,14 @@ export const reducer: React.Reducer<
 			};
 		}
 
+		// A story pulled from the backup server replaces a state this stack has inverse
+		// actions for. Undoing across that would resurrect passages someone else deleted,
+		// from a state that never existed anywhere. The whole stack goes rather than the
+		// pulled story's share of it: changes carry no story id, and a pull is rare enough
+		// that losing the undo history of other stories costs nothing worth keeping.
+		case 'clearChanges':
+			return {changes: [], currentChange: -1};
+
 		case 'updateCurrent':
 			return {
 				...state,

@@ -1,0 +1,61 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.server-conflict-explanation {
+	margin: 0 0 var(--grid-size) 0;
+}
+
+.server-conflict-sides {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ui-gap);
+}
+
+.server-conflict-side {
+	background: var(--faint-gray);
+	border-radius: var(--corner-round);
+	flex: 1 1 200px;
+	padding: var(--grid-size);
+}
+
+.server-conflict-side h3 {
+	align-items: center;
+	display: flex;
+	gap: calc(var(--grid-size) / 2);
+	margin: 0 0 calc(var(--grid-size) / 2) 0;
+}
+
+.server-conflict-side ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.server-conflict-side li {
+	align-items: center;
+	color: var(--dark-gray);
+	display: flex;
+	font-size: 90%;
+	gap: calc(var(--grid-size) / 2);
+}
+
+.server-conflict-choices {
+	margin-top: var(--ui-gap);
+}
+
+.server-conflict-outcomes {
+	color: var(--dark-gray);
+	font-size: 85%;
+	margin: var(--grid-size) 0 0 0;
+	padding-left: var(--ui-gap);
+}
+
+.server-conflict-error {
+	align-items: center;
+	background: var(--faint-red);
+	border-radius: var(--corner-round);
+	display: flex;
+	gap: calc(var(--grid-size) / 2);
+	margin: 0 0 var(--grid-size) 0;
+	padding: var(--control-inner-padding) var(--grid-size);
+}

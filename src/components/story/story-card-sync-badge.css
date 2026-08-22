@@ -1,0 +1,81 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.story-card-sync-badge {
+	align-items: center;
+	background-color: var(--white-translucent);
+	border-radius: var(--control-height);
+	color: var(--dark-gray);
+	display: inline-flex;
+	font-size: 80%;
+	gap: calc(var(--grid-size) / 2);
+	padding: calc(var(--grid-size) / 4) calc(var(--grid-size) / 2);
+	white-space: nowrap;
+}
+
+.story-card-sync-badge .story-card-sync-badge-icon {
+	display: inline-flex;
+	position: relative;
+}
+
+.story-card-sync-badge .story-card-sync-badge-icon svg {
+	height: 16px;
+	width: 16px;
+}
+
+.story-card-sync-badge
+	.story-card-sync-badge-icon
+	svg.story-card-sync-badge-tick {
+	bottom: -2px;
+	color: var(--dark-green);
+	height: 10px;
+	position: absolute;
+	right: -4px;
+	width: 10px;
+}
+
+.story-card-sync-badge.sync-state-conflict {
+	color: var(--dark-red);
+}
+
+.story-card-sync-badge.sync-state-error,
+.story-card-sync-badge.sync-state-gone {
+	color: var(--dark-orange);
+}
+
+.story-card-sync-badge.sync-state-pushing .story-card-sync-badge-icon,
+.story-card-sync-badge.sync-state-pulling .story-card-sync-badge-icon {
+	animation: story-card-sync-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes story-card-sync-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: 0.35;
+	}
+}
+
+/* Always present, even when empty: presence arrives and leaves constantly and the badge
+   must not resize under the pointer when it does. */
+
+.story-card-sync-badge .story-card-sync-badge-presence {
+	display: inline-flex;
+	gap: calc(var(--grid-size) / 4);
+	min-width: calc(var(--grid-size) * 2);
+}
+
+.story-card-sync-badge .story-card-sync-badge-initial {
+	align-items: center;
+	background-color: var(--light-blue);
+	border-radius: 50%;
+	color: var(--dark-blue);
+	display: inline-flex;
+	font-size: 90%;
+	height: calc(var(--grid-size) * 1.8);
+	justify-content: center;
+	width: calc(var(--grid-size) * 1.8);
+}

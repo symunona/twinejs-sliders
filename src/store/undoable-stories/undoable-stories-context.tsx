@@ -13,13 +13,13 @@ import {
 } from './undoable-stories.types';
 import {reducer} from './reducer';
 import {useStoriesContext} from '../stories';
+import {onStoryPulled} from '../persistence/server';
 
-export const UndoableStoriesContext = React.createContext<UndoableStoriesContextProps>(
-	{
+export const UndoableStoriesContext =
+	React.createContext<UndoableStoriesContextProps>({
 		dispatch: () => {},
 		stories: []
-	}
-);
+	});
 
 UndoableStoriesContext.displayName = 'UndoableStories';
 
@@ -48,6 +48,12 @@ export const UndoableStoriesContextProvider: React.FC = props => {
 		[stories, storiesDispatch]
 	);
 	const {t} = useTranslation();
+
+	// See the `clearChanges` comment in the reducer.
+	React.useEffect(
+		() => onStoryPulled(() => dispatch({type: 'clearChanges'})),
+		[]
+	);
 
 	let redo: (() => void) | undefined = undefined;
 	let redoLabel: string | undefined = undefined;

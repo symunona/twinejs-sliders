@@ -35,3 +35,12 @@
 	margin-right: var(--grid-size);
 	margin-bottom: var(--grid-size);
 }
+.story-card .story-card-sync {
+	position: absolute;
+	right: var(--grid-size);
+	top: var(--grid-size);
+}
+
+.story-card .selectable-card > .card {
+	position: relative;
+}

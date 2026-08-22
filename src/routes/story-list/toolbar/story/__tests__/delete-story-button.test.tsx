@@ -3,11 +3,22 @@ import {axe} from 'jest-axe';
 import * as React from 'react';
 import {useStoriesContext} from '../../../../../store/stories';
 import {FakeStateProvider, StoryInspector} from '../../../../../test-util';
+import type {SyncRecord} from '../../../../../store/persistence/server/server.types';
 import {isElectronRenderer} from '../../../../../util/is-electron';
 import {
 	DeleteStoryButton,
 	DeleteStoryButtonProps
 } from '../delete-story-button';
+
+function fakeSyncRecord(props?: Partial<SyncRecord>): SyncRecord {
+	return {
+		pushedHash: 'mock-hash',
+		rev: 3,
+		state: 'idle',
+		storyId: 'mock-story-id',
+		...props
+	};
+}
 
 jest.mock('../../../../../util/is-electron');
 
@@ -20,10 +31,10 @@ const TestDeleteStoryButton: React.FC<DeleteStoryButtonProps> = props => {
 describe('<DeleteStoryButton>', () => {
 	const isElectronRendererMock = isElectronRenderer as jest.Mock;
 
-	async function renderComponent() {
+	async function renderComponent(props?: Partial<DeleteStoryButtonProps>) {
 		const result = render(
 			<FakeStateProvider>
-				<TestDeleteStoryButton />
+				<TestDeleteStoryButton {...props} />
 				<StoryInspector />
 			</FakeStateProvider>
 		);
@@ -79,8 +90,72 @@ describe('<DeleteStoryButton>', () => {
 		).not.toBeInTheDocument();
 	});
 
+	it('does not offer to remove the story from the server when it has no sync record', async () => {
+		await renderComponent();
+		fireEvent.click(screen.getByText('common.delete'));
+		await act(() => Promise.resolve());
+		expect(
+			screen.queryByTestId('delete-also-remove-server')
+		).not.toBeInTheDocument();
+	});
+
+	it('offers to remove the story from the server when it has a sync record', async () => {
+		await renderComponent({syncRecord: fakeSyncRecord()});
+		fireEvent.click(screen.getByText('common.delete'));
+		await act(() => Promise.resolve());
+
+		const checkbox = await screen.findByTestId('delete-also-remove-server');
+
+		expect(checkbox).toHaveAttribute('aria-checked', 'false');
+	});
+
+	it('does not remove the story from the server unless asked to', async () => {
+		const onRemoveFromServer = jest.fn();
+
+		await renderComponent({
+			onRemoveFromServer,
+			syncRecord: fakeSyncRecord()
+		});
+		fireEvent.click(screen.getByText('common.delete'));
+		fireEvent.click(
+			await screen.findByText('common.delete', {
+				selector: '.card-button-card button'
+			})
+		);
+		expect(onRemoveFromServer).not.toHaveBeenCalled();
+		expect(
+			screen.queryByTestId('story-inspector-default')
+		).not.toBeInTheDocument();
+	});
+
+	it('removes the story from the server when asked to', async () => {
+		const onRemoveFromServer = jest.fn();
+
+		await renderComponent({
+			onRemoveFromServer,
+			syncRecord: fakeSyncRecord()
+		});
+		fireEvent.click(screen.getByText('common.delete'));
+		fireEvent.click(await screen.findByTestId('delete-also-remove-server'));
+		fireEvent.click(
+			await screen.findByText('common.delete', {
+				selector: '.card-button-card button'
+			})
+		);
+		expect(onRemoveFromServer).toHaveBeenCalledTimes(1);
+		expect(
+			screen.queryByTestId('story-inspector-default')
+		).not.toBeInTheDocument();
+	});
+
 	it('is accessible', async () => {
 		const {container} = await renderComponent();
+
+		expect(await axe(container)).toHaveNoViolations();
+	});
+
+	it('is accessible with a sync record', async () => {
+		const {container} = await renderComponent({syncRecord: fakeSyncRecord()});
 
 		expect(await axe(container)).toHaveNoViolations();
 	});

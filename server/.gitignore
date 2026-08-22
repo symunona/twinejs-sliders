@@ -1,0 +1,3 @@
+# The data directory is the server's state, not source.
+/data/
+.env

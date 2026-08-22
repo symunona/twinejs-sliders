@@ -1,0 +1,17 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.story-cards-group + .story-cards-group {
+	margin-top: calc(var(--grid-size) * 2);
+}
+
+/* Quiet on purpose--this is a divider, not a title. */
+
+.story-cards-group .story-cards-group-heading {
+	color: var(--dark-gray);
+	font-size: 90%;
+	font-weight: normal;
+	letter-spacing: 0.05em;
+	margin: 0 0 var(--grid-size) 0;
+	text-transform: uppercase;
+}

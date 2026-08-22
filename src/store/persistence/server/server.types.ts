@@ -160,13 +160,7 @@ export type ServerMessage =
 // ---------------------------------------------------------------------------
 
 export type SyncState =
-	| 'idle'
-	| 'dirty'
-	| 'pushing'
-	| 'pulling'
-	| 'conflict'
-	| 'gone'
-	| 'error';
+	'idle' | 'dirty' | 'pushing' | 'pulling' | 'conflict' | 'gone' | 'error';
 
 export interface SyncRecord {
 	storyId: string;

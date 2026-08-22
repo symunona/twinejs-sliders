@@ -8,6 +8,7 @@ import {
 	DialogsContextProvider,
 	useDialogsContext
 } from '../../dialogs';
+import {useServerSyncContext} from '../../store/persistence/server';
 import {usePrefsContext} from '../../store/prefs';
 import {useDonationCheck} from '../../store/prefs/use-donation-check';
 import {
@@ -25,6 +26,8 @@ export const InnerStoryListRoute: React.FC = () => {
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {dispatch: storiesDispatch, stories} = useStoriesContext();
 	const {prefs} = usePrefsContext();
+	const {actions, connected, ghosts, progress, records} =
+		useServerSyncContext();
 	const {shouldShowDonationPrompt} = useDonationCheck();
 	const {t} = useTranslation();
 
@@ -38,7 +41,7 @@ export const InnerStoryListRoute: React.FC = () => {
 			prefs.storyListTagFilter.length > 0
 				? stories.filter(story =>
 						story.tags.some(tag => prefs.storyListTagFilter.includes(tag))
-				  )
+					)
 				: stories;
 
 		switch (prefs.storyListSort) {
@@ -48,6 +51,38 @@ export const InnerStoryListRoute: React.FC = () => {
 				return orderBy(filteredStories, 'name');
 		}
 	}, [prefs.storyListSort, prefs.storyListTagFilter, stories]);
+
+	// Checked-out stories are pinned into their own group above everything else, in
+	// whatever order the person chose for the rest of the library.
+
+	const syncedStories = React.useMemo(
+		() => visibleStories.filter(story => story.sync === true),
+		[visibleStories]
+	);
+
+	const localStories = React.useMemo(
+		() => visibleStories.filter(story => story.sync !== true),
+		[visibleStories]
+	);
+
+	// Ghosts are what the server has and this browser doesn't. With no connection there is
+	// no index to trust, so they simply aren't drawn.
+
+	const visibleGhosts = React.useMemo(
+		() => (connected ? orderBy(ghosts ?? [], ['updatedAt'], ['desc']) : []),
+		[connected, ghosts]
+	);
+
+	const checkoutProgress = React.useMemo(() => {
+		const result: Record<string, number | undefined> = {};
+
+		for (const [storyId, value] of Object.entries(progress ?? {})) {
+			result[storyId] =
+				value && value.total > 0 ? value.done / value.total : undefined;
+		}
+
+		return result;
+	}, [progress]);
 
 	// Any stories no longer visible should be deselected.
 
@@ -83,14 +118,19 @@ export const InnerStoryListRoute: React.FC = () => {
 				>
 					<SafariWarningCard />
 					<div className="stories">
-						{stories.length === 0 ? (
+						{stories.length === 0 && visibleGhosts.length === 0 ? (
 							<p>{t('routes.storyList.noStories')}</p>
 						) : (
 							<StoryCards
+								checkoutProgress={checkoutProgress}
+								ghosts={visibleGhosts}
+								onCheckOutGhost={entry => actions.checkout(entry.id)}
 								onSelectStory={story =>
 									storiesDispatch(selectStory(story, true))
 								}
-								stories={visibleStories}
+								stories={localStories}
+								syncedStories={syncedStories}
+								syncRecords={records}
 							/>
 						)}
 					</div>

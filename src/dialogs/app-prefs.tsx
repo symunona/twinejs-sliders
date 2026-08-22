@@ -8,6 +8,7 @@ import {TextInput} from '../components/control/text-input';
 import {TextSelect} from '../components/control/text-select';
 import {setPref, usePrefsContext} from '../store/prefs';
 import {closestAppLocale, locales} from '../util/locales';
+import {BackendPrefs} from './app-prefs/backend-prefs';
 import './app-prefs.css';
 
 export const AppPrefsDialog: React.FC<
@@ -146,6 +147,7 @@ export const AppPrefsDialog: React.FC<
 				>
 					{t('dialogs.appPrefs.openAiApiKey')}
 				</TextInput>
+				<BackendPrefs />
 			</CardContent>
 		</DialogCard>
 	);

@@ -115,6 +115,55 @@ describe('<StoryCard>', () => {
 		expect(onRemoveTag.mock.calls).toEqual([['mock-tag']]);
 	});
 
+	it('renders no sync badge for a story with no server record', () => {
+		renderComponent();
+		expect(
+			screen.queryByTestId('story-card-sync-badge')
+		).not.toBeInTheDocument();
+	});
+
+	it('renders a sync badge for a story marked to sync', () => {
+		renderComponent({story: {...fakeStory(), sync: true}});
+		expect(screen.getByTestId('story-card-sync-badge').dataset.syncState).toBe(
+			'idle'
+		);
+	});
+
+	it("renders the sync record's state in the badge", () => {
+		const story = fakeStory();
+
+		renderComponent({
+			story,
+			syncRecord: {
+				pushedHash: 'mock-hash',
+				rev: 3,
+				state: 'conflict',
+				storyId: story.id
+			}
+		});
+		expect(screen.getByTestId('story-card-sync-badge').dataset.syncState).toBe(
+			'conflict'
+		);
+	});
+
+	it("renders other editors' initials in the badge", () => {
+		const story = fakeStory();
+
+		renderComponent({
+			presence: [{id: 'mock-id', name: 'mira'}],
+			story,
+			syncRecord: {
+				pushedHash: 'mock-hash',
+				rev: 3,
+				state: 'idle',
+				storyId: story.id
+			}
+		});
+		expect(screen.getByTestId('story-card-sync-presence').textContent).toBe(
+			'M'
+		);
+	});
+
 	it('is accessible', async () => {
 		const {container} = renderComponent();
 

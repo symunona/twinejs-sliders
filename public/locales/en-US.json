@@ -122,7 +122,17 @@
 		"storyCard": {
 			"lastUpdated": "Last edited on {{date}}",
 			"passageCount": "1 passage",
-			"passageCount_plural": "{{count}} passages"
+			"passageCount_plural": "{{count}} passages",
+			"sync": {
+				"conflict": "Changed on the server",
+				"dirty": "Waiting to send",
+				"error": "Sync problem",
+				"gone": "Removed from server",
+				"pending": "Not sent yet",
+				"pulling": "Getting from server",
+				"pushing": "Sending to server",
+				"synced": "Synced {{time}}"
+			}
 		},
 		"storyFormatItem": {
 			"author": "by {{author}}",
@@ -199,7 +209,29 @@
 			"assetGenerator": "Asset Generator",
 			"assetGeneratorExplanation": "Keys are kept on this machine, in the same browser storage as every other preference, and are sent only to the provider they belong to. Anyone with access to this browser profile can read them.",
 			"geminiApiKey": "Google AI Studio API Key",
-			"openAiApiKey": "OpenAI API Key"
+			"openAiApiKey": "OpenAI API Key",
+			"backendServer": "Story backup server",
+			"backendServerExplanation": "Stories marked to sync are backed up to this server, and appear on the story list of every editor connected to it.",
+			"backendUsername": "Username",
+			"backendUsernameExplanation": "The label other editors see in presence, locks and version history. Leave it empty to use the name shown.",
+			"backendUrl": "Server address",
+			"backendUrlPlaceholder": "https://twine-story-store.tmpx.space",
+			"backendMixedContent": "This page is served over HTTPS, so the browser will block requests to a plain HTTP address. Use an https:// address instead.",
+			"backendToken": "Auth token",
+			"backendTokenPlaceholder": "Paste a token",
+			"backendTokenExplanation": "The token is kept on this machine, in the same browser storage as every other preference, and is sent only to the server above. Anyone with access to this browser profile can read it.",
+			"backendTokenShow": "Show token",
+			"backendTokenHide": "Hide token",
+			"backendAutosave": "Sync stories automatically",
+			"backendAutosaveExplanation": "This only affects stories you have marked to sync. Everything else stays on this machine.",
+			"backendTest": "Test",
+			"backendTesting": "Testing…",
+			"backendTestUnreachable": "No answer. Wrong address, server down, or blocked by the browser.",
+			"backendTestMixedContent": "No answer. This page is HTTPS and the address is plain HTTP, so the browser blocks the request before it leaves.",
+			"backendTestUnauthorized": "Server is there. Token rejected.",
+			"backendTestFailed": "Server is there, but it answered with an error ({{status}}).",
+			"backendTestConnected": "Connected — {{service}} {{version}}, {{storyCount}} stories, {{bytes}}.",
+			"backendTestAlsoHere": "Also here: {{names}}."
 		},
 		"assetEditor": {
 			"adjust": "Adjust",
@@ -576,6 +608,43 @@
 		"sceneHelp": {
 			"title": "Scene Help",
 			"open": "Scene help"
+		},
+		"serverConflict": {
+			"title": "Story Changed On The Server",
+			"explanation": "“{{name}}” changed on the server while you were editing it here. Nothing is lost either way — both versions are kept.",
+			"serverHeading": "On the server",
+			"localHeading": "Here",
+			"passageCount": "{{count}} passages",
+			"savedAt": "Saved {{date}}",
+			"savedBy": "Saved by {{client}}",
+			"revision": "Version {{rev}}",
+			"loadingServer": "Loading the server version…",
+			"serverError": "The server version couldn't be loaded: {{message}}",
+			"noServer": "This editor isn't connected to a server.",
+			"resolveError": "This couldn't be resolved: {{message}}",
+			"keepMine": "Keep Mine",
+			"keepMineExplanation": "Keep mine: your version is pushed over the server one, and theirs stays in the history, one click from coming back.",
+			"takeTheirs": "Take Theirs",
+			"takeTheirsExplanation": "Take theirs: your version is first kept as a separate local copy, then the server version replaces the synced one.",
+			"later": "Later",
+			"laterExplanation": "Later: nothing changes, and this story stops syncing until you resolve it."
+		},
+		"storyHistory": {
+			"title": "History",
+			"buttonLabel": "History…",
+			"loading": "Loading history…",
+			"empty": "No history yet",
+			"error": "The history couldn't be loaded: {{message}}",
+			"noServer": "This editor isn't connected to a server.",
+			"now": "now",
+			"passageCount": "{{count}} passages",
+			"savedBy": "by {{client}}",
+			"restoredFrom": "restored from version {{rev}}",
+			"restore": "Restore",
+			"restoring": "Restoring…",
+			"restoreConfirm": "Restore the version from {{date}} by {{client}}? The current version stays in history.",
+			"restoreError": "That version couldn't be restored: {{message}}",
+			"missingAssets": "{{count}} pictures from that version are no longer on the server."
 		}
 	},
 	"electron": {
@@ -694,6 +763,27 @@
 				"sortByDate": "Last Updated",
 				"sortByName": "Name",
 				"storyTags": "Story Tags"
+			},
+			"server": {
+				"alsoRemoveFromServer": "Also remove from server",
+				"checkOut": "Check Out",
+				"checkingOut": "Checking Out…",
+				"ghostSize": "{{size}}",
+				"ghostUpdated": "Updated {{time}}",
+				"groupGhosts": "On server",
+				"groupLocal": "Local",
+				"groupSynced": "Synced",
+				"onServer": "On server",
+				"publish": "Publish to Server",
+				"publishAsNew": "Publish as New",
+				"publishConflict": "The server already has a story with this ID. Overwrite it with “{{storyName}}”, or publish this as a new story?",
+				"publishOverwrite": "Overwrite",
+				"refresh": "Refresh Server",
+				"removeFromServer": "Remove from Server",
+				"removeFromServerWarning": "Remove “{{storyName}}” from the server? Other editors keep their copy, and the version history is kept too.",
+				"republish": "Republish",
+				"resolve": "Resolve…",
+				"syncToServer": "Sync to Server"
 			}
 		},
 		"welcome": {

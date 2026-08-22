@@ -2,8 +2,7 @@ import {Thunk} from 'react-hook-thunk-reducer';
 import {StoriesAction, StoriesState} from '../stories';
 
 export type StoriesActionOrThunk =
-	| StoriesAction
-	| Thunk<StoriesState, StoriesAction>;
+	StoriesAction | Thunk<StoriesState, StoriesAction>;
 
 export type UndoableStoriesAction =
 	| {
@@ -12,7 +11,8 @@ export type UndoableStoriesAction =
 			description: string;
 			storiesState: StoriesState;
 	  }
-	| {type: 'updateCurrent'; change: number};
+	| {type: 'updateCurrent'; change: number}
+	| {type: 'clearChanges'};
 
 export interface StoryChange {
 	/**

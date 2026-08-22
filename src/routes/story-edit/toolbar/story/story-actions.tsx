@@ -4,6 +4,7 @@ import {RenameStoryButton} from '../../../../components/story/rename-story-butto
 import {Story, updateStory, useStoriesContext} from '../../../../store/stories';
 import {DetailsButton} from './details-button';
 import {FindReplaceButton} from './find-replace-button';
+import {HistoryButton} from './history-button';
 import {JavaScriptButton} from './javascript-button';
 import {PassageTagsButton} from './passage-tags-button';
 import {SlidersAssetsButton} from './sliders-assets-button';
@@ -30,6 +31,7 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 			/>
 			<DetailsButton story={story} />
 			<PassageTagsButton story={story} />
+			<HistoryButton story={story} />
 			<SlidersAssetsButton />
 			<SlidersCharactersButton />
 			<SlidersGeneratorButton />

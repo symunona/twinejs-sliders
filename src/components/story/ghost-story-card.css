@@ -1,0 +1,29 @@
+@import '../../styles/metrics.css';
+
+/* Dimmed on purpose: a ghost is a story that isn't here yet, and it must never read as an
+   ordinary card you can select or open. */
+
+.ghost-story-card {
+	opacity: 0.65;
+	user-select: none;
+}
+
+.ghost-story-card:hover,
+.ghost-story-card:focus-within {
+	opacity: 1;
+}
+
+.ghost-story-card .card-content {
+	flex-grow: 1;
+}
+
+.ghost-story-card .ghost-story-card-summary {
+	margin-bottom: var(--grid-size);
+	min-height: calc(var(--grid-size) * 10);
+}
+
+.ghost-story-card .ghost-story-card-progress {
+	display: block;
+	margin-top: var(--grid-size);
+	width: 100%;
+}
