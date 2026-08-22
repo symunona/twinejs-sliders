@@ -3,21 +3,35 @@
 Global: `--data <dir>`, `--server`, `--token`, `--profile`, `--json` (JSONL), `--yes`, `-q`.
 
 CLI in **local mode** when it see store `DATA_DIR`. Then reads come off disk, no HTTP, and
-assets are symlinks not downloads. `ping` say which mode. Writes always go over HTTP.
+asset paths are the store blobs. `ping` say which mode. Writes always go over HTTP.
 
-## Move stories
+## Refs
+
+| Form | Is |
+|---|---|
+| `ep3` | story: uuid, name, or unambiguous slug (`chapter-3` → `Chapter 3`) |
+| `ep3/Tavern Night` | passage, by name or id prefix |
+| `ep3#tavern-night` | passage holding that scene id |
+| `ep3:a_8f21` · `ep3:tavern-dawn` | asset, by id or manifest name |
+| `ep3@37` | story at old rev, read only |
+
+Ambiguous = exit 2 plus candidate list. Quote refs with spaces or `#`.
+
+## Text in, text out
 
 | Command | Does |
 |---|---|
-| `checkout <story>[@rev] [dir] [--passages <glob>] [--copy-assets]` | decode story to working copy |
-| `status [dir]` | local changes, server changes since checkout, new asset files, missing or changed blobs |
-| `push [dir] [--dry-run] [--no-rewrite-links] [--strict]` | reassemble, upload new assets, `PUT` with `If-Match` |
-| `pull [dir] [--force]` | re-decode at server rev; refuse over local edits |
+| `map <story> [--json]` | passages, scene ids with in-passage line, links, asset summary, lint tally, token estimate |
+| `cat <ref> [-o file] [--refresh]` | passage text with receipt front matter, or asset bytes |
+| `cat <story> --all -o <dir>` | every passage, one file each, own receipt |
+| `put <ref> <file>` | splice into current body, `PUT` with `If-Match` |
+| `put <story> --all <dir> [--delete "<name>"]` | per passage, per hash check. Absence never delete |
+| `check <file\|dir>` | fresh / stale-elsewhere / conflict. Read only |
 
-`--copy-assets` = real copies not symlinks. For checkout you zip, move to other machine, or
-keep after story change.
+Receipt front matter = `story`, `passage`, `rev`, `hash`, plus editable `name`, `tags`, `at`.
 
-`push` order: bytes → manifest → story. Rejected push leave nothing behind.
+`put` three-way test: hash match → write, even when rev moved for other passages. Hash differ
+→ exit 3. 412 between read and write → retry once, then exit 3.
 
 ## Look
 
@@ -25,20 +39,20 @@ keep after story change.
 |---|---|
 | `ping` | mode, server version, story count, connected clients |
 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, bytes, est tokens |
-| `assets [dir\|<story>] [--scene <id>] [--all-frames] [--unused] [--missing] [--json]` | what exists, or what scene needs, with paths |
-| `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph |
+| `assets <story> [--scene <id>] [--all-frames] [--unused] [--missing] [--fetch -o dir] [--json]` | what exists, or what a scene needs, with paths |
+| `graph <story> [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph |
 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
-| `lint [dir\|<story>] [--fix]` | `file:line: message`; exit 5 on errors |
+| `lint [<story>\|<file>] [--after <file>] [--fix]` | `file:line: message`; exit 5 on errors |
 
-Content live in working copy: `Read`, `rg`, `sed` cover passages, scenes, beats, searches.
-Everything here except `checkout`/`status`/`push`/`pull` take story ref too — only editing
-passage text need a decode.
+`lint <file>` = YAML tier only, no server. `lint <story> --after <file>` = all four tiers as if
+that file were pushed. Pre-flight.
 
 ## Change the store
 
 | Command | Does |
 |---|---|
 | `copy <story>[@rev] --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone: new id, new ifid, new passage ids |
+| `put <story>:<name> <file> --kind bg\|obj\|fx\|frame` | upload art; unknown name create it |
 | `new --name "<n>"` | empty story |
 | `rm <story> [--purge] --yes` | tombstone, or erase |
 | `restore <story> --rev N` | new revision from old one; print `missingAssets` |
@@ -55,23 +69,13 @@ reclaim once nothing name them — use when you mean it.
 1. **YAML** — parse errors, unknown keys with suggestions, bad coordinates.
 2. **Cross-passage** — duplicate scene ids, unknown `from:`, unknown `@mark`, `from:` cycles.
 3. **Story graph** — links to passages that do not exist, unreachable passages, scene passage
-   whose only exit is `[[link]]` *outside* block (spec 02: never drawn).
+   whose only exit is `[[link]]` *outside* the block (spec 02: never drawn).
 4. **Assets** — refs to unknown assets, manifest entries with no blob, orphan blobs.
 
 `--fix` do mechanical ones: prune unreferenced manifest entries, normalise `at:` format. Broken
 links wait for human.
 
-## Refs
-
-Ref = a story: uuid, name, or unambiguous slug (`chapter-3` → `Chapter 3`). Ambiguous = exit 2
-plus candidate list. Two suffixes:
-
-- `<story>@<rev>` — `checkout`, `copy`, `revs`
-- `<story>#<sceneId>` — `assets --scene`, `lint`
-
-Quote anything with spaces or `#`.
-
 ## Exit codes
 
-`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict (rev moved, or `--strict` hit
-advisory lock) · `4` server unreachable or token rejected · `5` lint errors.
+`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict (passage changed under you,
+or `--strict` hit advisory lock) · `4` server unreachable or token rejected · `5` lint errors.
