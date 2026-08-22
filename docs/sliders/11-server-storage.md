@@ -1,6 +1,8 @@
 # 11 — Server storage (autosave backend + server library)
 
-**Status: design only. Nothing built.** Review artifact for `~/twine-server-storage.md`.
+**Status: built.** Server in `server/`, client in `src/store/persistence/server/`, two-browser
+suite in `e2e/server-*.spec.ts`. Deviations from this design, and what is left, are under
+"As built" at the end.
 
 Go backend in `server/`, token auth, throttled autosave, server stories on the main screen,
 version history, presence and soft locks. Internal tool, 2–3 people, one shared token.
@@ -558,3 +560,36 @@ be textually clean and still fail to parse.
 
 Nothing here blocks it later: revs, tombstones and per-story directories survive, a
 `ydoc.bin` appears beside `story.json`, and `story.json` becomes a snapshot.
+
+## As built
+
+Everything above shipped except where noted here.
+
+- **Revision list leads with the current version.** The store keeps it out of the snapshot
+  index — it is `story.json`, not a snapshot — but the dialog shows one list, and a version
+  you cannot see reads as a version that was lost. `current` still says which row is *now*.
+- **`DELETE` does not bump `rev`.** A tombstone has no body to snapshot and nothing a client
+  missed, and leaving the rev alone lets an editor still holding rev 42 republish with
+  `If-Match: "42"`. Revive continues from the same number.
+- **Asset blob `PUT`/`DELETE` do not bump the manifest rev**, only `PUT /assets` does.
+  Otherwise a checkout that uploads blobs and then writes the manifest with the rev it read
+  would 412 against itself.
+- **`Notifier` carries an `Origin{ID, Name}`**, not just a name: the id is what lets the hub
+  skip echoing a change back to the client that made it.
+- **Auth and CORS live in `server/api/`, not at the server root** — the root is `package main`
+  and cannot be imported, so a 401 test would have been impossible.
+- **`?format=html` returns 501.** Publishing is the fork's job; nothing asked the server for
+  it yet.
+- **Presence TTL is not configurable**, so the E2E lock-expiry story covers a closed browser
+  rather than an idle one. `hub_test.go` covers the idle path at 200 ms; wiring `PRESENCE_TTL`
+  into `Config` would let the browser test cover both.
+- **Story 9 found a real defect and it is fixed**: every publish was followed by a duplicate
+  PUT whose body differed only in `lastUpdate`, so with two editors watching, three saves
+  listed as six rows alternating between them. `publish()` now claims the hash before its
+  PUT and the queue re-checks it when it fires.
+- **The legacy shared asset library is gone**, along with `migrate-legacy-assets.ts` and the
+  asset manager's shared-pile row. Assets are per story, full stop.
+
+Not deployed to taskbot yet: `server/README.md` carries the systemd unit and Caddyfile, and
+the box needs the binary, an `AUTH_TOKEN` and a DNS record before any of this reaches
+`https://twine-story-store.tmpx.space`.
