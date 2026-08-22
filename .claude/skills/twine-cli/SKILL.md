@@ -5,8 +5,12 @@ description: Work on Sliders/Twine stories that live on the story-store server �
 
 # twine-cli
 
-Check the story out as files. Work on the files. Push. Spec: `docs/sliders/12-story-cli.md`.
+Decode the story into files. Work on the files. Push. Spec: `docs/sliders/12-story-cli.md`.
 Server: `docs/sliders/11-server-storage.md`. Scene YAML: `docs/sliders/02-sliders-format.md`.
+
+On the server a story is **one line of JSON** — every passage a string with its scene YAML
+flattened into `\n` escapes. `checkout` decodes that into files so line numbers, `rg` hits
+and `Edit` anchors exist. It is not a download; in local mode nothing is fetched.
 
 ## The loop
 
@@ -19,6 +23,14 @@ twine-cli push tmp/ep3
 ```
 
 That is the job. Reading and editing happen in the checkout with `Read`, `rg` and `Edit`.
+
+Questions that don't involve editing passage text need no checkout — `assets`, `lint`,
+`graph`, `ls`, `revs` and `copy` take a story ref and read the store directly:
+
+```sh
+twine-cli assets ep3 --scene tavern-night
+twine-cli lint ep3
+```
 
 ## Two rules
 
@@ -37,7 +49,7 @@ tmp/ep3/
   assets/bg/tavern-night.a_8f21.webp     symlinks to the real blobs
   assets/char/desert-punk/idle.a_3450.webp
   characters/desert-punk.yaml
-  .twine/                         rev, etag, the pulled body. Don't edit.
+  .twine/                         rev, etag, the pulled body. Leave it alone.
 ```
 
 A passage file:

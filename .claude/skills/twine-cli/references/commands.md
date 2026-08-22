@@ -11,10 +11,10 @@ it is in. Writes always go over HTTP either way.
 
 | Command | Does |
 |---|---|
-| `checkout <story>[@rev] [dir] [--copy-assets]` | explode a story into a working copy |
+| `checkout <story>[@rev] [dir] [--passages <glob>] [--copy-assets]` | decode a story into a working copy |
 | `status [dir]` | local changes, server changes since checkout, new asset files, missing or changed blobs |
 | `push [dir] [--dry-run] [--no-rewrite-links] [--strict]` | reassemble, upload new assets, `PUT` with `If-Match` |
-| `pull [dir] [--force]` | re-explode at the server's rev; refuses over local edits |
+| `pull [dir] [--force]` | re-decode at the server's rev; refuses over local edits |
 
 `--copy-assets` makes real copies instead of symlinks — for a checkout you will zip, move
 to another machine, or keep after the story changes.
@@ -27,13 +27,14 @@ to another machine, or keep after the story changes.
 |---|---|
 | `ping` | mode, server version, story count, connected clients |
 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, bytes, est tokens |
-| `assets [dir] [--scene <id>] [--all-frames] [--unused] [--missing] [--json]` | what exists, or what a scene needs, with paths |
-| `graph [dir] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | the link graph |
+| `assets [dir\|<story>] [--scene <id>] [--all-frames] [--unused] [--missing] [--json]` | what exists, or what a scene needs, with paths |
+| `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | the link graph |
 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
 | `lint [dir\|<story>] [--fix]` | `file:line: message`; exit 5 on errors |
 
 Content lives in the working copy: `Read`, `rg` and `sed` cover passages, scenes, beats and
-searches.
+searches. Everything in this section except `checkout`/`status`/`push`/`pull` takes a story
+ref as well as a directory — only editing passage text needs a decode.
 
 ## Changing the store
 

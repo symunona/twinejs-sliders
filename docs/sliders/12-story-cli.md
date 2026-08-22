@@ -3,13 +3,23 @@
 A command-line client for the server in [`11-server-storage.md`](11-server-storage.md),
 built for a coding agent first and a human second.
 
-The whole design is one sentence: **check the story out as files, work on the files, push.**
+The whole design is one sentence: **decode the story into files, work on the files, encode
+it back.**
 
-A working copy turns a story into a directory — one file per passage, the scene YAML inside
-it, the art beside it under readable names. From there an agent uses what it already knows:
-read a file, grep a tree, edit a line, look at an image. The CLI does the four things files
-cannot do for themselves — **move stories between the server and the disk, resolve what a
-scene needs, check that the result is valid, and talk to the store about history.**
+A story on disk is one line of JSON. The 4 KB fixture in `data/` has zero newlines in it:
+every passage is a string with its scene YAML flattened into `\n` escapes, so `rg -n`
+answers "line 1" to every question and there is nothing for an editor to anchor on. Decoding
+it gives one file per passage, the scene YAML sitting where the author wrote it, the art
+beside it under readable names — and from there an agent uses what it already knows: read a
+file, grep a tree, edit a line, look at an image.
+
+That decode is what `checkout` is. It is not a download: in local mode nothing is fetched
+and the art is symlinked to blobs that were already on disk. The working copy is a derived
+view — disposable, regenerable, and cheap.
+
+Around it the CLI does the four things a text editor cannot: **write through the store's
+API, resolve what a scene needs, check that the result is valid, and talk to the store about
+history.** Only the first of those needs a decode at all; the rest read the store directly.
 
 Fifteen commands, and you will type four of them.
 
@@ -67,13 +77,13 @@ Global: `--data`, `--server`, `--token`, `--profile`, `--json`, `--yes`, `-q`.
 | 1 | `ping` | mode (local/remote), server version, story count, who else is connected |
 | 2 | `login [--server URL]` | store a token in the profile, 0600 |
 | 3 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, size, est tokens |
-| 4 | `checkout <story> [dir] [--rev N] [--copy-assets]` | explode a story into a working copy — §2 |
+| 4 | `checkout <story> [dir] [--rev N] [--passages <glob>] [--copy-assets]` | decode a story into a working copy — §2 |
 | 5 | `status [dir]` | what changed locally, what changed on the server, new asset files, missing or changed blobs |
 | 6 | `push [dir]` | reassemble, upload, `PUT` with `If-Match` — §3 |
 | 7 | `pull [dir] [--force]` | re-explode at the server's rev; keeps local edits safe unless `--force` |
 | 8 | `lint [dir\|<story>] [--fix]` | scene YAML, cross-passage, link graph, assets — §5 |
-| 9 | `assets [dir] [--scene <id>] [--unused] [--missing]` | what exists, and what a scene needs, with real paths — §4 |
-| 10 | `graph [dir] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | the link graph, derived from the passage text |
+| 9 | `assets [dir\|<story>] [--scene <id>] [--unused] [--missing]` | what exists, and what a scene needs, with real paths — §4 |
+| 10 | `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | the link graph, derived from the passage text |
 | 11 | `copy <story> --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone — §6 |
 | 12 | `new --name "<n>"` | empty story, new ifid |
 | 13 | `rm <story> [--purge] --yes` | tombstone, or erase |
@@ -82,6 +92,10 @@ Global: `--data`, `--server`, `--token`, `--profile`, `--json`, `--yes`, `-q`.
 
 Reading and editing content happens in the working copy with `Read`, `rg`, `sed` and
 `Edit` — the tools an agent is already fluent in, on files that are already on disk.
+
+`ls`, `assets`, `lint`, `graph`, `revs` and `copy` take a story ref and read the store
+directly; none of them touches passage text, so none of them needs a decode. A working copy
+is for editing.
 
 A **ref** is a story: its uuid, its name, or an unambiguous slug (`chapter-3` finds
 `Chapter 3`). Ambiguity is answered with the candidate list and exit 2. Two suffixed forms
@@ -109,8 +123,13 @@ tmp/ep3/
     ref.json        server, story id, rev, etag, mode, client id
     story.json      the body exactly as pulled — the round-trip reference
     assets.json     the manifest as pulled
-    index.json      passage file -> {id, hash at checkout}, asset id -> {path, hash}
 ```
+
+Three files, and two of them are what the store handed over. `status` re-decodes
+`.twine/story.json` in memory and compares it with what is on disk, so there is no separate
+record of hashes to go stale; blob changes come the same way, from the hashes already in
+`.twine/assets.json`. Delete the directory and check out again whenever it is easier than
+thinking about it.
 
 ### Passages
 
@@ -164,8 +183,8 @@ machine, or keep after the story moves on. Remote stores copy as well; the layou
 identical either way, so everything downstream is unaffected.
 
 Asset ids are identity rather than content (spec 03), and the janitor reclaims blobs the
-manifest stops naming after `ORPHAN_TTL`. `.twine/index.json` records each blob's hash at
-checkout, so `status` reports `changed` and `vanished` up front.
+manifest stops naming after `ORPHAN_TTL`. `.twine/assets.json` holds the hash each blob had
+at checkout, so `status` reports `changed` and `vanished` up front.
 
 ### `STORY.md`
 
@@ -356,7 +375,7 @@ parser, shared by the editor, the runtime and the CLI.
 packages/twine-cli/src/
   bin.ts          arg parse, profile, mode detection, exit codes
   source/         one interface, two implementations: local files, HTTP
-  wc/             explode, STORY.md, index.json, reassemble, status, push
+  wc/             decode, STORY.md, reassemble, status, push
   assets.ts       the symlink farm and the per-scene resolution
   lint.ts         the four tiers, formatted as file:line
   cmd/            one small file per command
@@ -378,7 +397,7 @@ which keeps them in step.
 | **2** | `pull`, `copy`, `revs`, `restore`, `graph`, `new`, `rm`, `login` |
 | **3** | `--fix`, `--reid`, `assets --all-frames`, `graph --format dot` |
 
-**Tests.** Round-trip is the load-bearing one: check a fixture story out, push it back
+**Tests.** Round-trip is the load-bearing one: decode a fixture story, encode it back
 unchanged, assert the body is byte-identical. Then edit one passage file and assert exactly
 one passage differs. The rest run against a real server — `go run . --addr 127.0.0.1:0`
 prints its port on the first line for exactly this, and the Playwright fixture already
