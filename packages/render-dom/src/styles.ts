@@ -77,7 +77,12 @@ export const RENDER_DOM_CSS = `
 }
 
 .sliders-entity > img {
-	object-fit: fill;
+	/* Box fit, not stretch: a frame whose aspect differs from the character's manifest
+	   size keeps its own shape inside the sprite box. Pinned by object-position, which
+	   the renderer overwrites with the entity's own origin (feet, by default) so a frame
+	   that ends up shorter than the box still stands on the floor instead of floating. */
+	object-fit: contain;
+	object-position: 50% 100%;
 	image-rendering: auto;
 	user-select: none;
 	-webkit-user-drag: none;

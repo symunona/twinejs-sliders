@@ -668,9 +668,14 @@ export class DomRenderer implements Renderer {
 	 * feet — so this gets its own element, and the two never fight.
 	 *
 	 * Scaling about that same origin keeps the feet planted when a frame is resized, and
-	 * `translate` reads as a fraction of the box because the <img> is stretched to fill it.
+	 * `translate` reads as a fraction of the sprite box, which is the <img> element's own
+	 * size — `object-fit: contain` letterboxes the pixels inside it, it does not resize it.
 	 * Written outside `setContent`, which bails early when the asset is unchanged: two
 	 * frames can share one asset and differ only in fit.
+	 *
+	 * `object-position` is the box fit's anchor: the frame's origin point lands on the
+	 * sprite box's origin point, so a frame with a wider aspect than the manifest size
+	 * sits bottom centre (feet on the floor) rather than floating mid-box.
 	 */
 	private applyFit(rec: EntityRecord, res: ResolvedEntity): void {
 		if (!rec.img) {
@@ -678,6 +683,11 @@ export class DomRenderer implements Renderer {
 		}
 
 		const style = rec.img.style;
+		const originCss = `${rec.metrics.origin.x * 100}% ${
+			rec.metrics.origin.y * 100
+		}%`;
+
+		style.objectPosition = originCss;
 
 		if (!res.fit) {
 			style.transform = '';
@@ -687,9 +697,7 @@ export class DomRenderer implements Renderer {
 
 		const {offset, scale} = res.fit;
 
-		style.transformOrigin = `${rec.metrics.origin.x * 100}% ${
-			rec.metrics.origin.y * 100
-		}%`;
+		style.transformOrigin = originCss;
 		style.transform = `translate(${offset.x * 100}%, ${
 			offset.y * 100
 		}%) scale(${scale})`;
