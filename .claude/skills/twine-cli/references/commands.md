@@ -1,8 +1,11 @@
 # twine-cli — command reference
 
 Global flags on everything: `--server`, `--token`, `--profile`, `--json` (JSONL),
-`--limit` (40), `--offset`, `--max-lines` (120), `-p/--print`, `--dry-run`, `--yes`,
-`-q/--quiet`.
+`--full`, `--brief`, `--budget` (50k tokens), `--max-tokens` (6k per output), `--limit`,
+`--offset`, `-o/--out`, `--dry-run`, `--yes`, `-q/--quiet`.
+
+Under the budget the CLI prints bodies; over it, summaries and cache paths. `--full` and
+`--brief` force one call either way. `twine-cli size <ref>` says which mode a story is in.
 
 ## Session and server
 
@@ -20,15 +23,17 @@ Global flags on everything: `--server`, `--token`, `--profile`, `--json` (JSONL)
 
 | Command | Does |
 |---|---|
-| `ls [--all] [--deleted] [--sort rev\|name\|bytes]` | the index, one line per story |
+| `ls [--all] [--deleted] [--sort rev\|name\|bytes]` | the index, one line per story, with size estimates |
+| `size [<ref>]` | est tokens, bytes, passages, scenes, mode, cached or not |
 | `story show <ref>` | rev, counts, scene ids, asset totals, lint tally |
 | `story copy <src> --name "<n>" [--reid <prefix>] [--assets copy\|link\|none] [--passages <glob>]` | see SKILL.md |
 | `story new --name "<n>" [--from-template <ref>]` | |
 | `story rename <ref> --name "<n>"` | |
 | `story rm <ref> [--purge] --yes` | tombstone, or erase |
 | `story revs <ref>` | rev, when, who, bytes, passages, `restoredFrom` |
-| `story get <ref>[@rev] [-o path]` | body to a file; prints the path |
-| `story diff <refA> <refB>` | passage-level: added/removed/changed with `+n/−n` |
+| `story get <ref>[@rev] [-o path]` | raw JSON body to a file; prints the path |
+| `story text <ref> [--scenes-only\|--prose-only] [-o path]` | the whole story as readable text — `## Passage` headers and bodies, no JSON noise |
+| `story diff <refA> <refB>` | hunks in full mode; names with `+n/−n` in brief |
 | `story restore <ref> --rev N` | prints new rev and `missingAssets` |
 | `story stat <ref>` | bytes, passages, scenes, beats, words, assets, orphans |
 | `lint [<ref>] [--fix]` | see below |
@@ -38,8 +43,9 @@ Global flags on everything: `--server`, `--token`, `--profile`, `--json` (JSONL)
 | Command | Does |
 |---|---|
 | `passage ls [<story>] [--tag t] [--scenes] [--orphans]` | ref, name, tags, lines, scene id, out-degree |
-| `passage show <ref>` | header, vars, modifiers present, links. Body only with `-p` |
-| `passage get <ref> [-o path]` | full text to a file |
+| `passage show <ref>` | the whole passage plus a header of ref, tags, links, scene id. Brief mode stops at the header |
+| `passage get <ref> [-o path]` | full text to a file, when you want it on disk |
+| `passage cat <ref>... [--tag t] [--glob g]` | several passages in full, one after another |
 | `passage new <story>/<name> [--tags] [--from-file f] [--at x,y]` | |
 | `passage set <ref> --from-file f` | replace text |
 | `passage rename <ref> --name "<n>" [--rewrite-links]` | fixes `[[link]]` and `links: to:` |
@@ -52,8 +58,8 @@ Global flags on everything: `--server`, `--token`, `--profile`, `--json` (JSONL)
 | Command | Does |
 |---|---|
 | `scene ls [<story>]` | id, passage, cast/beat counts, `from:`, marks, errors |
-| `scene show <ref>` | one-screen summary — not the YAML |
-| `scene get <ref> [-o path]` | the YAML; prints it if short, else a path |
+| `scene show <ref>` | summary header, then the YAML block. Brief mode stops at the header |
+| `scene get <ref> [-o path]` | the YAML. Spills to a path only past `--max-tokens` |
 | `scene set <ref> --from-file f` | replace the block |
 | `scene new <story>/<passage> --id <id> [--from <ref>] [--bg <asset>]` | |
 | `scene rm <ref> [--keep-passage]` | |

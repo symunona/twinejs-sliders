@@ -16,30 +16,76 @@ in a 24-line terminal too.
 
 ---
 
-## 0 — The prime directive: nothing overflows
+## 0 — Measure first, then decide
 
-A story is one JSON blob of up to 32 MB. `curl | jq` is not a workflow; it is a context
-fire. Every command in this spec obeys five rules.
+Most stories are small. A 40-passage episode is 60 KB of text — 15k tokens, less than this
+spec. Reading it whole is not a problem to be engineered around; it is the fastest way to
+understand it. The tool should hand it over.
+
+Some stories are not small. The body cap is 32 MB, and a long-running series with a hundred
+scenes and dense prose will pass the point where a full read is a bad trade. So the CLI
+**measures** and changes its default rather than being permanently defensive.
+
+### The estimate
+
+```
+est_tokens ≈ chars / 4
+```
+
+Before anything is fetched, `GET /stories` already gives `bytes` and `passageCount` per
+story, so `est = bytes / 4` is free and conservative — story JSON carries positions, ids
+and sizes that never get printed, so the real prose is always smaller than the guess. Once
+a body is in the cache, the estimate is exact: the sum of the passage texts it would print.
+Both are stored in the cache index, so every later command knows the answer without
+re-deciding.
+
+### Two modes, one threshold
+
+| Estimate | Mode | Default behaviour |
+|---|---|---|
+| **< 50k tokens** (≈ 200 KB) | `full` | Bodies print. `passage show` prints the whole passage. `scene get` prints the YAML. Lists are unpaged up to 200 rows. `story text` will hand over the entire episode as readable text. |
+| **≥ 50k tokens** | `brief` | Summaries by default, bodies become cache paths, lists page at 40. Every one of them takes `--full` to override for that call. |
+
+The threshold is `--budget` / `TWINE_BUDGET`, default `50k`. `--brief` and `--full` force a
+mode for one call; `--budget 0` means never guard.
+
+When brief mode engages, the CLI says so once, on stderr, with the way out:
+
+```
+note: ep3 ≈ 78k tokens (412 KB, 190 passages) — brief mode. --full for whole bodies.
+```
+
+Silence means full mode. An agent never has to guess which one it is in — and `twine-cli
+size <ref>` answers directly.
+
+### What still holds at any size
+
+Four rules are about being useful, not about being frugal, so they do not relax:
 
 | # | Rule |
 |---|---|
-| **R1** | **Summaries by default.** `show` prints headers, counts and refs. It never prints a body. |
-| **R2** | **Big things are paths, not text.** Anything over `--max-lines` (default 120) is written into the cache and the CLI prints its path. `-p/--print` forces stdout. |
-| **R3** | **Every list is bounded.** `--limit` (default 40) with `--offset`; the last line is always `… 132 more — --offset 40`. Never silent truncation. |
-| **R4** | **Every row starts with a ref**, and that ref is valid input to the next command. Output is the index of the next command. |
-| **R5** | **`--json` is JSONL**, one record per line, so `head`, `grep` and `jq -c` work on a stream and nobody has to hold the array. |
+| **R1** | **A single output never exceeds `--max-tokens`** (default 6k, ≈ 600 lines). Past that it is written to the cache and the **path** is printed, in either mode. One passage cannot eat a context window by accident. |
+| **R2** | **Nothing truncates silently.** A capped list ends with `… 132 more — --offset 40`; a spilled body prints its path and its size. |
+| **R3** | **Every row starts with a ref** that is valid input to the next command. The output is the index of the next command. |
+| **R4** | **`--json` is JSONL**, one record per line, so `head`, `grep` and `jq -c` work on a stream. |
 
-Corollary — **the tool is a map, not a dump**. `twine-cli graph`, `twine-cli grep` and
-`twine-cli scene ls` exist so an agent can find the three passages that matter and read
-only those. Reading a whole story is possible (`checkout`), but it lands on disk as files,
-where `sed -n` and `rg` do the reading.
+The map commands — `graph`, `grep`, `scene ls` — exist for the large case and for the
+targeted question, not as a mandatory ritual before every read. On a 15k-token episode,
+`twine-cli story text .` and reading it is the right move.
 
-**Walking, one node at a time.** `twine-cli walk` keeps a cursor in the session state and
-prints exactly one passage's summary plus its outgoing links per call. `twine-cli next`
-advances. An agent traverses a 300-passage episode in 300 small turns and never holds more
-than one node.
+### Whole-story reads
 
----
+Because they are legitimate:
+
+| Command | Does |
+|---|---|
+| `size [<ref>]` | est tokens, bytes, passages, scenes, mode, and whether it is cached |
+| `story text <ref> [--scenes-only\|--prose-only] [-o path]` | the whole story as readable text: `## Passage name` headers, then the passage body. Refuses over `--max-tokens` unless `-o` or `--force`, and then says how big it was |
+| `passage cat <ref>...` · `passage cat <story> --tag act1` | several passages, full text, one after another, same ceiling |
+
+`story text` is not the JSON. Positions, sizes, selection flags and ids are dropped; what
+is left is what a person would read. That is usually a third of the wire bytes, which is
+why the mode decision uses the printed estimate once it can.
 
 ## 1 — Refs
 
@@ -89,8 +135,9 @@ hatch when a name is ambiguous.
 twine-cli <group> <verb> [ref] [flags]
 ```
 
-Global flags everywhere: `--server`, `--token`, `--profile`, `--json`, `--limit`,
-`--offset`, `--max-lines`, `-p/--print`, `--dry-run`, `--yes`, `-q/--quiet`.
+Global flags everywhere: `--server`, `--token`, `--profile`, `--json`, `--full`, `--brief`,
+`--budget`, `--max-tokens`, `--limit`, `--offset`, `-o/--out`, `--dry-run`, `--yes`,
+`-q/--quiet`.
 
 ### 2.1 Session and server
 
@@ -106,15 +153,17 @@ Global flags everywhere: `--server`, `--token`, `--profile`, `--json`, `--limit`
 
 | Command | Does |
 |---|---|
-| `ls [--all] [--deleted] [--sort rev\|name\|bytes]` | the index — one line per story, from `GET /stories`, no bodies downloaded |
+| `ls [--all] [--deleted] [--sort rev\|name\|bytes]` | the index — one line per story, from `GET /stories`, no bodies downloaded. Carries the estimate: `ep3  rev 42  190p  ~78k ⚠` |
 | `story show <ref>` | rev, updatedAt, lastClient, counts, top passages, scene ids, asset totals, lint tally |
 | `story copy <src> --name "<new>"` | see §5 |
 | `story new --name "<n>" [--from-template <ref>]` | empty story, new ifid |
 | `story rename <ref> --name "<n>"` | |
 | `story rm <ref> [--purge] --yes` | tombstone, or erase |
 | `story revs <ref>` | `GET /revisions` — rev, when, who, bytes, passages, `restoredFrom` |
-| `story get <ref>[@rev] [-o path]` | the raw body to a file. Prints the path, never the JSON |
-| `story diff <refA> <refB>` | passage-level diff between two revs or two stories: added/removed/changed names, with a `+n/-n` line count each. Bounded by R3 |
+| `story get <ref>[@rev] [-o path]` | the raw JSON body to a file. Prints the path — the JSON itself is never worth printing |
+| `story text <ref> [-o path]` | the whole story as readable text, §0 |
+| `size <ref>` | est tokens, bytes, passages, scenes, mode, cached or not |
+| `story diff <refA> <refB>` | passage-level diff between two revs or two stories. Full mode prints the hunks; brief mode prints names with a `+n/-n` count each |
 | `story restore <ref> --rev N` | `POST /restore`; prints the new rev and any `missingAssets` |
 | `story lint <ref>` | §7 |
 | `story stat <ref>` | bytes, passages, scenes, beats, words, assets, orphans |
@@ -124,8 +173,9 @@ Global flags everywhere: `--server`, `--token`, `--profile`, `--json`, `--limit`
 | Command | Does |
 |---|---|
 | `passage ls [<story>] [--tag t] [--scenes] [--orphans]` | ref, name, tags, lines, `scene:<id>` if it has one, out-degree |
-| `passage show <ref>` | header + vars + which modifiers are present + link table. Body only under `-p` or when under `--max-lines` |
-| `passage get <ref> [-o path]` | full text to a file, path printed |
+| `passage show <ref>` | **the whole passage**, with a header line of ref, tags, links and scene id. Brief mode prints the header, the vars and the link table only — `--full` for the body |
+| `passage get <ref> [-o path]` | full text to a file, path printed. `show` already prints it; this is for when you want it on disk |
+| `passage cat <ref>... [--tag t] [--glob g]` | several passages in full, one after another |
 | `passage new <story>/<name> [--tags] [--from-file f] [--at x,y]` | |
 | `passage set <ref> --from-file f` | replace text wholesale |
 | `passage rename <ref> --name "<n>" [--rewrite-links]` | renames and fixes every `[[link]]` and `links: to:` that pointed at it |
@@ -144,8 +194,8 @@ survive.
 | Command | Does |
 |---|---|
 | `scene ls [<story>]` | `#id`, passage, cast count, beat count, `from:`, marks, link targets, errors |
-| `scene show <ref>` | one screen: id, from, bg, cast/props with `at`, fx, beat count by kind, links, marks. **Not the YAML** |
-| `scene get <ref> [-o path]` | the block's YAML. Under `--max-lines` it prints; over, it writes and prints the path |
+| `scene show <ref>` | the summary header — id, from, bg, cast/props with `at`, fx, beats by kind, links, marks — and then the YAML block itself. Brief mode stops after the header |
+| `scene get <ref> [-o path]` | the block's YAML, printed. Over `--max-tokens` (a very long beat list) it writes and prints the path |
 | `scene set <ref> --from-file f` | replace the block, keeping the rest of the passage |
 | `scene new <story>/<passage> --id <sceneId> [--from <ref>] [--bg <asset>]` | inserts a `[scene]` block |
 | `scene rm <ref> [--keep-passage]` | |
@@ -194,11 +244,12 @@ exit 2 with `keyHint()`'s suggestion — the same "did you mean `frame`?" the ed
 | `walk <story> [--from <passage>] [--order links\|name\|created]` | start a traversal; prints node 1 |
 | `next [n]` | advance the cursor, print the next node |
 | `prev`, `goto <ref>`, `walk --reset` | |
-| `walk --list` | the whole traversal as refs only — the itinerary, cheap, bounded by R3 |
+| `walk --list` | the whole traversal as refs only — the itinerary, cheap at any size |
 | `graph <story> [--format tree\|dot\|jsonl] [--depth n] [--from <ref>]` | the link graph. `tree` is the map an agent reads once before deciding what to open |
 
-A walk node is one screen: the passage ref, its scene summary, beat count, the assets it
-needs, and the outgoing links as refs. That is the unit of "episode by episode".
+A walk node is one passage: its ref, its full text in full mode, its scene summary, the
+assets it needs, and the outgoing links as refs. That is the unit of "episode by episode",
+and on a large story it is the way to read one that will not fit whole.
 
 ### 2.7 Working copy
 
@@ -216,7 +267,7 @@ needs, and the outgoing links as refs. That is the unit of "episode by episode".
 **Human output** is aligned columns, no borders, no colour when not a TTY. **`--json`** is
 JSONL. **Every mutation** prints one line: `ok  <ref>  rev 42  (+3 −1 lines)`, and under
 `--dry-run` the same line plus a unified diff of the passage text it would have written,
-bounded by R2.
+bounded by R1.
 
 | Exit | Means |
 |---|---|
@@ -228,7 +279,8 @@ bounded by R2.
 | 5 | lint found errors |
 
 **The cache** is `${XDG_CACHE_HOME:-~/.cache}/twine-cli/<server-host>/<storyId>/`:
-bodies by rev, asset blobs by id, and the last written `.txt`/`.yaml` extracts. It is
+bodies by rev, asset blobs by id, the last written `.txt`/`.yaml` extracts, and an index
+holding each story's exact estimate and mode so §0 is decided once, not per command. It is
 content-addressed and disposable; `twine-cli cache path <ref>` prints where something
 would land, `twine-cli cache clear` empties it. Every path the CLI prints is absolute, so
 an agent can hand it straight to `Read` or `sed`.
@@ -415,7 +467,8 @@ packages/twine-cli/src/
   bin.ts              arg parse, profile, exit codes
   ref.ts              the grammar in §1: parse, resolve, canonicalise, print
   client.ts           HTTP over the spec 11 API; ETag cache; If-Match; typed errors
-  render/             table + jsonl writers, the R1–R5 budget enforcement in one place
+  budget.ts           the estimate, the mode decision, the spill-to-path rule
+  render/             table + jsonl writers, one place that enforces §0
   cmd/                one file per group: story, passage, scene, asset, char, walk, wc
   wc/                 working copy: checkout, index.json, splice, push
 ```
@@ -428,7 +481,7 @@ the two stay honest because both compile against `server.types.ts`.
 
 | Tier | Commands |
 |---|---|
-| **1** | `login`, `ping`, `use`, `ls`, `story show/get/copy/revs`, `passage ls/show/get`, `scene ls/show/get`, `asset ls --scene`, `asset get`, `grep`, `lint` |
+| **1** | `login`, `ping`, `use`, `ls`, `size`, `story show/text/get/copy/revs`, `passage ls/show/cat/get`, `scene ls/show/get`, `asset ls --scene`, `asset get`, `grep`, `lint` |
 | **2** | the `get/set/add/rm/mv` field family, `scene new/rm/reid/beats/states`, `passage new/set/rename`, `asset put/rm/where/gc`, `checkout/status/pull/push` |
 | **3** | `walk/next/graph`, `story diff`, `scene diff`, `watch`, `char frames`, `--fix` |
 
@@ -440,7 +493,8 @@ the Playwright fixture proves the pattern.
 
 ## 10 — The skill
 
-`.claude/skills/twine-cli/` wraps this for an agent: `SKILL.md` holds the budget rules, the
-ref grammar and the five recipes; `references/commands.md`, `references/refs.md` and
-`references/recipes.md` hold the rest, loaded only when needed. The skill's job is to stop
-an agent from ever running `cat story.json` — everything else is this document.
+`.claude/skills/twine-cli/` wraps this for an agent: `SKILL.md` holds §0, the ref grammar
+and the recipes; `references/commands.md`, `references/refs.md` and `references/recipes.md`
+hold the rest, loaded only when needed. Its job is to teach one habit — `twine-cli size`
+before a big read, and then read freely — not to make an agent nervous about a 15k-token
+episode.

@@ -1,38 +1,51 @@
 # Recipes
 
-Each one is a full loop: find, read the minimum, change, verify. Working files go in `tmp/`.
+Each one is a full loop: size it, read what you need, change, verify. Working files go in
+`tmp/`.
 
-## 1 — Audit an episode without reading it
+## 1 — Read an episode
 
 ```sh
 twine-cli use ep3
-twine-cli story show .                       # counts + lint tally
-twine-cli lint .                             # exit 5 = broken; the refs tell you where
-twine-cli scene ls . --limit 40              # every scene, one line
-twine-cli graph . --format tree --depth 3    # the shape
-twine-cli passage ls . --orphans             # unreachable
-twine-cli asset ls . --missing               # art the store does not have
+twine-cli size .                # ~15k tokens, full mode → just read it
+twine-cli story text .          # the whole episode, readable, no JSON noise
 ```
 
-Only now open something, and open it by ref. Three summaries beat one download.
+If `size` says brief (≥50k tokens), don't fight it — map first, read the parts:
 
-## 2 — Walk it node by node
+```sh
+twine-cli story show .                       # counts + lint tally
+twine-cli graph . --format tree --depth 3    # the shape
+twine-cli scene ls .                         # every scene, one line
+twine-cli passage show '.../Tavern Fight'    # then read the ones that matter
+```
+
+Either way, before you touch anything:
+
+```sh
+twine-cli lint .                # exit 5 = already broken; the refs say where
+twine-cli passage ls . --orphans
+twine-cli asset ls . --missing
+```
+
+## 2 — Walk a big one node by node
 
 ```sh
 twine-cli walk . --from Start
-twine-cli next          # one passage per call: summary, beats, assets, outgoing links
+twine-cli next          # one passage per call: text, beats, assets, outgoing links
 twine-cli next
 twine-cli goto '.#tavern-night'
 ```
 
-Use this when the task is "go through the episode and check X". The cursor persists between
-calls, so nothing accumulates in context. `twine-cli walk --list` first if you want the
-itinerary before committing to it.
+For "go through the episode and check X" on a story too big to hold at once. The cursor
+persists between calls. `twine-cli walk --list` gives the itinerary as refs first.
+
+On a small story this is usually the slow way — `story text .` and read.
 
 ## 3 — Move a character, change a line
 
 ```sh
-twine-cli scene show '.#tavern-night'                 # summary first — who is on stage
+twine-cli scene show '.#tavern-night'                 # summary + the YAML
 twine-cli get '.#tavern-night/cast/mira'              # {at: -0.4, frame: arms-crossed}
 twine-cli set '.#tavern-night/cast/mira/at' -- -0.25
 twine-cli scene beats '.#tavern-night'                # numbered
@@ -61,6 +74,7 @@ twine-cli lint .
 twine-cli story copy ep3 --name "Episode 4" --reid ep4- --assets copy
 twine-cli use "Episode 4"
 twine-cli story show .                    # confirm counts and the new refs
+twine-cli size .                          # the copy's own estimate
 twine-cli scene ls .                      # ids should all carry the ep4- prefix
 twine-cli lint .                          # catches anything the reid failed to rewrite
 ```

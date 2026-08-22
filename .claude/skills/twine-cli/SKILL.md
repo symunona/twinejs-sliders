@@ -8,21 +8,47 @@ description: Read and edit Sliders/Twine stories on the story-store server from 
 Terminal client for the Sliders story store. Spec: `docs/sliders/12-story-cli.md`.
 Server API: `docs/sliders/11-server-storage.md`. Scene YAML: `docs/sliders/02-sliders-format.md`.
 
-## The one rule
+## Size first, then read freely
 
-**Never read a story whole.** A story is one JSON body up to 32 MB. Do not `curl` the API,
-do not `cat story.json`, do not `jq .` a body. Use the map commands to find the two or
-three passages that matter, then read only those.
+Most stories are small. A 40-passage episode is ~15k tokens — read it whole, that is the
+fastest way to understand it. Don't ritually summarise something that fits.
 
-The tool enforces this and you should rely on it:
+```sh
+twine-cli size .          # ep3  62 KB  40 passages  12 scenes  ~15k tokens  full
+```
 
-- Lists cap at 40 rows and print `… N more — --offset 40`. Ask for the next page only if
-  you actually need it.
-- Anything over 120 lines is written to a file and the **path** is printed. Read the path,
-  or `sed -n '40,80p'` it. `-p` forces stdout — use it only for small things.
-- `--json` is JSONL, one record per line. Pipe it to `head`/`grep`/`jq -c`.
-- Every output row starts with a **ref** that is valid input to the next command. The
-  output is your index.
+| Estimate | Mode | What the CLI does by default |
+|---|---|---|
+| **< 50k tokens** | `full` | prints bodies — whole passages, whole scene YAML, unpaged lists. `story text` hands over the entire episode |
+| **≥ 50k tokens** | `brief` | summaries, cache paths instead of bodies, lists page at 40. `--full` on any call overrides |
+
+It decides for you and says so on stderr when it guards:
+
+```
+note: ep3 ≈ 78k tokens (412 KB, 190 passages) — brief mode. --full for whole bodies.
+```
+
+Silence = full mode. `GET /stories` carries `bytes`, so `twine-cli ls` shows every story's
+estimate without downloading anything.
+
+**On a small story, just read it.** `twine-cli story text .` → the whole episode as
+readable text, `## Passage name` headers and bodies, no JSON noise. `twine-cli passage cat
+. --tag act1` for a slice.
+
+**On a large story, use the map**: `grep`, `graph --format tree`, `scene ls` to find the
+three passages that matter, then `passage show --full` on those, or `walk`/`next` to go
+node by node.
+
+Whatever the mode:
+
+- A single output never exceeds `--max-tokens` (default 6k, ≈600 lines). Past that it spills
+  to a cache file and prints the **path** — read the path.
+- Nothing truncates silently. `… 132 more — --offset 40` means there is more.
+- Every row starts with a **ref** that is valid input to the next command.
+- `--json` is JSONL: pipe it to `head`, `grep`, `jq -c`.
+
+Never `curl` the API or `jq .` a story body — that is the raw JSON, mostly passage
+positions and ids. `story text` is the same content at a third the size.
 
 ## Refs
 
@@ -43,20 +69,22 @@ spaces or `#`.
 
 ```sh
 twine-cli ping                     # server up? who else is connected?
-twine-cli ls                       # stories, one line each — no bodies fetched
+twine-cli ls                       # stories + their size estimates, no bodies fetched
 twine-cli use ep3                  # pin it
-twine-cli story show .             # counts, scene ids, lint tally. Still no bodies
+twine-cli size .                   # full or brief? decides how you read
+twine-cli story show .             # counts, scene ids, lint tally
 ```
 
 Then pick a lane:
 
 | You need to | Do |
 |---|---|
+| Read a small story | `twine-cli story text .` — the whole thing, readable |
+| Read a few passages | `twine-cli passage show <ref>` (full text) or `passage cat` |
 | Find something by text | `twine-cli grep 'mira' . --scope scene` → `story/passage:line` refs |
 | See the shape of the episode | `twine-cli graph . --format tree --depth 3` |
-| Go through it node by node | `twine-cli walk .` then `twine-cli next` — one passage per call |
-| Understand one scene | `twine-cli scene show '.#tavern-night'` (summary, not YAML) |
-| Read the actual YAML | `twine-cli scene get '.#tavern-night'` — prints, or gives a path |
+| Go through a big one node by node | `twine-cli walk .` then `twine-cli next` |
+| Understand one scene | `twine-cli scene show '.#tavern-night'` — summary + its YAML |
 | Know what art it needs | `twine-cli asset ls --scene '.#tavern-night'` |
 | Look at that art | add `--paths`, then Read the printed paths |
 
