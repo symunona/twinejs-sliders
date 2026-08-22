@@ -1,70 +1,64 @@
-# 12 — `twine-cli`, the terminal interface to the story store
+# 12 — `twine-cli`, terminal client for story store
 
-A command-line client for the server in [`11-server-storage.md`](11-server-storage.md),
-built for a coding agent first and a human second.
+CLI for server in [`11-server-storage.md`](11-server-storage.md). Agent first, human second.
 
-The whole design is one sentence: **decode the story into files, work on the files, encode
-it back.**
+Design one line: **decode story to files, work on files, encode back.**
 
-A story on disk is one line of JSON. The 4 KB fixture in `data/` has zero newlines in it:
-every passage is a string with its scene YAML flattened into `\n` escapes, so `rg -n`
-answers "line 1" to every question and there is nothing for an editor to anchor on. Decoding
-it gives one file per passage, the scene YAML sitting where the author wrote it, the art
-beside it under readable names — and from there an agent uses what it already knows: read a
-file, grep a tree, edit a line, look at an image.
+Story on disk = one line JSON. Fixture in `data/` is 4278 bytes, **zero newlines**. Every
+passage a string, scene YAML flattened to `\n` escapes. So `rg -n` answer "line 1" to every
+question, and editor got nothing to anchor on.
 
-That decode is what `checkout` is. It is not a download: in local mode nothing is fetched
-and the art is symlinked to blobs that were already on disk. The working copy is a derived
-view — disposable, regenerable, and cheap.
+Decode gives one file per passage, scene YAML where author wrote it, art beside it under
+readable names. Then agent use what it knows: read file, grep tree, edit line, look at
+image.
 
-Around it the CLI does the four things a text editor cannot: **write through the store's
-API, resolve what a scene needs, check that the result is valid, and talk to the store about
-history.** Only the first of those needs a decode at all; the rest read the store directly.
+Decode is what `checkout` is. Not download — local mode fetch nothing, art is symlink to
+blobs already on disk. Working copy = derived view. Disposable. Regenerable.
 
-Fifteen commands, and you will type four of them.
+Around it CLI does four things text editor cannot: **write through store API, resolve what
+scene needs, check result valid, talk to store about history.** Only first needs decode.
+
+Fifteen commands. You type four.
 
 ---
 
-## 0 — How the CLI reaches the data
+## 0 — How CLI reach data
 
-The store keeps plain files (spec 11):
+Store keep plain files (spec 11):
 
 ```
 data/stories/79d06063-0d0d-4cb1-bf6f-d9d61272d41b/
-  story.json      the body, verbatim minus `sync`
-  meta.json       rev, ifid, name, cached counts, hash      ← this is the index
-  assets.json     the manifest
+  story.json      body, verbatim minus `sync`
+  meta.json       rev, ifid, name, cached counts, hash      <- this is the index
+  assets.json     manifest
   assets/         a_1f0e.webp, a_3450.webp …  real files, real extensions
   revs/           000001.json.gz, 000001.assets.gz …
 ```
 
-On taskbot that directory sits next to the CLI, owned by the same user, so **reads take the
-short path**: `ls` reads the `meta.json` files, `checkout` reads `story.json`, older
-revisions come out of `revs/`, and asset blobs are already at a path on disk. Nothing is
-downloaded, cached or copied.
+Same box, same user, so **reads take short path**: `ls` read `meta.json` files, `checkout`
+read `story.json`, old revisions come from `revs/`, blobs already at a path. Nothing
+downloaded, cached, copied.
 
-This is sound because the server writes by temp-file + rename: a reader sees either the
-whole previous version or the whole new one, so there is nothing to lock against.
+Sound because server write by temp-file + rename. Reader see whole old version or whole new
+one. Nothing to lock.
 
-**Writes go through the API** — `push`, `restore`, `copy` and `rm` are the four commands
-that write, and each one is an HTTP request to the store. That is what bumps `rev`,
-snapshots the old body into `revs/`, announces the change on the websocket so every open
-editor updates, serialises against a concurrent autosave, and refreshes the cached counts
-in `meta.json`. One request to loopback buys all five.
+**Writes go through API.** Four commands write: `push`, `restore`, `copy`, `rm`. Each one HTTP
+request. That bump `rev`, snapshot old body to `revs/`, announce change on websocket so open
+editors update, serialise against concurrent autosave, refresh cached counts in `meta.json`.
+One request to loopback buy all five.
 
 ### Local mode
 
-The CLI is in local mode when it can see the store's `DATA_DIR`. It finds it from, in
-order: `--data <dir>`, `TWINE_DATA`, `dataDir` in the profile, or — when the configured
-server is a loopback address — the `DATA_DIR` of the `.env` beside the server binary.
-`twine-cli ping` reports which mode it is in.
+CLI in local mode when it see store `DATA_DIR`. Finds it, in order: `--data <dir>`,
+`TWINE_DATA`, `dataDir` in profile, or — when server is loopback — `DATA_DIR` from `.env`
+beside server binary. `twine-cli ping` say which mode.
 
-Local mode is an optimisation, not a second personality: a remote store answers the same
-commands over HTTP, and the working copy that comes out is byte-identical.
+Optimisation, not second personality. Remote store answer same commands over HTTP. Working
+copy comes out byte-identical.
 
 ---
 
-## 1 — The commands
+## 1 — Commands
 
 ```
 twine-cli <cmd> [args] [flags]
@@ -74,38 +68,36 @@ Global: `--data`, `--server`, `--token`, `--profile`, `--json`, `--yes`, `-q`.
 
 | # | Command | Does |
 |---|---|---|
-| 1 | `ping` | mode (local/remote), server version, story count, who else is connected |
-| 2 | `login [--server URL]` | store a token in the profile, 0600 |
+| 1 | `ping` | mode, server version, story count, who else connected |
+| 2 | `login [--server URL]` | store token in profile, 0600 |
 | 3 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, size, est tokens |
-| 4 | `checkout <story> [dir] [--rev N] [--passages <glob>] [--copy-assets]` | decode a story into a working copy — §2 |
-| 5 | `status [dir]` | what changed locally, what changed on the server, new asset files, missing or changed blobs |
+| 4 | `checkout <story> [dir] [--rev N] [--passages <glob>] [--copy-assets]` | decode story to working copy — §2 |
+| 5 | `status [dir]` | changed local, changed on server, new asset files, missing or changed blobs |
 | 6 | `push [dir]` | reassemble, upload, `PUT` with `If-Match` — §3 |
-| 7 | `pull [dir] [--force]` | re-explode at the server's rev; keeps local edits safe unless `--force` |
+| 7 | `pull [dir] [--force]` | re-decode at server rev; keep local edits unless `--force` |
 | 8 | `lint [dir\|<story>] [--fix]` | scene YAML, cross-passage, link graph, assets — §5 |
-| 9 | `assets [dir\|<story>] [--scene <id>] [--unused] [--missing]` | what exists, and what a scene needs, with real paths — §4 |
-| 10 | `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | the link graph, derived from the passage text |
+| 9 | `assets [dir\|<story>] [--scene <id>] [--unused] [--missing]` | what exists, what scene needs, with real paths — §4 |
+| 10 | `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph from passage text |
 | 11 | `copy <story> --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone — §6 |
 | 12 | `new --name "<n>"` | empty story, new ifid |
 | 13 | `rm <story> [--purge] --yes` | tombstone, or erase |
 | 14 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
-| 15 | `restore <story> --rev N` | `POST /restore`; prints the new rev and any `missingAssets` |
+| 15 | `restore <story> --rev N` | `POST /restore`; print new rev and `missingAssets` |
 
-Reading and editing content happens in the working copy with `Read`, `rg`, `sed` and
-`Edit` — the tools an agent is already fluent in, on files that are already on disk.
+Read and edit content in working copy with `Read`, `rg`, `sed`, `Edit`. Agent already fluent,
+files already on disk.
 
-`ls`, `assets`, `lint`, `graph`, `revs` and `copy` take a story ref and read the store
-directly; none of them touches passage text, so none of them needs a decode. A working copy
-is for editing.
+`ls`, `assets`, `lint`, `graph`, `revs`, `copy` take story ref and read store direct. None
+touch passage text, none need decode. Working copy is for editing.
 
-A **ref** is a story: its uuid, its name, or an unambiguous slug (`chapter-3` finds
-`Chapter 3`). Ambiguity is answered with the candidate list and exit 2. Two suffixed forms
-appear as arguments: `<story>@<rev>` for `checkout`, `copy` and `revs`, and
-`<story>#<sceneId>` for `assets --scene` and `lint`, because a scene id is unique inside a
-story and is what the YAML calls itself. That is the entire grammar.
+**Ref** = a story: uuid, name, or unambiguous slug (`chapter-3` finds `Chapter 3`). Ambiguous
+→ candidate list, exit 2. Two suffixes: `<story>@<rev>` for `checkout`/`copy`/`revs`, and
+`<story>#<sceneId>` for `assets --scene`/`lint`. Scene id unique inside story, and it is what
+YAML call itself. That is whole grammar.
 
 ---
 
-## 2 — The working copy
+## 2 — Working copy
 
 ```
 tmp/ep3/
@@ -114,28 +106,26 @@ tmp/ep3/
     001-start.md
     003-tavern-night.md
   assets/
-    bg/tavern-night.a_8f21.webp              -> …/data/stories/<id>/assets/a_8f21.webp
+    bg/tavern-night.a_8f21.webp              -> <DATA_DIR>/stories/<id>/assets/a_8f21.webp
     obj/candle.a_44de.webp                   -> …
     char/desert-punk/idle.a_3450.webp        -> …
   characters/
     desert-punk.yaml
   .twine/
     ref.json        server, story id, rev, etag, mode, client id
-    story.json      the body exactly as pulled — the round-trip reference
-    assets.json     the manifest as pulled
+    story.json      body exactly as pulled — round-trip reference
+    assets.json     manifest as pulled
 ```
 
-Three files, and two of them are what the store handed over. `status` re-decodes
-`.twine/story.json` in memory and compares it with what is on disk, so there is no separate
-record of hashes to go stale; blob changes come the same way, from the hashes already in
-`.twine/assets.json`. Delete the directory and check out again whenever it is easier than
-thinking about it.
+Three files, two of them what store handed over. `status` re-decode `.twine/story.json` in
+memory, compare with disk — no separate hash record to go stale. Blob changes same way, from
+hashes already in `.twine/assets.json`. Delete `.twine/` and check out again when that is
+easier than thinking.
 
 ### Passages
 
-One file per passage, holding the whole passage text. The `[scene]` block stays where the
-author wrote it, inside the passage, so each passage has exactly one source of truth and an
-edit lands in the same place a person would have made it.
+One file per passage, whole text. `[scene]` block stay inside passage, where author wrote it.
+One source of truth per passage, and edit land where person would put it.
 
 ```markdown
 ---
@@ -154,42 +144,40 @@ beats:
   - mira: "You shouldn't have come back."
 ```
 
-The front matter carries the three things an author changes: `name`, `tags`, `at`. The
-passage's id, size and every field a future Twine adds live in `.twine/story.json` and are
-carried through untouched. `name` is the truth; the filename is cosmetic, `NNN-slug.md` in
-the story's own passage order, so a directory listing reads in the order the story was
-built.
+Front matter = three things author change: `name`, `tags`, `at`. Passage id, size, and any
+field future Twine adds live in `.twine/story.json`, carried through untouched.
 
-Creating a file creates a passage. Deleting one deletes it. Editing `name:` renames the
-passage, and `push` follows the rename through every `[[link]]` and `links: to:` that
-pointed at it, unless you pass `--no-rewrite-links`.
+`name` is truth. Filename cosmetic — `NNN-slug.md` in story passage order, so directory
+listing read in build order.
+
+New file = new passage. Delete file = delete passage. Edit `name:` = rename, and `push`
+follow rename through every `[[link]]` and `links: to:` that pointed at it, unless
+`--no-rewrite-links`.
 
 ### Assets
 
-The blobs are already on disk under their ids, so the working copy lays a readable name
-over them as **relative symlinks**, by kind:
+Blobs already on disk under ids. Working copy lay readable name over them as **relative
+symlinks**, by kind:
 
 ```
 assets/bg/…      assets/obj/…      assets/fx/…      assets/char/<character>/<frame>.<id>.<ext>
 ```
 
-The name comes from the manifest (`desert-punk/idle`), the id stays in the filename so it
-survives a rename, and the target is the store's own file — a checkout of a 2.3 MB library
-is instant and costs no disk. Read one, hand its path to an image model, write a new one
-next to it.
+Name from manifest (`desert-punk/idle`), id stay in filename so it survive rename, target is
+store own file. Checkout of 2.3 MB library instant, costs no disk. Read one, hand path to
+image model, write new one next to it.
 
-`--copy-assets` makes real copies, for a checkout you intend to zip, move to another
-machine, or keep after the story moves on. Remote stores copy as well; the layout is
-identical either way, so everything downstream is unaffected.
+`--copy-assets` make real copies — for checkout you zip, move to other machine, or keep after
+story move on. Remote store copy too. Layout identical either way.
 
-Asset ids are identity rather than content (spec 03), and the janitor reclaims blobs the
-manifest stops naming after `ORPHAN_TTL`. `.twine/assets.json` holds the hash each blob had
-at checkout, so `status` reports `changed` and `vanished` up front.
+Asset ids are identity, not content (spec 03). Janitor reclaim blobs manifest stop naming
+after `ORPHAN_TTL`. `.twine/assets.json` hold hash each blob had at checkout, so `status`
+report `changed` and `vanished` up front.
 
 ### `STORY.md`
 
-Generated, regenerated by `checkout`, `pull` and `status`. It is the map — the one file to
-read before deciding anything:
+Generated. Regenerated by `checkout`, `pull`, `status`. The map — one file to read before
+deciding anything:
 
 ```markdown
 # Trip to my Desert
@@ -213,33 +201,30 @@ ep3 · rev 42 · 4 passages · 10 assets (2.3 MB) · ~15k tokens · local · cle
 2 warnings, 0 errors — see `twine-cli lint`.
 ```
 
-The scene table carries `file:line`, so opening scene `tavern-night` is a `Read` with an
-offset. The token estimate is `chars / 4` over the passage text: under 50k, reading the
-whole `passages/` directory is a good move and the header says so; over it, the tables are
-how you pick the three files that matter.
+Scene table carry `file:line`, so open scene `tavern-night` = `Read` with offset. Token
+estimate = `chars / 4` over passage text. Under 50k: read whole `passages/` dir, header say
+so. Over: tables pick the three files that matter.
 
 ---
 
 ## 3 — Push
 
-1. **Rebuild the body.** Take `.twine/story.json`, replace each passage's `text`, `name`,
-   `tags` and position from its file, add passages for new files, drop passages for deleted
-   ones. Every other field, known or unknown, comes through from the stored object — a
-   checkout followed immediately by a push is a byte-identical no-op, and a test says so.
-2. **Upload new art.** Any asset file whose name carries no id is one you added: the CLI
-   assigns an id, `PUT`s the bytes with `X-Asset-Hash`, renames the file to
-   `<name>.<id>.<ext>`, and adds the manifest entry with `kind` from the directory and
-   `name` from the filename.
-3. **Publish.** `PUT` the manifest if it changed, then `PUT` the story with
-   `If-Match: "<rev>"`.
+1. **Rebuild body.** Take `.twine/story.json`. Replace each passage `text`, `name`, `tags`,
+   position from its file. Add passage for new file, drop passage for deleted file. Every
+   other field, known or unknown, come through from stored object. Checkout then push =
+   byte-identical no-op. Test say so.
+2. **Upload new art.** Asset file with no id in name = one you added. CLI assign id, `PUT`
+   bytes with `X-Asset-Hash`, rename file to `<name>.<id>.<ext>`, add manifest entry. `kind`
+   from directory, `name` from filename.
+3. **Publish.** `PUT` manifest if changed, then `PUT` story with `If-Match: "<rev>"`.
 
-Bytes before manifest before story, so a client pulling mid-push always sees a manifest
-whose blobs exist — the order `checkout-story.ts` already uses in the browser. The story
-`PUT` going last also means a rejected push leaves the store exactly as it was.
+Bytes before manifest before story. Client pulling mid-push always see manifest whose blobs
+exist — same order `checkout-story.ts` use in browser. Story `PUT` last also mean rejected
+push leave store as it was.
 
-`--dry-run` prints the plan. A **412 is exit 3**: the CLI prints the rev it holds, the rev
-the server has, who wrote it, and the two ways forward — check the server's rev out into a
-second directory and compare, or `pull --force` to take theirs.
+`--dry-run` print plan. **412 = exit 3**: CLI print rev you hold, rev server has, who wrote
+it, and two ways forward — check server rev out to second directory and compare, or
+`pull --force` to take theirs.
 
 ---
 
@@ -255,16 +240,15 @@ a_3450  frame   desert-punk/idle    1344x768  118 KB  assets/char/desert-punk/id
 a_9002  object  candle               256x256   12 KB  assets/obj/candle.a_9002.webp   unused
 ```
 
-**What a scene needs** — `twine-cli assets tmp/ep3 --scene tavern-night`. This resolution is
-the real work behind the command:
+**What scene needs** — `twine-cli assets tmp/ep3 --scene tavern-night`. This resolution is the
+real work:
 
-1. `bg:` → an asset id.
-2. every `props:` entry → its `ref` (defaulting to the key) → an asset id.
-3. every `cast:` entry → a **character** → the frames the scene actually names: the
-   entity's `frame:`, any `frame:` in a beat patch, and the character's default.
-   `--all-frames` widens it to the whole character.
+1. `bg:` → asset id.
+2. every `props:` entry → its `ref` (default = key) → asset id.
+3. every `cast:` entry → **character** → frames scene actually names: entity `frame:`, any
+   `frame:` in beat patch, character default. `--all-frames` widen to whole character.
 4. `fx:` entries that are asset-backed.
-5. if `from:` is set, the same walk over the inherited scene, marked `inherited`.
+5. `from:` set → same walk over inherited scene, marked `inherited`.
 
 ```
 a_8f21  bg              assets/bg/tavern-night.a_8f21.webp            bg:
@@ -273,56 +257,54 @@ a_44de  frame  mira     MISSING BLOB                                  beats/2 pa
 —       object candle   NOT IN MANIFEST                               props/candle
 ```
 
-Every row is a path or the reason there isn't one yet, so "look at what this scene uses" is
-one command and three `Read`s, and "generate the one that's missing" has both the gap and
-the place to put the result.
+Every row = path, or reason there is none yet. "Look at what scene uses" = one command, three
+`Read`s. "Generate missing one" = gap plus place to put result.
 
 `--json` gives `{id, kind, name, via, path, bytes, hash, present}` per line. `--missing` and
-`--unused` filter to the two answers worth acting on.
+`--unused` filter to two answers worth acting on.
 
 ---
 
 ## 5 — `lint`
 
-The verification step after any edit, and what decides whether a working copy is ready to
-push. Four tiers, each already implemented in a package:
+Verify step after edit. Decides if working copy ready to push. Four tiers, each already in a
+package:
 
 | Tier | From | Catches |
 |---|---|---|
 | YAML | `@sliders/scene-schema` | parse errors, unknown keys with `keyHint()` suggestions, bad coordinates |
 | Cross-passage | `@sliders/scene-index` | duplicate scene ids, unknown `from:`, unknown `@mark`, `from:` cycles |
-| Story graph | `scanLinkTargets` + passage names | links to passages that do not exist, unreachable passages, and a scene passage whose only exit is a `[[link]]` outside the block — spec 02: that link is never drawn |
-| Assets | manifest + blobs | scene references to unknown assets, manifest entries with no blob, blobs nothing names |
+| Story graph | `scanLinkTargets` + passage names | links to passages that do not exist, unreachable passages, scene passage whose only exit is `[[link]]` outside block — spec 02: that link never drawn |
+| Assets | manifest + blobs | scene refs to unknown assets, manifest entries with no blob, blobs nothing names |
 
-Output is `file:line: message`, which every editor and every agent already knows how to
-open. Exit 5 on any error, 0 with warnings printed. `--fix` handles the mechanical ones:
-prune manifest entries nothing references, normalise `at:` through `scene-edit.formatAt`.
-Broken links stay for a human to decide.
+Output `file:line: message`. Every editor and every agent know how to open that. Exit 5 on
+error, 0 with warnings printed. `--fix` do mechanical ones: prune manifest entries nothing
+references, normalise `at:` through `scene-edit.formatAt`. Broken links wait for human.
 
-`lint <story>` runs against the server for a quick check without a checkout.
+`lint <story>` run against store, no checkout.
 
 ---
 
 ## 6 — `copy`
 
-`twine-cli copy ep3 --name "Episode 4"` — server-side, no checkout needed.
+`twine-cli copy ep3 --name "Episode 4"` — server-side, no checkout.
 
 | Thing | What happens | Why |
 |---|---|---|
-| story `id` | new uuid | it is a new story |
-| `ifid` | new uuid | an IFID is stable across import/export of *the same* story; a copy is a different one |
-| passage ids | new uuids | ids are per story, so a fresh set keeps every sync record honest |
+| story `id` | new uuid | new story |
+| `ifid` | new uuid | IFID stable across import/export of *same* story; copy is different one |
+| passage ids | new uuids | ids per story, fresh set keep every sync record honest |
 | names, positions, tags, text | verbatim | |
-| scene ids | kept, or rewritten by `--reid <prefix>` | ids are unique *within* a story (spec 02) and the index is per story, so two stories may share one. Rewriting is opt-in because it also rewrites every `from:` and `@mark` |
-| assets | `--assets copy` (default), `link`, `none` | `copy` re-`PUT`s the blobs under the new story. `link` copies manifest entries and shares the source's blobs, which the janitor reclaims once nothing names them — available, warned about, opt-in |
-| revisions | start fresh | the copy begins at rev 1 |
+| scene ids | kept, or rewritten by `--reid <prefix>` | ids unique *within* story (spec 02), index per story, so two stories may share one. Rewrite opt-in because it also rewrite every `from:` and `@mark` |
+| assets | `--assets copy` (default), `link`, `none` | `copy` re-`PUT` blobs under new story. `link` copy manifest entries, share source blobs, janitor reclaim once nothing name them — opt-in |
+| revisions | start fresh | copy begin at rev 1 |
 
-`copy ep3@37 --name "Ep3 rescue"` copies an old revision. It prints the new story's ref and
-any reference it could not rewrite.
+`copy ep3@37 --name "Ep3 rescue"` copy old revision. Prints new story ref, plus any reference
+it could not rewrite.
 
 ---
 
-## 7 — Config and identity
+## 7 — Config, identity, exits
 
 `~/.config/twine-cli/config.json`, 0600:
 
@@ -330,64 +312,61 @@ any reference it could not rewrite.
 {
   "profile": "local",
   "profiles": {
-    "local": {"server": "http://127.0.0.1:8080", "token": "…",
-              "dataDir": "/home/symunona/dev/twinejs-sliders/server/data"},
+    "local": {"server": "http://127.0.0.1:8080", "token": "…", "dataDir": "<DATA_DIR>"},
     "prod":  {"server": "https://twine-story-store.tmpx.space", "token": "…"}
   },
   "clientId": "cli_9f31",
-  "clientName": "twine-cli@taskbot"
+  "clientName": "twine-cli@<host>"
 }
 ```
 
-`TWINE_STORE_URL`, `TWINE_STORE_TOKEN`, `TWINE_DATA`, `TWINE_PROFILE` override the file;
-flags override the environment.
+`TWINE_STORE_URL`, `TWINE_STORE_TOKEN`, `TWINE_DATA`, `TWINE_PROFILE` override file. Flags
+override env. `dataDir` default = `DATA_DIR` from server `.env`, so no host paths in config.
 
-`clientId` is persisted, not per-process. It rides every request as `X-Client-Id`, so the
-change bus skips the CLI's own writes when the same person has an editor open, and the
-history list reads `twine-cli@taskbot`.
+`clientId` persisted, not per-process. Ride every request as `X-Client-Id`, so change bus skip
+CLI own writes when same person has editor open, and history list read `twine-cli@<host>`.
 
-Locks are advisory (spec 11). `push` warns when another client is focused on a passage it is
-about to change and goes ahead; `--strict` turns that into exit 3.
+Locks advisory (spec 11). `push` warn when other client focused on passage it change, then go
+ahead. `--strict` turn that into exit 3.
 
 | Exit | Means |
 |---|---|
 | 0 | fine |
 | 1 | not found |
-| 2 | usage, or an ambiguous ref |
-| 3 | conflict — the server's rev moved, or `--strict` hit a lock |
-| 4 | server unreachable, or the token was rejected |
+| 2 | usage, or ambiguous ref |
+| 3 | conflict — server rev moved, or `--strict` hit lock |
+| 4 | server unreachable, or token rejected |
 | 5 | lint errors |
 
 ---
 
-## 8 — Building it
+## 8 — Build it
 
-TypeScript, `packages/twine-cli`, bin `twine-cli`, Node 20, native `fetch`. The only new
-runtime dependency is `yaml`, already in the tree.
+TypeScript, `packages/twine-cli`, bin `twine-cli`, Node 20, native `fetch`. Only new runtime
+dep is `yaml`, already in tree.
 
-It lives in this repo because everything that makes it more than `curl` is already here:
-`@sliders/scene-schema` parses a scene, `@sliders/scene-index` resolves `from:` and marks
-and finds the cross-passage errors, `@sliders/scene-core` compiles states,
-`@sliders/asset-store` owns id and hash rules, `scanLinkTargets` reads the link graph. One
-parser, shared by the editor, the runtime and the CLI.
+Lives in this repo because everything past `curl` is already here: `@sliders/scene-schema`
+parse scene, `@sliders/scene-index` resolve `from:` and marks and find cross-passage errors,
+`@sliders/scene-core` compile states, `@sliders/asset-store` own id and hash rules,
+`scanLinkTargets` read link graph. One parser, shared by editor, runtime, CLI.
 
 ```
 packages/twine-cli/src/
-  bin.ts          arg parse, profile, mode detection, exit codes
-  source/         one interface, two implementations: local files, HTTP
+  bin.ts          arg parse, profile, mode detect, exit codes
+  source/         one interface, two impls: local files, HTTP
   wc/             decode, STORY.md, reassemble, status, push
-  assets.ts       the symlink farm and the per-scene resolution
-  lint.ts         the four tiers, formatted as file:line
+  assets.ts       symlink farm, per-scene resolution
+  lint.ts         four tiers, formatted file:line
   cmd/            one small file per command
 ```
 
-`source/` is the seam that keeps local mode honest: `checkout` and `ls` ask it for a body or
-a manifest and never learn which side answered. The writing commands hold the HTTP client
-directly, so going through the API is structural rather than a habit.
+`source/` is seam that keep local mode honest: `checkout` and `ls` ask it for body or
+manifest, never learn which side answered. Write commands hold HTTP client direct, so going
+through API is structural, not habit.
 
-`src/store/persistence/server/client.ts` already speaks this API from the browser; the node
-client shares its types and its `ServerError`, and both compile against `server.types.ts`,
-which keeps them in step.
+`src/store/persistence/server/client.ts` already speak this API from browser. Node client
+share its types and `ServerError`. Both compile against `server.types.ts`, so they stay in
+step.
 
 **Tiers.**
 
@@ -397,17 +376,17 @@ which keeps them in step.
 | **2** | `pull`, `copy`, `revs`, `restore`, `graph`, `new`, `rm`, `login` |
 | **3** | `--fix`, `--reid`, `assets --all-frames`, `graph --format dot` |
 
-**Tests.** Round-trip is the load-bearing one: decode a fixture story, encode it back
-unchanged, assert the body is byte-identical. Then edit one passage file and assert exactly
-one passage differs. The rest run against a real server — `go run . --addr 127.0.0.1:0`
-prints its port on the first line for exactly this, and the Playwright fixture already
-proves the pattern. Local mode tests read a data directory that same server built.
+**Tests.** Round-trip is load-bearing: decode fixture story, encode back unchanged, assert
+body byte-identical. Then edit one passage file, assert exactly one passage differs. Rest run
+against real server — `go run . --addr 127.0.0.1:0` print its port on first line for exactly
+this, Playwright fixture already prove pattern. Local mode tests read data dir that same
+server built.
 
 ---
 
-## 9 — The skill
+## 9 — Skill
 
-`.claude/skills/twine-cli/` teaches an agent the loop — checkout, read the map, edit files,
-lint, push — plus the two facts it cannot infer: writes go through the CLI, and `assets/`
-holds real paths meant to be read. `SKILL.md` is that loop; `references/commands.md` and
-`references/recipes.md` hold the detail, loaded when needed.
+`.claude/skills/twine-cli/` teach agent the loop — checkout, read map, edit files, lint, push
+— plus two facts it cannot infer: writes go through CLI, and `assets/` hold real paths meant
+to be read. `SKILL.md` is that loop. `references/commands.md` and `references/recipes.md` hold
+detail, loaded when needed.

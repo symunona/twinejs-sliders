@@ -1,79 +1,77 @@
 # twine-cli — every command
 
-Global flags: `--data <dir>`, `--server`, `--token`, `--profile`, `--json` (JSONL),
-`--yes`, `-q`.
+Global: `--data <dir>`, `--server`, `--token`, `--profile`, `--json` (JSONL), `--yes`, `-q`.
 
-The CLI is in **local mode** when it can see the store's `DATA_DIR` — then reads come off
-disk with no HTTP and assets are symlinked rather than downloaded. `ping` says which mode
-it is in. Writes always go over HTTP either way.
+CLI in **local mode** when it see store `DATA_DIR`. Then reads come off disk, no HTTP, and
+assets are symlinks not downloads. `ping` say which mode. Writes always go over HTTP.
 
-## Moving stories
+## Move stories
 
 | Command | Does |
 |---|---|
-| `checkout <story>[@rev] [dir] [--passages <glob>] [--copy-assets]` | decode a story into a working copy |
+| `checkout <story>[@rev] [dir] [--passages <glob>] [--copy-assets]` | decode story to working copy |
 | `status [dir]` | local changes, server changes since checkout, new asset files, missing or changed blobs |
 | `push [dir] [--dry-run] [--no-rewrite-links] [--strict]` | reassemble, upload new assets, `PUT` with `If-Match` |
-| `pull [dir] [--force]` | re-decode at the server's rev; refuses over local edits |
+| `pull [dir] [--force]` | re-decode at server rev; refuse over local edits |
 
-`--copy-assets` makes real copies instead of symlinks — for a checkout you will zip, move
-to another machine, or keep after the story changes.
+`--copy-assets` = real copies not symlinks. For checkout you zip, move to other machine, or
+keep after story change.
 
-`push` order is bytes → manifest → story, so a rejected push leaves nothing behind.
+`push` order: bytes → manifest → story. Rejected push leave nothing behind.
 
-## Looking
+## Look
 
 | Command | Does |
 |---|---|
 | `ping` | mode, server version, story count, connected clients |
 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, bytes, est tokens |
-| `assets [dir\|<story>] [--scene <id>] [--all-frames] [--unused] [--missing] [--json]` | what exists, or what a scene needs, with paths |
-| `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | the link graph |
+| `assets [dir\|<story>] [--scene <id>] [--all-frames] [--unused] [--missing] [--json]` | what exists, or what scene needs, with paths |
+| `graph [dir\|<story>] [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph |
 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
 | `lint [dir\|<story>] [--fix]` | `file:line: message`; exit 5 on errors |
 
-Content lives in the working copy: `Read`, `rg` and `sed` cover passages, scenes, beats and
-searches. Everything in this section except `checkout`/`status`/`push`/`pull` takes a story
-ref as well as a directory — only editing passage text needs a decode.
+Content live in working copy: `Read`, `rg`, `sed` cover passages, scenes, beats, searches.
+Everything here except `checkout`/`status`/`push`/`pull` take story ref too — only editing
+passage text need a decode.
 
-## Changing the store
+## Change the store
 
 | Command | Does |
 |---|---|
 | `copy <story>[@rev] --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone: new id, new ifid, new passage ids |
 | `new --name "<n>"` | empty story |
 | `rm <story> [--purge] --yes` | tombstone, or erase |
-| `restore <story> --rev N` | new revision from an old one; prints `missingAssets` |
-| `login [--server URL]` | store a token in the profile, 0600 |
+| `restore <story> --rev N` | new revision from old one; print `missingAssets` |
+| `login [--server URL]` | store token in profile, 0600 |
 
-`--reid` rewrites scene ids **and** every `from:` and `@mark` that referenced them. A copy
-keeps its scene ids by default, which is fine — ids are unique within a story, not across.
+`--reid` rewrite scene ids **and** every `from:` and `@mark` that referenced them. Copy keep
+scene ids by default — fine, ids unique within story, not across.
 
-`--assets copy` (the default) gives the new story its own blobs. `--assets link` shares the
-source's, which the janitor reclaims once nothing names them — use it when you mean it.
+`--assets copy` (default) give new story own blobs. `--assets link` share source blobs, janitor
+reclaim once nothing name them — use when you mean it.
 
 ## Lint tiers
 
 1. **YAML** — parse errors, unknown keys with suggestions, bad coordinates.
 2. **Cross-passage** — duplicate scene ids, unknown `from:`, unknown `@mark`, `from:` cycles.
-3. **Story graph** — links to passages that do not exist, unreachable passages, and a scene
-   passage whose only exit is a `[[link]]` *outside* the block (spec 02: it is never drawn).
-4. **Assets** — references to unknown assets, manifest entries with no blob, orphan blobs.
+3. **Story graph** — links to passages that do not exist, unreachable passages, scene passage
+   whose only exit is `[[link]]` *outside* block (spec 02: never drawn).
+4. **Assets** — refs to unknown assets, manifest entries with no blob, orphan blobs.
 
-`--fix` handles the mechanical ones: prune unreferenced manifest entries, normalise `at:`
-formatting. Broken links stay for a human to decide.
+`--fix` do mechanical ones: prune unreferenced manifest entries, normalise `at:` format. Broken
+links wait for human.
 
 ## Refs
 
-A ref is a story: its uuid, its name, or an unambiguous slug (`chapter-3` → `Chapter 3`).
-Ambiguity is exit 2 with the candidates listed. Two suffixes exist:
+Ref = a story: uuid, name, or unambiguous slug (`chapter-3` → `Chapter 3`). Ambiguous = exit 2
+plus candidate list. Two suffixes:
 
-- `<story>@<rev>` — for `checkout`, `copy`, `revs`
-- `<story>#<sceneId>` — for `assets --scene`, `lint`
+- `<story>@<rev>` — `checkout`, `copy`, `revs`
+- `<story>#<sceneId>` — `assets --scene`, `lint`
 
 Quote anything with spaces or `#`.
 
 ## Exit codes
 
-`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict (rev moved, or `--strict`
-hit an advisory lock) · `4` server unreachable or token rejected · `5` lint errors.
+`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict (rev moved, or `--strict` hit
+advisory lock) · `4` server unreachable or token rejected · `5` lint errors.

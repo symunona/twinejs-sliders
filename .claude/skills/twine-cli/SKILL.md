@@ -5,27 +5,27 @@ description: Work on Sliders/Twine stories that live on the story-store server �
 
 # twine-cli
 
-Decode the story into files. Work on the files. Push. Spec: `docs/sliders/12-story-cli.md`.
+Decode story to files. Work on files. Push. Spec: `docs/sliders/12-story-cli.md`.
 Server: `docs/sliders/11-server-storage.md`. Scene YAML: `docs/sliders/02-sliders-format.md`.
 
-On the server a story is **one line of JSON** — every passage a string with its scene YAML
-flattened into `\n` escapes. `checkout` decodes that into files so line numbers, `rg` hits
-and `Edit` anchors exist. It is not a download; in local mode nothing is fetched.
+Story on server = **one line JSON**. Every passage a string, scene YAML flattened to `\n`
+escapes. `checkout` decode that to files, so line numbers, `rg` hits, `Edit` anchors exist.
+Not a download — local mode fetch nothing.
 
-## The loop
+## Loop
 
 ```sh
 twine-cli checkout ep3 tmp/ep3
-cat tmp/ep3/STORY.md          # the map: passages, scenes with file:line, assets, lint tally
-# ... Read / rg / Edit the files like any repo ...
+cat tmp/ep3/STORY.md          # map: passages, scenes with file:line, assets, lint tally
+# ... Read / rg / Edit files like any repo ...
 twine-cli lint tmp/ep3        # exit 5 = broken. Not optional.
 twine-cli push tmp/ep3
 ```
 
-That is the job. Reading and editing happen in the checkout with `Read`, `rg` and `Edit`.
+Read and edit in checkout with `Read`, `rg`, `Edit`.
 
-Questions that don't involve editing passage text need no checkout — `assets`, `lint`,
-`graph`, `ls`, `revs` and `copy` take a story ref and read the store directly:
+No checkout needed when not editing passage text — `assets`, `lint`, `graph`, `ls`, `revs`,
+`copy` take story ref, read store direct:
 
 ```sh
 twine-cli assets ep3 --scene tavern-night
@@ -34,25 +34,24 @@ twine-cli lint ep3
 
 ## Two rules
 
-1. **Writes go through the CLI** — `push`, `restore`, `copy`, `rm`. That is what bumps the
-   rev, snapshots the old version, and tells open browser editors to update. (Reading the
-   server's `data/` directory directly is fine and fast; the CLI does it for you.)
-2. **Lint before push.** Exit 5 means a scene, a link or an asset reference needs fixing.
-   A clean lint is what makes the work done.
+1. **Writes go through CLI** — `push`, `restore`, `copy`, `rm`. That bump rev, snapshot old
+   version, tell open browser editors to update. (Reading server `data/` direct is fine and
+   fast; CLI do it for you.)
+2. **Lint before push.** Exit 5 = scene, link or asset ref needs fix. Clean lint = work done.
 
-## The working copy
+## Working copy
 
 ```
 tmp/ep3/
-  STORY.md                        generated map — read it first
-  passages/003-tavern-night.md    front matter + whole passage, scene YAML inside it
-  assets/bg/tavern-night.a_8f21.webp     symlinks to the real blobs
+  STORY.md                        generated map — read first
+  passages/003-tavern-night.md    front matter + whole passage, scene YAML inside
+  assets/bg/tavern-night.a_8f21.webp     symlinks to real blobs
   assets/char/desert-punk/idle.a_3450.webp
   characters/desert-punk.yaml
-  .twine/                         rev, etag, the pulled body. Leave it alone.
+  .twine/                         rev, etag, pulled body. Leave alone.
 ```
 
-A passage file:
+Passage file:
 
 ```markdown
 ---
@@ -69,49 +68,47 @@ cast:
   mira: {at: -0.4, frame: arms-crossed}
 ```
 
-- Front matter is `name`, `tags`, `at`. Everything else about the passage rides through
-  untouched from `.twine/story.json`.
-- **New file = new passage. Deleted file = deleted passage.** The filename is cosmetic;
-  `name:` is what renames, and push follows the rename through every link that pointed at it.
-- The `[scene]` block lives inside the passage file. `STORY.md` gives you `file:line` for
-  every scene id, so opening one is a `Read` with an offset.
+- Front matter = `name`, `tags`, `at`. Rest of passage ride through untouched from
+  `.twine/story.json`.
+- **New file = new passage. Delete file = delete passage.** Filename cosmetic. `name:` renames,
+  and push follow rename through every link that pointed at it.
+- `[scene]` block live inside passage file. `STORY.md` give `file:line` per scene id, so open
+  one = `Read` with offset.
 
-## Assets are real paths
+## Assets = real paths
 
-`assets/` holds symlinks to the store's actual blobs. Read them directly — feed one to an
-image model, look at a background, compare two frames.
+`assets/` hold symlinks to store actual blobs. Read them direct — feed one to image model,
+look at background, compare two frames.
 
 ```sh
-twine-cli assets tmp/ep3 --scene tavern-night   # what this scene needs, resolved
-twine-cli assets tmp/ep3 --missing              # referenced but no blob
-twine-cli assets tmp/ep3 --unused               # in the manifest, nothing uses it
+twine-cli assets tmp/ep3 --scene tavern-night   # what scene needs, resolved
+twine-cli assets tmp/ep3 --missing              # referenced, no blob
+twine-cli assets tmp/ep3 --unused               # in manifest, nothing use it
 ```
 
-`--scene` resolves `bg:` + props + only the character frames the scene actually names, and
-prints a path or the reason there isn't one.
+`--scene` resolve `bg:` + props + only character frames scene actually names. Print path, or
+reason there is none.
 
-**Adding art:** write the file into `assets/<kind>/<name>.webp` — no id in the name. Push
-uploads it, assigns the id, renames the file, updates the manifest. Kind comes from the
-directory (`bg`, `obj`, `fx`, `char/<character>`).
+**Add art:** write file to `assets/<kind>/<name>.webp` — no id in name. Push upload it, assign
+id, rename file, update manifest. Kind from directory (`bg`, `obj`, `fx`, `char/<character>`).
 
-## How big is it
+## How big
 
-`STORY.md`'s header has a token estimate. Under ~50k, reading the whole `passages/`
-directory is fine and usually fastest. Over it, use the tables in `STORY.md` — and
-`twine-cli graph tmp/ep3 --format tree` — to pick the few files that matter.
+`STORY.md` header has token estimate. Under ~50k: read whole `passages/` dir, usually fastest.
+Over: use STORY.md tables and `twine-cli graph tmp/ep3 --format tree` to pick few files.
 
 ## Conflicts
 
-Push sends `If-Match`. Exit 3 means someone wrote while you worked, and the store is
-untouched. Check the story out again into a second directory to compare and merge by hand,
-or `pull --force` to take theirs. Forcing past a conflict is the user's call.
+Push send `If-Match`. Exit 3 = someone wrote while you worked, store untouched. Check story out
+to second directory, compare, merge by hand. Or `pull --force` to take theirs — that discard
+your copy, so ask first.
 
 ## Exit codes
 
-`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict · `4` server unreachable
-or token rejected · `5` lint errors.
+`0` ok · `1` not found · `2` usage or ambiguous ref · `3` conflict · `4` server unreachable or
+token rejected · `5` lint errors.
 
 ## More
 
-- `references/commands.md` — all fifteen commands and their flags
-- `references/recipes.md` — copy an episode, retheme a scene, generate missing art, rescue an old rev
+- `references/commands.md` — all fifteen commands, flags
+- `references/recipes.md` — copy episode, retheme scene, generate missing art, rescue old rev
