@@ -85,6 +85,12 @@ path, or reason there is none.
 **Add art:** `twine-cli put ep3:tavern-dawn tmp/new.webp --kind bg`. Unknown name = create,
 assign id, update manifest. Then point the scene at it: `bg: tavern-dawn`.
 
+**Add passage:** `twine-cli put ep3/"Signal Fire" tmp/s.txt --new`. Plain text, no receipt —
+nothing was handed out yet. Front matter optional, sets `tags:`/`at:` when present.
+
+**Characters cannot be made by CLI.** A scene with `cast:` needs its character to exist
+already (the editor rigs them). `lint` flag it when missing.
+
 ## How big
 
 `map` header carry token estimate. Under ~50k: `cat ep3 --all -o tmp/ep3/` and read

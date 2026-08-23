@@ -67,7 +67,7 @@ Global: `--data`, `--server`, `--token`, `--profile`, `--json`, `--yes`, `-q`.
 | 3 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, size, est tokens |
 | 4 | `map <story> [--json]` | the story map — §2 |
 | 5 | `cat <ref> [-o file] [--all -o dir] [--refresh]` | hand out passage text, or asset bytes — §3 |
-| 6 | `put <ref> <file> [--all dir] [--delete <name>]` | take it back, splice, `PUT` — §3 |
+| 6 | `put <ref> <file> [--new] [--all dir] [--delete <name>]` | take it back, splice, `PUT` — §3 |
 | 7 | `check <file\|dir>` | is my copy still current? read-only — §3 |
 | 8 | `lint [<story>\|<file>] [--fix]` | scene YAML, cross-passage, links, assets — §5 |
 | 9 | `assets <story> [--scene <id>] [--unused] [--missing]` | what exists, what scene needs, with real paths — §4 |
@@ -199,6 +199,21 @@ twine-cli put ep3 --all tmp/ep3/             # per-passage splice, per-passage h
 
 `cat <ref> --refresh` re-take a passage, refusing when the local file has edits, so a stale
 copy is one command from current.
+
+### Creating and deleting
+
+A passage that does not exist yet has no receipt, so `--new` takes a plain text file:
+
+```sh
+twine-cli put ep3/"Signal Fire" tmp/signal.txt --new
+```
+
+Front matter is honoured when present — that is how a create also sets `tags:` and `at:` —
+and never required. Position defaults continue the grid, so a story built entirely by the
+CLI opens as a readable row instead of one stack of cards.
+
+`--new` and `--delete` are both explicit for the same reason: a mistyped ref should be "no
+such passage", not a second passage with a typo for a name.
 
 ### Assets through same verbs
 
@@ -372,7 +387,23 @@ its port on first line for exactly this, Playwright fixture already prove the pa
 
 ---
 
-## 9 — Skill
+## 9 — Where the CLI stops
+
+Three jobs stay in the editor, and the CLI says so rather than half-doing them.
+
+| Job | Why it lives there |
+|---|---|
+| **Characters and frames** | A character is a rig — origin, per-frame anchors, bubble placement (spec 04). Those are drawn, not typed. The CLI reads characters and resolves their frames; it does not mint them, so a scene with `cast:` needs its character to exist first, and `lint` says so plainly when it does not. |
+| **Image dimensions** | A new asset's `w`/`h` land as `0` and the editor fills them on first render. Decoding four image formats to save one round trip is not worth the dependency. |
+| **Advisory locks** | Presence lives on the websocket and this package has no socket client, so `put` does not yet warn that someone else is focused on the passage. `--strict` is reserved for when it does. Locks enforce nothing either way (spec 11). |
+
+One asymmetry worth knowing: `copy <story>@37` takes the body from revision 37 and the
+manifest from now, because the store exposes an old manifest by revision but `Source` does
+not yet surface it. The command prints a note when it does this.
+
+---
+
+## 10 — Skill
 
 `.claude/skills/twine-cli/` teach agent the loop — `map`, `cat`, edit, `lint`, `put` — plus two
 facts it cannot infer: writes go through CLI, and asset paths are real files meant to be read.

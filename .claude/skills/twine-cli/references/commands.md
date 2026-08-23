@@ -26,6 +26,7 @@ Ambiguous = exit 2 plus candidate list. Quote refs with spaces or `#`.
 | `cat <story> --all -o <dir>` | every passage, one file each, own receipt |
 | `put <ref> <file>` | splice into current body, `PUT` with `If-Match` |
 | `put <story> --all <dir> [--delete "<name>"]` | per passage, per hash check. Absence never delete |
+| `put <ref> <file> --new` | passage that does not exist yet. Plain text file, no receipt needed. Front matter optional |
 | `check <file\|dir>` | fresh / stale-elsewhere / conflict. Read only |
 
 Receipt front matter = `story`, `passage`, `rev`, `hash`, plus editable `name`, `tags`, `at`.
