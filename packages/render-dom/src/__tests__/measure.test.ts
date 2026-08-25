@@ -468,6 +468,20 @@ describe('reconciliation', () => {
 		expect(placeholders[0].textContent).toContain('tavern/night');
 	});
 
+	it('stays quiet about a missing bg the scene only implied', async () => {
+		const mount = makeMount(1600, 900);
+		const renderer = new DomRenderer();
+
+		await renderer.mount(mount, createStubResolver({missing: ['tavern/night']}));
+		await renderer.apply(
+			stage([], {bg: 'tavern/night', bgImplicit: true}),
+			[]
+		);
+
+		expect(mount.querySelectorAll('.sliders-placeholder')).toHaveLength(0);
+		expect(mount.querySelectorAll('img.sliders-bg')).toHaveLength(0);
+	});
+
 	it('survives a resolver that throws', async () => {
 		const mount = makeMount(1600, 900);
 		const renderer = new DomRenderer();

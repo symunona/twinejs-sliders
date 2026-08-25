@@ -21,6 +21,28 @@ import {
 } from './stage';
 
 /**
+ * The backdrop a scene names, with `id:` as the default (spec 02).
+ *
+ * A snapshot named `tavern-night` almost always wants the `tavern-night` backdrop, so
+ * spelling it twice was the confusing part — the same shorthand `props:` already gets,
+ * where the entity key doubles as the asset name. `bg:` still wins when present, and
+ * `bg: ~` is how a scene says it genuinely has no backdrop.
+ *
+ * A patch (`from:`) is left alone: its id names the variant, not the art, so defaulting
+ * there would demand a backdrop file per variant instead of inheriting the one it came
+ * from.
+ */
+export function sceneBg(scene: Scene): string | null | undefined {
+	if (scene.bg !== undefined || scene.from !== undefined) {
+		return scene.bg;
+	}
+
+	const id = scene.id?.trim();
+
+	return id === '' ? undefined : id;
+}
+
+/**
  * Merge a scene onto a base stage.
  *
  * `base` is the stage named by `from:`. When the scene has no `from:` it is a complete
@@ -32,12 +54,16 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 	const out: Stage = isPatch ? cloneStage(base) : emptyStage();
 
 	// --- bg -----------------------------------------------------------------
-	if (scene.bg === null) {
+	const bg = sceneBg(scene);
+
+	if (bg === null) {
 		out.bg = undefined;
-	} else if (scene.bg !== undefined) {
-		out.bg = scene.bg;
+		out.bgImplicit = undefined;
+	} else if (bg !== undefined) {
+		out.bg = bg;
+		out.bgImplicit = scene.bg === undefined ? true : undefined;
 	}
-	// absent + patch -> inherited (already cloned); absent + snapshot -> undefined.
+	// absent + patch -> inherited (already cloned); absent + snapshot -> `id:` or undefined.
 
 	// --- camera -------------------------------------------------------------
 	if (scene.camera) {

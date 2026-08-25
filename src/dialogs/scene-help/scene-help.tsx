@@ -33,12 +33,14 @@ type KeyHelp<T extends readonly string[]> = Record<T[number], string>;
 
 const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	beats: 'The timeline. A list, played in order.',
-	bg: 'Backdrop, by asset name. Not a layer, and never a file path.',
+	bg:
+		'Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none.',
 	camera: `{at: [x, y], zoom: 1}. Origin is screen centre, +y is up.`,
 	cast: 'Characters on stage, as id: {…} entries.',
 	from: 'Inherit another scene state, and become a patch over it.',
 	fx: 'Screen effects, as a list.',
-	id: 'Names this scene so from: can point at it. Must be unique in the story.',
+	id:
+		'Names this scene so from: can point at it, and names its backdrop when there is no bg:. Must be unique in the story.',
 	links: 'Ways out of the scene. In a scene passage these are the ONLY ways out.',
 	props: 'Objects on stage. Same entry shape as cast:.'
 };
@@ -98,8 +100,7 @@ const KeyTable: React.FC<{
 );
 
 const CONVERSATION_SAMPLE = `[scene]
-id: tavern-night
-bg: tavern-night
+id: tavern-night              # also the backdrop, with no bg: line
 
 cast:
   mira:  {at: -0.4, frame: idle}

@@ -102,6 +102,12 @@ export interface Camera {
 /** A complete, renderable snapshot of the stage. No history, no beats. */
 export interface Stage {
 	bg?: AssetId;
+	/**
+	 * True when `bg` came from the scene's `id:` rather than a `bg:` line. A backdrop the
+	 * author never asked for is a soft reference: it draws if the art exists and stays
+	 * silent if it does not, so no lint, bundle report or `? bg` placeholder fires for it.
+	 */
+	bgImplicit?: boolean;
 	camera: Camera;
 	/** Keyed by entity id. Insertion order is not significant; z decides drawing. */
 	entities: Record<EntityId, StageEntity>;

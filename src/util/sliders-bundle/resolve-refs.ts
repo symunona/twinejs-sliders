@@ -105,6 +105,16 @@ export async function resolveBundleRefs(
 		}
 	}
 
+	// Implied backdrops (a scene `id:` with no `bg:`). Same lookup, no complaint on a
+	// miss — the scene simply has no backdrop then.
+	for (const ref of refs.optionalAssetRefs ?? []) {
+		const meta = await byKey(ref);
+
+		if (meta) {
+			take(meta);
+		}
+	}
+
 	for (const ref of refs.fxRefs) {
 		const direct = await byKey(ref);
 

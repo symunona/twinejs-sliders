@@ -128,6 +128,28 @@ describe('resolveSceneAssets', () => {
 		);
 	});
 
+	it('reaches the backdrop a bare id: names, pointing at the id: line', async () => {
+		const rows = resolveSceneAssets(scene('id: tavern/night\n'), await catalog());
+
+		expect(rows).toEqual([
+			expect.objectContaining({
+				id: 'a_bg',
+				key: 'id',
+				kind: 'bg',
+				present: 'present',
+				via: 'id:'
+			})
+		]);
+	});
+
+	it('says nothing when a scene id happens to name no art', async () => {
+		// Ids exist to be linked to as much as to name backdrops, so an implied one that
+		// misses is silence — an "unknown asset" per scene id would drown the real ones.
+		const rows = resolveSceneAssets(scene('id: signal-fire\n'), await catalog());
+
+		expect(rows).toEqual([]);
+	});
+
 	it('names the pose when a character has no such frame', async () => {
 		const rows = resolveSceneAssets(
 			scene('id: x\ncast:\n  mira: {at: 0, frame: waving}\n'),

@@ -14,6 +14,7 @@
  * reaches it.
  */
 
+import {sceneBg} from '@sliders/scene-core';
 import {splitSceneRef} from '@sliders/scene-index';
 import type {Character, Scene} from '@sliders/scene-types';
 import type {AssetMetaRow, Manifest, Source} from './types';
@@ -226,9 +227,28 @@ export function resolveSceneAssets(
 	}
 
 	function walk(current: Scene, inherited: boolean): void {
-		// 1 — bg. `null` is a patch clearing an inherited backdrop, not a reference.
-		if (typeof current.bg === 'string' && current.bg !== '') {
-			push(rowFor(catalog, current.bg, 'bg:', 'bg', inherited, 'bg'));
+		// 1 — bg, defaulting to `id:`. `null` is a patch clearing an inherited backdrop,
+		// not a reference. An `id:`-derived backdrop is a soft reference — it is only art
+		// the scene reaches once art by that name exists, so a miss is silence rather than
+		// an "unknown asset" against every scene id in the story.
+		const bg = sceneBg(current);
+
+		if (typeof bg === 'string' && bg !== '') {
+			const implicit = current.bg === undefined;
+			const known = catalog.byId.has(bg) || catalog.byName.has(bg);
+
+			if (!implicit || known) {
+				push(
+					rowFor(
+						catalog,
+						bg,
+						implicit ? 'id:' : 'bg:',
+						implicit ? 'id' : 'bg',
+						inherited,
+						'bg'
+					)
+				);
+			}
 		}
 
 		for (const [id, patch] of Object.entries(current.entities ?? {})) {

@@ -255,7 +255,8 @@ describe('the fixture story references what this suite relies on', () => {
 			assetRefs: ['tavern-night', 'tavern-night-edited'],
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
-			fxRefs: ['rain']
+			fxRefs: ['rain'],
+			optionalAssetRefs: []
 		});
 	});
 

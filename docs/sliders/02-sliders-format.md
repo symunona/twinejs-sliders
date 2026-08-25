@@ -67,7 +67,7 @@ Paste a block anywhere → identical stage. React-vs-jQuery, applied to a stage.
 [scene]
 id: tavern-night              # globally unique. Required if anything refers to it.
 from: ~                       # optional. See "Reuse" below.
-bg: tavern/night              # asset id, never a path
+bg: tavern/night              # asset id, never a path. Omit it and `id` stands in.
 camera: {at: [0, 0], zoom: 1} # optional. The 3D hook lives here.
 
 cast:
@@ -98,15 +98,29 @@ links:
 
 | Key | Type | Notes |
 |---|---|---|
-| `id` | string | globally unique. Dupe = error. |
+| `id` | string | globally unique. Dupe = error. Doubles as the default `bg`. |
 | `from` | ref | inherit a state. Flips merge semantics — see Reuse. |
-| `bg` | asset id | backdrop. Not a layer. |
+| `bg` | asset id | backdrop. Not a layer. Defaults to `id`, `~` for none. |
 | `camera` | map | optional. `{at, zoom}`. |
 | `cast` | map of id → entity | characters |
 | `props` | map of id → entity | objects |
 | `fx` | seq | `name@amount` or `{id, …}` |
 | `beats` | seq | the timeline |
 | `links` | map of name → props | link targets + props |
+
+#### `id` is the default backdrop
+
+A scene called `tavern-night` almost always wants the `tavern-night` backdrop, so writing
+the name twice was pure ceremony — the same shorthand `props:` already has, where the entry
+key doubles as the asset name.
+
+- `bg:` wins whenever it is written.
+- `bg: ~` says the scene genuinely has no backdrop.
+- The implied backdrop is a **soft** reference: art by that name draws, no art by that name
+  draws nothing. No lint error, no bundle "unresolved", no `? bg` placeholder — the author
+  never asked for it. An explicit `bg:` that misses is still an error, because they did.
+- A patch (`from:`) is left alone. Its `id` names the variant, not the art, so it inherits
+  the backdrop it came from rather than demanding a file per variant.
 
 ### Entity keys
 

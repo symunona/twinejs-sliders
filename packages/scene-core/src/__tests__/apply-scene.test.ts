@@ -1,7 +1,7 @@
 import {LAYER_BASELINE} from '@sliders/scene-types';
 import {emptyStage} from '@sliders/scene-types';
 import type {EntityPatch, Scene, Stage} from '@sliders/scene-types';
-import {applyScene} from '../apply-scene';
+import {applyScene, sceneBg} from '../apply-scene';
 import {resolveZ} from '../stage';
 
 function scene(partial: Partial<Scene> = {}): Scene {
@@ -71,6 +71,25 @@ describe('applyScene', () => {
 			expect(stage.fx).toEqual([]);
 		});
 
+		it('falls back to id: for the bg, marking it implicit', () => {
+			const stage = applyScene(baseStage(), scene({id: 'street-dusk'}));
+
+			expect(stage.bg).toBe('street-dusk');
+			expect(stage.bgImplicit).toBe(true);
+		});
+
+		it('lets bg: beat id:, and bg: ~ mean no backdrop at all', () => {
+			const set = applyScene(baseStage(), scene({bg: 'alley', id: 'street-dusk'}));
+
+			expect(set.bg).toBe('alley');
+			expect(set.bgImplicit).toBeUndefined();
+
+			const none = applyScene(baseStage(), scene({bg: null, id: 'street-dusk'}));
+
+			expect(none.bg).toBeUndefined();
+			expect(none.bgImplicit).toBeUndefined();
+		});
+
 		it('is copy-pasteable: the same scene gives the same stage from any base', () => {
 			const s = scene({
 				bg: 'street/day',
@@ -138,6 +157,18 @@ describe('applyScene', () => {
 				layer: 'mid',
 				opacity: 1
 			});
+		});
+
+		it('does not let id: displace an inherited bg', () => {
+			// A patch's id names the variant, not the art — defaulting here would want a
+			// backdrop file per variant instead of the one it came from.
+			const stage = applyScene(
+				baseStage(),
+				scene({from: 'tavern-night', id: 'tavern-fight'})
+			);
+
+			expect(stage.bg).toBe('tavern/night');
+			expect(sceneBg(scene({from: 'x', id: 'tavern-fight'}))).toBeUndefined();
 		});
 
 		it('inherits bg unless it is explicitly set or nulled', () => {

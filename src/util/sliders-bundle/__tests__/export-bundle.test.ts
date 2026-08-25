@@ -151,6 +151,26 @@ describe('resolveBundleRefs', () => {
 		expect(resolved.unresolved).toEqual([]);
 	});
 
+	it('takes an implied bg when it exists and shrugs when it does not', async () => {
+		const store = newStore();
+		const id = await store.put(file(webpBytes(), 'tavern.webp', 'image/webp'), {
+			kind: 'bg',
+			name: 'tavern-night'
+		});
+		const resolved = await resolveBundleRefs(store, {
+			assetRefs: [],
+			characterRefs: [],
+			frameRefs: {},
+			fxRefs: [],
+			optionalAssetRefs: ['tavern-night', 'signal-fire']
+		});
+
+		expect(resolved.assets.map(meta => meta.id)).toEqual([id]);
+		// `signal-fire` is a scene id that names no art. The author never asked for a
+		// backdrop there, so the export must not report one missing.
+		expect(resolved.unresolved).toEqual([]);
+	});
+
 	it('resolves a bg written by id', async () => {
 		const store = newStore();
 		const id = await store.put(file(webpBytes(), 'tavern.webp', 'image/webp'), {
@@ -675,7 +695,8 @@ describe('exportStoryBundle', () => {
 			assetRefs: ['tavern-night'],
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
-			fxRefs: ['rain']
+			fxRefs: ['rain'],
+			optionalAssetRefs: []
 		});
 	});
 });

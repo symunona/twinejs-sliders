@@ -113,6 +113,20 @@ describe('collectPassageRefs', () => {
 		);
 	});
 
+	it('collects a bare id: as an optional asset, not a required one', () => {
+		const refs = collectPassageRefs('[scene]\nid: tavern/night\n');
+
+		expect(refs.assetRefs).toEqual([]);
+		expect(refs.optionalAssetRefs).toEqual(['tavern/night']);
+	});
+
+	it('keeps id: out of the refs once bg: names the backdrop', () => {
+		const refs = collectPassageRefs('[scene]\nid: tavern-night\nbg: tavern/night\n');
+
+		expect(refs.assetRefs).toEqual(['tavern/night']);
+		expect(refs.optionalAssetRefs).toEqual([]);
+	});
+
 	it('collects a prop ref as an asset and a cast ref as a character', () => {
 		const refs = collectPassageRefs(
 			'[scene]\ncast:\n  mira: {at: 0}\nprops:\n  candle: {at: 0.1}\n'
@@ -173,7 +187,8 @@ describe('collectPassageRefs', () => {
 			assetRefs: [],
 			characterRefs: [],
 			frameRefs: {},
-			fxRefs: []
+			fxRefs: [],
+			optionalAssetRefs: []
 		});
 	});
 
@@ -190,6 +205,9 @@ describe('collectPassageRefs', () => {
 		expect(scene.bg).toBeNull();
 		expect(
 			collectPassageRefs('[scene]\nfrom: other\nbg: ~\n').assetRefs
+		).toEqual([]);
+		expect(
+			collectPassageRefs('[scene]\nid: x\nfrom: other\nbg: ~\n').optionalAssetRefs
 		).toEqual([]);
 	});
 
@@ -249,7 +267,8 @@ describe('collectAssetRefs', () => {
 			assetRefs: [],
 			characterRefs: [],
 			frameRefs: {},
-			fxRefs: []
+			fxRefs: [],
+			optionalAssetRefs: []
 		});
 	});
 });

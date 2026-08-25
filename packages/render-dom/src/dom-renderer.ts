@@ -207,7 +207,7 @@ export class DomRenderer implements Renderer {
 
 		this.camera = normalizeCamera(stage.camera);
 
-		this.syncBg(stage.bg, durations.duration('bg'));
+		this.syncBg(stage.bg, durations.duration('bg'), stage.bgImplicit === true);
 		this.syncEntities(resolved, durations);
 		this.syncFx(stage.fx ?? []);
 		this.syncCamera(durations.duration('camera'));
@@ -773,7 +773,11 @@ export class DomRenderer implements Renderer {
 	// Background, fx, camera
 	// -----------------------------------------------------------------------
 
-	private syncBg(bg: string | undefined, duration: number): void {
+	private syncBg(
+		bg: string | undefined,
+		duration: number,
+		implicit: boolean
+	): void {
 		if (bg === this.bgId) {
 			return;
 		}
@@ -810,6 +814,10 @@ export class DomRenderer implements Renderer {
 
 		if (url) {
 			this.bgEl = this.makeBgImage(url, layer, duration);
+		} else if (implicit) {
+			// An `id:`-derived backdrop is a guess, not a request. No art by that name just
+			// means the scene has none — placeholding it would nag about every scene id.
+			this.bgEl = undefined;
 		} else {
 			// Missing backdrop: a labelled placeholder, never a blank stage (spec 06).
 			const ph = this.el('div', 'sliders-bg sliders-placeholder');

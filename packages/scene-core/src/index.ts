@@ -5,7 +5,7 @@
  * into transitions. No DOM, no assets, no renderer.
  */
 
-export {applyScene} from './apply-scene';
+export {applyScene, sceneBg} from './apply-scene';
 export {DEFAULT_DURATIONS, diffStages} from './diff-stages';
 export type {Placement} from './diff-stages';
 export {collectMarks, runBeats} from './run-beats';

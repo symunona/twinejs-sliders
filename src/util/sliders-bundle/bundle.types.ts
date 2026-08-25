@@ -32,6 +32,13 @@ export const ASSET_DIR = 'assets/';
 export interface SceneAssetRefs {
 	/** Where a plain asset is expected: `bg:` and `kind: 'prop'` entity refs. */
 	assetRefs: string[];
+	/**
+	 * Asset names a scene implies rather than names: an `id:` standing in for a missing
+	 * `bg:`. Bundled when they resolve, silently dropped when they do not — the author
+	 * never asked for them, so they are not `unresolved`. Optional: bundles and callers
+	 * written before implied backdrops existed simply have none.
+	 */
+	optionalAssetRefs?: string[];
 	/** `kind: 'cast'` entity refs. These are character ids, not asset names. */
 	characterRefs: string[];
 	/**
@@ -49,7 +56,13 @@ export interface SceneAssetRefs {
 }
 
 export function emptySceneAssetRefs(): SceneAssetRefs {
-	return {assetRefs: [], characterRefs: [], fxRefs: [], frameRefs: {}};
+	return {
+		assetRefs: [],
+		characterRefs: [],
+		frameRefs: {},
+		fxRefs: [],
+		optionalAssetRefs: []
+	};
 }
 
 // ---------------------------------------------------------------------------
