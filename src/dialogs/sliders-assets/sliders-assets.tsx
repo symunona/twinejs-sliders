@@ -1,4 +1,9 @@
-import {defaultCharacter, slugify} from '@sliders/asset-store';
+import {
+	defaultCharacter,
+	nameFromFilename,
+	newFrameAnchors,
+	slugify
+} from '@sliders/asset-store';
 import {AssetKind} from '@sliders/scene-types';
 import {IconUserPlus} from '@tabler/icons';
 import * as React from 'react';
@@ -89,6 +94,50 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		await library.upload(files, {kind: kind ?? 'bg'});
 	}
 
+	function characterNameFromFilename(filename: string): string {
+		const base = nameFromFilename(filename).replace(/[-/]+/g, ' ').trim();
+
+		return base.replace(/\S+/g, word => word[0].toUpperCase() + word.slice(1));
+	}
+
+	/**
+	 * Characters aren't an `AssetKind`, so a dropped file can't just "upload into that
+	 * kind" the way spec 03 has every other tab do it. Each file becomes a new character
+	 * instead, with the image as its first (`idle`) frame — the same shape the character
+	 * editor's own frame upload writes (`kind: 'frame'`, `ownerCharacter`).
+	 */
+	async function handleCharacterDrop(files: File[]) {
+		const takenIds = new Set(library.characters.map(character => character.id));
+
+		for (const file of files) {
+			const baseId = slugify(nameFromFilename(file.name));
+			let id = baseId;
+			let suffix = 2;
+
+			while (takenIds.has(id)) {
+				id = `${baseId}-${suffix}`;
+				suffix++;
+			}
+
+			takenIds.add(id);
+
+			try {
+				const asset = await library.store.putAsset(file, {
+					kind: 'frame',
+					ownerCharacter: id
+				});
+				const character = defaultCharacter(id, characterNameFromFilename(file.name));
+
+				character.frames.idle = {asset: asset.id, anchors: newFrameAnchors(undefined)};
+				await library.store.putCharacter(character);
+			} catch (error) {
+				console.error(`Could not add ${file.name} as a character`, error);
+			}
+		}
+
+		library.refresh();
+	}
+
 	async function handleCreateCharacter(name: string) {
 		const id = slugify(name);
 
@@ -150,12 +199,12 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			maximizable
 		>
 			<ButtonBar>
-				{!importing && kind && (
+				{!importing && (
 					<UploadButton
 						commandId="slidersAssets.upload"
 						commandScope="sliders-assets"
 						label={t('dialogs.slidersAssets.upload')}
-						onUpload={handleUpload}
+						onUpload={kind ? handleUpload : handleCharacterDrop}
 					/>
 				)}
 				{!kind && !importing && (
@@ -266,18 +315,16 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 
 					return (
 						<TabPanel key={tab.labelKey}>
-							{tab.kind ? (
-								<UploadDropZone
-									label={t('dialogs.slidersAssets.dropHint', {
-										kind: t(tab.labelKey)
-									})}
-									onDrop={handleUpload}
-								>
-									{body}
-								</UploadDropZone>
-							) : (
-								body
-							)}
+							<UploadDropZone
+								label={
+									tab.kind
+										? t('dialogs.slidersAssets.dropHint', {kind: t(tab.labelKey)})
+										: t('dialogs.slidersAssets.dropHintCharacters')
+								}
+								onDrop={tab.kind ? handleUpload : handleCharacterDrop}
+							>
+								{body}
+							</UploadDropZone>
 						</TabPanel>
 					);
 				})}
