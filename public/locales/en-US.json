@@ -363,6 +363,7 @@
 			"editTags": "Tags",
 			"editTagsPrompt": "Tags for this asset, separated by commas",
 			"empty": "Nothing here yet. Drop image files onto this tab to add some.",
+			"emptyCharacters": "No characters yet. Use New Character to add one.",
 			"frameCount": "{{count}} frame",
 			"frameCount_plural": "{{count}} frames",
 			"fx": "FX",

@@ -150,7 +150,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			maximizable
 		>
 			<ButtonBar>
-				{!importing && (
+				{!importing && kind && (
 					<UploadButton
 						commandId="slidersAssets.upload"
 						commandScope="sliders-assets"
@@ -225,45 +225,62 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						{t('dialogs.slidersAssets.importTab')}
 					</Tab>
 				</TabList>
-				{TABS.map(tab => (
-					<TabPanel key={tab.labelKey}>
-						<UploadDropZone
-							label={t('dialogs.slidersAssets.dropHint', {
-								kind: t(tab.labelKey)
-							})}
-							onDrop={handleUpload}
-						>
-							<div className="sliders-tiles">
-								{tab.kind
-									? matchingAssets.map(asset => (
-											<AssetTile
-												key={asset.id}
-												meta={asset}
-												onChangeTags={tags => handleChangeTags(asset.id, tags)}
-												onDelete={() => handleDeleteAsset(asset.id)}
-												onEdit={() => openAssetEditor(asset.id)}
-											/>
-									  ))
-									: matchingCharacters.map(character => (
-											<CharacterTile
-												character={character}
-												key={character.id}
-												onDelete={() => handleDeleteCharacter(character.id)}
-												onEdit={() => openCharacterEditor(character.id)}
-											/>
-									  ))}
-							</div>
-							{!library.busy &&
-								(tab.kind
-									? matchingAssets.length === 0
-									: matchingCharacters.length === 0) && (
-									<p className="sliders-empty">
-										{t('dialogs.slidersAssets.empty')}
-									</p>
-								)}
-						</UploadDropZone>
-					</TabPanel>
-				))}
+				{TABS.map(tab => {
+					const tiles = tab.kind ? (
+						matchingAssets.map(asset => (
+							<AssetTile
+								key={asset.id}
+								meta={asset}
+								onChangeTags={tags => handleChangeTags(asset.id, tags)}
+								onDelete={() => handleDeleteAsset(asset.id)}
+								onEdit={() => openAssetEditor(asset.id)}
+							/>
+						))
+					) : (
+						matchingCharacters.map(character => (
+							<CharacterTile
+								character={character}
+								key={character.id}
+								onDelete={() => handleDeleteCharacter(character.id)}
+								onEdit={() => openCharacterEditor(character.id)}
+							/>
+						))
+					);
+					const empty = tab.kind
+						? matchingAssets.length === 0
+						: matchingCharacters.length === 0;
+					const body = (
+						<>
+							<div className="sliders-tiles">{tiles}</div>
+							{!library.busy && empty && (
+								<p className="sliders-empty">
+									{t(
+										tab.kind
+											? 'dialogs.slidersAssets.empty'
+											: 'dialogs.slidersAssets.emptyCharacters'
+									)}
+								</p>
+							)}
+						</>
+					);
+
+					return (
+						<TabPanel key={tab.labelKey}>
+							{tab.kind ? (
+								<UploadDropZone
+									label={t('dialogs.slidersAssets.dropHint', {
+										kind: t(tab.labelKey)
+									})}
+									onDrop={handleUpload}
+								>
+									{body}
+								</UploadDropZone>
+							) : (
+								body
+							)}
+						</TabPanel>
+					);
+				})}
 				<TabPanel>
 					<ImportTab
 						onImported={library.refresh}
