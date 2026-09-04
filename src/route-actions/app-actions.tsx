@@ -20,16 +20,8 @@ import {
 } from '../dialogs';
 import {useCommand} from '../hotkeys';
 import {StoryFormatsDialog} from '../dialogs/story-formats/story-formats';
-import {SyncMenuButton} from './sync-menu-button';
-import {Story} from '../store/stories';
 
-export interface AppActionsProps {
-	/** The story Sync's Publish/Unpublish acts on. Omitted when none is unambiguous. */
-	story?: Story;
-}
-
-export const AppActions: React.FC<AppActionsProps> = props => {
-	const {story} = props;
+export const AppActions: React.FC = () => {
 	const {dispatch} = useDialogsContext();
 	const history = useHistory();
 	const {t} = useTranslation();
@@ -81,7 +73,6 @@ export const AppActions: React.FC<AppActionsProps> = props => {
 				label={t('routeActions.app.ai')}
 				onClick={handleAi}
 			/>
-			<SyncMenuButton story={story} />
 			<IconButton
 				disabled={history.location.pathname === '/story-formats'}
 				icon={<IconFileCode />}

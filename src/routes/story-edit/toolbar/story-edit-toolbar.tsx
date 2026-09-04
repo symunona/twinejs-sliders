@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {RouteToolbar} from '../../../components/route-toolbar';
-import {AppActions, BuildActions} from '../../../route-actions';
+import {AppActions, BuildActions, SyncActions} from '../../../route-actions';
 import {Story} from '../../../store/stories';
 import {Point} from '../../../util/geometry';
 import {BuildInfo} from './build-info';
@@ -41,7 +41,8 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 				),
 				[t('common.story')]: <StoryActions story={story} />,
 				[t('common.build')]: <BuildActions story={story} />,
-				[t('common.appName')]: <AppActions story={story} />
+				[t('common.sync')]: <SyncActions story={story} />,
+				[t('common.appName')]: <AppActions />
 			}}
 		/>
 	);

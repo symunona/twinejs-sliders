@@ -1,9 +1,9 @@
-.sync-menu-button-icon {
+.sync-actions-icon {
 	position: relative;
 	display: inline-flex;
 }
 
-svg.sync-menu-button-alert {
+svg.sync-actions-alert {
 	bottom: -4px;
 	color: var(--red);
 	height: 10px;
