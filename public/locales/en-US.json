@@ -180,6 +180,12 @@
 			"noThanks": "No Thanks",
 			"title": "Support Twine Development"
 		},
+		"aiPrefs": {
+			"title": "AI"
+		},
+		"syncPrefs": {
+			"title": "Sync Settings"
+		},
 		"appPrefs": {
 			"codeEditorFont": "Code Editor Font",
 			"codeEditorFontScale": "Code Editor Font Size",
@@ -815,9 +821,16 @@
 	"routeActions": {
 		"app": {
 			"aboutApp": "About Twine",
+			"ai": "AI",
 			"preferences": "Preferences",
 			"reportBug": "Report a Bug",
-			"storyFormats": "Story Formats"
+			"storyFormats": "Story Formats",
+			"sync": "Sync",
+			"syncDisconnected": "Sync: disconnected",
+			"syncNotConfigured": "Sync: not configured",
+			"syncPublish": "Publish",
+			"syncSettings": "Sync Settings",
+			"syncUnpublish": "Unpublish"
 		},
 		"build": {
 			"exportAmbiguousFx": "{{count}} effect name(s) match more than one asset, so one was picked for you: {{names}}",

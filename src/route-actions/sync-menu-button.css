@@ -1,0 +1,12 @@
+.sync-menu-button-icon {
+	position: relative;
+	display: inline-flex;
+}
+
+svg.sync-menu-button-alert {
+	bottom: -4px;
+	color: var(--red);
+	height: 10px;
+	position: absolute;
+	right: -4px;
+}

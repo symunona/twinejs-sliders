@@ -50,6 +50,7 @@ export function exclusivelyEnabled(
  */
 export const commandCatalog: CatalogEntry[] = [
 	{id: 'app.preferences', scope: 'global'},
+	{id: 'app.ai', scope: 'global'},
 	{id: 'app.keyboardShortcuts', scope: 'global'},
 
 	{id: 'story.create', scope: 'story-list'},

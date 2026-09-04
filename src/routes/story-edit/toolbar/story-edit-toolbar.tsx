@@ -41,7 +41,7 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 				),
 				[t('common.story')]: <StoryActions story={story} />,
 				[t('common.build')]: <BuildActions story={story} />,
-				[t('common.appName')]: <AppActions />
+				[t('common.appName')]: <AppActions story={story} />
 			}}
 		/>
 	);

@@ -1,4 +1,5 @@
 export * from './about-twine';
+export * from './ai-prefs';
 export * from './app-donation';
 export * from './app-prefs';
 export * from './asset-editor';
@@ -20,3 +21,4 @@ export * from './story-history';
 export * from './story-search';
 export * from './story-stylesheet';
 export * from './story-tags';
+export * from './sync-prefs';

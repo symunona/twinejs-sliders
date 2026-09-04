@@ -3,6 +3,7 @@ import {
 	IconBug,
 	IconFileCode,
 	IconKeyboard,
+	IconRobot,
 	IconSettings
 } from '@tabler/icons';
 import * as React from 'react';
@@ -12,14 +13,23 @@ import {ButtonBar} from '../components/container/button-bar';
 import {IconButton} from '../components/control/icon-button';
 import {
 	AboutTwineDialog,
+	AiPrefsDialog,
 	AppPrefsDialog,
 	KeyboardShortcutsDialog,
 	useDialogsContext
 } from '../dialogs';
 import {useCommand} from '../hotkeys';
 import {StoryFormatsDialog} from '../dialogs/story-formats/story-formats';
+import {SyncMenuButton} from './sync-menu-button';
+import {Story} from '../store/stories';
 
-export const AppActions: React.FC = () => {
+export interface AppActionsProps {
+	/** The story Sync's Publish/Unpublish acts on. Omitted when none is unambiguous. */
+	story?: Story;
+}
+
+export const AppActions: React.FC<AppActionsProps> = props => {
+	const {story} = props;
 	const {dispatch} = useDialogsContext();
 	const history = useHistory();
 	const {t} = useTranslation();
@@ -32,6 +42,16 @@ export const AppActions: React.FC = () => {
 		id: 'app.preferences',
 		label: t('routeActions.app.preferences'),
 		run: handlePreferences
+	});
+	const handleAi = React.useCallback(
+		() => dispatch({type: 'addDialog', component: AiPrefsDialog}),
+		[dispatch]
+	);
+
+	useCommand({
+		id: 'app.ai',
+		label: t('routeActions.app.ai'),
+		run: handleAi
 	});
 	const handleKeyboardShortcuts = React.useCallback(
 		() =>
@@ -56,6 +76,12 @@ export const AppActions: React.FC = () => {
 				label={t('routeActions.app.preferences')}
 				onClick={handlePreferences}
 			/>
+			<IconButton
+				icon={<IconRobot />}
+				label={t('routeActions.app.ai')}
+				onClick={handleAi}
+			/>
+			<SyncMenuButton story={story} />
 			<IconButton
 				disabled={history.location.pathname === '/story-formats'}
 				icon={<IconFileCode />}

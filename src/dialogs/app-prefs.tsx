@@ -4,11 +4,9 @@ import {CardContent} from '../components/container/card';
 import {DialogCard, DialogCardProps} from '../components/container/dialog-card';
 import {CheckboxButton} from '../components/control/checkbox-button';
 import {FontSelect} from '../components/control/font-select';
-import {TextInput} from '../components/control/text-input';
 import {TextSelect} from '../components/control/text-select';
 import {setPref, usePrefsContext} from '../store/prefs';
 import {closestAppLocale, locales} from '../util/locales';
-import {BackendPrefs} from './app-prefs/backend-prefs';
 import './app-prefs.css';
 
 export const AppPrefsDialog: React.FC<
@@ -123,31 +121,6 @@ export const AppPrefsDialog: React.FC<
 					}
 					scaleLabel={t('dialogs.appPrefs.codeEditorFontScale')}
 				/>
-				<h3 className="app-prefs-heading">
-					{t('dialogs.appPrefs.assetGenerator')}
-				</h3>
-				<p className="font-explanation">
-					{t('dialogs.appPrefs.assetGeneratorExplanation')}
-				</p>
-				<TextInput
-					onChange={e => dispatch(setPref('geminiApiKey', e.target.value))}
-					orientation="vertical"
-					placeholder={t('dialogs.appPrefs.apiKeyPlaceholder')}
-					type="password"
-					value={prefs.geminiApiKey}
-				>
-					{t('dialogs.appPrefs.geminiApiKey')}
-				</TextInput>
-				<TextInput
-					onChange={e => dispatch(setPref('openAiApiKey', e.target.value))}
-					orientation="vertical"
-					placeholder={t('dialogs.appPrefs.apiKeyPlaceholder')}
-					type="password"
-					value={prefs.openAiApiKey}
-				>
-					{t('dialogs.appPrefs.openAiApiKey')}
-				</TextInput>
-				<BackendPrefs />
 			</CardContent>
 		</DialogCard>
 	);

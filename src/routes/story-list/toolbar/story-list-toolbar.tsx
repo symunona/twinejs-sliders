@@ -27,7 +27,7 @@ export const StoryListToolbar: React.FC<StoryListToolbarProps> = props => {
 				[t('routes.storyList.library')]: <LibraryActions />,
 				[t('common.build')]: <BuildActions story={selectedStory} />,
 				[t('common.view')]: <ViewActions />,
-				[t('common.appName')]: <AppActions />
+				[t('common.appName')]: <AppActions story={selectedStory} />
 			}}
 		/>
 	);
