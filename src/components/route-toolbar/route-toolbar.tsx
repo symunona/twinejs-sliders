@@ -9,11 +9,18 @@ import './route-toolbar.css';
 export interface RouteToolbarProps {
 	helpUrl?: string;
 	pinnedControls?: React.ReactNode;
+	/** Extra content drawn inside a tab, next to its label, keyed by the same tab name. */
+	tabBadges?: Record<string, React.ReactNode>;
 	tabs: Record<string, React.ReactNode>;
 }
 
 export const RouteToolbar: React.FC<RouteToolbarProps> = props => {
-	const {helpUrl = 'https://twinery.org/2guide', pinnedControls, tabs} = props;
+	const {
+		helpUrl = 'https://twinery.org/2guide',
+		pinnedControls,
+		tabBadges,
+		tabs
+	} = props;
 	const {t} = useTranslation();
 
 	return (
@@ -28,6 +35,7 @@ export const RouteToolbar: React.FC<RouteToolbarProps> = props => {
 						{Object.keys(tabs).map(tabName => (
 							<Tab className="route-toolbar-tab" key={tabName}>
 								{tabName}
+								{tabBadges?.[tabName]}
 							</Tab>
 						))}
 					</TabList>

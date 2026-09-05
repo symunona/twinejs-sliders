@@ -831,6 +831,8 @@
 			"syncNotConfigured": "Sync: not configured",
 			"syncPublish": "Publish",
 			"syncSettings": "Sync Settings",
+			"syncStatus": "Synced {{time}}",
+			"syncStatusPending": "Not synced yet",
 			"syncUnpublish": "Unpublish"
 		},
 		"build": {
