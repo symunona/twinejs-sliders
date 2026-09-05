@@ -243,12 +243,17 @@
 		"assetEditor": {
 			"adjust": "Adjust",
 			"animatedError": "This image is animated, so it can't be edited—editing would flatten it to a single frame.",
+			"apply": "Apply Edit",
+			"applyNote": "The edit goes back into the generation history at {{width}}×{{height}}. Nothing reaches the asset library until you save it there.",
 			"background": "Background",
 			"backgroundError": "Background removal failed: {{message}}",
 			"brightness": "Brightness",
 			"clashesWithOther": "Another asset is already called “{{name}}”. Saving makes a second one with that name, and “bg: {{name}}” in a scene could then mean either of them.",
 			"clashesWithSelf": "That is the name of the asset you are editing. “Save as new” would give you two assets called “{{name}}”, and “bg: {{name}}” in a scene could mean either—use “Overwrite Original” instead.",
 			"contrast": "Contrast",
+			"cpuEngineNote": "Runs on your machine—no image is uploaded. First use downloads {{name}} (about {{size}}, {{license}}) and keeps it. It reasons at {{resolution}} pixels, then the edge is refined against your full-size image. The second, closer pass is skipped on the CPU; the result is a little coarser and takes half as long.",
+			"cpuSlowNote": "Nothing is stuck. The CPU runs the whole model one layer at a time, and the percentage is a guess from how long this machine took last time—it can finish early or run over.",
+			"cpuWarning": "Running on your CPU, not a graphics card. One image takes roughly a minute instead of a second, the browser tab stays busy the whole time, and the first use downloads {{size}} of weights. {{reason}}",
 			"crop": "Crop",
 			"cropDetail": "{{width}}×{{height}} at {{x}}, {{y}}",
 			"cropHint": "Drag across the image to crop it. Click once to start over.",
@@ -259,8 +264,8 @@
 			"loading": "Opening…",
 			"lockAspect": "Lock Aspect",
 			"name": "Name",
-			"needsRealGpu": "Your browser is running WebGPU on a software renderer (SwiftShader), not on your graphics card, where the model takes minutes per image instead of a second. Turn on “Use graphics acceleration when available” in your browser settings, and if it is already on, check chrome://gpu to see why your card was rejected.",
-			"needsWebGpu": "Removing the background needs WebGPU, which this browser doesn't have. Try a recent Chrome or Edge—there's no CPU fallback, because these models are far too heavy to run without a GPU.",
+			"needsRealGpu": "Your browser is running WebGPU on a software renderer (SwiftShader), not on your graphics card. Turn on “Use graphics acceleration when available” in your browser settings, and if it is already on, check chrome://gpu to see why your card was rejected.",
+			"needsWebGpu": "Removing the background needs WebGPU, which this browser doesn't have. Try a recent Chrome or Edge.",
 			"onCpuError": "One pass took {{seconds}} seconds, which means the model is running on your CPU rather than your graphics card—it would take many minutes and the result would be no better. Your browser reports its GPU as: {{gpu}}. Check that hardware acceleration is on in your browser settings, then reload.",
 			"removeBackground": "Remove Background",
 			"replace": "Overwrite Original",
@@ -281,7 +286,10 @@
 				"refine": "Tidying the edges against your full-size image…",
 				"run": "Working out which pixels are the subject…",
 				"runCloser": "Looking again, zoomed in on the subject…",
-				"start": "Setting the model up on your GPU…"
+				"runCloserEstimated": "Looking again, zoomed in on the subject… about {{percent}}% (estimated)",
+				"runEstimated": "Working out which pixels are the subject… about {{percent}}% (estimated)",
+				"start": "Setting the model up on your GPU…",
+				"startCpu": "Setting the model up on your CPU…"
 			},
 			"step": "Step {{step}}/{{steps}}",
 			"threshold": "Keep ↔ cut",
@@ -289,9 +297,7 @@
 			"title": "Edit {{name}}",
 			"tuningNote": "Drag these if too much or too little was cut—they re-use the cutout the model already made, so they apply instantly. Lower “keep ↔ cut” rescues a subject that came out full of holes; higher softness keeps the model’s own soft edges instead of forcing them to solid or clear.",
 			"unknownGpu": "not reported",
-			"width": "Width",
-			"apply": "Apply Edit",
-			"applyNote": "The edit goes back into the generation history at {{width}}×{{height}}. Nothing reaches the asset library until you save it there."
+			"width": "Width"
 		},
 		"passageEdit": {
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",

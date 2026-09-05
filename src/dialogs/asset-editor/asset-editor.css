@@ -177,3 +177,22 @@
 	margin: 0;
 	padding: var(--control-inner-padding);
 }
+
+/*
+The CPU fallback warning. Louder than the plain warning box it builds on: this
+one has to be read *before* someone starts a cutout that will take a minute,
+not noticed afterwards.
+*/
+
+.asset-editor-cpu-warning {
+	align-items: start;
+	display: flex;
+	font-size: 90%;
+	gap: var(--control-inner-padding);
+	margin-bottom: var(--control-inner-padding);
+}
+
+.asset-editor-cpu-warning svg {
+	color: var(--yellow);
+	flex: none;
+}

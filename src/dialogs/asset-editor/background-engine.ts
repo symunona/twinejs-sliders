@@ -9,6 +9,7 @@ import {
 	checkAborted,
 	EngineProgress,
 	EngineSupport,
+	hasWasm,
 	hasWebGpu,
 	webGpuIsSoftware,
 	MaskFunction,
@@ -24,6 +25,11 @@ import {
 export interface EngineDescriptor {
 	/** One-off model download, in bytes. */
 	bytes: number;
+	/**
+	 * Runs on the CPU rather than the GPU: minutes rather than seconds, so the
+	 * UI warns before starting one and the second pass is off by default.
+	 */
+	cpu?: boolean;
 	id: string;
 	label: string;
 	license: string;
@@ -60,6 +66,21 @@ const ENGINES: EngineDescriptor[] = [
 				? {reasonKey: 'dialogs.assetEditor.needsRealGpu', supported: false}
 				: {supported: true};
 		}
+	},
+	{
+		// The fp32 export. fp16 is a WebGPU trick and buys nothing on wasm, so
+		// the fallback pays for twice the download as well as the wait.
+		bytes: 176116019,
+		cpu: true,
+		id: 'ormbg-cpu',
+		label: 'Open Remove Background Model',
+		license: 'Apache-2.0',
+		load: async () => (await import('./engines/ormbg-engine')).maskOnCpu,
+		resolution: 1024,
+		support: async () =>
+			hasWasm()
+				? {supported: true}
+				: {reasonKey: 'dialogs.assetEditor.needsWebGpu', supported: false}
 	}
 ];
 
@@ -90,16 +111,32 @@ export class BackgroundTimeoutError extends Error {
 	}
 }
 
+export type StageLimits = Record<EngineProgress['stage'], number>;
+
 /**
- * Per-stage patience. Setting up the model is the slow one--a cold download
- * plus shader compilation--and it's also where a CPU fallback shows itself, so
- * it gets the longest leash and still has one.
+ * Per-stage patience on the GPU. Setting up the model is the slow one--a cold
+ * download plus shader compilation--and it's also where a silent CPU fallback
+ * shows itself, so it gets the longest leash and still has one.
  */
-const STAGE_LIMITS: Record<EngineProgress['stage'], number> = {
+const STAGE_LIMITS: StageLimits = {
 	download: 300,
 	refine: 60,
 	run: 120,
 	start: 180
+};
+
+/**
+ * The same, for the engine that means to run on the CPU. A pass there is a
+ * minute or more by design, so the GPU's numbers would fire on healthy work.
+ * The estimated-progress ticker keeps the run stage alive while it believes
+ * the pass is still going and then goes quiet, so this limit is what catches a
+ * pass that has genuinely stopped.
+ */
+const CPU_STAGE_LIMITS: StageLimits = {
+	download: 600,
+	refine: 120,
+	run: 600,
+	start: 600
 };
 
 /**
@@ -108,7 +145,8 @@ const STAGE_LIMITS: Record<EngineProgress['stage'], number> = {
  * genuinely stalled work is.
  */
 export function withStageWatchdog<T>(
-	work: (report: (stage: EngineProgress['stage']) => void) => Promise<T>
+	work: (report: (stage: EngineProgress['stage']) => void) => Promise<T>,
+	limits: StageLimits = STAGE_LIMITS
 ): Promise<T> {
 	let timer: number | undefined;
 	let settled = false;
@@ -121,9 +159,9 @@ export function withStageWatchdog<T>(
 			timer = window.setTimeout(() => {
 				if (!settled) {
 					settled = true;
-					reject(new BackgroundTimeoutError(stage, STAGE_LIMITS[stage]));
+					reject(new BackgroundTimeoutError(stage, limits[stage]));
 				}
-			}, STAGE_LIMITS[stage] * 1000);
+			}, limits[stage] * 1000);
 		};
 
 		arm();
@@ -150,12 +188,20 @@ export function withStageWatchdog<T>(
 export interface BackgroundSupport {
 	engine?: EngineDescriptor;
 	support: EngineSupport;
+	/**
+	 * Why the GPU engine was refused, when the one we ended up with runs on the
+	 * CPU. The UI needs it to say *why* the author is about to wait minutes; it
+	 * is absent whenever the GPU engine was the one chosen.
+	 */
+	gpuReasonKey?: string;
 }
 
 /**
- * The engine this machine can run, if any. There is deliberately no CPU
- * fallback: the models worth running need a GPU, and a wasm path that takes
- * minutes or dies allocating is worse than an honest "not here".
+ * The engine this machine can run. WebGPU first, and the CPU fallback only
+ * once it has been ruled out: same model, same mask, roughly a hundred times
+ * the wait, so it is never chosen while a real GPU is on offer. The reason the
+ * GPU was passed over travels with it, because a cutout that is about to take
+ * two minutes has to say why.
  */
 export async function backgroundSupport(): Promise<BackgroundSupport> {
 	let first: EngineSupport | undefined;
@@ -166,7 +212,14 @@ export async function backgroundSupport(): Promise<BackgroundSupport> {
 		first ??= support;
 
 		if (support.supported) {
-			return {engine, support};
+			return engine.cpu
+				? {
+						engine,
+						gpuReasonKey:
+							first.reasonKey ?? 'dialogs.assetEditor.needsWebGpu',
+						support
+				  }
+				: {engine, support};
 		}
 	}
 
@@ -235,6 +288,10 @@ export interface RemoveBackgroundOptions extends MaskOptions {
 	/**
 	 * Run a second pass framed on the subject. Roughly doubles the time and
 	 * buys real mask resolution when the subject doesn't fill the frame.
+	 *
+	 * Unset means "whatever suits the engine": on by default on the GPU, where
+	 * it costs a second, and off on the CPU, where it costs another minute or
+	 * two for a refinement nobody waiting that long asked for.
 	 */
 	detail?: boolean;
 }
@@ -375,8 +432,10 @@ export async function removeBackground(
 
 	const {detail, onProgress, signal, tuning} = options;
 
-	return await withStageWatchdog(report =>
-		cutOut(source, engine, {detail, onProgress, report, signal, tuning})
+	return await withStageWatchdog(
+		report =>
+			cutOut(source, engine, {detail, onProgress, report, signal, tuning}),
+		engine.cpu ? CPU_STAGE_LIMITS : STAGE_LIMITS
 	);
 }
 
@@ -406,7 +465,9 @@ async function cutOut(
 
 	let mask = base;
 
-	if (detail !== false) {
+	// The closer pass is worth a second on a GPU and another minute or two on
+	// the CPU, so the fallback skips it unless it was asked for by name.
+	if (detail ?? !engine.cpu) {
 		// Same stages again, tagged as the second pass--otherwise the status
 		// line repeats itself and looks stuck.
 		const closer = await closerPass(flat, run, base, {

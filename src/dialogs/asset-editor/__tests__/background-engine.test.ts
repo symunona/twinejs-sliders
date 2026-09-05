@@ -51,6 +51,31 @@ describe('withStageWatchdog', () => {
 		expect((error as BackgroundTimeoutError).seconds).toBe(120);
 	});
 
+	it('honours a slower set of limits, as the CPU engine needs', async () => {
+		// A CPU pass is a minute or more by design, so the GPU's 120s run limit
+		// would fire on perfectly healthy work.
+		let report: (stage: 'run') => void = () => undefined;
+		const stalled = withStageWatchdog<string>(
+			next => {
+				report = next;
+				return new Promise(() => undefined);
+			},
+			{download: 600, refine: 120, run: 600, start: 600}
+		);
+		const settled = stalled.catch(error => error);
+
+		report('run');
+		jest.advanceTimersByTime(200 * 1000);
+		expect(await Promise.race([settled, 'still running'])).toBe('still running');
+
+		jest.advanceTimersByTime(401 * 1000);
+
+		const error = await settled;
+
+		expect((error as BackgroundTimeoutError).stage).toBe('run');
+		expect((error as BackgroundTimeoutError).seconds).toBe(600);
+	});
+
 	it('never cuts off work that is slow but still moving', async () => {
 		let report: (stage: 'run') => void = () => undefined;
 		let finish: (value: string) => void = () => undefined;
@@ -70,5 +95,76 @@ describe('withStageWatchdog', () => {
 
 		finish('done');
 		await expect(watched).resolves.toBe('done');
+	});
+});
+
+describe('backgroundSupport', () => {
+	// The module has to be re-imported per case: the engine list reads its
+	// capability checks once, at import time, through these mocks.
+	beforeEach(() => jest.resetModules());
+	afterEach(() => jest.resetModules());
+
+	/**
+	 * The engine list is module-private on purpose, so these drive it the way
+	 * the app does: through the capability checks it asks the browser.
+	 */
+	async function support(gpu: {webGpu: boolean; software?: boolean}) {
+		jest.doMock('../engine-types', () => ({
+			...jest.requireActual('../engine-types'),
+			hasWasm: () => true,
+			hasWebGpu: async () => gpu.webGpu,
+			webGpuIsSoftware: () => gpu.software ?? false
+		}));
+
+		return await (await import('../background-engine')).backgroundSupport();
+	}
+
+	it('takes the GPU engine whenever there is one', async () => {
+		const {engine, gpuReasonKey} = await support({webGpu: true});
+
+		expect(engine?.id).toBe('ormbg');
+		expect(engine?.cpu).toBeUndefined();
+		// Nothing to explain: the author gets the fast path.
+		expect(gpuReasonKey).toBeUndefined();
+	});
+
+	it('falls back to the CPU when there is no WebGPU', async () => {
+		const {engine, gpuReasonKey, support: result} = await support({
+			webGpu: false
+		});
+
+		expect(engine?.id).toBe('ormbg-cpu');
+		expect(engine?.cpu).toBe(true);
+		expect(result.supported).toBe(true);
+		// The UI needs this to say why a cutout is about to take a minute.
+		expect(gpuReasonKey).toBe('dialogs.assetEditor.needsWebGpu');
+	});
+
+	it('falls back to the CPU rather than run WebGPU on a software renderer', async () => {
+		// SwiftShader is slower than the wasm path and pretends to be a GPU, so
+		// the fallback is the honest choice and has to say which problem it is.
+		const {engine, gpuReasonKey} = await support({
+			software: true,
+			webGpu: true
+		});
+
+		expect(engine?.id).toBe('ormbg-cpu');
+		expect(gpuReasonKey).toBe('dialogs.assetEditor.needsRealGpu');
+	});
+
+	it('gives up when even wasm is missing', async () => {
+		jest.doMock('../engine-types', () => ({
+			...jest.requireActual('../engine-types'),
+			hasWasm: () => false,
+			hasWebGpu: async () => false,
+			webGpuIsSoftware: () => false
+		}));
+
+		const {engine, support: result} = await (
+			await import('../background-engine')
+		).backgroundSupport();
+
+		expect(engine).toBeUndefined();
+		expect(result.supported).toBe(false);
 	});
 });

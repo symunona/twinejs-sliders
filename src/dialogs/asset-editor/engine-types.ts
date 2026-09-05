@@ -20,14 +20,34 @@ export interface EngineSupport {
 
 export interface EngineProgress {
 	stage: 'download' | 'start' | 'run' | 'refine';
-	/** 0 to 1. Only meaningful while downloading. */
+	/**
+	 * 0 to 1. Real while downloading, where the byte count is known. On the CPU
+	 * backend the run stage reports one too, but it is a clock against a
+	 * remembered pass time rather than anything the runtime told us -- see
+	 * `estimated`.
+	 */
 	progress?: number;
+	/**
+	 * Set when `progress` is a guess from elapsed time, so the UI can say so
+	 * rather than implying the model is counting its own work.
+	 */
+	estimated?: boolean;
 	/**
 	 * Set on the second, closer look at the subject. The model runs twice on
 	 * most images, and two identical status lines in a row read like a hang.
 	 */
 	pass?: number;
 }
+
+/**
+ * Which execution provider an engine should ask onnxruntime-web for.
+ *
+ * `webgpu` is the one anybody wants; `wasm` is the fallback for machines
+ * without a usable GPU, where the same model produces the same mask about a
+ * hundred times more slowly. They are separate sessions, so a machine that has
+ * both can hold both without either reloading the other.
+ */
+export type MaskBackend = 'webgpu' | 'wasm';
 
 export interface MaskOptions {
 	onProgress?: (progress: EngineProgress) => void;
@@ -91,9 +111,9 @@ export function webGpuDescription(): string | undefined {
 }
 
 /**
- * WebGPU is a hard requirement for the models worth running. There's no CPU
- * fallback on purpose: the wasm path can't allocate a 1024² transformer's
- * activations, so pretending otherwise would only produce a hang.
+ * WebGPU is what the models worth running want. The wasm fallback below exists
+ * and is honest about itself, but it is one to two minutes a pass against well
+ * under a second here, so this is always asked first.
  *
  * Asking for an adapter rather than just looking for `navigator.gpu` is the
  * whole point. Plenty of browsers expose the object and then hand back no
@@ -140,6 +160,19 @@ export function hasWebGpu(): Promise<boolean> {
 	}
 
 	return webGpuProbe;
+}
+
+/**
+ * Whether the CPU fallback can run at all.
+ *
+ * onnxruntime-web's wasm backend needs WebAssembly itself and, to fetch the
+ * runtime, `fetch`. Both are present everywhere this app runs, so this is
+ * really a guard for jsdom and for browsers where a policy has switched wasm
+ * off -- but "the button is disabled and won't say why" is the failure this
+ * feature already has too much of.
+ */
+export function hasWasm(): boolean {
+	return typeof WebAssembly === 'object' && typeof fetch === 'function';
 }
 
 /**

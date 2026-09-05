@@ -1,24 +1,113 @@
 import {
 	BackgroundMask,
 	BackgroundOnCpuError,
+	MaskBackend,
 	MaskOptions,
 	checkAborted,
 	webGpuDescription
 } from '../engine-types';
 
 /**
- * How long one 1024² pass may take before we call it a CPU fallback. Measured
- * either side of the line: under a second on this repo's GTX 1050 Ti, 40 to 90
- * seconds on wasm. Nothing lands in between, so the threshold has room to be
- * generous--a weak integrated GPU is still an order of magnitude clear of it.
+ * How long one 1024² pass may take before we call the WebGPU session a silent
+ * CPU fallback. Measured either side of the line: under a second on this repo's
+ * GTX 1050 Ti, 40 to 90 seconds on wasm. Nothing lands in between, so the
+ * threshold has room to be generous--a weak integrated GPU is still an order of
+ * magnitude clear of it.
+ *
+ * This only guards the `webgpu` backend. The `wasm` one is *asked* to run on
+ * the CPU, so being slow there is the deal, not a fault.
  */
 const CPU_FALLBACK_SECONDS = 25;
 
 /**
- * ORMBG ("open remove background model") run through onnxruntime-web on
- * WebGPU. It reasons at 1024x1024 and emits a single-channel map at that size,
- * which is exactly the `BackgroundMask` contract: no resizing, no compositing,
- * no alpha work here.
+ * What one CPU pass is assumed to take before we have measured this machine,
+ * in seconds. Sits at the pessimistic end of the 40-to-90 range seen on wasm:
+ * a bar that creeps and then finishes early reads far better than one that
+ * sits pinned at 99% for half a minute.
+ */
+const ASSUMED_CPU_PASS_SECONDS = 75;
+
+/** Where the measured CPU pass time is remembered between visits. */
+const CPU_PASS_KEY = 'sliders.background.cpuPassSeconds';
+
+/** How often the CPU run stage re-reports its estimated percentage. */
+const CPU_TICK_MS = 500;
+
+/**
+ * The last measured CPU pass, or the assumption. Kept in local storage because
+ * the estimate is only useful on the *first* pass of a session -- by the second
+ * one the run is already over.
+ */
+function cpuPassSeconds(): number {
+	try {
+		const stored = Number(window.localStorage.getItem(CPU_PASS_KEY));
+
+		return stored > 0 ? stored : ASSUMED_CPU_PASS_SECONDS;
+	} catch (error) {
+		// Storage can throw outright where cookies are blocked.
+		return ASSUMED_CPU_PASS_SECONDS;
+	}
+}
+
+/**
+ * Remembers what a pass actually cost here. Blended with what we thought
+ * rather than replacing it, so one pass that fought a busy machine for the CPU
+ * doesn't set the estimate for good.
+ */
+function rememberCpuPass(seconds: number) {
+	try {
+		const blended = Math.round((cpuPassSeconds() + seconds) / 2);
+
+		window.localStorage.setItem(CPU_PASS_KEY, String(blended));
+	} catch (error) {
+		// Nothing to do about it; the next run just estimates from the default.
+	}
+}
+
+/**
+ * Reports an estimated percentage while a CPU pass runs, and stops at 99%.
+ *
+ * There is no honest number to report here: onnxruntime-web runs the whole
+ * graph in one call and says nothing until it comes back, so this is a clock
+ * against how long a pass took last time, flagged `estimated` so the UI can
+ * say as much. It is still worth doing -- a minute and a half of "working…"
+ * with no movement is indistinguishable from a hang.
+ *
+ * Stopping at 99% is deliberate rather than cosmetic. Every progress event
+ * also resets the caller's stage watchdog, so a ticker that ran forever would
+ * keep genuinely stuck work alive forever; going quiet once the estimate is
+ * spent hands the watchdog back its job.
+ */
+function tickEstimate(options: MaskOptions | undefined): () => void {
+	const startedAt = performance.now();
+	const expected = cpuPassSeconds() * 1000;
+	const timer = window.setInterval(() => {
+		const progress = (performance.now() - startedAt) / expected;
+
+		if (progress >= 0.99) {
+			window.clearInterval(timer);
+			return;
+		}
+
+		options?.onProgress?.({estimated: true, progress, stage: 'run'});
+	}, CPU_TICK_MS);
+
+	return () => {
+		window.clearInterval(timer);
+		rememberCpuPass(Math.round((performance.now() - startedAt) / 1000));
+	};
+}
+
+/**
+ * ORMBG ("open remove background model") run through onnxruntime-web, on
+ * WebGPU where there is one and on wasm where there isn't. It reasons at
+ * 1024x1024 and emits a single-channel map at that size, which is exactly the
+ * `BackgroundMask` contract: no resizing, no compositing, no alpha work here.
+ *
+ * The two backends are the same weights and the same graph and produce the
+ * same mask -- the only difference is that a pass costs well under a second on
+ * a real GPU and roughly a minute on the CPU. Sessions are cached per backend,
+ * so a machine offered both never has to rebuild one to use the other.
  *
  * The runtime is only ever pulled in by the dynamic import inside `load()`.
  * This module is small enough to sit in the main graph, but a megabyte of ONNX
@@ -305,16 +394,20 @@ interface LoadedEngine {
 /**
  * Kept across calls so the second background removal skips the download and
  * the session build. Holds the in-flight promise rather than the result, so
- * overlapping calls share one load; it's cleared on failure so a retry can
- * start over.
+ * overlapping calls share one load; an entry is cleared on failure so a retry
+ * can start over. Keyed by backend, because the fallback and the GPU path are
+ * separate sessions over the same weights.
  */
-let engine: Promise<LoadedEngine> | null = null;
+const engines: Partial<Record<MaskBackend, Promise<LoadedEngine>>> = {};
 
 function clamp01(value: number) {
 	return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
-async function load(options?: MaskOptions): Promise<LoadedEngine> {
+async function load(
+	backend: MaskBackend,
+	options?: MaskOptions
+): Promise<LoadedEngine> {
 	const {onProgress} = options ?? {};
 	// `ort.bundle.min.mjs` is the package's default entry, and the build that
 	// carries the WebGPU execution provider: it loads
@@ -330,10 +423,16 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 	// The bundle would derive this from its own `import.meta.url` anyway, but
 	// say it out loud so a future move off the CDN can't half-happen.
 	ort.env.wasm.wasmPaths = ORT_CDN;
-	// The GPU does the work; ORT's CPU pool would only cost us a
-	// cross-origin-isolation requirement we can't meet on Pages, because
-	// SharedArrayBuffer needs COOP/COEP headers this app doesn't send.
-	ort.env.wasm.numThreads = 1;
+	// ORT's thread pool needs SharedArrayBuffer, which needs the page to be
+	// cross-origin isolated, which needs COOP/COEP headers this app doesn't
+	// send on Pages. So it's one thread almost everywhere -- but ask for real
+	// threads where the page *is* isolated, because that's several times faster
+	// and the CPU fallback below has nothing else going for it. On the GPU
+	// backend the pool does nothing either way.
+	ort.env.wasm.numThreads =
+		backend === 'wasm' && self.crossOriginIsolated
+			? Math.min(4, navigator.hardwareConcurrency || 1)
+			: 1;
 	// Run the session in a worker.
 	//
 	// Building a session is synchronous wasm work, and on the main thread it
@@ -347,7 +446,11 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 
 	onProgress?.({stage: 'download', progress: 0});
 
-	const dtype = (await hasShaderF16()) ? 'fp16' : 'fp32';
+	// fp16 is a WebGPU trick. ORT's wasm backend has no f16 kernels for this
+	// graph and would spend the whole run casting, so the CPU fallback takes
+	// the bigger download and the dtype it can actually execute.
+	const dtype =
+		backend === 'webgpu' && (await hasShaderF16()) ? 'fp16' : 'fp32';
 	const build = async (which: 'fp16' | 'fp32') => {
 		const model = await weights(MODEL_URLS[which], options);
 
@@ -355,8 +458,10 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 
 		// Both published exports carry exactly 33 of these. If a re-export ever
 		// changes that, say so here rather than letting ORT fail several seconds
-		// later with a shape-inference error that names nothing useful.
-		if (disableCeilMode(model) === 0) {
+		// later with a shape-inference error that names nothing useful. Only the
+		// WebGPU backend needs the patch, so only it treats the miss as fatal --
+		// wasm implements `ceil_mode` and runs the graph either way.
+		if (disableCeilMode(model) === 0 && backend === 'webgpu') {
 			throw new Error(
 				'The ORMBG export no longer declares ceil_mode on its MaxPool nodes; ' +
 					'check whether the WebGPU backend still needs the patch before removing it.'
@@ -368,7 +473,7 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 		onProgress?.({stage: 'start'});
 
 		return ort.InferenceSession.create(model, {
-			executionProviders: ['webgpu'],
+			executionProviders: [backend],
 			graphOptimizationLevel: 'all'
 		});
 	};
@@ -403,20 +508,26 @@ async function load(options?: MaskOptions): Promise<LoadedEngine> {
 	// minute and a half -- so timing it is a reliable test, and it costs
 	// nothing: this is the pass that compiles the pipelines, which the first
 	// real cutout would otherwise have paid for.
-	const warmedAt = performance.now();
+	//
+	// The wasm backend skips it. There is nothing to detect -- it was asked for
+	// the CPU -- and the warm-up is not free there: it would be a whole extra
+	// minute before the image the author is waiting on even starts.
+	if (backend === 'webgpu') {
+		const warmedAt = performance.now();
 
-	await session.run({
-		[inputName]: new ort.Tensor(
-			'float32',
-			new Float32Array(3 * RESOLUTION * RESOLUTION),
-			[1, 3, RESOLUTION, RESOLUTION]
-		)
-	});
+		await session.run({
+			[inputName]: new ort.Tensor(
+				'float32',
+				new Float32Array(3 * RESOLUTION * RESOLUTION),
+				[1, 3, RESOLUTION, RESOLUTION]
+			)
+		});
 
-	const warmSeconds = Math.round((performance.now() - warmedAt) / 1000);
+		const warmSeconds = Math.round((performance.now() - warmedAt) / 1000);
 
-	if (warmSeconds > CPU_FALLBACK_SECONDS) {
-		throw new BackgroundOnCpuError(warmSeconds, webGpuDescription());
+		if (warmSeconds > CPU_FALLBACK_SECONDS) {
+			throw new BackgroundOnCpuError(warmSeconds, webGpuDescription());
+		}
 	}
 
 	return {
@@ -474,23 +585,24 @@ function preprocess(source: HTMLCanvasElement): Float32Array {
 	return input;
 }
 
-export async function mask(
+async function maskWith(
+	backend: MaskBackend,
 	source: HTMLCanvasElement,
 	options?: MaskOptions
 ): Promise<BackgroundMask> {
 	checkAborted(options?.signal);
 
-	if (!engine) {
-		engine = load(options).catch(error => {
+	if (!engines[backend]) {
+		engines[backend] = load(backend, options).catch(error => {
 			// Let the next attempt start from scratch -- a half-built session is
 			// worse than none, and load failures here are usually transient
 			// network ones.
-			engine = null;
+			delete engines[backend];
 			throw error;
 		});
 	}
 
-	const {run} = await engine;
+	const {run} = await engines[backend]!;
 
 	checkAborted(options?.signal);
 	options?.onProgress?.({stage: 'run'});
@@ -499,7 +611,17 @@ export async function mask(
 
 	checkAborted(options?.signal);
 
-	const tensor = await run(input);
+	// On the CPU this is the minute-long part, and it says nothing while it
+	// runs, so put an estimated clock over it. On the GPU it's over before a
+	// first tick could fire.
+	const stopTicking = backend === 'wasm' ? tickEstimate(options) : undefined;
+	let tensor;
+
+	try {
+		tensor = await run(input);
+	} finally {
+		stopTicking?.();
+	}
 
 	checkAborted(options?.signal);
 
@@ -519,4 +641,24 @@ export async function mask(
 	// 1 is foreground, which is what a salient-object head already predicts --
 	// no inversion needed.
 	return {data, width, height};
+}
+
+/** The model on the GPU. What everybody should get. */
+export function mask(
+	source: HTMLCanvasElement,
+	options?: MaskOptions
+): Promise<BackgroundMask> {
+	return maskWith('webgpu', source, options);
+}
+
+/**
+ * The same model on the CPU, for machines with no usable GPU. Same weights,
+ * same mask, about a hundred times the wait -- the engine list only reaches for
+ * this once WebGPU has been ruled out, and the UI warns before it starts.
+ */
+export function maskOnCpu(
+	source: HTMLCanvasElement,
+	options?: MaskOptions
+): Promise<BackgroundMask> {
+	return maskWith('wasm', source, options);
 }

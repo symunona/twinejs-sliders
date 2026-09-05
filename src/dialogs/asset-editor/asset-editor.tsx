@@ -1,6 +1,7 @@
 import {AssetId, AssetMeta} from '@sliders/scene-types';
 import classNames from 'classnames';
 import {
+	IconAlertTriangle,
 	IconArrowsExchange,
 	IconCrop,
 	IconDeviceFloppy,
@@ -91,6 +92,27 @@ const STAGE_COUNT = 4;
 
 /** Past this, a wait needs explaining rather than just spinning. */
 const SLOW_SECONDS = 12;
+
+/**
+ * The line to show for a stage. Three things vary: the closer pass has to read
+ * differently from the first one or it looks stuck, a percentage is only worth
+ * printing when there is one, and "on your GPU" is a lie on the CPU fallback.
+ */
+export function stageKey(progress: EngineProgress, cpu: boolean): string {
+	const {estimated, pass, stage} = progress;
+
+	if (stage === 'start' && cpu) {
+		return 'dialogs.assetEditor.stage.startCpu';
+	}
+
+	if (stage !== 'run') {
+		return `dialogs.assetEditor.stage.${stage}`;
+	}
+
+	const closer = pass === 2 ? 'Closer' : '';
+
+	return `dialogs.assetEditor.stage.run${closer}${estimated ? 'Estimated' : ''}`;
+}
 
 function elapsedLabel(seconds: number): string {
 	if (seconds < 60) {
@@ -284,6 +306,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	}, [edits, source]);
 
 	const busy = saving || progress !== undefined;
+	/**
+	 * The cutout is about to run on the CPU. Everything works, it is simply a
+	 * minute an image rather than a second, which is worth saying loudly before
+	 * someone starts one and worth repeating in every line while it runs.
+	 */
+	const onCpu = background?.engine?.cpu === true;
 	const backgroundRemoved = source !== undefined && source !== original;
 	/** Editing bytes no asset owns--everything keyed off library metadata is off. */
 	const detached = assetId === undefined;
@@ -752,6 +780,24 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 						</section>
 						<section>
 							<h3>{t('dialogs.assetEditor.background')}</h3>
+							{onCpu && (
+								<p
+									className="asset-editor-warning asset-editor-cpu-warning"
+									data-testid="asset-editor-cpu-warning"
+									role="status"
+								>
+									<IconAlertTriangle />
+									<span>
+										{t('dialogs.assetEditor.cpuWarning', {
+											reason: t(
+												background?.gpuReasonKey ??
+													'dialogs.assetEditor.needsWebGpu'
+											),
+											size: megabytes(background?.engine?.bytes ?? 0)
+										})}
+									</span>
+								</p>
+							)}
 							<ButtonBar>
 								<IconButton
 									disabled={busy || backgroundRemoved || !background?.engine}
@@ -828,34 +874,40 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 												steps: STAGE_COUNT
 											})}
 										</span>{' '}
-										{t(
-											progress.pass === 2 && progress.stage === 'run'
-												? 'dialogs.assetEditor.stage.runCloser'
-												: `dialogs.assetEditor.stage.${progress.stage}`,
-											{percent: Math.round((progress.progress ?? 0) * 100)}
-										)}{' '}
+										{t(stageKey(progress, onCpu), {
+											percent: Math.round((progress.progress ?? 0) * 100)
+										})}{' '}
 										<span className="asset-editor-elapsed">
 											{elapsedLabel(elapsed)}
 										</span>
 									</p>
 									{elapsed >= SLOW_SECONDS && (
 										<p className="asset-editor-detail">
-											{t('dialogs.assetEditor.slowNote')}
+											{t(
+												onCpu
+													? 'dialogs.assetEditor.cpuSlowNote'
+													: 'dialogs.assetEditor.slowNote'
+											)}
 										</p>
 									)}
 								</div>
 							) : (
 								<p className="asset-editor-detail">
 									{background?.engine
-										? t('dialogs.assetEditor.engineNote', {
-												gpu:
-													webGpuDescription() ??
-													t('dialogs.assetEditor.unknownGpu'),
-												license: background.engine.license,
-												name: background.engine.label,
-												resolution: background.engine.resolution,
-												size: megabytes(background.engine.bytes)
-										  })
+										? t(
+												onCpu
+													? 'dialogs.assetEditor.cpuEngineNote'
+													: 'dialogs.assetEditor.engineNote',
+												{
+													gpu:
+														webGpuDescription() ??
+														t('dialogs.assetEditor.unknownGpu'),
+													license: background.engine.license,
+													name: background.engine.label,
+													resolution: background.engine.resolution,
+													size: megabytes(background.engine.bytes)
+												}
+										  )
 										: background &&
 										  t(
 												background.support.reasonKey ??
