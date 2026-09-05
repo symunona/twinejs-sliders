@@ -205,3 +205,25 @@
 .scene-preview-errors .hint {
 	opacity: 0.7;
 }
+
+/* Popped out into its own window. The bar stays behind in the passage editor, so the stage
+   is the only thing in that window and should have all of it — the inline
+   `clamp(180px, 34vh, 420px)` would otherwise leave most of it empty. These sit at the end
+   of the file on purpose: they match `.scene-preview .scene-stage` in specificity and have
+   to win on order, while full screen (one class more specific) still wins over them. */
+.scene-preview-popout-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.scene-preview-popout-root > .scene-preview {
+	border-top: 0;
+	flex-grow: 1;
+}
+
+.scene-preview-popout-root .scene-stage {
+	flex-grow: 1;
+	height: auto;
+	max-height: none;
+}

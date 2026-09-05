@@ -126,6 +126,7 @@ export class DomRenderer implements Renderer {
 
 	private observer?: ResizeObserver;
 	private windowResize?: () => void;
+	private resizeWindow?: Window & typeof globalThis;
 	private listeners = new Set<() => void>();
 
 	/** Guards against an in-flight `apply()` writing DOM after a newer one started. */
@@ -246,8 +247,13 @@ export class DomRenderer implements Renderer {
 		this.observer = undefined;
 
 		if (this.windowResize) {
-			globalThis.removeEventListener?.('resize', this.windowResize);
+			// Whichever window the listener went onto--see `observeResize`.
+			(this.resizeWindow ?? globalThis).removeEventListener?.(
+				'resize',
+				this.windowResize
+			);
 			this.windowResize = undefined;
+			this.resizeWindow = undefined;
 		}
 
 		for (const rec of this.entities.values()) {
@@ -903,16 +909,25 @@ export class DomRenderer implements Renderer {
 	// -----------------------------------------------------------------------
 
 	private observeResize(el: HTMLElement): void {
-		if (typeof ResizeObserver !== 'undefined') {
-			this.observer = new ResizeObserver(() => this.relayout());
+		// The mount can live in another window entirely (the editor's popped-out
+		// scene preview), and an observer built from this realm's constructor does
+		// not reliably deliver for elements in a different document. Build it from
+		// the mount's own window instead, falling back to ours when there isn't one
+		// (detached nodes, jsdom).
+		const ownerWindow = el.ownerDocument?.defaultView ?? globalThis;
+		const Observer = (ownerWindow as typeof globalThis).ResizeObserver;
+
+		if (typeof Observer !== 'undefined') {
+			this.observer = new Observer(() => this.relayout());
 			this.observer.observe(el);
 
 			return;
 		}
 
 		// jsdom and very old browsers.
+		this.resizeWindow = ownerWindow as Window & typeof globalThis;
 		this.windowResize = () => this.relayout();
-		globalThis.addEventListener?.('resize', this.windowResize);
+		ownerWindow.addEventListener?.('resize', this.windowResize);
 	}
 
 	/** Recompute the letterbox and re-place everything. Never animates — a resize is not a beat. */

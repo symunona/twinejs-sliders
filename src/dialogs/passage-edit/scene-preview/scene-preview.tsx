@@ -38,6 +38,7 @@ import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import {StageSelectionControls} from './stage-selection-controls';
 import {roundCoord} from './stage-geometry';
+import {usePopoutWindow} from './use-popout-window';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
@@ -88,6 +89,17 @@ export interface ScenePreviewProps {
 	 * Absent means the preview shows links but cannot open them.
 	 */
 	onOpenPassage?: (name: string) => void;
+	/**
+	 * Whether the stage is currently detached into its own OS window. Controlled by the
+	 * toolbar rather than owned here, so the same toggle works from outside the collapsed
+	 * preview too. Optional and defaulted off so existing callers and tests are unaffected.
+	 */
+	poppedOut?: boolean;
+	/**
+	 * Called whenever the pop-out state should change--including when the author closes
+	 * that window natively, which this component cannot prevent and has to report instead.
+	 */
+	onPoppedOutChange?: (next: boolean) => void;
 }
 
 const OPEN_KEY = 'sliders.preview.open';
@@ -155,10 +167,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	parse,
 	text,
 	passages,
-	onOpenPassage
+	onOpenPassage,
+	poppedOut = false,
+	onPoppedOutChange = () => {}
 }) => {
 	const {t} = useTranslation();
 	const store = useAssetStore();
+	const {container: popoutContainer, popout} = usePopoutWindow(
+		poppedOut,
+		t('dialogs.passageEdit.scenePreview.title'),
+		() => onPoppedOutChange(false)
+	);
 	const [open, setOpen] = React.useState(
 		() => window.localStorage.getItem(OPEN_KEY) !== 'false'
 	);
@@ -292,10 +311,18 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			shiftHeld.current = event.shiftKey;
 		};
 
-		document.addEventListener('keydown', sample, true);
+		// The popup has its own document--a capture listener on the main one never sees a
+		// key pressed while focus is over there, so the shift flag has to be sampled on both.
+		const popupDoc = poppedOut && popout ? popout.document : undefined;
 
-		return () => document.removeEventListener('keydown', sample, true);
-	}, []);
+		document.addEventListener('keydown', sample, true);
+		popupDoc?.addEventListener('keydown', sample, true);
+
+		return () => {
+			document.removeEventListener('keydown', sample, true);
+			popupDoc?.removeEventListener('keydown', sample, true);
+		};
+	}, [popout, poppedOut]);
 
 	// The parse is debounced, so for a moment after a write the parsed stage still holds
 	// the OLD position. Patch entries are dropped one by one as the parse agrees with
@@ -717,9 +744,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			}
 		};
 
-		window.addEventListener('keydown', onKey);
-		return () => window.removeEventListener('keydown', onKey);
-	}, [fullScreen]);
+		// Full screen while popped out fills the POPUP window, so Escape pressed there has
+		// to be heard too--the main window's listener never sees it. It has to be the
+		// document rather than the window: the popped-out stage stops keys from bubbling
+		// on to the passage dialog (see the portal below), and that stops them reaching
+		// the window as well. Listeners on the document itself still run.
+		const popupDocument = poppedOut && popout ? popout.document : undefined;
+
+		document.addEventListener('keydown', onKey);
+		popupDocument?.addEventListener('keydown', onKey);
+
+		return () => {
+			document.removeEventListener('keydown', onKey);
+			popupDocument?.removeEventListener('keydown', onKey);
+		};
+	}, [fullScreen, popout, poppedOut]);
 
 	// Viewer keys, unmodified, in the preview's own scope: they only fire once
 	// focus is inside the preview, so left and right still move the cursor
@@ -893,6 +932,211 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const canAdvance = fullScreen && !beatHasLink && (beat < lastBeat || !!nextScene);
 
+	const bar = (
+		<div className="scene-preview-bar">
+			<IconButton
+				icon={
+					open ? <IconChevronDown /> : <IconChevronRight />
+				}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.toggle')}
+				onClick={handleToggle}
+				selectable
+				selected={open}
+			/>
+			<span className="scene-preview-title">
+				{t('dialogs.passageEdit.scenePreview.title')}
+			</span>
+			<span className="scene-preview-spacer" />
+			{open && (
+				<>
+					<IconButton
+						disabled={beat <= 0}
+						icon={<IconChevronLeft />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.previousBeat')}
+						onClick={goToPreviousBeat}
+					/>
+					<span className="scene-preview-beat" data-testid="scene-preview-beat">
+						{beat} / {lastBeat}
+					</span>
+					<IconButton
+						disabled={beat >= lastBeat && !nextScene}
+						icon={<IconChevronRight />}
+						iconOnly
+						label={
+							beat >= lastBeat && nextScene
+								? t('dialogs.passageEdit.scenePreview.nextScene', {
+										name: nextScene
+								  })
+								: t('dialogs.passageEdit.scenePreview.nextBeat')
+						}
+						onClick={goToNextBeat}
+					/>
+					<IconButton
+						icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.play')}
+						onClick={togglePlaying}
+					/>
+					{/* Sits beside the lock rather than in the selection row: the grid
+					    is how the author reads the stage, and nothing has to be
+					    selected to want to read it. */}
+					<IconButton
+						icon={<IconGridDots />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.grid')}
+						onClick={toggleGrid}
+						selectable
+						selected={grid}
+					/>
+					{/* Always here, selection or not: the lock is how the author stops
+					    the stage editing the file, so it cannot be a control that only
+					    appears once something has been grabbed. */}
+					<IconButton
+						icon={locked ? <IconLock /> : <IconLockOpen />}
+						iconOnly
+						label={t(
+							locked
+								? 'dialogs.passageEdit.scenePreview.unlock'
+								: 'dialogs.passageEdit.scenePreview.lock'
+						)}
+						onClick={toggleLock}
+						selectable
+						selected={locked}
+					/>
+					<IconButton
+						icon={fullScreen ? <IconMinimize /> : <IconMaximize />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
+						onClick={() => setFullScreen(f => !f)}
+					/>
+				</>
+			)}
+		</div>
+	);
+
+	// The stage itself--everything below the bar. Popped out, this is the part that
+	// travels to the popup window; the bar always stays put in the passage editor.
+	const stageBody = open && (
+		<>
+			{/* A click on the stage selects, so full screen moved to a double
+			    click. The toolbar button above is still the keyboard-accessible
+			    path, and `scene.fullScreen` still works. */}
+			<StageSelectionControls
+				assets={assets}
+				editable={editable}
+				entities={selectedEntities}
+				onDelete={remove}
+				onFlip={flip}
+				onFrame={setFrame}
+				onLayer={setLayer}
+			/>
+			<StageEditorOverlay
+				editable={editable}
+				grid={grid}
+				onAdvance={canAdvance ? goToNextBeat : undefined}
+				onCameraPatch={setCamera}
+				onCancel={handleCancel}
+				onCommit={handleCommit}
+				onDropAsset={handleDropAsset}
+				onDropFiles={handleDropFiles}
+				onPatch={setPatch}
+				ownerWindow={poppedOut && popout ? popout : window}
+				parentOffsets={offsets}
+				onSelect={select}
+				onToggleFullScreen={() => setFullScreen(f => !f)}
+				player={fullScreen}
+				renderer={renderer}
+				seal={seal}
+				selection={selection}
+				stage={stage}
+			>
+				<SceneStage
+					animate={playing}
+					assets={assets}
+					beat={shownBeat}
+					onLink={handleLink}
+					onRenderer={handleRenderer}
+					stage={stage}
+				/>
+				{/* The player's own controls, in the corner the stage needs least.
+				    Faint until asked for: full screen exists so the scene can fill
+				    the screen, and a bar of chrome across it would undo that. Inside
+				    the stage rather than under it, so the error list — which is the
+				    author's, not the reader's — never pushes it off the corner. */}
+				{fullScreen && lastBeat > 0 && (
+					<div className="scene-preview-nav" data-testid="scene-preview-nav">
+						<button
+							aria-label={t('dialogs.passageEdit.scenePreview.previousBeat')}
+							disabled={beat <= 0}
+							onClick={goToPreviousBeat}
+							type="button"
+						>
+							<IconChevronLeft />
+						</button>
+						<span className="scene-preview-nav-count">
+							{beat} / {lastBeat}
+						</span>
+						<button
+							aria-label={
+								beat >= lastBeat && nextScene
+									? t('dialogs.passageEdit.scenePreview.nextScene', {
+											name: nextScene
+									  })
+									: t('dialogs.passageEdit.scenePreview.nextBeat')
+							}
+							disabled={beat >= lastBeat && !nextScene}
+							onClick={goToNextBeat}
+							type="button"
+						>
+							<IconChevronRight />
+						</button>
+					</div>
+				)}
+			</StageEditorOverlay>
+		</>
+	);
+
+	// Popped out, the stage lives in the popup's own document--a separate DOM tree, so it
+	// needs its OWN copy of the classes the stage's CSS keys off (`.scene-preview
+	// .scene-stage`, `.scene-preview.full-screen .scene-stage`), not just whatever ancestor
+	// the bar happens to have. Full screen inside the popup fills that window: `position:
+	// fixed` on a plain, untransformed body resolves against the popup's own viewport.
+	if (poppedOut && popoutContainer) {
+		return (
+			<>
+				<div
+					className={classNames('scene-preview', {open})}
+					data-hotkey-scope="scene-preview"
+					data-testid="scene-preview"
+				>
+					{bar}
+				</div>
+				{createPortal(
+					<div
+						className={classNames('scene-preview', {
+							open,
+							'full-screen': fullScreen
+						})}
+						data-hotkey-scope="scene-preview"
+						data-testid="scene-preview-stage"
+						// A portal moves the DOM, not the React tree, so keys pressed in
+						// the other window still bubble as React events into the passage
+						// dialog above--where Escape closes the dialog, taking this window
+						// with it. Nothing up there should react to typing that happened in
+						// a separate window. Hotkeys are unaffected: they listen on this
+						// window's document directly, not through React.
+						onKeyDown={event => event.stopPropagation()}
+					>
+						{stageBody}
+					</div>,
+					popoutContainer
+				)}
+			</>
+		);
+	}
+
 	const body = (
 		<div
 			className={classNames('scene-preview', {
@@ -902,165 +1146,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			data-hotkey-scope="scene-preview"
 			data-testid="scene-preview"
 		>
-			<div className="scene-preview-bar">
-				<IconButton
-					icon={
-						open ? <IconChevronDown /> : <IconChevronRight />
-					}
-					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.toggle')}
-					onClick={handleToggle}
-					selectable
-					selected={open}
-				/>
-				<span className="scene-preview-title">
-					{t('dialogs.passageEdit.scenePreview.title')}
-				</span>
-				<span className="scene-preview-spacer" />
-				{open && (
-					<>
-						<IconButton
-							disabled={beat <= 0}
-							icon={<IconChevronLeft />}
-							iconOnly
-							label={t('dialogs.passageEdit.scenePreview.previousBeat')}
-							onClick={goToPreviousBeat}
-						/>
-						<span className="scene-preview-beat" data-testid="scene-preview-beat">
-							{beat} / {lastBeat}
-						</span>
-						<IconButton
-							disabled={beat >= lastBeat && !nextScene}
-							icon={<IconChevronRight />}
-							iconOnly
-							label={
-								beat >= lastBeat && nextScene
-									? t('dialogs.passageEdit.scenePreview.nextScene', {
-											name: nextScene
-									  })
-									: t('dialogs.passageEdit.scenePreview.nextBeat')
-							}
-							onClick={goToNextBeat}
-						/>
-						<IconButton
-							icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
-							iconOnly
-							label={t('dialogs.passageEdit.scenePreview.play')}
-							onClick={togglePlaying}
-						/>
-						{/* Sits beside the lock rather than in the selection row: the grid
-						    is how the author reads the stage, and nothing has to be
-						    selected to want to read it. */}
-						<IconButton
-							icon={<IconGridDots />}
-							iconOnly
-							label={t('dialogs.passageEdit.scenePreview.grid')}
-							onClick={toggleGrid}
-							selectable
-							selected={grid}
-						/>
-						{/* Always here, selection or not: the lock is how the author stops
-						    the stage editing the file, so it cannot be a control that only
-						    appears once something has been grabbed. */}
-						<IconButton
-							icon={locked ? <IconLock /> : <IconLockOpen />}
-							iconOnly
-							label={t(
-								locked
-									? 'dialogs.passageEdit.scenePreview.unlock'
-									: 'dialogs.passageEdit.scenePreview.lock'
-							)}
-							onClick={toggleLock}
-							selectable
-							selected={locked}
-						/>
-						<IconButton
-							icon={fullScreen ? <IconMinimize /> : <IconMaximize />}
-							iconOnly
-							label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-							onClick={() => setFullScreen(f => !f)}
-						/>
-					</>
-				)}
-			</div>
-			{open && (
-				<>
-					{/* A click on the stage selects, so full screen moved to a double
-					    click. The toolbar button above is still the keyboard-accessible
-					    path, and `scene.fullScreen` still works. */}
-					<StageSelectionControls
-						assets={assets}
-						editable={editable}
-						entities={selectedEntities}
-						onDelete={remove}
-						onFlip={flip}
-						onFrame={setFrame}
-						onLayer={setLayer}
-					/>
-					<StageEditorOverlay
-						editable={editable}
-						grid={grid}
-						onAdvance={canAdvance ? goToNextBeat : undefined}
-						onCameraPatch={setCamera}
-						onCancel={handleCancel}
-						onCommit={handleCommit}
-						onDropAsset={handleDropAsset}
-						onDropFiles={handleDropFiles}
-						onPatch={setPatch}
-						parentOffsets={offsets}
-						onSelect={select}
-						onToggleFullScreen={() => setFullScreen(f => !f)}
-						player={fullScreen}
-						renderer={renderer}
-						seal={seal}
-						selection={selection}
-						stage={stage}
-					>
-						<SceneStage
-							animate={playing}
-							assets={assets}
-							beat={shownBeat}
-							onLink={handleLink}
-							onRenderer={handleRenderer}
-							stage={stage}
-						/>
-						{/* The player's own controls, in the corner the stage needs least.
-						    Faint until asked for: full screen exists so the scene can fill
-						    the screen, and a bar of chrome across it would undo that. Inside
-						    the stage rather than under it, so the error list — which is the
-						    author's, not the reader's — never pushes it off the corner. */}
-						{fullScreen && lastBeat > 0 && (
-							<div className="scene-preview-nav" data-testid="scene-preview-nav">
-								<button
-									aria-label={t('dialogs.passageEdit.scenePreview.previousBeat')}
-									disabled={beat <= 0}
-									onClick={goToPreviousBeat}
-									type="button"
-								>
-									<IconChevronLeft />
-								</button>
-								<span className="scene-preview-nav-count">
-									{beat} / {lastBeat}
-								</span>
-								<button
-									aria-label={
-										beat >= lastBeat && nextScene
-											? t('dialogs.passageEdit.scenePreview.nextScene', {
-													name: nextScene
-											  })
-											: t('dialogs.passageEdit.scenePreview.nextBeat')
-									}
-									disabled={beat >= lastBeat && !nextScene}
-									onClick={goToNextBeat}
-									type="button"
-								>
-									<IconChevronRight />
-								</button>
-							</div>
-						)}
-					</StageEditorOverlay>
-				</>
-			)}
+			{bar}
+			{stageBody}
 		</div>
 	);
 

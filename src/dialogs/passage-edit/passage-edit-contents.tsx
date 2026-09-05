@@ -45,6 +45,11 @@ export const PassageEditContents: React.FC<
 	// `PassageText`), which is fine for the story map and useless for the scene preview:
 	// a drag has to read the document the author is looking at.
 	const [liveText, setLiveText] = React.useState<string>();
+	/**
+	 * Whether the scene stage is detached into its own OS window. Lifted up here, out of
+	 * `ScenePreview`, so the toolbar button and the preview's own state agree about it.
+	 */
+	const [poppedOut, setPoppedOut] = React.useState(false);
 	const {ErrorBoundary, error, reset: resetError} = useErrorBoundary();
 	const {prefs} = usePrefsContext();
 	const {blurPassage, focusPassage, lock, stealPassage} =
@@ -122,6 +127,14 @@ export const PassageEditContents: React.FC<
 	// else entirely — find and replace, undo — the store is the one that is right.
 	React.useEffect(() => setLiveText(undefined), [passage.text]);
 
+	// A background card's popup would keep showing a passage the author is no longer
+	// looking at, and its stage would still be writing into text they can't see.
+	React.useEffect(() => {
+		if (disabled) {
+			setPoppedOut(false);
+		}
+	}, [disabled]);
+
 	/**
 	 * Ctrl/cmd-click on a link inside a scene bubble. Opens the passage it points at, the
 	 * same editor stack a double click on the story map opens. A link to a passage that does
@@ -188,7 +201,9 @@ export const PassageEditContents: React.FC<
 					<PassageToolbar
 						disabled={readOnly}
 						editor={cmEditor}
+						onTogglePopout={() => setPoppedOut(value => !value)}
 						passage={passage}
+						poppedOut={poppedOut}
 						story={story}
 						useCodeMirror={prefs.useCodeMirror}
 					/>
@@ -230,8 +245,10 @@ export const PassageEditContents: React.FC<
 				assets={previewAssets}
 				editor={cmEditor}
 				onOpenPassage={handleOpenPassage}
+				onPoppedOutChange={setPoppedOut}
 				parse={parse}
 				passages={story.passages}
+				poppedOut={poppedOut}
 				text={sceneText}
 			/>
 		</div>

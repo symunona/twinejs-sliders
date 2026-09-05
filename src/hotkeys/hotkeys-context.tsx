@@ -35,6 +35,13 @@ export interface HotkeysContextProps {
 	 * Removes all of the user's overrides.
 	 */
 	resetAllBindings: () => void;
+	/**
+	 * Registers another document to listen for hotkeys on--e.g. a scene preview
+	 * popped out into its own browser window. Returns a function that
+	 * unregisters it. The main `document` is always registered and cannot be
+	 * removed.
+	 */
+	registerDocument: (doc: Document) => () => void;
 }
 
 const noop = () => {};
@@ -44,6 +51,7 @@ export const HotkeysContext = React.createContext<HotkeysContextProps>({
 	keymap: {},
 	platform: 'linux',
 	registerCommand: () => noop,
+	registerDocument: () => noop,
 	resetAllBindings: noop,
 	setBinding: noop
 });
@@ -57,6 +65,9 @@ export const HotkeysProvider: React.FC = props => {
 	const [platform] = React.useState(detectPlatform);
 	const registrations = React.useRef<React.RefObject<Command>[]>([]);
 	const [, setRegistrationCount] = React.useState(0);
+	// The main document is always in this list and can't be removed--see
+	// `registerDocument` below.
+	const [documents, setDocuments] = React.useState<Document[]>([document]);
 
 	const overrides = prefs.hotkeyOverrides ?? {};
 	const keymap = React.useMemo(() => resolveKeymap(overrides), [overrides]);
@@ -82,6 +93,23 @@ export const HotkeysProvider: React.FC = props => {
 		},
 		[]
 	);
+
+	/**
+	 * A popped-out window has its own `document`, and a raw
+	 * `document.addEventListener` in the main window never sees events fired
+	 * there--the two are separate documents entirely. Anything that wants
+	 * hotkeys to work while focus is in such a window registers its document
+	 * here instead of assuming there is only one.
+	 */
+	const registerDocument = React.useCallback((doc: Document) => {
+		setDocuments(current =>
+			current.includes(doc) ? current : [...current, doc]
+		);
+
+		return () => {
+			setDocuments(current => current.filter(existing => existing !== doc));
+		};
+	}, []);
 
 	const setBinding = React.useCallback(
 		(commandId: string, bindings?: string[]) => {
@@ -118,11 +146,22 @@ export const HotkeysProvider: React.FC = props => {
 			// The event target is where the key actually went, which is normally
 			// the focused element. Falling back to activeElement covers events
 			// dispatched at the document or body.
+			//
+			// `instanceof Element` cannot be used here: a popped-out window is a
+			// separate realm, so its elements are instances of ITS `Element`, not
+			// this one's, and the check would silently fail for every key pressed
+			// there. `nodeType` is realm-independent. For the same reason the
+			// fallbacks come from the document the listener is attached to rather
+			// than the main one.
 
+			const eventDocument = (event.currentTarget as Document | null) ?? document;
+			const eventTarget = event.target as Element | null;
 			const target =
-				event.target instanceof Element && event.target !== document.body
-					? event.target
-					: document.activeElement;
+				eventTarget &&
+				eventTarget.nodeType === Node.ELEMENT_NODE &&
+				eventTarget !== eventDocument.body
+					? eventTarget
+					: eventDocument.activeElement;
 			const inTextEntry = isTextEntry(target);
 			const chain = scopeChain(target);
 
@@ -189,9 +228,16 @@ export const HotkeysProvider: React.FC = props => {
 			}
 		}
 
-		document.addEventListener('keydown', handleKeyDown);
-		return () => document.removeEventListener('keydown', handleKeyDown);
-	}, [platform]);
+		for (const doc of documents) {
+			doc.addEventListener('keydown', handleKeyDown);
+		}
+
+		return () => {
+			for (const doc of documents) {
+				doc.removeEventListener('keydown', handleKeyDown);
+			}
+		};
+	}, [documents, platform]);
 
 	// Warn about ambiguous keybindings during development.
 
@@ -214,6 +260,7 @@ export const HotkeysProvider: React.FC = props => {
 			keymap,
 			platform,
 			registerCommand,
+			registerDocument,
 			resetAllBindings,
 			setBinding,
 			commands: registrations.current
@@ -223,7 +270,7 @@ export const HotkeysProvider: React.FC = props => {
 		// The registration list is a ref, so it doesn't belong in this array. It
 		// changes together with the state counter registerCommand updates, which
 		// is what causes this to be recalculated.
-		[keymap, platform, registerCommand, resetAllBindings, setBinding]
+		[keymap, platform, registerCommand, registerDocument, resetAllBindings, setBinding]
 	);
 
 	return (

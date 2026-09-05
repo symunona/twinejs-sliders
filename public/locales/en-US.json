@@ -324,6 +324,7 @@
 				"nextScene": "Next scene: {{name}}",
 				"play": "Play beats",
 				"fullScreen": "Full screen",
+				"popOut": "Open scene preview in its own window",
 				"grid": "Show the stage grid: centre point, thirds and the floor line",
 				"lock": "Lock the stage so gestures cannot edit the scene",
 				"unlock": "Unlock the stage",

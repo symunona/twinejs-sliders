@@ -174,6 +174,13 @@ export interface StageEditorOverlayProps {
 	 * pointer and turning it on cannot change what a click does.
 	 */
 	grid?: boolean;
+	/**
+	 * The window whose `pointermove`/`pointerup`/`pointercancel` continue a drag. Defaults to
+	 * `window`. When the stage is popped out into its own browser window, a drag started
+	 * there fires its pointer events on THAT window, not the one this module loaded in--for
+	 * the same reason full screen already avoids pointer capture (see below).
+	 */
+	ownerWindow?: Window;
 }
 
 /**
@@ -266,6 +273,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onDropFiles,
 		onPatch,
 		onSelect,
+		ownerWindow = window,
 		parentOffsets,
 		onToggleFullScreen,
 		player,
@@ -595,16 +603,16 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			}
 		};
 
-		window.addEventListener('pointermove', move);
-		window.addEventListener('pointerup', up);
-		window.addEventListener('pointercancel', cancel);
+		ownerWindow.addEventListener('pointermove', move);
+		ownerWindow.addEventListener('pointerup', up);
+		ownerWindow.addEventListener('pointercancel', cancel);
 
 		return () => {
-			window.removeEventListener('pointermove', move);
-			window.removeEventListener('pointerup', up);
-			window.removeEventListener('pointercancel', cancel);
+			ownerWindow.removeEventListener('pointermove', move);
+			ownerWindow.removeEventListener('pointerup', up);
+			ownerWindow.removeEventListener('pointercancel', cancel);
 		};
-	}, [endGesture, onCancel, runGesture]);
+	}, [endGesture, onCancel, ownerWindow, runGesture]);
 
 	/**
 	 * Scroll-zoom, on Ctrl/Cmd + wheel only.
