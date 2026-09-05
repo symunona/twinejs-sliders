@@ -21,6 +21,10 @@
 	padding: var(--ui-gap);
 }
 
+.main-content h1 {
+	margin-bottom: var(--ui-gap);
+}
+
 .main-content-grab-listener {
 	cursor: grab;
 	position: fixed;

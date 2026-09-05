@@ -1,3 +1,6 @@
+@import '../styles/colors.css';
+@import '../styles/metrics.css';
+
 .sync-actions-icon {
 	position: relative;
 	display: inline-flex;
@@ -9,4 +12,16 @@ svg.sync-actions-alert {
 	height: 10px;
 	position: absolute;
 	right: -4px;
+}
+
+.sync-actions-status-label {
+	align-items: center;
+	display: inline-flex;
+	gap: var(--grid-size);
+}
+
+.sync-actions-status-tick {
+	color: var(--dark-green);
+	height: 14px;
+	width: 14px;
 }
