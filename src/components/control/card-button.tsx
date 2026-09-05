@@ -27,7 +27,10 @@ export const CardButton: React.FC<CardButtonProps> = props => {
 		null
 	);
 	const [cardEl, setCardEl] = React.useState<HTMLDivElement | null>(null);
-	const {styles, attributes} = usePopper(buttonEl, cardEl, {strategy: 'fixed'});
+	const {styles, attributes} = usePopper(buttonEl, cardEl, {
+		placement: 'bottom-start',
+		strategy: 'fixed'
+	});
 
 	function filterEventsOutsideFocusTrap(event: MouseEvent | TouchEvent) {
 		const narrowedTarget = event.target as HTMLElement;

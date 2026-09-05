@@ -8,7 +8,11 @@ export const TagButton: React.FC<TagButtonProps> = ({
 	onRemove
 }) => (
 	<div data-testid={`mock-tag-button-${name}`} data-disabled={disabled}>
-		<button onClick={() => onChangeColor('mock-color')}>onChangeColor</button>
+		{onChangeColor && (
+			<button onClick={() => onChangeColor('mock-color')}>
+				onChangeColor
+			</button>
+		)}
 		<button onClick={onRemove}>onRemove</button>
 	</div>
 );

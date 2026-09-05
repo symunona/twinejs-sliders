@@ -75,6 +75,7 @@ describe('dragging a tile onto the stage', () => {
 		render(
 			<FakeStateProvider>
 				<AssetTile
+					allTags={[]}
 					meta={meta()}
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
@@ -94,6 +95,7 @@ describe('dragging a tile onto the stage', () => {
 		render(
 			<FakeStateProvider>
 				<AssetTile
+					allTags={[]}
 					meta={meta({kind: 'bg', name: 'tavern/night'})}
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
@@ -109,6 +111,7 @@ describe('dragging a tile onto the stage', () => {
 		render(
 			<FakeStateProvider>
 				<AssetTile
+					allTags={[]}
 					meta={meta({kind: 'fx', name: 'rain'})}
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
@@ -124,7 +127,9 @@ describe('dragging a tile onto the stage', () => {
 		render(
 			<FakeStateProvider>
 				<CharacterTile
+					allTags={[]}
 					character={character()}
+					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
 					onEdit={jest.fn()}
 				/>

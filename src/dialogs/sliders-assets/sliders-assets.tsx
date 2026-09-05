@@ -13,7 +13,7 @@ import {ButtonBar} from '../../components/container/button-bar';
 import {DialogCard} from '../../components/container/dialog-card';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
-import {TextSelect} from '../../components/control/text-select';
+import {TagCardButton} from '../../components/tag/tag-card-button';
 import {useCommand} from '../../hotkeys';
 import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
@@ -50,7 +50,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const [newCharacterOpen, setNewCharacterOpen] = React.useState(false);
 	const [search, setSearch] = React.useState('');
 	const [tabIndex, setTabIndex] = React.useState(0);
-	const [tagFilter, setTagFilter] = React.useState('');
+	const [tagFilter, setTagFilter] = React.useState<string[]>([]);
 	const searchField = React.useRef<HTMLInputElement>(null);
 	const {t} = useTranslation();
 
@@ -62,14 +62,15 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		asset =>
 			asset.kind === kind &&
 			(!searchText || asset.name.toLowerCase().includes(searchText)) &&
-			(!tagFilter || asset.tags.includes(tagFilter))
+			(tagFilter.length === 0 || asset.tags.some(tag => tagFilter.includes(tag)))
 	);
 	const matchingCharacters = library.characters.filter(
 		character =>
 			(!searchText ||
 				character.name.toLowerCase().includes(searchText) ||
 				character.id.includes(searchText)) &&
-			(!tagFilter || character.tags.includes(tagFilter))
+			(tagFilter.length === 0 ||
+				character.tags.some(tag => tagFilter.includes(tag)))
 	);
 
 	function openAssetEditor(assetId: string) {
@@ -182,6 +183,17 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		library.refresh();
 	}
 
+	async function handleChangeCharacterTags(id: string, tags: string[]) {
+		const character = library.characters.find(c => c.id === id);
+
+		if (!character) {
+			return;
+		}
+
+		await library.store.putCharacter({...character, tags});
+		library.refresh();
+	}
+
 	const report = library.lastUpload;
 	const hasReport =
 		report &&
@@ -229,16 +241,16 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 					{t('dialogs.slidersAssets.search')}
 				</TextInput>
 				{!importing && (
-					<TextSelect
-						onChange={event => setTagFilter(event.target.value)}
-						options={[
-							{label: t('dialogs.slidersAssets.allTags'), value: ''},
-							...library.tags.map(tag => ({label: tag, value: tag}))
-						]}
-						value={tagFilter}
-					>
-						{t('common.tag')}
-					</TextSelect>
+					<TagCardButton
+						allTags={library.tags}
+						id="sliders-assets-tag-filter"
+						onAdd={tag => setTagFilter([...tagFilter, tag])}
+						onRemove={tag =>
+							setTagFilter(tagFilter.filter(t => t !== tag))
+						}
+						restrictToExisting
+						tags={tagFilter}
+					/>
 				)}
 			</ButtonBar>
 			{hasReport && (
@@ -278,6 +290,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 					const tiles = tab.kind ? (
 						matchingAssets.map(asset => (
 							<AssetTile
+								allTags={library.tags}
 								key={asset.id}
 								meta={asset}
 								onChangeTags={tags => handleChangeTags(asset.id, tags)}
@@ -288,8 +301,12 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 					) : (
 						matchingCharacters.map(character => (
 							<CharacterTile
+								allTags={library.tags}
 								character={character}
 								key={character.id}
+								onChangeTags={tags =>
+									handleChangeCharacterTags(character.id, tags)
+								}
 								onDelete={() => handleDeleteCharacter(character.id)}
 								onEdit={() => openCharacterEditor(character.id)}
 							/>

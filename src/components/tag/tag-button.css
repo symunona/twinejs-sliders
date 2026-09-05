@@ -94,3 +94,18 @@
 .tag-button.color-purple .menu-button > .icon-button:hover {
 	background-color: var(--light-purple);
 }
+
+.tag-button.plain {
+	align-items: center;
+	background-color: var(--off-white);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--control-height);
+	display: inline-flex;
+	height: var(--control-height);
+	font-size: 85%;
+	padding-left: calc(2 * var(--control-inner-padding));
+}
+
+.tag-button.plain .icon-button {
+	height: var(--control-height);
+}

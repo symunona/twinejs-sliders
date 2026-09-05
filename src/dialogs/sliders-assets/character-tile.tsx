@@ -7,12 +7,15 @@ import {Badge} from '../../components/badge/badge';
 import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
+import {TagCardButton} from '../../components/tag/tag-card-button';
 import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import {AssetPreview} from './asset-preview';
 import {CopyFragmentButton} from './copy-fragment-button';
 
 export interface CharacterTileProps {
+	allTags: string[];
 	character: Character;
+	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
 }
@@ -22,7 +25,7 @@ export interface CharacterTileProps {
  * character editor.
  */
 export const CharacterTile: React.FC<CharacterTileProps> = props => {
-	const {character, onDelete, onEdit} = props;
+	const {allTags, character, onChangeTags, onDelete, onEdit} = props;
 	const frameNames = Object.keys(character.frames);
 	const {t} = useTranslation();
 
@@ -67,6 +70,15 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 					icon={<IconEdit />}
 					label={t('dialogs.slidersAssets.editCharacter')}
 					onClick={onEdit}
+				/>
+				<TagCardButton
+					allTags={allTags}
+					id={`character-tag-input-${character.id}`}
+					onAdd={tag => onChangeTags([...character.tags, tag])}
+					onRemove={tag =>
+						onChangeTags(character.tags.filter(t => t !== tag))
+					}
+					tags={character.tags}
 				/>
 				<ConfirmButton
 					confirmVariant="danger"

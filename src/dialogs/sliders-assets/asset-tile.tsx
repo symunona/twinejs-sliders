@@ -1,19 +1,20 @@
 import {assetFragment} from '@sliders/asset-store';
 import {AssetMeta} from '@sliders/scene-types';
-import {IconPhotoEdit, IconTags, IconTrash} from '@tabler/icons';
+import {IconPhotoEdit, IconTrash} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Badge} from '../../components/badge/badge';
 import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
-import {PromptButton} from '../../components/control/prompt-button';
+import {TagCardButton} from '../../components/tag/tag-card-button';
 import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
 import {AssetPreview} from './asset-preview';
 import {CopyFragmentButton} from './copy-fragment-button';
 
 export interface AssetTileProps {
+	allTags: string[];
 	meta: AssetMeta;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
@@ -33,8 +34,7 @@ function formatBytes(bytes: number): string {
 }
 
 export const AssetTile: React.FC<AssetTileProps> = props => {
-	const {meta, onChangeTags, onDelete, onEdit} = props;
-	const [tagText, setTagText] = React.useState(meta.tags.join(', '));
+	const {allTags, meta, onChangeTags, onDelete, onEdit} = props;
 	const {t} = useTranslation();
 
 	// Backgrounds replace `bg:`, objects become an entry under `props:`. Only the NAME
@@ -86,20 +86,12 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					}
 					onClick={onEdit}
 				/>
-				<PromptButton
-					icon={<IconTags />}
-					label={t('dialogs.slidersAssets.editTags')}
-					onChange={event => setTagText(event.target.value)}
-					onSubmit={value =>
-						onChangeTags(
-							value
-								.split(',')
-								.map(tag => tag.trim())
-								.filter(Boolean)
-						)
-					}
-					prompt={t('dialogs.slidersAssets.editTagsPrompt')}
-					value={tagText}
+				<TagCardButton
+					allTags={allTags}
+					id={`asset-tag-input-${meta.id}`}
+					onAdd={tag => onChangeTags([...meta.tags, tag])}
+					onRemove={tag => onChangeTags(meta.tags.filter(t => t !== tag))}
+					tags={meta.tags}
 				/>
 				<ConfirmButton
 					confirmVariant="danger"

@@ -26,9 +26,15 @@ export interface TagCardButtonProps {
 	 * Is the tag card open? Leave undefined to let the button manage itself.
 	 */
 	open?: boolean;
-	onChangeColor: (value: string, color: Color) => void;
+	onChangeColor?: (value: string, color: Color) => void;
 	onRemove: (value: string) => void;
-	tagColors: Record<string, Color>;
+	/**
+	 * When true, the new-tag field only accepts names already present in
+	 * `allTags` -- for a filter-style selector, where "adding" a name that
+	 * matches nothing would be a dead end.
+	 */
+	restrictToExisting?: boolean;
+	tagColors?: Record<string, Color>;
 	tags: string[];
 }
 
@@ -42,6 +48,7 @@ export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 		onChangeOpen,
 		onRemove,
 		open: controlledOpen,
+		restrictToExisting,
 		tagColors,
 		tags
 	} = props;
@@ -70,6 +77,14 @@ export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 
 		if (!canAdd) {
 			validationMessage = t('components.tagCardButton.alreadyAdded');
+		}
+	}
+
+	if (canAdd && restrictToExisting) {
+		canAdd = allTags.includes(newTagName);
+
+		if (!canAdd) {
+			validationMessage = t('components.tagCardButton.invalidName');
 		}
 	}
 
@@ -139,8 +154,12 @@ export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 							<TagButton
 								key={tag}
 								name={tag}
-								color={tagColors[tag]}
-								onChangeColor={color => onChangeColor(tag, color)}
+								color={tagColors?.[tag]}
+								onChangeColor={
+									onChangeColor
+										? color => onChangeColor(tag, color)
+										: undefined
+								}
 								onRemove={() => onRemove(tag)}
 							/>
 						))}
