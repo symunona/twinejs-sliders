@@ -371,16 +371,35 @@ describe('resolveZ', () => {
 		expect(resolveZ({at: {x: 0, y: 0}, z: NaN})).toBe(0.5);
 	});
 
-	it('sorts a layer back-to-front, breaking ties on id', () => {
+	it('sorts back-to-front, breaking ties on insertion order', () => {
 		const sorted = sortByZ([
-			{id: 'near', at: {x: 0, y: -0.8}},
-			{id: 'far', at: {x: 0, y: 0.8}},
-			{id: 'forced', at: {x: 0, y: 0.9}, z: 9},
-			{id: 'b', at: {x: 0, y: 0}},
-			{id: 'a', at: {x: 0, y: 0}}
+			{id: 'near', at: {x: 0, y: -0.8}, order: 0},
+			{id: 'far', at: {x: 0, y: 0.8}, order: 1},
+			{id: 'forced', at: {x: 0, y: 0.9}, z: 9, order: 2},
+			{id: 'b', at: {x: 0, y: 0}, order: 3},
+			{id: 'a', at: {x: 0, y: 0}, order: 4}
 		]);
 
-		expect(sorted.map(e => e.id)).toEqual(['far', 'a', 'b', 'near', 'forced']);
+		// `a` is last despite the alphabet: it was written last, so it paints on top.
+		expect(sorted.map(e => e.id)).toEqual(['far', 'b', 'a', 'near', 'forced']);
+	});
+
+	it('falls back to the id when two items share an order', () => {
+		const sorted = sortByZ([
+			{id: 'b', at: {x: 0, y: 0}, order: 0},
+			{id: 'a', at: {x: 0, y: 0}, order: 0}
+		]);
+
+		expect(sorted.map(e => e.id)).toEqual(['a', 'b']);
+	});
+
+	it('treats a missing order as zero rather than dropping the tie-break', () => {
+		const sorted = sortByZ([
+			{id: 'later', at: {x: 0, y: 0}, order: 1},
+			{id: 'unordered', at: {x: 0, y: 0}}
+		]);
+
+		expect(sorted.map(e => e.id)).toEqual(['unordered', 'later']);
 	});
 });
 

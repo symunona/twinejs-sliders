@@ -107,3 +107,28 @@ export function slugify(value: string): string {
 			.replace(/^-|-$/g, '') || 'untitled'
 	);
 }
+
+/**
+ * `base`, or `base-2`, `base-3`, … until one is free.
+ *
+ * Scene YAML names assets by NAME and characters by ID, and looks both up in one flat
+ * namespace (`createNamedResolver`). So two assets called `lamp`, or an asset called `mira`
+ * next to a character `mira`, is not a cosmetic clash: one of them becomes unaddressable
+ * and the resolver's name index silently keeps whichever it saw last.
+ *
+ * Numbered rather than suffixed with the id, because the result is something an author has
+ * to type into a scene. `-2` is the first suffix, since `lamp` already IS the first one.
+ */
+export function uniqueName(base: string, taken: Set<string>): string {
+	if (!taken.has(base)) {
+		return base;
+	}
+
+	for (let n = 2; ; n++) {
+		const candidate = `${base}-${n}`;
+
+		if (!taken.has(candidate)) {
+			return candidate;
+		}
+	}
+}

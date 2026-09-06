@@ -14,6 +14,7 @@ import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {
 	LAYERS,
 	LAYER_BASELINE,
+	LAYER_Z,
 	type Beat,
 	type Camera,
 	type EntityKind,
@@ -39,12 +40,13 @@ export const TOP_LEVEL_KEYS = [
 	'camera',
 	'cast',
 	'props',
+	'entities',
 	'fx',
 	'beats',
 	'links'
 ] as const;
 
-/** Keys accepted inside a `cast:` / `props:` entry. */
+/** Keys accepted inside a `cast:` / `props:` / `entities:` entry. */
 export const ENTITY_KEYS = [
 	'at',
 	'of',
@@ -375,6 +377,13 @@ function parseAt(
 interface EntityBody {
 	patch: EntityPatchBody;
 	ref?: string;
+	/**
+	 * What a legacy `layer:` asked for, held back until the whole map is read.
+	 *
+	 * `layer:` is sugar for a `z` seed, and an explicit `z:` must beat it whichever order the
+	 * author wrote the two keys in — YAML map order is the author's, not a precedence rule.
+	 */
+	layerZ?: number;
 	say?: string;
 	sayNode?: unknown;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
@@ -517,7 +526,8 @@ function parseEntityBody(
 
 				if (layer !== undefined) {
 					if ((LAYERS as readonly string[]).includes(layer)) {
-						body.patch.layer = layer as Layer;
+						// Sugar only. `mid` is the y-derived order, so it seeds nothing.
+						body.layerZ = LAYER_Z[layer as Layer];
 					} else {
 						addError(
 							ctx,
@@ -599,6 +609,11 @@ function parseEntityBody(
 					hint: keyHint(key, valid)
 				});
 		}
+	}
+
+	// Desugar `layer:` last, so an explicit `z:` wins no matter which came first.
+	if (body.patch.z === undefined && body.layerZ !== undefined) {
+		body.patch.z = body.layerZ;
 	}
 
 	return body;
@@ -1164,8 +1179,12 @@ export function parseScene(text: string): ParseResult {
 			}
 
 			case 'cast':
-			case 'props': {
-				const kind: EntityKind = key === 'cast' ? 'cast' : 'prop';
+			case 'props':
+			case 'entities': {
+				// `entities:` declares no kind. The parser has no asset store, so it cannot
+				// tell a character id from an asset name — `auto` defers that to whoever does.
+				const kind: EntityKind =
+					key === 'cast' ? 'cast' : key === 'props' ? 'prop' : 'auto';
 
 				if (isNullNode(pair.value)) {
 					break;
@@ -1179,8 +1198,10 @@ export function parseScene(text: string): ParseResult {
 				if ((pair.value as YAMLMap).tag === ONLY_TAG) {
 					if (key === 'cast') {
 						scene.replaceCast = true;
-					} else {
+					} else if (key === 'props') {
 						scene.replaceProps = true;
+					} else {
+						scene.replaceEntities = true;
 					}
 				}
 

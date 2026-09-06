@@ -2,7 +2,8 @@ import {
 	defaultCharacter,
 	nameFromFilename,
 	newFrameAnchors,
-	slugify
+	slugify,
+	uniqueName
 } from '@sliders/asset-store';
 import {AssetKind} from '@sliders/scene-types';
 import {IconUserPlus} from '@tabler/icons';
@@ -111,17 +112,14 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	 * editor's own frame upload writes (`kind: 'frame'`, `ownerCharacter`).
 	 */
 	async function handleCharacterDrop(files: File[]) {
-		const takenIds = new Set(library.characters.map(character => character.id));
+		// Asset names count, not just other character ids: a scene addresses assets by name
+		// and characters by id out of one namespace, and `store.putCharacter` throws on a
+		// clash rather than quietly renaming. Minting a free id here is what keeps a drop of
+		// forty sprites from stopping on the first one that matches a backdrop.
+		const takenIds = await library.store.takenNames();
 
 		for (const file of files) {
-			const baseId = slugify(nameFromFilename(file.name));
-			let id = baseId;
-			let suffix = 2;
-
-			while (takenIds.has(id)) {
-				id = `${baseId}-${suffix}`;
-				suffix++;
-			}
+			const id = uniqueName(slugify(nameFromFilename(file.name)), takenIds);
 
 			takenIds.add(id);
 
@@ -143,7 +141,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	}
 
 	async function handleCreateCharacter(name: string) {
-		const id = slugify(name);
+		const id = uniqueName(slugify(name), await library.store.takenNames());
 
 		await library.store.putCharacter(defaultCharacter(id, name.trim() || id));
 		setNewCharacterName('');

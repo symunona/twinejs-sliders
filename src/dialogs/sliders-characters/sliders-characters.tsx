@@ -2,7 +2,8 @@ import {
 	defaultCharacter,
 	nameFromFilename,
 	newFrameAnchors,
-	slugify
+	slugify,
+	uniqueName
 } from '@sliders/asset-store';
 import {AssetMeta, Character} from '@sliders/scene-types';
 import {IconTag, IconTrash, IconUserPlus} from '@tabler/icons';
@@ -56,6 +57,8 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 	const [draft, setDraft] = React.useState<Character>();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
 	const [newId, setNewId] = React.useState('');
+	/** Set when the store refused an id. Shown above the tabs, cleared on the next try. */
+	const [idError, setIdError] = React.useState<string>();
 	const [selectedId, setSelectedId] = React.useState(characterId);
 	const {t} = useTranslation();
 
@@ -129,9 +132,13 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 	);
 
 	async function handleCreate(name: string) {
-		const id = slugify(name);
+		// Minted against asset names too. Scene YAML addresses assets by name and characters
+		// by id out of one namespace, so `putCharacter` throws on a clash — a new character
+		// should quietly become `mira-2` rather than fail.
+		const id = uniqueName(slugify(name), await store.takenNames());
 
 		setNewCharacterName('');
+		setIdError(undefined);
 		await store.putCharacter(defaultCharacter(id, name.trim() || id));
 		setSelectedId(id);
 		refresh();
@@ -160,6 +167,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		const id = slugify(value);
 
 		setNewId('');
+		setIdError(undefined);
 
 		if (!id || id === draft.id || characters.some(other => other.id === id)) {
 			return;
@@ -167,7 +175,21 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 
 		const renamed = {...draft, id};
 
-		await store.putCharacter(renamed);
+		// A rename is deliberate, so a clash is loud: the store throws rather than handing
+		// back `mira-2`, and an author who typed `mira` would go on writing `mira` in their
+		// scenes. Caught here so it reads as a message instead of an unhandled rejection.
+		try {
+			await store.putCharacter(renamed);
+		} catch (error) {
+			setIdError(
+				t('dialogs.slidersCharacters.idTaken', {
+					id,
+					message: (error as Error).message
+				})
+			);
+			return;
+		}
+
 		await store.removeCharacter(draft.id);
 		setDraft(renamed);
 		setSelectedId(id);
@@ -314,6 +336,13 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 					</>
 				)}
 			</ButtonBar>
+			{idError && (
+				<CardContent>
+					<p className="sliders-characters-error" role="alert">
+						{idError}
+					</p>
+				</CardContent>
+			)}
 			{characters.length === 0 ? (
 				<CardContent>
 					<p>{t('dialogs.slidersCharacters.none')}</p>

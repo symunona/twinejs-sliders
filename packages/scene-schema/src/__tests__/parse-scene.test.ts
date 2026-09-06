@@ -73,13 +73,14 @@ describe('parseScene', () => {
 				flip: true,
 				frame: 'idle',
 				kind: 'cast',
-				layer: 'back',
-				ref: 'joren'
+				ref: 'joren',
+				// `layer: back` is sugar. It desugars to a z seed behind everything derived.
+				z: -1
 			});
 			expect(scene.entities.candle).toEqual({
 				at: {x: 0.1, y: -0.2},
 				kind: 'prop',
-				layer: 'front',
+				z: 2,
 				ref: 'candle'
 			});
 		});
@@ -171,7 +172,7 @@ describe('parseScene', () => {
 
 			expect(errors).toEqual([]);
 			expect(scene.entities.mira).toMatchObject({scale: 1.15});
-			expect(scene.entities.candle).toMatchObject({scale: 0.6, layer: 'front'});
+			expect(scene.entities.candle).toMatchObject({scale: 0.6, z: 2});
 		});
 
 		it('reads a scale inside a beat patch', () => {
@@ -210,13 +211,41 @@ describe('parseScene', () => {
 		});
 	});
 
-	describe('layers', () => {
+	describe('layer:, which is now sugar for z', () => {
 		it('accepts back, mid and front', () => {
 			const {errors} = parseScene(
 				'cast:\n  a: {layer: back}\n  b: {layer: mid}\n  c: {layer: front}\n'
 			);
 
 			expect(errors).toEqual([]);
+		});
+
+		it('desugars back and front to a z seed, and mid to nothing', () => {
+			const {scene} = parseScene(
+				'cast:\n  a: {layer: back}\n  b: {layer: mid}\n  c: {layer: front}\n'
+			);
+
+			expect(scene.entities.a).toMatchObject({z: -1});
+			// `mid` IS the y-derived order, so it writes no z at all rather than pinning
+			// the entity to some number that stops tracking its y.
+			expect(scene.entities.b).not.toHaveProperty('z');
+			expect(scene.entities.c).toMatchObject({z: 2});
+		});
+
+		it('never writes a layer key onto the patch', () => {
+			const {scene} = parseScene('cast:\n  a: {layer: front}\n');
+
+			expect(scene.entities.a).not.toHaveProperty('layer');
+		});
+
+		it('lets an explicit z win, in EITHER key order', () => {
+			// YAML map order is the author's, not a precedence rule, so both have to agree.
+			expect(parseScene('cast:\n  a: {layer: front, z: 0.4}\n').scene.entities.a).toMatchObject(
+				{z: 0.4}
+			);
+			expect(parseScene('cast:\n  a: {z: 0.4, layer: front}\n').scene.entities.a).toMatchObject(
+				{z: 0.4}
+			);
 		});
 
 		it('rejects anything else', () => {
@@ -226,6 +255,53 @@ describe('parseScene', () => {
 			expect(errors[0].line).toBe(2);
 			// Still returns the entity, just without the bad layer.
 			expect(scene.entities.mira).toMatchObject({kind: 'cast', ref: 'mira'});
+			expect(scene.entities.mira).not.toHaveProperty('z');
+		});
+	});
+
+	describe('entities:', () => {
+		it('parses entries with kind auto — it cannot know which they are', () => {
+			const {errors, scene} = parseScene(
+				'entities:\n  mira: {at: -0.4, frame: idle}\n  candle: {at: 0.4}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.entities.mira).toMatchObject({
+				frame: 'idle',
+				kind: 'auto',
+				ref: 'mira'
+			});
+			expect(scene.entities.candle).toMatchObject({kind: 'auto', ref: 'candle'});
+		});
+
+		it('shares one id space with cast: and props:', () => {
+			const {scene} = parseScene(
+				'cast:\n  mira: {at: 0}\nentities:\n  candle: {at: 0.4}\n'
+			);
+
+			expect(Object.keys(scene.entities).sort()).toEqual(['candle', 'mira']);
+			expect(scene.entities.mira).toMatchObject({kind: 'cast'});
+		});
+
+		it('takes the same entity keys, layer sugar included', () => {
+			const {errors, scene} = parseScene(
+				'entities:\n  candle: {at: 0.4, ref: lamp, scale: 0.6, layer: front}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.entities.candle).toMatchObject({
+				kind: 'auto',
+				ref: 'lamp',
+				scale: 0.6,
+				z: 2
+			});
+		});
+
+		it('is suggested for a near miss on the key', () => {
+			const {errors} = parseScene('entites:\n  mira: {at: 0}\n');
+
+			expect(errors[0].code).toBe('unknown-key');
+			expect(errors[0].hint).toBe("Did you mean 'entities'?");
 		});
 	});
 
@@ -291,6 +367,17 @@ describe('parseScene', () => {
 			const {scene} = parseScene('from: other\ncast: !only {mira: {at: 0}}\n');
 
 			expect(scene.replaceCast).toBe(true);
+		});
+
+		it('sets replaceEntities for entities:, which names no kind at all', () => {
+			const {scene, errors} = parseScene(
+				'from: other\nentities: !only {candle: {at: 0}}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.replaceEntities).toBe(true);
+			expect(scene.replaceCast).toBeUndefined();
+			expect(scene.replaceProps).toBeUndefined();
 		});
 
 		it('sets replaceProps for props', () => {

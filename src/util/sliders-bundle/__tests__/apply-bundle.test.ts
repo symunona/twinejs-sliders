@@ -390,6 +390,68 @@ describe('planBundle asset clashes', () => {
 	});
 });
 
+describe('planBundle against a local character id', () => {
+	// Asset names and character ids are one namespace — a scene resolves an `entities:`
+	// entry against both — and a character id cannot be renamed: it is written literally
+	// into every scene that casts it. So the incoming ASSET is the one that has to move.
+
+	it('numbers the incoming asset and says so', async () => {
+		const store = newStore();
+
+		await store.putCharacter({
+			frames: {},
+			id: 'lamp',
+			name: 'Lamp',
+			origin: {x: 0.5, y: 1},
+			size: {w: 100, h: 200},
+			tags: []
+		});
+
+		const incoming = await asset(webpBytes(), {id: 'a_8f21', name: 'lamp'});
+		const plan = await planBundle(store, contents({assets: [incoming]}));
+
+		expect(plan.assets[0].meta.name).toBe('lamp-2');
+		expect(plan.warnings.join(' ')).toContain('already has a character called "lamp"');
+
+		await applyBundlePlan(store, plan);
+
+		const library = await store.list({includeFrames: true});
+
+		expect(library.map(item => item.name)).toEqual(['lamp-2']);
+	});
+
+	it('leaves a name alone when no character answers to it', async () => {
+		const store = newStore();
+		const incoming = await asset(webpBytes(), {id: 'a_8f21', name: 'lamp'});
+		const plan = await planBundle(store, contents({assets: [incoming]}));
+
+		expect(plan.assets[0].meta.name).toBe('lamp');
+		expect(plan.warnings).toEqual([]);
+	});
+
+	it('does not move a frame — a frame is reached through its character, not by name', async () => {
+		const store = newStore();
+
+		await store.putCharacter({
+			frames: {},
+			id: 'lamp',
+			name: 'Lamp',
+			origin: {x: 0.5, y: 1},
+			size: {w: 100, h: 200},
+			tags: []
+		});
+
+		const incoming = await asset(webpBytes(), {
+			id: 'a_8f21',
+			name: 'lamp',
+			ownerCharacter: 'someone'
+		});
+		const plan = await planBundle(store, contents({assets: [incoming]}));
+
+		expect(plan.assets[0].meta.name).toBe('lamp');
+	});
+});
+
 describe('planBundle sourceAsset', () => {
 	it('remaps a sourceAsset that travelled with the bundle', async () => {
 		const store = newStore();

@@ -142,6 +142,7 @@ describe('resolveBundleRefs', () => {
 		});
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: ['tavern-night'],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: []
@@ -159,6 +160,7 @@ describe('resolveBundleRefs', () => {
 		});
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: [],
@@ -179,6 +181,7 @@ describe('resolveBundleRefs', () => {
 		});
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [id],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: []
@@ -205,6 +208,7 @@ describe('resolveBundleRefs', () => {
 
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: ['tavern-nite', 'tavern-nite'],
+			autoRefs: [],
 			characterRefs: ['mira'],
 			frameRefs: {},
 			fxRefs: ['sparkle']
@@ -226,23 +230,34 @@ describe('resolveBundleRefs', () => {
 			return new Map(list.map(asset => [asset.name, asset]));
 		}
 
+		/**
+		 * Two assets under one name, built the only way that is still possible:
+		 * `putAsset` numbers a clashing name now, so the second one goes in through
+		 * `importAsset` — the bundle path, which deliberately leaves naming to its caller.
+		 * A library that predates the uniqueness rule holds exactly this shape, and the
+		 * resolver still has to pick the one the preview draws.
+		 */
 		async function seedBothOrders(first: 'png' | 'webp') {
 			const store = newStore();
-			const put = {
-				png: () =>
-					store.put(file(pngBytes(3, 3), 'a.png', 'image/png'), {
-						kind: 'bg',
-						name: 'tavern-night'
-					}),
-				webp: () =>
-					store.put(file(webpBytes(), 'b.webp', 'image/webp'), {
-						kind: 'bg',
-						name: 'tavern-night'
-					})
+			const blobs = {
+				png: file(pngBytes(3, 3), 'a.png', 'image/png'),
+				webp: file(webpBytes(), 'b.webp', 'image/webp')
 			};
+			const second = first === 'png' ? 'webp' : 'png';
 
-			await put[first]();
-			await put[first === 'png' ? 'webp' : 'png']();
+			await store.put(blobs[first], {kind: 'bg', name: 'tavern-night'});
+
+			const put = await store.putAsset(blobs[second], {
+				kind: 'bg',
+				name: 'tavern-night'
+			});
+
+			// The rule under test elsewhere, asserted here so this fixture cannot rot into
+			// something that quietly stops producing a clash.
+			expect(put.meta.name).toBe('tavern-night-2');
+			// Re-filed under the contested name, then the numbered copy dropped.
+			await store.importAsset({...put.meta, name: 'tavern-night'}, blobs[second]);
+			await store.remove(put.id);
 
 			return store;
 		}
@@ -262,6 +277,7 @@ describe('resolveBundleRefs', () => {
 				const drawn = (await previewIndex(store)).get('tavern-night');
 				const resolved = await resolveBundleRefs(store, {
 					assetRefs: ['tavern-night'],
+					autoRefs: [],
 					characterRefs: [],
 					frameRefs: {},
 					fxRefs: []
@@ -276,6 +292,63 @@ describe('resolveBundleRefs', () => {
 		);
 	});
 
+	describe('an autoRef, which could be either', () => {
+		it('resolves as a character first', async () => {
+			const store = newStore();
+
+			await store.putCharacter({
+				frames: {},
+				id: 'mira',
+				name: 'Mira',
+				origin: {x: 0.5, y: 1},
+				size: {w: 100, h: 200},
+				tags: []
+			});
+
+			const resolved = await resolveBundleRefs(store, {
+				assetRefs: [],
+				autoRefs: ['mira'],
+				characterRefs: [],
+				frameRefs: {},
+				fxRefs: []
+			});
+
+			expect(resolved.characters.map(one => one.id)).toEqual(['mira']);
+			expect(resolved.unresolved).toEqual([]);
+		});
+
+		it('falls through to an asset when no character answers', async () => {
+			const store = newStore();
+			const id = await store.put(file(webpBytes(), 'lamp.webp', 'image/webp'), {
+				kind: 'object',
+				name: 'lamp'
+			});
+			const resolved = await resolveBundleRefs(store, {
+				assetRefs: [],
+				autoRefs: ['lamp'],
+				characterRefs: [],
+				frameRefs: {},
+				fxRefs: []
+			});
+
+			expect(resolved.assets.map(meta => meta.id)).toEqual([id]);
+			// Never "missing character lamp": only one of the two was ever going to hit.
+			expect(resolved.unresolved).toEqual([]);
+		});
+
+		it('is unresolved only when BOTH lookups miss', async () => {
+			const resolved = await resolveBundleRefs(newStore(), {
+				assetRefs: [],
+				autoRefs: ['ghost'],
+				characterRefs: [],
+				frameRefs: {},
+				fxRefs: []
+			});
+
+			expect(resolved.unresolved).toEqual(['ghost']);
+		});
+	});
+
 	it('matches an fx ref against the slug assetFragment writes', async () => {
 		const store = newStore();
 		const id = await store.put(file(webpBytes(), 'rain.webp', 'image/webp'), {
@@ -284,6 +357,7 @@ describe('resolveBundleRefs', () => {
 		});
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: ['rain']
@@ -308,6 +382,7 @@ describe('resolveBundleRefs', () => {
 		});
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: ['rain']
@@ -332,6 +407,7 @@ describe('resolveBundleRefs', () => {
 
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: ['rain']
@@ -357,6 +433,7 @@ describe('resolveBundleRefs', () => {
 
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: ['rain']
@@ -378,6 +455,7 @@ describe('resolveBundleRefs', () => {
 			// A `bg:` may legitimately name a frame by its full name, and then the frame
 			// travels without anything having asked for its character.
 			assetRefs: ['mira/smile'],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: []
@@ -425,6 +503,7 @@ describe('resolveBundleRefs', () => {
 		]);
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
 			fxRefs: []
@@ -445,6 +524,7 @@ describe('resolveBundleRefs', () => {
 
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['idle', 'smirk'], candle: ['lit']},
 			fxRefs: []
@@ -461,6 +541,7 @@ describe('resolveBundleRefs', () => {
 
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: ['mira'],
 			frameRefs: {},
 			fxRefs: []
@@ -482,6 +563,7 @@ describe('resolveBundleRefs', () => {
 		});
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: ['tavern-night', id],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: []
@@ -693,6 +775,7 @@ describe('exportStoryBundle', () => {
 
 		expect(collectAssetRefs(story)).toEqual({
 			assetRefs: ['tavern-night'],
+			autoRefs: [],
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
 			fxRefs: ['rain'],

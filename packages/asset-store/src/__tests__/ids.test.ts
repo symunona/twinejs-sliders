@@ -3,7 +3,8 @@ import {
 	nameFromFilename,
 	randomAssetId,
 	slugify,
-	uniqueAssetId
+	uniqueAssetId,
+	uniqueName
 } from '../ids';
 
 // jsdom in this Jest version has no TextEncoder.
@@ -120,5 +121,30 @@ describe('slugify()', () => {
 		['  ??  ', 'untitled']
 	])('turns %s into %s', (value, expected) => {
 		expect(slugify(value)).toBe(expected);
+	});
+});
+
+describe('uniqueName()', () => {
+	it('hands back a free name untouched', () => {
+		expect(uniqueName('lamp', new Set())).toBe('lamp');
+		expect(uniqueName('lamp', new Set(['torch']))).toBe('lamp');
+	});
+
+	it('numbers from 2 — the original already is the first one', () => {
+		expect(uniqueName('lamp', new Set(['lamp']))).toBe('lamp-2');
+	});
+
+	it('keeps counting past a run of taken numbers', () => {
+		expect(uniqueName('lamp', new Set(['lamp', 'lamp-2', 'lamp-3']))).toBe('lamp-4');
+	});
+
+	it('skips a gap rather than filling it — the first free number wins', () => {
+		expect(uniqueName('lamp', new Set(['lamp', 'lamp-3']))).toBe('lamp-2');
+	});
+
+	it('does not care what kind of thing took the name', () => {
+		// The taken set is asset names AND character ids: one namespace, because a scene
+		// resolves an `entities:` entry against both.
+		expect(uniqueName('mira', new Set(['mira']))).toBe('mira-2');
 	});
 });

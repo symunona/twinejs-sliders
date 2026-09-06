@@ -19,6 +19,7 @@ export const TOP_LEVEL_ORDER = [
 	'camera',
 	'cast',
 	'props',
+	'entities',
 	'fx',
 	'beats',
 	'links'
@@ -117,12 +118,19 @@ export function findPair(
 	);
 }
 
-/** `cast` -> the `cast:` key, `prop` -> the `props:` key. */
-export function mapKeyFor(kind: EntityKind): 'cast' | 'props' {
-	return kind === 'cast' ? 'cast' : 'props';
+/**
+ * `cast` -> the `cast:` key, `prop` -> `props:`, `auto` -> `entities:`.
+ *
+ * `auto` only ever comes back OUT of a hand-authored `entities:` block, so this is where an
+ * edit to such an entry lands — in place, not copied into `props:` under the same id. The
+ * editor still never MINTS an `auto` entity: a drop picks cast or prop, and the prebuilt
+ * story format carries an older parser that has never heard of `entities:`.
+ */
+export function mapKeyFor(kind: EntityKind): 'cast' | 'props' | 'entities' {
+	return kind === 'cast' ? 'cast' : kind === 'auto' ? 'entities' : 'props';
 }
 
-/** The `cast:` / `props:` map node, when it exists and is actually a map. */
+/** The `cast:` / `props:` / `entities:` map node, when it exists and is actually a map. */
 export function entityMapOf(
 	parsed: Parsed,
 	kind: EntityKind

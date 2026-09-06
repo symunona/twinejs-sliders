@@ -39,9 +39,7 @@ export const RENDER_DOM_CSS = `
 }
 
 .sliders-layer[data-layer='bg'] { z-index: 0; }
-.sliders-layer[data-layer='back'] { z-index: 10; }
-.sliders-layer[data-layer='mid'] { z-index: 20; }
-.sliders-layer[data-layer='front'] { z-index: 30; }
+.sliders-layer[data-layer='entities'] { z-index: 10; }
 
 .sliders-bg {
 	position: absolute;

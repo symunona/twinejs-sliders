@@ -253,6 +253,7 @@ describe('the fixture story references what this suite relies on', () => {
 	it('writes the refs the scanner is expected to find', () => {
 		expect(collectAssetRefs(storyFixture())).toEqual({
 			assetRefs: ['tavern-night', 'tavern-night-edited'],
+			autoRefs: [],
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
 			fxRefs: ['rain'],

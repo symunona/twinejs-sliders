@@ -19,7 +19,7 @@ function baseStage(): Stage {
 		scene({
 			bg: 'tavern/night',
 			entities: {
-				candle: {at: {x: 0.5, y: 0}, kind: 'prop', layer: 'front', ref: 'candle'},
+				candle: {at: {x: 0.5, y: 0}, kind: 'prop', z: 2, ref: 'candle'},
 				joren: {at: {x: 0.35, y: 0}, frame: 'idle', kind: 'cast', ref: 'joren'},
 				mira: {
 					at: {x: -0.4, y: 0.1},
@@ -44,7 +44,6 @@ describe('applyScene', () => {
 				frame: undefined,
 				id: 'mira',
 				kind: 'cast',
-				layer: 'mid',
 				opacity: 1,
 				ref: 'mira',
 				scale: 1,
@@ -154,7 +153,6 @@ describe('applyScene', () => {
 
 			expect(stage.entities.sara).toMatchObject({
 				flip: false,
-				layer: 'mid',
 				opacity: 1
 			});
 		});

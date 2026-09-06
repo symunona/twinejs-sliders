@@ -258,9 +258,15 @@ export function resolveSceneAssets(
 
 			const ref = patch.ref ?? id;
 
-			if (patch.kind === 'prop') {
+			// An `entities:` entry is kind `auto`: character first, asset second, the same
+			// order the renderer tries. Only when the character misses does it become a
+			// prop row, so a resolvable name is never reported as a missing asset.
+			const auto = patch.kind === 'auto';
+			const via = auto ? `entities/${id}` : `props/${id}`;
+
+			if (patch.kind === 'prop' || (auto && !catalog.characters.has(ref))) {
 				// 2 — props resolve straight to an asset through `ref` (default = the key).
-				push(rowFor(catalog, ref, `props/${id}`, id, inherited, 'object'));
+				push(rowFor(catalog, ref, via, id, inherited, 'object'));
 				continue;
 			}
 

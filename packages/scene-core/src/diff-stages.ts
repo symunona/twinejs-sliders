@@ -31,7 +31,6 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
  */
 export interface Placement {
 	at: Vec2;
-	layer: StageEntity['layer'];
 	z?: number;
 	opacity: number;
 }
@@ -39,7 +38,6 @@ export interface Placement {
 function placementOf(entity: StageEntity): Placement {
 	return {
 		at: {x: entity.at.x, y: entity.at.y},
-		layer: entity.layer,
 		opacity: entity.opacity,
 		z: entity.z
 	};
@@ -52,7 +50,6 @@ function sameVec(a: Vec2, b: Vec2): boolean {
 function samePlacement(a: StageEntity, b: StageEntity): boolean {
 	return (
 		sameVec(a.at, b.at) &&
-		a.layer === b.layer &&
 		a.z === b.z &&
 		a.opacity === b.opacity
 	);

@@ -33,6 +33,7 @@ export type HintSlot =
 	| {kind: 'passage'}
 	| {kind: 'cast'}
 	| {kind: 'props'}
+	| {kind: 'entities'}
 	| {kind: 'frame'; entity: string}
 	| {kind: 'layer'}
 	| {kind: 'fx'};
@@ -58,7 +59,7 @@ export interface SceneHintContext {
 	needsSpace: boolean;
 	/**
 	 * True when picking a name should write a whole entity line rather than just
-	 * the name -- `mira` becomes `mira: {at: 0, layer: mid}`.
+	 * the name -- `mira` becomes `mira: {at: 0}`.
 	 *
 	 * Only for an entity id in KEY position, and only when the rest of the line
 	 * is still empty. `ref: mi` wants the bare name, and an id being edited in a
@@ -70,16 +71,19 @@ export interface SceneHintContext {
 }
 
 /**
- * What an entity gets prefilled with. `at` and `layer` are the two knobs almost
- * every entity ends up setting, and writing them out beats remembering the key
- * names -- `at: 0` is centre stage with the feet on the layer baseline, `mid` is
- * the layer an entity would have defaulted to anyway (scene-core's `stage.ts`).
+ * What an entity gets prefilled with. `at` is the one knob almost every entity ends up
+ * setting, and writing it out beats remembering the key name -- `at: 0` is centre stage
+ * with the feet on the stage baseline.
+ *
+ * `layer: mid` used to ride along. It was already only the default written out longhand,
+ * and now that `layer:` is sugar for a `z` seed with no seed for `mid`, it writes nothing
+ * at all -- so it is noise in a file people hand-edit.
  *
  * Split so the caller can put the cursor on the value instead of after it.
  */
 const ENTITY_PREFIX = ': {at: ';
 const ENTITY_AT = '0';
-const ENTITY_SUFFIX = ', layer: mid}';
+const ENTITY_SUFFIX = '}';
 
 /**
  * What ends a name, scanning outward from the cursor. Everything else belongs to it --
@@ -342,10 +346,12 @@ export function sceneHintContext(
 				// `ref:` names a character under `cast:` and an asset under
 				// `props:`, so the block the entity lives in decides.
 				const section = enclosingKeys(lines, blockStart, cursor.line).find(
-					one => one === 'cast' || one === 'props'
+					one => one === 'cast' || one === 'props' || one === 'entities'
 				);
 
-				return section === 'cast' || section === 'props'
+				return section === 'cast' ||
+					section === 'props' ||
+					section === 'entities'
 					? found({kind: section})
 					: undefined;
 			}
@@ -369,6 +375,9 @@ export function sceneHintContext(
 
 		case 'props':
 			return found({kind: 'props'}, true);
+
+		case 'entities':
+			return found({kind: 'entities'}, true);
 
 		case 'fx':
 			return found({kind: 'fx'});
@@ -424,6 +433,14 @@ function namesForSlot(
 
 		case 'cast':
 			return characters.map(character => character.id).sort();
+
+		// `entities:` declares no kind, so both vocabularies are on offer. Characters
+		// lead because that is the order the resolver tries them in.
+		case 'entities':
+			return [
+				...characters.map(character => character.id).sort(),
+				...assetNames(all, ['object', 'fx'])
+			];
 
 		case 'layer':
 			return [...LAYERS];

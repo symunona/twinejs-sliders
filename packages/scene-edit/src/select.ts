@@ -52,11 +52,18 @@ function pairSpan(
 }
 
 /**
- * A beat speaker is a cast member unless the `props:` map says otherwise. A patch scene
+ * A beat speaker is a cast member unless `entities:` or the `props:` map says otherwise. A
+ * patch scene
  * inherits entities it never names locally, so "not declared here" cannot mean "not a
  * character" — defaulting to prop would break every `from:` scene.
  */
 function kindOfId(parsed: Parsed, id: string): EntityKind {
+	const entities = entityMapOf(parsed, 'auto');
+
+	if (entities && findPair(entities, id)) {
+		return 'auto';
+	}
+
 	const props = entityMapOf(parsed, 'prop');
 
 	return props && findPair(props, id) ? 'prop' : 'cast';
@@ -73,7 +80,7 @@ export function entityAtLine(
 		return undefined;
 	}
 
-	for (const kind of ['cast', 'prop'] as const) {
+	for (const kind of ['cast', 'prop', 'auto'] as const) {
 		const map = entityMapOf(parsed, kind);
 
 		if (!map) {

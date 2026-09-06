@@ -398,3 +398,161 @@ describe('importAsset', () => {
 		expect((await store.meta('a_1111'))?.ownerCharacter).toBe('mira');
 	});
 });
+
+/**
+ * Scene YAML addresses assets by NAME and characters by ID, and an `entities:` entry is
+ * resolved against both. So the two share one namespace, and the store is what keeps it
+ * unambiguous — nothing downstream can, because by then the name index has already dropped
+ * whichever entry it saw first.
+ */
+describe('unique names', () => {
+	function png(name: string, size = 3) {
+		return file(pngBytes(size, size), `${name}.png`, 'image/png');
+	}
+
+	it('numbers a clashing upload rather than refusing it', async () => {
+		const store = newStore();
+
+		// Different pixels, so the hash dedupe cannot quietly collapse them into one.
+		const first = await store.putAsset(png('lamp', 3), {name: 'lamp'});
+		const second = await store.putAsset(png('lamp', 4), {name: 'lamp'});
+		const third = await store.putAsset(png('lamp', 5), {name: 'lamp'});
+
+		expect(first.meta.name).toBe('lamp');
+		expect(second.meta.name).toBe('lamp-2');
+		expect(third.meta.name).toBe('lamp-3');
+	});
+
+	it('counts a character id as taken, not just other assets', async () => {
+		const store = newStore();
+
+		await store.putCharacter(defaultCharacter('mira'));
+
+		const put = await store.putAsset(png('mira'), {name: 'mira'});
+
+		expect(put.meta.name).toBe('mira-2');
+	});
+
+	it('counts character frames too — a bg: may legitimately name one', async () => {
+		const store = newStore();
+
+		await store.putCharacter(defaultCharacter('mira'));
+		await store.putAsset(png('idle', 3), {
+			name: 'mira-idle',
+			ownerCharacter: 'mira'
+		});
+
+		const loose = await store.putAsset(png('idle', 4), {name: 'mira-idle'});
+
+		expect(loose.meta.name).toBe('mira-idle-2');
+	});
+
+	it('leaves a name alone when nothing else answers to it', async () => {
+		const store = newStore();
+
+		await store.putAsset(png('lamp', 3), {name: 'lamp'});
+
+		expect((await store.putAsset(png('torch', 4), {name: 'torch'})).meta.name).toBe(
+			'torch'
+		);
+	});
+
+	it('reports the whole namespace through takenNames()', async () => {
+		const store = newStore();
+
+		await store.putCharacter(defaultCharacter('mira'));
+		await store.putAsset(png('lamp'), {name: 'lamp'});
+
+		expect([...(await store.takenNames())].sort()).toEqual(['lamp', 'mira']);
+	});
+
+	describe('rename', () => {
+		it('throws rather than numbering — a rename is deliberate', async () => {
+			const store = newStore();
+			const lamp = await store.putAsset(png('lamp', 3), {name: 'lamp'});
+			const torch = await store.putAsset(png('torch', 4), {name: 'torch'});
+
+			await expect(store.update(torch.id, {name: 'lamp'})).rejects.toThrow(
+				/already called lamp/
+			);
+			// And nothing was written on the way out.
+			expect((await store.meta(torch.id))?.name).toBe('torch');
+			expect((await store.meta(lamp.id))?.name).toBe('lamp');
+		});
+
+		it('throws on a character id as readily as on an asset name', async () => {
+			const store = newStore();
+
+			await store.putCharacter(defaultCharacter('mira'));
+
+			const lamp = await store.putAsset(png('lamp'), {name: 'lamp'});
+
+			await expect(store.update(lamp.id, {name: 'mira'})).rejects.toThrow(
+				/already called mira/
+			);
+		});
+
+		it('lets an asset keep its own name', async () => {
+			const store = newStore();
+			const lamp = await store.putAsset(png('lamp'), {name: 'lamp'});
+
+			await expect(
+				store.update(lamp.id, {name: 'lamp', tags: ['prop']})
+			).resolves.toMatchObject({name: 'lamp', tags: ['prop']});
+		});
+
+		it('lets an edit that never touches the name through', async () => {
+			const store = newStore();
+			const lamp = await store.putAsset(png('lamp'), {name: 'lamp'});
+
+			await expect(
+				store.update(lamp.id, {tags: ['prop']})
+			).resolves.toMatchObject({name: 'lamp'});
+		});
+	});
+
+	describe('putCharacter', () => {
+		it('refuses a new id an asset name already answers to', async () => {
+			const store = newStore();
+
+			await store.putAsset(png('mira'), {name: 'mira'});
+
+			await expect(store.putCharacter(defaultCharacter('mira'))).rejects.toThrow(
+				/already called mira/
+			);
+		});
+
+		it('keeps letting an existing character be saved over', async () => {
+			const store = newStore();
+
+			await store.putCharacter(defaultCharacter('mira'));
+
+			// The frame lands under a different name (`mira` is taken by the character), but
+			// the re-save itself must not become an error — every edit goes through here.
+			await expect(
+				store.putCharacter({...defaultCharacter('mira'), name: 'Mira the Second'})
+			).resolves.toMatchObject({id: 'mira', name: 'Mira the Second'});
+		});
+
+		it('leaves a free id alone', async () => {
+			const store = newStore();
+
+			await expect(store.putCharacter(defaultCharacter('joren'))).resolves.toMatchObject(
+				{id: 'joren'}
+			);
+		});
+	});
+
+	it('leaves importAsset alone — the importer owns naming', async () => {
+		const store = newStore();
+
+		await store.putAsset(png('lamp'), {name: 'lamp'});
+
+		const imported = await store.importAsset(
+			bundled({id: 'a_dupe', name: 'lamp'}),
+			new Blob([pngBytes(4, 4)], {type: 'image/png'})
+		);
+
+		expect(imported.name).toBe('lamp');
+	});
+});

@@ -14,7 +14,7 @@ import {
 } from './asset-store.types';
 import {blobBytes} from './blob-bytes';
 import {migrateCharacter} from './characters';
-import {contentHash, nameFromFilename, uniqueAssetId} from './ids';
+import {contentHash, nameFromFilename, uniqueAssetId, uniqueName} from './ids';
 import {prepareUpload} from './transcode';
 
 /**
@@ -100,6 +100,36 @@ export class BackedAssetStore implements AssetStore {
 		return run;
 	}
 
+	/**
+	 * Every name a scene block can write. Asset names and character ids share one namespace,
+	 * because that is how a scene reads them: `bg: lamp` and an `entities:` entry called
+	 * `mira` are looked up against both.
+	 *
+	 * Frames count. They are ordinary assets and `bg:` may legitimately name one, so a frame
+	 * called `tavern` is as much a clash as a backdrop called `tavern`.
+	 */
+	private namesIn(manifest: AssetManifest, except?: string): Set<string> {
+		const taken = new Set<string>();
+
+		for (const meta of Object.values(manifest.assets)) {
+			if (meta.id !== except) {
+				taken.add(meta.name);
+			}
+		}
+
+		for (const id of Object.keys(manifest.characters)) {
+			if (id !== except) {
+				taken.add(id);
+			}
+		}
+
+		return taken;
+	}
+
+	async takenNames(): Promise<Set<string>> {
+		return this.namesIn(await this.load());
+	}
+
 	async putAsset(
 		file: File,
 		options: PutAssetOptions = {}
@@ -121,7 +151,13 @@ export class BackedAssetStore implements AssetStore {
 			const id = uniqueAssetId(Object.keys(manifest.assets));
 			const meta: AssetMeta = {
 				id,
-				name: options.name ?? nameFromFilename(file.name),
+				// Numbered rather than rejected: an upload is a bulk act — a folder of forty
+				// sprites, half of them called `idle` — and stopping the drop on the first
+				// clash would be useless. A rename is where the loud failure belongs.
+				name: uniqueName(
+					options.name ?? nameFromFilename(file.name),
+					this.namesIn(manifest)
+				),
 				kind: options.kind ?? (options.ownerCharacter ? 'frame' : 'bg'),
 				tags: options.tags ?? [],
 				animated: prepared.animated,
@@ -241,6 +277,17 @@ export class BackedAssetStore implements AssetStore {
 				throw new Error(`There is no asset with ID ${id}.`);
 			}
 
+			if (changes.name !== undefined && changes.name !== existing.name) {
+				// Loud, not numbered. `putAsset` may quietly pick `lamp-2` because nobody
+				// typed `lamp`; here somebody did, and handing them a different name would
+				// leave every scene that says `lamp` pointing at the other asset.
+				if (this.namesIn(manifest, id).has(changes.name)) {
+					throw new Error(
+						`Something else in this library is already called ${changes.name}.`
+					);
+				}
+			}
+
 			const updated = {...existing, ...changes, id};
 
 			manifest.assets[id] = updated;
@@ -273,6 +320,18 @@ export class BackedAssetStore implements AssetStore {
 			const stored: Character = migrateCharacter(
 				JSON.parse(JSON.stringify(character))
 			);
+
+			// Saving over an existing character is an update and always allowed. A NEW id
+			// that an asset name already answers to is not: scenes address both out of one
+			// namespace, so one of the two would become undrawable.
+			if (
+				!manifest.characters[stored.id] &&
+				this.namesIn(manifest).has(stored.id)
+			) {
+				throw new Error(
+					`Something else in this library is already called ${stored.id}.`
+				);
+			}
 
 			manifest.characters[stored.id] = stored;
 

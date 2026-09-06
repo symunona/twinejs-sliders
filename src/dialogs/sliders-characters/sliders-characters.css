@@ -336,3 +336,12 @@
 	gap: var(--control-inner-padding);
 	margin: 0;
 }
+
+/* Same shape as the asset editor's banner: this dialog only ever has one thing to say. */
+.sliders-characters-error {
+	background: var(--faint-red);
+	border-left: 4px solid var(--red);
+	border-radius: var(--corner-round);
+	margin: 0;
+	padding: var(--control-inner-padding) var(--grid-size);
+}

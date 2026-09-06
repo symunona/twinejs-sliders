@@ -17,7 +17,7 @@ import {useTranslation} from 'react-i18next';
 import {IconButton} from '../../../components/control/icon-button';
 import {useCommand} from '../../../hotkeys';
 import {extractSceneBlock, IndexedPassage} from '@sliders/scene-index';
-import {AssetResolver, Camera, EntityId, Layer, Vec2} from '@sliders/scene-types';
+import {AssetResolver, Camera, EntityId, Vec2} from '@sliders/scene-types';
 import {parseLinkText} from '@sliders/render-dom';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {AssetDragPayload} from './asset-drag';
@@ -26,8 +26,6 @@ import {
 	deleteWrites,
 	flipWrites,
 	frameWrite,
-	layerStepWrites,
-	layerWrites,
 	zWrites
 } from './scene-gestures';
 import {
@@ -562,17 +560,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[commit, selection, stage]
 	);
 
-	const setLayer = React.useCallback(
-		(layer: Layer) => commit(layerWrites(stage, selection, layer), EDIT_ORIGIN),
-		[commit, selection, stage]
-	);
-
-	const stepLayer = React.useCallback(
-		(delta: number) =>
-			commit(layerStepWrites(stage, selection, delta), EDIT_ORIGIN),
-		[commit, selection, stage]
-	);
-
 	const stepZ = React.useCallback(
 		(delta: number) => commit(zWrites(stage, selection, delta), Z_ORIGIN),
 		[commit, selection, stage]
@@ -885,22 +872,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open && editable && selection.length > 0,
-		id: 'scene.layerBack',
-		label: t('hotkeys.commands.scene.layerBack'),
-		run: () => stepLayer(-1),
-		scope: 'scene-preview'
-	});
-
-	useCommand({
-		enabled: open && editable && selection.length > 0,
-		id: 'scene.layerFront',
-		label: t('hotkeys.commands.scene.layerFront'),
-		run: () => stepLayer(1),
-		scope: 'scene-preview'
-	});
-
-	useCommand({
 		allowRepeat: true,
 		enabled: open && editable && selection.length > 0,
 		id: 'scene.zBack',
@@ -1030,7 +1001,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDelete={remove}
 				onFlip={flip}
 				onFrame={setFrame}
-				onLayer={setLayer}
+				onStepZ={stepZ}
 			/>
 			<StageEditorOverlay
 				editable={editable}

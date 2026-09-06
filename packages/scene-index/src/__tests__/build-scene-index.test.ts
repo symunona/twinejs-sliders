@@ -186,7 +186,8 @@ describe('buildSceneIndex', () => {
 			]);
 
 			expect(index.scenes.has('a')).toBe(true);
-			expect(index.resolve('a')?.entities.mira.layer).toBe('mid');
+			// A bad `layer:` seeds nothing, so the entity keeps its y-derived depth.
+			expect(index.resolve('a')?.entities.mira.z).toBeUndefined();
 		});
 	});
 

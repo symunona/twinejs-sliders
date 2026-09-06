@@ -181,6 +181,26 @@ export async function resolveBundleRefs(
 		await takeCharacter(character);
 	}
 
+	// `entities:` refs, where the author never said which of the two this is. Character
+	// first, asset second — the same order the renderer resolves an `auto` entity in — and
+	// only unresolved when BOTH miss, because exactly one of them was ever going to hit.
+	for (const ref of refs.autoRefs ?? []) {
+		const character = await store.character(ref);
+
+		if (character) {
+			await takeCharacter(character);
+			continue;
+		}
+
+		const meta = await byKey(ref);
+
+		if (meta) {
+			take(meta);
+		} else {
+			unresolved.add(ref);
+		}
+	}
+
 	// A frame that got picked up on its own — a `bg:` naming one, say — drags its character
 	// along. Without this it arrives owned by a character that is not in the bundle, which
 	// leaves it filtered out of the asset grid and unreachable from the character editor:

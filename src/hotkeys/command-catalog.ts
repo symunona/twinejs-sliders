@@ -142,8 +142,6 @@ export const commandCatalog: CatalogEntry[] = [
 
 	{id: 'scene.flip', scope: 'scene-preview'},
 	{id: 'scene.delete', scope: 'scene-preview'},
-	{id: 'scene.layerBack', scope: 'scene-preview'},
-	{id: 'scene.layerFront', scope: 'scene-preview'},
 	{id: 'scene.zBack', scope: 'scene-preview'},
 	{id: 'scene.zFront', scope: 'scene-preview'},
 

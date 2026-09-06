@@ -9,7 +9,6 @@ import {LAYER_BASELINE} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityPatch,
-	Layer,
 	Stage,
 	StageEntity,
 	StageFx,
@@ -20,7 +19,6 @@ import type {
 export const ENTITY_DEFAULTS = {
 	at: {x: 0, y: LAYER_BASELINE} as Vec2,
 	flip: false,
-	layer: 'mid' as Layer,
 	opacity: 1,
 	scale: 1
 };
@@ -60,8 +58,9 @@ export function cloneStage(stage: Stage): Stage {
 }
 
 /**
- * z within a layer. An explicit `z:` always wins; otherwise it derives from y — y is UP, so
- * lower on screen means nearer the camera and therefore drawn later (spec 02, Layers).
+ * Draw order. An explicit `z:` always wins; otherwise it derives from y — y is UP, so
+ * lower on screen means nearer the camera and therefore drawn later (spec 02). One space
+ * for the whole stage: there is nothing to partition it.
  */
 export function resolveZ(entity: StageEntity): number {
 	return entity.z ?? -entity.at.y;
@@ -92,10 +91,6 @@ export function mergePatch(
 		next.flip = patch.flip;
 	}
 
-	if (patch.layer !== undefined) {
-		next.layer = patch.layer;
-	}
-
 	if (patch.z !== undefined) {
 		next.z = patch.z;
 	}
@@ -119,7 +114,6 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		frame: patch.frame,
 		id,
 		kind: patch.kind,
-		layer: patch.layer ?? ENTITY_DEFAULTS.layer,
 		// No default: an entity with no `of` is in world space, and `of: ~` on a brand-new
 		// entity says the same thing.
 		of: patch.of ?? undefined,

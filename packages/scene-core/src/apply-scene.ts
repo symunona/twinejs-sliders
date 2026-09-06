@@ -87,11 +87,13 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 	}
 
 	// --- entities -----------------------------------------------------------
-	if (isPatch && (scene.replaceCast || scene.replaceProps)) {
+	if (isPatch && (scene.replaceCast || scene.replaceProps || scene.replaceEntities)) {
 		for (const id of Object.keys(out.entities)) {
 			const kind = out.entities[id].kind;
 
 			if (
+				// `entities: !only` names no kind, so it clears the whole stage.
+				scene.replaceEntities ||
 				(scene.replaceCast && kind === 'cast') ||
 				(scene.replaceProps && kind === 'prop')
 			) {
@@ -117,7 +119,10 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 		} else {
 			const merged = mergePatch(inherited, patch);
 
-			merged.kind = patch.kind;
+			// `auto` is "the parser could not tell". It must not overwrite a kind the base
+			// scene stated outright, or an `entities:` patch over a `cast:` entry would
+			// throw away what the snapshot already knew.
+			merged.kind = patch.kind === 'auto' ? inherited.kind : patch.kind;
 			merged.ref = patch.ref;
 			out.entities[id] = merged;
 		}

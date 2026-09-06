@@ -19,7 +19,6 @@ import type {
 	EntityId,
 	Frac2,
 	FrameFit,
-	Layer,
 	Renderer,
 	Stage,
 	StageEntity,
@@ -27,7 +26,6 @@ import type {
 	TransitionKind,
 	Vec2
 } from '@sliders/scene-types';
-import {LAYERS} from '@sliders/scene-types';
 import {
 	DEFAULT_ANCHORS,
 	DEFAULT_ORIGIN,
@@ -114,9 +112,13 @@ export class DomRenderer implements Renderer {
 	private boxEl?: HTMLDivElement;
 	private cameraEl?: HTMLDivElement;
 	private fxStackEl?: HTMLDivElement;
-	private layerEls = new Map<Layer | 'bg', HTMLDivElement>();
+	/** Two containers, drawn in order: the backdrop, then every entity in one z space. */
+	private bgLayerEl?: HTMLDivElement;
+	private entityLayerEl?: HTMLDivElement;
 
 	private entities = new Map<EntityId, EntityRecord>();
+	/** Entity id -> its index in the CURRENT stage's `entities` record. Ties break on it. */
+	private keyOrder = new Map<EntityId, number>();
 	private fxEls = new Map<string, HTMLDivElement>();
 	private bgEl?: HTMLElement;
 	private bgId?: string;
@@ -166,13 +168,17 @@ export class DomRenderer implements Renderer {
 		const box = this.el('div', 'sliders-stage-box');
 		const camera = this.el('div', 'sliders-camera');
 
-		for (const layer of ['bg', ...LAYERS] as const) {
-			const layerEl = this.el('div', 'sliders-layer');
+		// The backdrop is not an entity and must never be sorted with them, so it keeps a
+		// container of its own. Everything else shares ONE, which is what lets z decide the
+		// whole stage instead of only a slice of it.
+		const bgLayer = this.el('div', 'sliders-layer');
+		const entityLayer = this.el('div', 'sliders-layer');
 
-			layerEl.dataset.layer = layer;
-			this.layerEls.set(layer, layerEl);
-			camera.appendChild(layerEl);
-		}
+		bgLayer.dataset.layer = 'bg';
+		entityLayer.dataset.layer = 'entities';
+		this.bgLayerEl = bgLayer;
+		this.entityLayerEl = entityLayer;
+		camera.append(bgLayer, entityLayer);
 
 		const fxStack = this.el('div', 'sliders-fx-stack');
 		const guides = this.el('div', 'sliders-guides');
@@ -207,6 +213,12 @@ export class DomRenderer implements Renderer {
 		}
 
 		this.camera = normalizeCamera(stage.camera);
+
+		// Recorded here, not in syncEntities: assignZ() needs the order the author wrote in
+		// THIS scene, and the entity Map is keyed by first appearance.
+		this.keyOrder = new Map(
+			Object.keys(stage.entities ?? {}).map((id, index) => [id, index])
+		);
 
 		this.syncBg(stage.bg, durations.duration('bg'), stage.bgImplicit === true);
 		this.syncEntities(resolved, durations);
@@ -267,7 +279,8 @@ export class DomRenderer implements Renderer {
 		this.boxEl = undefined;
 		this.cameraEl = undefined;
 		this.fxStackEl = undefined;
-		this.layerEls.clear();
+		this.bgLayerEl = undefined;
+		this.entityLayerEl = undefined;
 		this.entities.clear();
 		this.fxEls.clear();
 		this.bgEl = undefined;
@@ -372,48 +385,31 @@ export class DomRenderer implements Renderer {
 		return out;
 	}
 
+	/**
+	 * Cast first, asset second — which is the order an `auto` entity (an `entities:` entry,
+	 * kind unknown to the parser) has to be tried in. A declared `cast:` still fails loudly
+	 * when the character is missing; `auto` only falls through.
+	 */
 	private async resolveEntity(entity: StageEntity): Promise<ResolvedEntity> {
-		if (entity.kind === 'cast') {
+		if (entity.kind === 'cast' || entity.kind === 'auto') {
 			const character = await this.character(entity.ref);
 
-			if (!character) {
+			if (character) {
+				return await this.resolveCast(entity, character);
+			}
+
+			if (entity.kind === 'cast') {
 				return {
 					entity,
 					placeholderId: entity.ref,
 					placeholderLabel: `? character\n${entity.ref}`
 				};
 			}
-
-			const frameName = pickFrameName(character, entity.frame);
-			const frame = frameName ? character.frames?.[frameName] : undefined;
-
-			if (!frame) {
-				const missingFrame = `${entity.ref}/${entity.frame ?? DEFAULT_FRAME_NAME}`;
-
-				return {
-					entity,
-					character,
-					placeholderId: missingFrame,
-					placeholderLabel: `? frame\n${missingFrame}`
-				};
-			}
-
-			const url = await this.url(frame.asset);
-
-			return {
-				entity,
-				character,
-				assetId: frame.asset,
-				url,
-				fit: frame.fit,
-				frameName,
-				placeholderId: url ? undefined : frame.asset,
-				placeholderLabel: url ? undefined : `? asset\n${frame.asset}`
-			};
 		}
 
 		const url = await this.url(entity.ref);
 		const meta = await this.meta(entity.ref);
+		const what = entity.kind === 'auto' ? 'entity' : 'asset';
 
 		return {
 			entity,
@@ -421,7 +417,39 @@ export class DomRenderer implements Renderer {
 			url,
 			meta,
 			placeholderId: url ? undefined : entity.ref,
-			placeholderLabel: url ? undefined : `? asset\n${entity.ref}`
+			placeholderLabel: url ? undefined : `? ${what}\n${entity.ref}`
+		};
+	}
+
+	private async resolveCast(
+		entity: StageEntity,
+		character: Character
+	): Promise<ResolvedEntity> {
+		const frameName = pickFrameName(character, entity.frame);
+		const frame = frameName ? character.frames?.[frameName] : undefined;
+
+		if (!frame) {
+			const missingFrame = `${entity.ref}/${entity.frame ?? DEFAULT_FRAME_NAME}`;
+
+			return {
+				entity,
+				character,
+				placeholderId: missingFrame,
+				placeholderLabel: `? frame\n${missingFrame}`
+			};
+		}
+
+		const url = await this.url(frame.asset);
+
+		return {
+			entity,
+			character,
+			assetId: frame.asset,
+			url,
+			fit: frame.fit,
+			frameName,
+			placeholderId: url ? undefined : frame.asset,
+			placeholderLabel: url ? undefined : `? asset\n${frame.asset}`
 		};
 	}
 
@@ -514,7 +542,6 @@ export class DomRenderer implements Renderer {
 		// Stable hooks the e2e suite selects on. Do not rename.
 		el.dataset.entityId = id;
 		el.dataset.kind = res.entity.kind;
-		el.dataset.layer = res.entity.layer;
 
 		const rec: EntityRecord = {
 			id,
@@ -530,7 +557,7 @@ export class DomRenderer implements Renderer {
 		this.entities.set(id, rec);
 		this.setContent(rec, res);
 		this.applyFit(rec, res);
-		this.layerFor(res.entity.layer).appendChild(el);
+		this.entityLayerEl?.appendChild(el);
 
 		// Enter: fade + slight rise. Snap into the start pose with transitions off, force a
 		// reflow so the browser has something to animate FROM, then transition to the target.
@@ -560,11 +587,6 @@ export class DomRenderer implements Renderer {
 		rec.character = res.character;
 		rec.frameName = res.frameName;
 		rec.metrics = this.metricsFor(res);
-
-		if (prev.layer !== res.entity.layer) {
-			rec.el.dataset.layer = res.entity.layer;
-			this.layerFor(res.entity.layer).appendChild(rec.el);
-		}
 
 		this.setContent(rec, res, durations.duration('frame', rec.id));
 		this.applyFit(rec, res);
@@ -710,7 +732,9 @@ export class DomRenderer implements Renderer {
 	}
 
 	private metricsFor(res: ResolvedEntity): SpriteMetrics {
-		if (res.entity.kind === 'cast') {
+		// A resolved character decides this, not the declared kind: an `auto` entity that
+		// found a character is a character, whatever the parser was able to say about it.
+		if (res.character || res.entity.kind === 'cast') {
 			return characterMetrics(
 				this.box,
 				res.character ?? {size: PLACEHOLDER_FRAME, origin: DEFAULT_ORIGIN},
@@ -758,23 +782,28 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
-	 * Draw order inside each layer. Explicit z wins, otherwise it derives from y — lower on
-	 * screen is nearer, so it paints later.
+	 * Draw order for the whole stage. Explicit z wins, otherwise it derives from y — lower on
+	 * screen is nearer, so it paints later. Ties go to whichever id the CURRENT scene lists
+	 * first.
+	 *
+	 * The order comes from `keyOrder`, not from this Map: entities persist across scenes, so
+	 * the Map remembers when each one first appeared rather than where the author put it in
+	 * the scene now on screen.
 	 */
 	private assignZ(): void {
-		for (const layer of LAYERS) {
-			const inLayer = [...this.entities.values()]
-				.filter(rec => rec.entity.layer === layer)
-				.map(rec => ({id: rec.id, at: rec.entity.at ?? {x: 0, y: 0}, z: rec.entity.z, rec}));
+		const items = [...this.entities.values()].map(rec => ({
+			id: rec.id,
+			at: rec.entity.at ?? {x: 0, y: 0},
+			z: rec.entity.z,
+			// Anything not in the current stage is exiting. Park it after the live ones so a
+			// fading sprite cannot jump in front of the scene it is leaving.
+			order: this.keyOrder.get(rec.id) ?? Number.MAX_SAFE_INTEGER,
+			rec
+		}));
 
-			sortByZ(inLayer).forEach((item, i) => {
-				item.rec.el.style.zIndex = String(i + 1);
-			});
-		}
-	}
-
-	private layerFor(layer: Layer | 'bg'): HTMLDivElement {
-		return this.layerEls.get(layer) ?? this.layerEls.get('mid')!;
+		sortByZ(items).forEach((item, i) => {
+			item.rec.el.style.zIndex = String(i + 1);
+		});
 	}
 
 	// -----------------------------------------------------------------------
@@ -793,7 +822,11 @@ export class DomRenderer implements Renderer {
 		this.bgId = bg;
 
 		const previous = this.bgEl;
-		const layer = this.layerFor('bg');
+		const layer = this.bgLayerEl;
+
+		if (!layer) {
+			return;
+		}
 
 		const drop = () => {
 			if (!previous) {
@@ -952,7 +985,7 @@ export class DomRenderer implements Renderer {
 			rec.metrics = this.metricsFor({
 				entity: rec.entity,
 				character: rec.character,
-				meta: rec.entity.kind === 'prop' ? this.metaCache.get(rec.entity.ref) : undefined
+				meta: rec.character ? undefined : this.metaCache.get(rec.entity.ref)
 			});
 			this.layout(rec, 0);
 		}

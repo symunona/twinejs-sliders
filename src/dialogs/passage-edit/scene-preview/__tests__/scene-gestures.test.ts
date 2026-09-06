@@ -8,9 +8,6 @@ import {
 	flipWrites,
 	formatCamera,
 	frameWrite,
-	layerStepWrites,
-	layerWrites,
-	nextLayer,
 	panCamera,
 	uniqueEntityId,
 	wheelZoomFactor,
@@ -58,37 +55,6 @@ describe('flipWrites()', () => {
 
 	it('ignores ids that are not on stage', () => {
 		expect(flipWrites(stage, ['nobody'])).toEqual([]);
-	});
-});
-
-describe('nextLayer()', () => {
-	it('steps one layer at a time', () => {
-		expect(nextLayer('mid', 1)).toBe('front');
-		expect(nextLayer('mid', -1)).toBe('back');
-	});
-
-	it('clamps at both ends — the layer set is fixed', () => {
-		expect(nextLayer('front', 1)).toBe('front');
-		expect(nextLayer('back', -1)).toBe('back');
-	});
-});
-
-describe('layerWrites()', () => {
-	it('writes layer: mid explicitly rather than dropping the key', () => {
-		expect(layerWrites(stage, ['joren'], 'mid')).toEqual([
-			{id: 'joren', key: 'layer', kind: 'cast', ref: 'joren', value: 'mid'}
-		]);
-	});
-
-	it('writes nothing for an entity already on that layer', () => {
-		expect(layerWrites(stage, ['mira'], 'mid')).toEqual([]);
-	});
-
-	it('steps a mixed selection by one each, not onto one layer', () => {
-		expect(
-			layerStepWrites(stage, ['mira', 'joren'], 1).map(write => write.value)
-			// mira mid -> front; joren is already front and stays there.
-		).toEqual(['front']);
 	});
 });
 

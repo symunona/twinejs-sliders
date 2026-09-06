@@ -37,6 +37,8 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 		'Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none.',
 	camera: `{at: [x, y], zoom: 1}. Origin is screen centre, +y is up.`,
 	cast: 'Characters on stage, as id: {…} entries.',
+	entities:
+		'Anything on stage, as id: {…} entries, without saying whether it is a character or an asset. cast: and props: are the same thing with the kind spelled out.',
 	from: 'Inherit another scene state, and become a patch over it.',
 	fx: 'Screen effects, as a list.',
 	id:
@@ -46,15 +48,15 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 };
 
 const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
-	at: 'Position. A bare number is x, with the feet on the layer baseline; [x, y] is both.',
+	at: 'Position. A bare number is x, with the feet on the stage baseline; [x, y] is both.',
 	flip: 'true mirrors the sprite horizontally.',
 	frame: 'Which named frame of the character to draw — idle, angry, whatever it has.',
-	layer: `One of ${LAYERS.join(', ')}. Defaults to mid.`,
+	layer: `Legacy sugar for z:. ${LAYERS.join(', ')} — back is z: -1, front is z: 2, mid writes nothing. An explicit z: wins.`,
 	of: `Hang this entity off another one: at: becomes an offset from it. of: ~ detaches.`,
 	opacity: '0 to 1. 1 is the default.',
 	ref: 'The asset or character this id draws, when the id is not the asset name itself.',
 	scale: 'Uniform size multiplier, about the origin, so feet stay on the floor. > 0.',
-	z: 'Numeric escape hatch inside a layer. Otherwise depth comes from y.'
+	z: 'Draw order for the whole stage. Higher is nearer. Otherwise depth comes from y.'
 };
 
 const CAMERA_HELP: KeyHelp<typeof CAMERA_KEYS> = {
@@ -107,7 +109,7 @@ cast:
   joren: {at: 0.35, frame: idle, flip: true}
 
 props:
-  candle: {at: [0.1, -0.2], layer: front}
+  candle: {at: [0.1, -0.2], z: 2}
 
 beats:
   - mira: "You shouldn't have come back."
@@ -196,9 +198,9 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 					<TabPanel>
 						<h3>Entity keys</h3>
 						<p>
-							Every entry under <code>cast:</code> and <code>props:</code> takes
-							these. They share one id space, so a prop can hang off a
-							character.
+							Every entry under <code>cast:</code>, <code>props:</code> and{' '}
+							<code>entities:</code> takes these. All three share one id space, so
+							a prop can hang off a character.
 						</p>
 						<KeyTable keys={ENTITY_KEYS} help={ENTITY_HELP} />
 						<h3>Coordinates</h3>
@@ -216,12 +218,16 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 						</ul>
 						<Sample>{`props:
   table:  {at: -0.3}
-  candle: {of: table, at: [0.1, 0.2], layer: front}   # rides with the table`}</Sample>
-						<h3>Layers</h3>
+  candle: {of: table, at: [0.1, 0.2], z: 2}   # rides with the table`}</Sample>
+						<h3>Depth</h3>
 						<p>
-							Exactly three, in order: {LAYERS.join(' → ')}. Bubbles sit above
-							all of them. Inside a layer, lower on screen draws nearer;{' '}
-							<code>z:</code> overrides that.
+							One number for the whole stage. Lower on screen draws nearer, so
+							depth normally comes from <code>y</code> and lands in 0 to 1;{' '}
+							<code>z:</code> overrides that, and nothing partitions it — a{' '}
+							<code>z: 2</code> prop is in front of every character. Two sprites
+							at the same depth draw in the order they are written. Bubbles sit
+							above all of it. The old <code>layer:</code> key still reads, as
+							sugar for a <code>z</code> seed.
 						</p>
 						<h3>Camera</h3>
 						<KeyTable keys={CAMERA_KEYS} help={CAMERA_HELP} />
@@ -253,7 +259,7 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 						</ol>
 						<Sample>{`cast:
   mira:  {at: -0.4, frame: idle}
-  joren: {at: 0.35, frame: idle, flip: true, layer: back}`}</Sample>
+  joren: {at: 0.35, frame: idle, flip: true, z: -1}`}</Sample>
 						<p>
 							Props work the same way but come from the asset library rather
 							than the character editor. Dragging an image onto the preview adds

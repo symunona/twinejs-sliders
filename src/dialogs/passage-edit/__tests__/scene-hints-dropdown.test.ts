@@ -140,7 +140,7 @@ describe('the scene hint dropdown', () => {
 		(document.querySelector('.CodeMirror-hint') as HTMLElement).click();
 
 		expect(editor.getValue()).toBe(
-			'[scene]\ncast:\n  mira: {at: 0, layer: mid}'
+			'[scene]\ncast:\n  mira: {at: 0}'
 		);
 		// The next thing typed should replace the position, not sit after the
 		// closing brace.
@@ -148,7 +148,7 @@ describe('the scene hint dropdown', () => {
 
 		editor.replaceSelection('-0.4');
 		expect(editor.getValue()).toBe(
-			'[scene]\ncast:\n  mira: {at: -0.4, layer: mid}'
+			'[scene]\ncast:\n  mira: {at: -0.4}'
 		);
 	});
 

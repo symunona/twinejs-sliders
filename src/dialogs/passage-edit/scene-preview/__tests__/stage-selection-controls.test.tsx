@@ -9,7 +9,7 @@ const passage = [
 	'[scene]',
 	'cast:',
 	'  mira: {at: -0.4, frame: angry}',
-	'  joren: {at: 0.3, layer: front}',
+	'  joren: {at: 0.3, z: 2}',
 	'props:',
 	'  candle: {at: 0.4}'
 ].join('\n');
@@ -39,7 +39,7 @@ function renderControls(
 		onDelete: jest.fn(),
 		onFlip: jest.fn(),
 		onFrame: jest.fn(),
-		onLayer: jest.fn()
+		onStepZ: jest.fn()
 	};
 
 	render(
@@ -87,9 +87,9 @@ describe('<StageSelectionControls>', () => {
 	it('offers the character manifest frames, plus automatic', async () => {
 		renderControls(['mira']);
 
-		await waitFor(() => expect(selects()).toHaveLength(2));
+		await waitFor(() => expect(selects()).toHaveLength(1));
 
-		const frame = selects()[1];
+		const frame = selects()[0];
 
 		expect(Array.from(frame.options).map(option => option.value)).toEqual([
 			'',
@@ -102,56 +102,43 @@ describe('<StageSelectionControls>', () => {
 	it('writes the chosen frame, and removes the key for automatic', async () => {
 		const {onFrame} = renderControls(['mira']);
 
-		await waitFor(() => expect(selects()).toHaveLength(2));
+		await waitFor(() => expect(selects()).toHaveLength(1));
 
-		fireEvent.change(selects()[1], {target: {value: 'idle'}});
+		fireEvent.change(selects()[0], {target: {value: 'idle'}});
 		expect(onFrame).toHaveBeenCalledWith('idle');
 
-		fireEvent.change(selects()[1], {target: {value: ''}});
+		fireEvent.change(selects()[0], {target: {value: ''}});
 		expect(onFrame).toHaveBeenLastCalledWith(undefined);
 	});
 
 	it('offers no frames for a prop — props are one image', async () => {
 		renderControls(['candle']);
 
-		// The layer select is the only one. Waited on so a late resolver cannot sneak a
-		// second one in after the assertion.
-		await waitFor(() => expect(selects()).toHaveLength(1));
+		// Nothing left to select at all now that depth is two buttons. Waited on so a late
+		// resolver cannot sneak one in after the assertion.
+		await waitFor(() => expect(selects()).toHaveLength(0));
 	});
 
 	it('offers no frames for a multi-selection', async () => {
 		renderControls(['mira', 'joren']);
 
-		await waitFor(() => expect(selects()).toHaveLength(1));
-	});
-
-	it('shows the layer the selection is on', async () => {
-		renderControls(['joren']);
-		expect(selects()[0].value).toBe('front');
-		// joren has no manifest, so the frame lookup resolves to nothing. Awaited so the
-		// state update lands inside the test rather than after it.
-		await waitFor(() => expect(selects()).toHaveLength(1));
-	});
-
-	it('shows nothing when the selection spans two layers', () => {
-		renderControls(['mira', 'joren']);
-		expect(selects()[0].value).toBe('');
-	});
-
-	it('sets the layer on everything selected', () => {
-		const {onLayer} = renderControls(['mira', 'joren']);
-
-		fireEvent.change(selects()[0], {target: {value: 'back'}});
-		expect(onLayer).toHaveBeenCalledWith('back');
+		await waitFor(() => expect(selects()).toHaveLength(0));
 	});
 
 	// A prop, so nothing is fetched and the buttons are all there is.
-	it('flips and deletes through its buttons', () => {
-		const {onDelete, onFlip} = renderControls(['candle']);
+	it('flips, steps depth and deletes through its buttons', () => {
+		const {onDelete, onFlip, onStepZ} = renderControls(['candle']);
 		const buttons = document.querySelectorAll('button');
 
 		fireEvent.click(buttons[0]);
 		expect(onFlip).toHaveBeenCalled();
+
+		// Backward then forward, in the order a stack reads bottom-up.
+		fireEvent.click(buttons[1]);
+		expect(onStepZ).toHaveBeenCalledWith(-1);
+
+		fireEvent.click(buttons[2]);
+		expect(onStepZ).toHaveBeenLastCalledWith(1);
 
 		fireEvent.click(buttons[buttons.length - 1]);
 		expect(onDelete).toHaveBeenCalled();

@@ -9,12 +9,30 @@
  *   A character's origin is its FEET, so `at: 0` means "standing centre".
  */
 
-/** Layer set is fixed (D11). Order is back -> mid -> front. */
+/**
+ * Legacy layer vocabulary. NOT a stage concept any more — entities live in one z space and
+ * `layer:` is parse-time sugar that desugars to a `z` seed (see `LAYER_Z`).
+ *
+ * Kept exported because the parser still accepts the key, the help dialog still documents
+ * it, and old scenes in the wild still write it. Order is back -> mid -> front.
+ */
 export const LAYERS = ['back', 'mid', 'front'] as const;
 export type Layer = (typeof LAYERS)[number];
 
 /**
- * Scene y of the layer baseline — the floor an entity stands on when the author writes
+ * What `layer:` desugars to. `mid` keeps the y-derived z, so it has no seed.
+ *
+ * The numbers match the space `resolveZ` documents: a derived z lands in 0..1, so -1 is
+ * behind everything derived and 2 is in front of it.
+ */
+export const LAYER_Z: Record<Layer, number | undefined> = {
+	back: -1,
+	mid: undefined,
+	front: 2
+};
+
+/**
+ * Scene y of the stage baseline — the floor an entity stands on when the author writes
  * `at: -0.4` (x only) and never mentions y.
  *
  * NOT zero. Zero is the vertical CENTRE of the stage, so a character placed there stands
@@ -44,7 +62,12 @@ export interface Frac2 {
 // Stage — the declarative snapshot the renderer draws.
 // ---------------------------------------------------------------------------
 
-export type EntityKind = 'cast' | 'prop';
+/**
+ * `auto` is what a `entities:` entry parses as. The parser has no asset store, so it cannot
+ * tell a character id from an asset name; the renderer and the editor resolve it — character
+ * first, asset second — and only complain when BOTH miss.
+ */
+export type EntityKind = 'cast' | 'prop' | 'auto';
 
 export interface StageEntity {
 	id: EntityId;
@@ -74,8 +97,10 @@ export interface StageEntity {
 	/** Named frame for cast; ignored for simple props. */
 	frame?: string;
 	flip: boolean;
-	layer: Layer;
-	/** Explicit z within a layer. When undefined, z derives from y. */
+	/**
+	 * Explicit draw order. When undefined, z derives from y — lower on screen is nearer, so
+	 * it paints later. ONE space for the whole stage: there are no layers to cross.
+	 */
 	z?: number;
 	opacity: number;
 	/**
@@ -222,6 +247,8 @@ export interface Scene {
 	/** True when `cast: !only {...}` was used — replace rather than merge. */
 	replaceCast?: boolean;
 	replaceProps?: boolean;
+	/** True when `entities: !only {...}` was used. */
+	replaceEntities?: boolean;
 }
 
 export interface EntityPatch extends EntityPatchBody {

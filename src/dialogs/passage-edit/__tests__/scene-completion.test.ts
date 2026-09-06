@@ -200,17 +200,17 @@ describe('sceneCompletion()', () => {
 	});
 
 	describe('prefilling a new entity', () => {
-		it('writes at and layer out for a character', () => {
+		it('writes at out for a character', () => {
 			expect(completeAt('[scene]\ncast:\n  mir|')!.list[0]).toMatchObject({
 				displayText: 'mira',
-				text: 'mira: {at: 0, layer: mid}'
+				text: 'mira: {at: 0}'
 			});
 		});
 
-		it('writes at and layer out for a prop', () => {
+		it('writes at out for a prop', () => {
 			expect(completeAt('[scene]\nprops:\n  cand|')!.list[0]).toMatchObject({
 				displayText: 'candle',
-				text: 'candle: {at: 0, layer: mid}'
+				text: 'candle: {at: 0}'
 			});
 		});
 

@@ -29,7 +29,6 @@ function entity(patch: Partial<StageEntity> & {id: string}): StageEntity {
 		ref: patch.id,
 		at: {x: 0, y: 0},
 		flip: false,
-		layer: 'mid',
 		opacity: 1,
 		scale: 1,
 		...patch

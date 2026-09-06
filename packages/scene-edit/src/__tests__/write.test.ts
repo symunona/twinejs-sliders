@@ -258,16 +258,16 @@ describe('addEntity', () => {
 		const edit = addEntity(FIXTURE, 'prop', 'candle', {
 			at: {x: 0.1, y: -0.2},
 			kind: 'prop',
-			layer: 'front',
-			ref: 'candle'
+			ref: 'candle',
+			z: 2
 		});
 		const after = applyEdit(FIXTURE, edit);
 
 		// props: sorts after cast: and before fx: (spec 02 key table).
 		expect(after).toContain(
-			'    layer: back\nprops:\n  candle: {at: [0.1, -0.2], layer: front}\n\nfx: [rain@0.6]'
+			'    layer: back\nprops:\n  candle: {at: [0.1, -0.2], z: 2}\n\nfx: [rain@0.6]'
 		);
-		expect(parse(after).props.candle.layer).toBe('front');
+		expect(parse(after).props.candle.z).toBe(2);
 		// The rest of the file is untouched.
 		expect(after).toContain('# The tavern, at night.');
 		expect(after).toContain('  - mark: tense');
@@ -496,14 +496,20 @@ describe('half-typed and malformed input', () => {
 	// A key the schema accepts but ENTITY_KEY_ORDER omits is not an error anywhere — it is
 	// just silently absent from the written entry. `scale:` was lost exactly this way.
 	it('writes every key the schema accepts, so none can be dropped silently', () => {
-		expect([...ENTITY_KEY_ORDER].sort()).toEqual([...ENTITY_KEYS].sort());
+		// A SUPERSET, not equality. `layer:` is still a key the parser accepts, but it is
+		// legacy sugar that desugars to `z` — there is no `layer` on an EntityPatch to write
+		// from, so it can only ever be read.
+		const writable = [...ENTITY_KEYS].filter(key => key !== 'layer');
+
+		expect([...ENTITY_KEY_ORDER].sort()).toEqual(
+			expect.arrayContaining([...ENTITY_KEYS].sort())
+		);
 
 		const patch: EntityPatch = {
 			at: {x: -0.6, y: -0.2},
 			flip: true,
 			frame: 'idle',
 			kind: 'prop',
-			layer: 'front',
 			of: 'table',
 			opacity: 0.5,
 			ref: 'tankard',
@@ -516,7 +522,7 @@ describe('half-typed and malformed input', () => {
 		);
 		const entry = parse(written).props.tankard;
 
-		for (const key of ENTITY_KEYS) {
+		for (const key of writable) {
 			// `ref` is implied by the entity id when they match, so it is legitimately absent.
 			if (key !== 'ref') {
 				expect(entry).toHaveProperty(key);

@@ -14,7 +14,6 @@ function entity(
 		flip: false,
 		id,
 		kind: 'prop',
-		layer: 'mid',
 		of,
 		opacity: 1,
 		ref: id,
@@ -158,7 +157,6 @@ describe('resolveStage', () => {
 			...entity('candle', {x: 0.1, y: 0}, 'table'),
 			flip: true,
 			frame: 'lit',
-			layer: 'front',
 			opacity: 0.5,
 			scale: 2,
 			z: 3
@@ -168,7 +166,6 @@ describe('resolveStage', () => {
 			flip: true,
 			frame: 'lit',
 			kind: 'prop',
-			layer: 'front',
 			opacity: 0.5,
 			ref: 'candle',
 			scale: 2,

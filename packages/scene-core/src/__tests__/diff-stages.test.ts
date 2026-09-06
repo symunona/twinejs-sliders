@@ -8,7 +8,6 @@ function entity(id: string, partial: Partial<StageEntity> = {}): StageEntity {
 		flip: false,
 		id,
 		kind: 'cast',
-		layer: 'mid',
 		opacity: 1,
 		ref: id,
 		scale: 1,
@@ -133,10 +132,10 @@ describe('diffStages', () => {
 			).toEqual(['move']);
 		});
 
-		it('reports a move when layer, z or opacity change', () => {
+		it('reports a move when z or opacity change', () => {
 			const base = stageWith(entity('mira'));
 
-			expect(kinds(diffStages(base, stageWith(entity('mira', {layer: 'front'}))))).toEqual(
+			expect(kinds(diffStages(base, stageWith(entity('mira', {z: 2}))))).toEqual(
 				['move']
 			);
 			expect(kinds(diffStages(base, stageWith(entity('mira', {z: 3}))))).toEqual([

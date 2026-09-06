@@ -342,10 +342,11 @@ test.describe('visual scene editor', () => {
 		await page.waitForTimeout(600);
 		expect(await cmText(page)).not.toContain('flip:');
 
-		// mod+] steps the layer. Shift+bracket is unbindable: the browser reports it as }.
-		await page.keyboard.press('ControlOrMeta+]');
+		// mod+up steps z, the same as ']'. There are no layers to cross any more, so the
+		// second binding writes the same key the bracket does.
+		await page.keyboard.press('ControlOrMeta+ArrowUp');
 		await page.waitForTimeout(600);
-		expect(await cmText(page)).toMatch(/mira:.*layer: (mid|front)/);
+		expect(await cmText(page)).toMatch(/mira:.*z: [-0-9.]+/);
 
 		// Delete removes the entry. This scene has no from:, so it goes entirely.
 		await page.keyboard.press('Delete');

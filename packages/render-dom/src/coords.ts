@@ -210,16 +210,33 @@ export function resolveZ(entity: {at: Vec2; z?: number}): number {
 }
 
 /**
- * Draw order within one layer. Ties break on id so the same stage always produces the same
- * z-indexes — a stable order matters more than which entity wins the tie.
+ * Draw order for the whole stage. Explicit z wins, then INSERTION ORDER — the order the ids
+ * appear in the scene the author wrote.
+ *
+ * Not alphabetical, which is what this used to do and what nobody expects: a table and a
+ * character both sitting on the baseline have the same derived z, and dictionary order then
+ * decides which one is in front. Insertion order at least matches something the author can
+ * see and reorder. `order` is the caller's number; id is only the last resort, so the sort
+ * stays total and deterministic even if two items somehow share one.
  */
-export function sortByZ<T extends {id: string; at: Vec2; z?: number}>(
+export function sortByZ<T extends {id: string; at: Vec2; z?: number; order?: number}>(
 	entities: T[]
 ): T[] {
 	return [...entities].sort((a, b) => {
 		const d = resolveZ(a) - resolveZ(b);
 
-		return d !== 0 ? d : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+		if (d !== 0) {
+			return d;
+		}
+
+		const ao = a.order ?? 0;
+		const bo = b.order ?? 0;
+
+		if (ao !== bo) {
+			return ao - bo;
+		}
+
+		return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 	});
 }
 

@@ -91,9 +91,28 @@ export interface AssetStore extends AssetResolver {
 	 * ownership survive; everything measured from the bytes is re-derived.
 	 */
 	replace(id: AssetId, file: File): Promise<AssetMeta>;
+	/**
+	 * Edits metadata in place. A `name` that another asset or character already answers to
+	 * THROWS rather than being quietly numbered: a rename is a deliberate act, and an author
+	 * who typed `lamp` and got `lamp-2` would go on writing `lamp` in their scenes.
+	 */
 	update(id: AssetId, changes: Partial<AssetMeta>): Promise<AssetMeta>;
 	remove(id: AssetId): Promise<void>;
+	/**
+	 * Saves a character. Updating one that already exists is always fine; creating one whose
+	 * id an ASSET NAME already answers to throws, for the same reason `update` does — scene
+	 * YAML addresses assets by name and characters by id out of one namespace.
+	 *
+	 * Callers that mint an id from user text (the New Character field) should run it through
+	 * `uniqueName(id, await store.takenNames())` first, so the common case is a free id
+	 * rather than an error.
+	 */
 	putCharacter(character: Character): Promise<Character>;
+	/**
+	 * Every name a scene can address: asset names, character frames included, plus character
+	 * ids. The namespace `uniqueName` dedupes against.
+	 */
+	takenNames(): Promise<Set<string>>;
 	character(id: string): Promise<Character | undefined>;
 	getCharacter(id: string): Promise<Character | undefined>;
 	listCharacters(): Promise<Character[]>;

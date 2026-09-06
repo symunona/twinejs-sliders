@@ -18,6 +18,7 @@ import type {Story} from '../../store/stories';
 /** `SceneAssetRefs` while it is still being filled — sorting happens once, at the end. */
 interface RefSets {
 	assetRefs: Set<string>;
+	autoRefs: Set<string>;
 	characterRefs: Set<string>;
 	fxRefs: Set<string>;
 	frameRefs: Map<string, Set<string>>;
@@ -27,6 +28,7 @@ interface RefSets {
 function emptyRefSets(): RefSets {
 	return {
 		assetRefs: new Set(),
+		autoRefs: new Set(),
 		characterRefs: new Set(),
 		frameRefs: new Map(),
 		fxRefs: new Set(),
@@ -79,8 +81,14 @@ function addScene(sets: RefSets, scene: Scene): void {
 			continue; // A null patch is a removal too.
 		}
 
+		// `auto` is an `entities:` entry: the parser could not tell a character id from an
+		// asset name, so the name goes in its own bucket and `resolveBundleRefs` tries both.
 		add(
-			entity.kind === 'cast' ? sets.characterRefs : sets.assetRefs,
+			entity.kind === 'cast'
+				? sets.characterRefs
+				: entity.kind === 'auto'
+				? sets.autoRefs
+				: sets.assetRefs,
 			entity.ref
 		);
 		addFrame(sets, id, entity.frame);
@@ -125,6 +133,7 @@ function freeze(sets: RefSets): SceneAssetRefs {
 
 	return {
 		assetRefs: [...sets.assetRefs].sort(),
+		autoRefs: [...sets.autoRefs].sort(),
 		characterRefs: [...sets.characterRefs].sort(),
 		frameRefs,
 		fxRefs: [...sets.fxRefs].sort(),

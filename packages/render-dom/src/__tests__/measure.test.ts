@@ -27,7 +27,6 @@ function entity(patch: Partial<StageEntity> & {id: string}): StageEntity {
 		ref: patch.id,
 		at: {x: 0, y: 0},
 		flip: false,
-		layer: 'mid',
 		opacity: 1,
 		scale: 1,
 		...patch
@@ -504,25 +503,115 @@ describe('reconciliation', () => {
 		expect(mount.querySelectorAll('.sliders-placeholder')).toHaveLength(1);
 	});
 
-	it('exposes the layer and z hooks the stage asked for', async () => {
+	it('draws every entity in ONE z space, with no layer to cross', async () => {
 		const {mount, renderer} = await mounted();
 
 		await renderer.apply(
 			stage([
 				entity({id: 'far', at: {x: 0, y: 0.5}}),
 				entity({id: 'near', at: {x: 0, y: -0.5}}),
-				entity({id: 'behind', layer: 'back'})
+				entity({id: 'behind', z: -1}),
+				entity({id: 'ahead', z: 2})
 			]),
 			[]
 		);
 
 		const el = (id: string) =>
 			mount.querySelector(`[data-entity-id="${id}"]`) as HTMLElement;
+		const z = (id: string) => Number(el(id).style.zIndex);
 
-		expect(el('behind').dataset.layer).toBe('back');
-		expect(el('behind').parentElement?.dataset.layer).toBe('back');
-		expect(Number(el('near').style.zIndex)).toBeGreaterThan(
-			Number(el('far').style.zIndex)
+		// One parent for all four. The old three-layer split is what made `z` unable to
+		// carry a sprite past anything outside its own layer.
+		const parents = new Set(
+			['far', 'near', 'behind', 'ahead'].map(id => el(id).parentElement)
 		);
+
+		expect(parents.size).toBe(1);
+		expect([...parents][0]?.dataset.layer).toBe('entities');
+		expect(z('near')).toBeGreaterThan(z('far'));
+		expect(z('behind')).toBeLessThan(z('far'));
+		expect(z('ahead')).toBeGreaterThan(z('near'));
+	});
+
+	// `entities:` names an id and nothing else — the parser has no library, so it cannot say
+	// whether `mira` is a character or an asset. Character first, asset second, and a
+	// placeholder only when BOTH miss.
+
+	describe('an auto entity', () => {
+		const el = (mount: HTMLElement, id: string) =>
+			mount.querySelector(`[data-entity-id="${id}"]`) as HTMLElement;
+
+		it('draws a character when the ref names one', async () => {
+			const {mount, renderer} = await mounted();
+
+			await renderer.apply(
+				stage([entity({id: 'mira', kind: 'auto', ref: 'mira'})]),
+				[]
+			);
+
+			// Character metrics, not prop metrics: sized off the manifest, as `cast:` is.
+			expect(el(mount, 'mira').style.width).toBe(`${SPRITE_W}px`);
+			expect(el(mount, 'mira').style.height).toBe(`${SPRITE_H}px`);
+			expect(mount.querySelectorAll('.sliders-placeholder')).toHaveLength(0);
+		});
+
+		it('falls through to the asset when no character answers', async () => {
+			const {mount, renderer} = await mounted();
+
+			await renderer.apply(
+				stage([entity({id: 'lamp', kind: 'auto', ref: 'lamp'})]),
+				[]
+			);
+
+			// The stub's default asset is 256x256, and a prop is sized from its pixels — so
+			// this cannot be the character path, which would have used the manifest.
+			expect(el(mount, 'lamp').style.width).not.toBe(`${SPRITE_W}px`);
+			expect(el(mount, 'lamp').querySelector('img')).not.toBeNull();
+			expect(mount.querySelectorAll('.sliders-placeholder')).toHaveLength(0);
+		});
+
+		it('only placeholders when BOTH lookups miss', async () => {
+			const mount = makeMount(1600, 900);
+			const renderer = new DomRenderer();
+
+			await renderer.mount(mount, createStubResolver({missing: ['ghost']}));
+			await renderer.apply(
+				stage([entity({id: 'ghost', kind: 'auto', ref: 'ghost'})]),
+				[]
+			);
+
+			const placeholder = mount.querySelector(
+				'.sliders-placeholder'
+			) as HTMLElement;
+
+			expect(placeholder).not.toBeNull();
+			// Neither "? character" nor "? asset": the scene never said which it was.
+			expect(placeholder.textContent).toContain('? entity');
+			expect(placeholder.dataset.assetId).toBe('ghost');
+		});
+	});
+
+	it('breaks a z tie on the order the scene lists ids, not the alphabet', async () => {
+		const {mount, renderer} = await mounted();
+		// Same y, so the same derived z. Alphabetically `zeta` loses; written first, it wins.
+		const first = entity({id: 'zeta', at: {x: 0, y: -0.5}});
+		const second = entity({id: 'alpha', at: {x: 0, y: -0.5}});
+
+		await renderer.apply(
+			{
+				camera: {at: {x: 0, y: 0}, zoom: 1},
+				entities: {zeta: first, alpha: second},
+				fx: []
+			},
+			[]
+		);
+
+		const z = (id: string) =>
+			Number(
+				(mount.querySelector(`[data-entity-id="${id}"]`) as HTMLElement).style
+					.zIndex
+			);
+
+		expect(z('alpha')).toBeGreaterThan(z('zeta'));
 	});
 });

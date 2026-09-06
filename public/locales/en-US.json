@@ -362,11 +362,8 @@
 				"nudgeDown": "Nudge down",
 				"flip": "Flip horizontally",
 				"remove": "Remove from scene",
-				"layer": "Layer",
-				"layerMixed": "Mixed",
-				"layer_back": "Back",
-				"layer_mid": "Middle",
-				"layer_front": "Front",
+				"zBack": "Send backward",
+				"zFront": "Bring forward",
 				"frame": "Frame",
 				"frameAuto": "Automatic"
 			},
@@ -436,6 +433,7 @@
 			"boxLabel": "Character box {{width}}×{{height}}",
 			"changeId": "ID: {{id}}",
 			"changeIdPrompt": "New ID for this character. Passages that already reference the old ID will not be updated.",
+			"idTaken": "Cannot rename to “{{id}}”. Something else in this library already answers to that name, and a scene cannot tell the two apart—asset names and character IDs share one namespace.",
 			"deleteFrame": "Delete Frame",
 			"deleteFramePrompt": "Are you sure you want to remove the frame “{{name}}”?",
 			"deletePrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
@@ -990,10 +988,8 @@
 				"nudgeDown": "Nudge Entity Down",
 				"flip": "Flip Entity",
 				"delete": "Remove Entity From Scene",
-				"layerBack": "Send Entity a Layer Back",
-				"layerFront": "Bring Entity a Layer Forward",
-				"zBack": "Send Entity Backward Within Layer",
-				"zFront": "Bring Entity Forward Within Layer"
+				"zBack": "Send Entity Backward",
+				"zFront": "Bring Entity Forward"
 			},
 			"slidersAssets": {
 				"upload": "Add Files",

@@ -1,5 +1,5 @@
 /**
- * The controls that only make sense with something selected: flip, layer, frame, delete.
+ * The controls that only make sense with something selected: flip, depth, frame, delete.
  *
  * These live in the preview's toolbar rather than floating over the sprite. A widget drawn
  * on the stage would have to be excluded from hit testing, would move with the camera, and
@@ -7,14 +7,21 @@
  * row exists so that the gestures are discoverable at all, which a keymap alone never is.
  *
  * `frame:` is cast-only and single-selection-only: props are one image and have no frames
- * (spec 03), and two characters share no frame vocabulary.
+ * (spec 03), and two characters share no frame vocabulary. An `entities:` entry is kind
+ * `auto` — the resolver decides. Asking it for frames and showing the select only when it
+ * answers with some IS the refinement: a name that turns out to be an asset comes back
+ * empty and the select stays hidden.
  */
 
-import {IconFlipHorizontal, IconTrash} from '@tabler/icons';
+import {
+	IconArrowDown,
+	IconArrowUp,
+	IconFlipHorizontal,
+	IconTrash
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {LAYERS} from '@sliders/scene-types';
-import type {AssetResolver, Layer, StageEntity} from '@sliders/scene-types';
+import type {AssetResolver, StageEntity} from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {TextSelect} from '../../../components/control/text-select';
 
@@ -27,14 +34,12 @@ export interface StageSelectionControlsProps {
 	onDelete: () => void;
 	onFlip: () => void;
 	onFrame: (frame: string | undefined) => void;
-	onLayer: (layer: Layer) => void;
+	/** One z step. -1 sends backward, +1 brings forward — same as `[` and `]`. */
+	onStepZ: (delta: number) => void;
 }
 
 /** No frame chosen: the renderer falls back to `idle`, or to the manifest's first frame. */
 const AUTO_FRAME = '';
-
-/** Mixed selection — the select shows nothing rather than lying about one of them. */
-const MIXED = '';
 
 /**
  * The frame names a character declares.
@@ -82,12 +87,12 @@ function useCharacterFrames(
 export const StageSelectionControls: React.FC<
 	StageSelectionControlsProps
 > = props => {
-	const {assets, editable, entities, onDelete, onFlip, onFrame, onLayer} = props;
+	const {assets, editable, entities, onDelete, onFlip, onFrame, onStepZ} = props;
 	const {t} = useTranslation();
 	const single = entities.length === 1 ? entities[0] : undefined;
 	const frames = useCharacterFrames(
 		assets,
-		single?.kind === 'cast' ? single.ref : undefined
+		single && single.kind !== 'prop' ? single.ref : undefined
 	);
 
 	// The row is always in the layout, even with nothing to put in it. It sits directly
@@ -104,9 +109,6 @@ export const StageSelectionControls: React.FC<
 		);
 	}
 
-	const layers = new Set(entities.map(entity => entity.layer));
-	const layer = layers.size === 1 ? entities[0].layer : MIXED;
-
 	return (
 		<div className="scene-preview-selection" data-testid="scene-preview-selection">
 			<IconButton
@@ -117,30 +119,21 @@ export const StageSelectionControls: React.FC<
 				selectable
 				selected={entities.every(entity => entity.flip)}
 			/>
-			<TextSelect
-				onChange={event => onLayer(event.target.value as Layer)}
-				options={[
-					// Only reachable as a starting state: picking it would mean picking
-					// "leave them as they are", which is what not touching the select does.
-					...(layer === MIXED
-						? [
-								{
-									disabled: true,
-									label: t('dialogs.passageEdit.scenePreview.layerMixed'),
-									value: MIXED
-								}
-						  ]
-						: []),
-					...LAYERS.map(name => ({
-						label: t(`dialogs.passageEdit.scenePreview.layer_${name}`),
-						value: name
-					}))
-				]}
-				value={layer}
-			>
-				{t('dialogs.passageEdit.scenePreview.layer')}
-			</TextSelect>
-			{single?.kind === 'cast' && frames.length > 0 && (
+			{/* Depth is one number now, so these are the buttons the layer select used to
+			    be. They step `z:`, exactly as `[` / `]` and mod+down / mod+up do. */}
+			<IconButton
+				icon={<IconArrowDown />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.zBack')}
+				onClick={() => onStepZ(-1)}
+			/>
+			<IconButton
+				icon={<IconArrowUp />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.zFront')}
+				onClick={() => onStepZ(1)}
+			/>
+			{single && single.kind !== 'prop' && frames.length > 0 && (
 				<TextSelect
 					onChange={event => onFrame(event.target.value || undefined)}
 					options={[

@@ -1,5 +1,5 @@
 /**
- * The rules behind phase 4's gestures (spec 10): flip, layer, z, frame, delete, drop, camera.
+ * The rules behind phase 4's gestures (spec 10): flip, z, frame, delete, drop, camera.
  *
  * Pure, like `planEntityWrite` and for the same reason — "does `f` on an unflipped sprite
  * write `flip: true` or delete the key" is a rule, and a rule that can only be checked by
@@ -15,12 +15,10 @@ import {entityKey} from '@sliders/asset-store';
 import {formatValue} from '@sliders/scene-edit';
 import {resolveZ} from '@sliders/render-dom';
 import type {StageBox} from '@sliders/render-dom';
-import {LAYERS} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityId,
 	EntityPatch,
-	Layer,
 	Stage,
 	StageEntity,
 	Vec2
@@ -36,8 +34,8 @@ import type {
 
 /**
  * One bracket press, in the 0..1 space `resolveZ` derives from y. A tenth is coarse enough
- * to reorder two sprites standing on the same line and fine enough not to jump a whole
- * layer's worth of depth in one tap.
+ * to reorder two sprites standing on the same line and fine enough not to jump the whole
+ * stage's worth of depth in one tap.
  */
 export const Z_STEP = 0.1;
 
@@ -81,68 +79,11 @@ export function flipWrites(stage: Stage, ids: EntityId[]): EntityKeyWrite[] {
 }
 
 // ---------------------------------------------------------------------------
-// layer
-// ---------------------------------------------------------------------------
-
-/** One step towards `front` (+1) or `back` (-1). Clamped: the set is fixed (D11). */
-export function nextLayer(layer: Layer, delta: number): Layer {
-	const index = LAYERS.indexOf(layer);
-	const from = index === -1 ? LAYERS.indexOf('mid') : index;
-
-	return LAYERS[Math.min(LAYERS.length - 1, Math.max(0, from + delta))];
-}
-
-/**
- * Put everything selected on one layer.
- *
- * `layer: mid` is written out even though it is the default, unlike `flip` and `scale`:
- * a layer only ever changes because the author asked for a specific one, and in a `from:`
- * scene an absent `layer:` inherits — dropping the key would silently hand the entity back
- * whatever the base scene said instead of the mid layer that was just asked for.
- */
-export function layerWrites(
-	stage: Stage,
-	ids: EntityId[],
-	layer: Layer
-): EntityKeyWrite[] {
-	return entitiesOf(stage, ids)
-		.filter(entity => entity.layer !== layer)
-		.map(entity => ({
-			id: entity.id,
-			key: 'layer',
-			kind: entity.kind,
-			ref: entity.ref,
-			value: layer
-		}));
-}
-
-/**
- * Send to back / bring to front, one layer at a time.
- *
- * Per entity rather than "everything to the layer the first one lands on": a selection
- * spread across two layers is spread on purpose, and one keypress should move the whole
- * group by one step, not flatten it.
- */
-export function layerStepWrites(
-	stage: Stage,
-	ids: EntityId[],
-	delta: number
-): EntityKeyWrite[] {
-	const writes: EntityKeyWrite[] = [];
-
-	for (const entity of entitiesOf(stage, ids)) {
-		writes.push(...layerWrites(stage, [entity.id], nextLayer(entity.layer, delta)));
-	}
-
-	return writes;
-}
-
-// ---------------------------------------------------------------------------
 // z
 // ---------------------------------------------------------------------------
 
 /**
- * Nudge `z:` within the layer.
+ * Nudge `z:`. One space for the whole stage — a step can carry a sprite past anything.
  *
  * An entity with no `z:` is ordered by its y (`resolveZ`), so the first press has to start
  * from that derived value — starting from 0 would teleport a character behind everything on
@@ -168,7 +109,9 @@ export function zWrites(
 // ---------------------------------------------------------------------------
 
 /**
- * Pick a named frame. Cast only — props are a single image and have no frames (spec 03).
+ * Pick a named frame. Not for props — a prop is a single image and has no frames (spec 03).
+ * An `auto` entity is allowed through: only the frame select can call this, and that is
+ * only on screen when the resolver actually found a character with frames.
  *
  * An empty choice removes the key: the renderer then falls back to `idle`, or to the first
  * frame in the manifest, which is a better default than any name this could write.
@@ -177,7 +120,7 @@ export function frameWrite(
 	entity: StageEntity | undefined,
 	frame: string | undefined
 ): EntityKeyWrite | undefined {
-	if (!entity || entity.kind !== 'cast') {
+	if (!entity || entity.kind === 'prop') {
 		return undefined;
 	}
 

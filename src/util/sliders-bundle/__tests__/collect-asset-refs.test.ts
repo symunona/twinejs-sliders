@@ -185,6 +185,7 @@ describe('collectPassageRefs', () => {
 
 		expect(refs).toEqual({
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: [],
@@ -262,9 +263,34 @@ describe('collectAssetRefs', () => {
 		});
 	});
 
+	it('files an entities: ref under autoRefs, not under one of the two guesses', () => {
+		// The parser has no library, so it cannot say whether `mira` is a character or an
+		// asset name. Filing it as either would report the other as missing.
+		const refs = collectPassageRefs(
+			'[scene]\nentities:\n  mira: {at: 0, frame: angry}\n  lamp: {at: 0.4}\n'
+		);
+
+		expect(refs.autoRefs).toEqual(['lamp', 'mira']);
+		expect(refs.assetRefs).toEqual([]);
+		expect(refs.characterRefs).toEqual([]);
+		// A frame named on an auto entity is still a frame its character has to have.
+		expect(refs.frameRefs).toEqual({mira: ['angry']});
+	});
+
+	it('keeps cast: and props: in their own buckets alongside it', () => {
+		const refs = collectPassageRefs(
+			'[scene]\ncast:\n  mira: {at: 0}\nprops:\n  candle: {at: 0.4}\nentities:\n  lamp: {at: 0.6}\n'
+		);
+
+		expect(refs.characterRefs).toEqual(['mira']);
+		expect(refs.assetRefs).toEqual(['candle']);
+		expect(refs.autoRefs).toEqual(['lamp']);
+	});
+
 	it('returns empty buckets for a story with no scenes', () => {
 		expect(collectAssetRefs(storyOf(['one', 'two']))).toEqual({
 			assetRefs: [],
+			autoRefs: [],
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: [],

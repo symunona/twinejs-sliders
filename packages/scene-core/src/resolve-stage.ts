@@ -6,7 +6,7 @@
  *
  *   props:
  *     table:  {at: -0.3}
- *     candle: {of: table, at: [0.1, 0.2], layer: front}
+ *     candle: {of: table, at: [0.1, 0.2], z: 2}
  *
  * Translation only. The parent's `scale`, `flip` and `frame` do NOT reach the child, which
  * is the whole reason this can live here: resolution is a vector add, needs no sprite

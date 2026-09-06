@@ -4,14 +4,14 @@
  *   npx vite packages/render-dom/harness --port 5199
  *
  * Three hardcoded stages exercise every path the renderer has — enter, exit, move, flip,
- * frame swap, layer change, camera pan + zoom, fx, a missing asset, bubbles with links and a
+ * frame swap, depth change, camera pan + zoom, fx, a missing asset, bubbles with links and a
  * narration box.
  */
 
 import type {Stage, StageEntity, Transition} from '@sliders/scene-types';
 import {DialogueLayer, DomRenderer, createStubResolver} from '../src/index';
 
-// The stage `y` an entity stands on. scene-core resolves the real layer baseline; the
+// The stage `y` an entity stands on. scene-core resolves the real stage baseline; the
 // renderer is handed absolute coordinates and does not invent one.
 const FLOOR = -0.85;
 
@@ -27,7 +27,6 @@ function cast(
 		at: {x: at.x, y: at.y ?? FLOOR},
 		frame: 'idle',
 		flip: false,
-		layer: 'mid',
 		opacity: 1,
 		scale: 1,
 		...patch
@@ -46,7 +45,6 @@ function prop(
 		ref,
 		at: {x: at.x, y: at.y ?? FLOOR},
 		flip: false,
-		layer: 'mid',
 		opacity: 1,
 		scale: 1,
 		...patch
@@ -80,7 +78,7 @@ const STEPS: Step[] = [
 		stage: stageOf([
 			cast('mira', {x: -0.4}, {frame: 'arms-crossed'}),
 			prop('table', 'obj_table', {x: 0.15}),
-			prop('candle', 'obj_candle', {x: 0.15, y: -0.55}, {layer: 'front'})
+			prop('candle', 'obj_candle', {x: 0.15, y: -0.55}, {z: 2})
 		]),
 		transitions: [
 			{kind: 'bg', duration: 0.4},
@@ -96,12 +94,12 @@ const STEPS: Step[] = [
 		box: null
 	},
 	{
-		title: 'Joren enters behind her, flipped, on the back layer',
+		title: 'Joren enters behind her, flipped, behind everything',
 		stage: stageOf([
 			cast('mira', {x: -0.25}, {frame: 'angry'}),
-			cast('joren', {x: 0.45, y: -0.78}, {flip: true, layer: 'back'}),
+			cast('joren', {x: 0.45, y: -0.78}, {flip: true, z: -1}),
 			prop('table', 'obj_table', {x: 0.15}),
-			prop('candle', 'obj_candle', {x: 0.15, y: -0.55}, {layer: 'front'})
+			prop('candle', 'obj_candle', {x: 0.15, y: -0.55}, {z: 2})
 		]),
 		transitions: [
 			{kind: 'enter', entityId: 'joren', duration: 0.5},
@@ -119,9 +117,9 @@ const STEPS: Step[] = [
 		stage: stageOf(
 			[
 				cast('mira', {x: -0.1}, {frame: 'wave'}),
-				cast('joren', {x: 0.3}, {layer: 'mid', frame: 'angry'}),
+				cast('joren', {x: 0.3}, {frame: 'angry'}),
 				prop('table', 'obj_table', {x: 0.15}),
-				prop('ghost', 'obj_missing_thing', {x: 0.75, y: -0.6}, {layer: 'front'})
+				prop('ghost', 'obj_missing_thing', {x: 0.75, y: -0.6}, {z: 2})
 			],
 			{
 				camera: {at: {x: 0.05, y: -0.1}, zoom: 1.2},

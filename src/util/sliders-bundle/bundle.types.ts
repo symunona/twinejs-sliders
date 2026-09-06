@@ -42,6 +42,16 @@ export interface SceneAssetRefs {
 	/** `kind: 'cast'` entity refs. These are character ids, not asset names. */
 	characterRefs: string[];
 	/**
+	 * `kind: 'auto'` entity refs — an `entities:` entry, where the author never said whether
+	 * the name is a character or an asset and the parser has no library to ask.
+	 *
+	 * Its own bucket rather than a name in both of the others, because it is ONE candidate
+	 * resolved two ways: character first, asset second, and only `unresolved` when both
+	 * miss. Filed under `assetRefs` as well it would report a perfectly good character as a
+	 * missing asset. Optional: bundles written before `entities:` existed have none.
+	 */
+	autoRefs?: string[];
+	/**
 	 * `fx:` ids. Lossy: `assetFragment` writes `fx: [{id: rain}]` for an asset named
 	 * `fx/rain`, because `entityKey()` slugifies the last path segment. Matching has to
 	 * try the mangled form too.

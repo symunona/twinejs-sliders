@@ -15,7 +15,6 @@
 
 import classNames from 'classnames';
 import * as React from 'react';
-import {LAYERS} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityId,
@@ -184,26 +183,28 @@ export interface StageEditorOverlayProps {
 }
 
 /**
- * Every entity that can be clicked, ranked in global draw order.
+ * Every entity that can be clicked, ranked in draw order.
  *
- * A prop in `front` must win over a character in `mid` however high that character's z is,
- * so the layer index outranks z rather than being folded in with it. The renderer writes
- * only a WITHIN-layer z-index to the DOM, which is why this cannot be read off the elements.
+ * One z space, so this is exactly the renderer's own sort — same `sortByZ`, same
+ * insertion-order tie-break off the scene's key order. Recomputed here rather than read off
+ * the DOM because the overlay also has to rank sprites the renderer has not laid out yet.
  */
 export function hitTargets(
 	stage: Stage,
 	rectOf: (id: EntityId) => Rect | null | undefined
 ): HitTarget[] {
 	const targets: HitTarget[] = [];
-	const all = Object.values(stage?.entities ?? {}).filter(Boolean);
+	const ids = Object.keys(stage?.entities ?? {});
+	const all = ids
+		.map((id, order) => ({entity: stage.entities[id], order}))
+		.filter(item => !!item.entity)
+		.map(item => ({...item.entity, order: item.order}));
 
-	for (const layer of LAYERS) {
-		for (const entity of sortByZ(all.filter(e => e.layer === layer))) {
-			const rect = rectOf(entity.id);
+	for (const entity of sortByZ(all)) {
+		const rect = rectOf(entity.id);
 
-			if (rect) {
-				targets.push({id: entity.id, rect, zIndex: targets.length});
-			}
+		if (rect) {
+			targets.push({id: entity.id, rect, zIndex: targets.length});
 		}
 	}
 
