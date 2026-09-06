@@ -18,6 +18,11 @@ export interface CharacterTileProps {
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
+	/**
+	 * No scene casts this character, so a push leaves it and its frames behind. Undefined
+	 * while the scan is still running — see `useSyncedRefs`.
+	 */
+	unreferenced?: boolean;
 }
 
 /**
@@ -25,7 +30,8 @@ export interface CharacterTileProps {
  * character editor.
  */
 export const CharacterTile: React.FC<CharacterTileProps> = props => {
-	const {allTags, character, onChangeTags, onDelete, onEdit} = props;
+	const {allTags, character, onChangeTags, onDelete, onEdit, unreferenced} =
+		props;
 	const frameNames = Object.keys(character.frames);
 	const {t} = useTranslation();
 
@@ -60,6 +66,13 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 				</span>
 			</button>
 			<div className="sliders-tile-badges">
+				{unreferenced && (
+					<Badge
+						label={t('dialogs.slidersAssets.unreferenced')}
+						title={t('dialogs.slidersAssets.unreferencedCharacterTitle')}
+						variant="warning"
+					/>
+				)}
 				{character.tags.map(tag => (
 					<Badge key={tag} label={tag} />
 				))}

@@ -25,6 +25,7 @@ import {AssetTile} from './asset-tile';
 import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
+import {useSyncedRefs} from './use-synced-refs';
 import './sliders-assets.css';
 
 /** Tabs, in the order spec 03 draws them. `undefined` is the characters collection tab. */
@@ -46,6 +47,8 @@ export type SlidersAssetsDialogProps = DialogComponentProps;
 export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => {
 	const {dispatch} = useDialogsContext();
 	const library = useAssetLibrary();
+	// Art no scene names never leaves this machine on a push. Badge it, don't change it.
+	const synced = useSyncedRefs();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
 	const [newCharacterOpen, setNewCharacterOpen] = React.useState(false);
 	const [search, setSearch] = React.useState('');
@@ -296,6 +299,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 								onChangeTags={tags => handleChangeTags(asset.id, tags)}
 								onDelete={() => handleDeleteAsset(asset.id)}
 								onEdit={() => openAssetEditor(asset.id)}
+								unreferenced={synced.ready && !synced.assetIds.has(asset.id)}
 							/>
 						))
 					) : (
@@ -309,6 +313,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 								}
 								onDelete={() => handleDeleteCharacter(character.id)}
 								onEdit={() => openCharacterEditor(character.id)}
+								unreferenced={
+									synced.ready && !synced.characterIds.has(character.id)
+								}
 							/>
 						))
 					);

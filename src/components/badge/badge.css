@@ -12,3 +12,14 @@
 	font-size: 85%;
 	padding: var(--control-inner-padding) calc(2 * var(--control-inner-padding));
 }
+
+/*
+The warning badge marks art the story does not reference. It has to read as a caution
+next to a row of ordinary tag badges, so it takes the orange ramp rather than off-white.
+*/
+
+.badge.variant-warning {
+	background-color: var(--light-orange);
+	box-shadow: 0 1px 1px var(--orange);
+	color: var(--dark-orange);
+}

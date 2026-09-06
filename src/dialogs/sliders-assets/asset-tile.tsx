@@ -19,6 +19,11 @@ export interface AssetTileProps {
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
+	/**
+	 * No scene names this asset, so a push leaves it behind. Undefined while the scan is
+	 * still running, which is not the same as "used" — see `useSyncedRefs`.
+	 */
+	unreferenced?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -34,7 +39,7 @@ function formatBytes(bytes: number): string {
 }
 
 export const AssetTile: React.FC<AssetTileProps> = props => {
-	const {allTags, meta, onChangeTags, onDelete, onEdit} = props;
+	const {allTags, meta, onChangeTags, onDelete, onEdit, unreferenced} = props;
 	const {t} = useTranslation();
 
 	// Backgrounds replace `bg:`, objects become an entry under `props:`. Only the NAME
@@ -68,6 +73,13 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 				})}
 			</div>
 			<div className="sliders-tile-badges">
+				{unreferenced && (
+					<Badge
+						label={t('dialogs.slidersAssets.unreferenced')}
+						title={t('dialogs.slidersAssets.unreferencedTitle')}
+						variant="warning"
+					/>
+				)}
 				{meta.animated && <Badge label={t('dialogs.slidersAssets.animated')} />}
 				{meta.tags.map(tag => (
 					<Badge key={tag} label={tag} />

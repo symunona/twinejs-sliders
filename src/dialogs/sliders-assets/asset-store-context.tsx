@@ -21,7 +21,11 @@ export function refreshAssetLibrary() {
 	libraryListeners.forEach(listener => listener());
 }
 
-function useLibraryVersion(): number {
+/**
+ * Bumped by every `refreshAssetLibrary()`. Exported so anything derived from the library —
+ * the unreferenced-art scan, say — recomputes on the same signal the grids redraw on.
+ */
+export function useLibraryVersion(): number {
 	const [version, setVersion] = React.useState(libraryVersion);
 
 	React.useEffect(() => {
