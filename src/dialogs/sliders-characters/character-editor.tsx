@@ -22,7 +22,6 @@ import {CardContent} from '../../components/container/card';
 import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
-import {TextSelect} from '../../components/control/text-select';
 import {useCommand} from '../../hotkeys';
 import {AdjustSlider} from '../asset-editor/adjust-slider';
 import {FrameList} from './frame-list';
@@ -51,7 +50,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	const frameNames = Object.keys(character.frames);
 	const [newAnchor, setNewAnchor] = React.useState('');
 	const [newAnchorOpen, setNewAnchorOpen] = React.useState(false);
-	const [onion, setOnion] = React.useState('');
+	/** Frames drawn faintly behind the selected one, so poses can be compared at once. */
+	const [ghosts, setGhosts] = React.useState<string[]>([]);
 	/** True while a click on the sprite places the origin. Same control as the asset editor. */
 	const [picking, setPicking] = React.useState(false);
 	const [selectedFrame, setSelectedFrame] = React.useState<string | undefined>(
@@ -237,6 +237,23 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 		onCommit();
 	}
 
+	function handleToggleGhost(name: string) {
+		setGhosts(current =>
+			current.includes(name)
+				? current.filter(ghost => ghost !== name)
+				: [...current, name]
+		);
+	}
+
+	// The selected frame draws itself in full, so it is never also a ghost of itself.
+	const ghostFrames = ghosts
+		.filter(name => name !== selectedFrame && character.frames[name])
+		.map(name => ({
+			assetId: character.frames[name].asset,
+			fit: character.frames[name].fit,
+			name
+		}));
+
 	return (
 		<div className="character-editor">
 			<div className="character-editor-body">
@@ -249,7 +266,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					onEdit={onEditFrame}
 					onRename={handleRenameFrame}
 					onSelect={setSelectedFrame}
+					onToggleGhost={handleToggleGhost}
 					selected={selectedFrame}
+					visible={ghosts}
 				/>
 				<div className="character-editor-stage">
 					<SpritePreview
@@ -260,9 +279,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 						onChangeFit={handleChangeFit}
 						onChangeOrigin={origin => onChange({...character, origin})}
 						onCommit={onCommit}
+						ghosts={ghostFrames}
 						onPickEnd={() => setPicking(false)}
-						onionAssetId={onion ? character.frames[onion]?.asset : undefined}
-						onionFit={onion ? character.frames[onion]?.fit : undefined}
 						origin={character.origin}
 						picking={picking}
 						size={character.size}
@@ -285,13 +303,14 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					{activeFrame && (
 						<div className="character-editor-fit">
 							<AdjustSlider
-								label={t('dialogs.slidersCharacters.frameZoom')}
+								editable
+								label={t('dialogs.slidersCharacters.frameScale')}
 								max={3}
 								min={0.2}
 								onChange={scale =>
 									handleChangeFit({...(activeFrame.fit ?? DEFAULT_FIT), scale})
 								}
-								resetLabel={t('dialogs.slidersCharacters.resetFrameZoom')}
+								resetLabel={t('dialogs.slidersCharacters.resetFrameScale')}
 								resetTo={DEFAULT_FIT.scale}
 								step={0.01}
 								value={activeFrame.fit?.scale ?? DEFAULT_FIT.scale}
@@ -313,18 +332,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 						</div>
 					)}
 					<ButtonBar>
-						<TextSelect
-							onChange={event => setOnion(event.target.value)}
-							options={[
-								{label: t('dialogs.slidersCharacters.noOnionSkin'), value: ''},
-								...frameNames
-									.filter(name => name !== selectedFrame)
-									.map(name => ({label: name, value: name}))
-							]}
-							value={onion}
-						>
-							{t('dialogs.slidersCharacters.onionSkin')}
-						</TextSelect>
 						<PromptButton
 							disabled={!activeFrame}
 							icon={<IconCrosshair />}

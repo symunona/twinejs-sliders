@@ -65,6 +65,12 @@
 	border-color: var(--blue);
 }
 
+/* A frame currently showing as a ghost behind the selected one. */
+.frame-list-item.ghosted {
+	border-color: var(--gray);
+	border-style: dashed;
+}
+
 .frame-list-select {
 	align-items: center;
 	background: none;
@@ -121,7 +127,29 @@
 
 .sprite-preview-frame {
 	height: 100%;
+	/* The box scenes lay this character out with. Solid and coloured, against the art's
+	   own dashed outline, so the two rectangles cannot be confused. */
+	outline: 1px solid var(--blue);
 	position: relative;
+}
+
+.sprite-box-label {
+	background: var(--blue);
+	color: var(--white);
+	font-size: 80%;
+	left: 0;
+	line-height: 1;
+	padding: 2px 4px;
+	pointer-events: none;
+	position: absolute;
+	top: 0;
+}
+
+/* The art inside the box: dashed, uncoloured, subordinate to the box outline. */
+.sprite-art-outline {
+	border: 1px dashed var(--gray);
+	pointer-events: none;
+	position: absolute;
 }
 
 .sprite-preview-frame.pannable {
@@ -152,11 +180,21 @@
 	min-width: 0;
 }
 
-.sprite-onion {
+.sprite-ghost {
+	height: 100%;
 	left: 0;
-	opacity: 0.3;
+	object-fit: contain;
+	opacity: 0.5;
 	position: absolute;
 	top: 0;
+	width: 100%;
+}
+
+/* Ghosts are absolutely positioned, so without this they would paint over the selected
+   frame rather than behind it. */
+.sprite-preview-frame > img:not(.sprite-ghost) {
+	position: relative;
+	z-index: 1;
 }
 
 .sprite-preview-empty {

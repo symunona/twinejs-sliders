@@ -2,20 +2,28 @@ import {AssetId, DEFAULT_FIT, Frac2, FrameFit} from '@sliders/scene-types';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {useArtRect} from '../../components/anchor';
 import {useAssetUrl} from '../sliders-assets/asset-store-context';
+import {containRect, fractionLimits} from './sprite-geometry';
 
 /** Handle identity: either the origin cross, or a named anchor dot. */
 type HandleId = {kind: 'origin'} | {kind: 'anchor'; name: string};
+
+/** A frame shown faintly behind the selected one, to check registration between poses. */
+export interface SpriteGhost {
+	assetId?: AssetId;
+	/** The ghost's OWN fit — aligning against an unaligned reference proves nothing. */
+	fit?: FrameFit;
+	name: string;
+}
 
 export interface SpritePreviewProps {
 	anchors: Record<string, Frac2>;
 	assetId?: AssetId;
 	/** The selected frame's registration transform. Absent frame means no panning. */
 	fit?: FrameFit;
-	/** Frame drawn faintly underneath, to check registration between poses. */
-	onionAssetId?: AssetId;
-	/** The ghost's OWN fit — aligning against an unaligned reference proves nothing. */
-	onionFit?: FrameFit;
+	/** Other frames to draw behind this one, half faded. */
+	ghosts?: SpriteGhost[];
 	onChangeAnchor: (name: string, value: Frac2) => void;
 	onChangeFit?: (fit: FrameFit) => void;
 	onChangeOrigin: (value: Frac2) => void;
@@ -33,18 +41,14 @@ export interface SpritePreviewProps {
 	size: {w: number; h: number};
 }
 
-function clamp(value: number): number {
-	return Math.min(1, Math.max(0, value));
-}
-
 /** Three decimals is finer than anyone can drag, and keeps the manifest readable. */
 function round(value: number): number {
-	return Math.round(clamp(value) * 1000) / 1000;
+	return Math.round(value * 1000) / 1000;
 }
 
 /**
- * Same precision, but a fit offset runs either side of zero, so it cannot use the 0..1
- * clamp above. A whole box in each direction is far more than registration ever needs
+ * Same precision, but a fit offset runs either side of zero, so it cannot use the clamp
+ * the box implies. A whole box in each direction is far more than registration ever needs
  * and still stops a stray drag from flinging a frame out of reach.
  */
 function roundOffset(value: number): number {
@@ -52,38 +56,58 @@ function roundOffset(value: number): number {
 }
 
 function percent(value: number): string {
-	return `${clamp(value) * 100}%`;
+	return `${value * 100}%`;
 }
 
 function handleKey(handle: HandleId): string {
 	return handle.kind === 'origin' ? 'origin' : `anchor:${handle.name}`;
 }
 
+/** One faded frame behind the selected one. Its own component, because URLs are a hook. */
+const GhostFrame: React.FC<{fitStyle: React.CSSProperties; ghost: SpriteGhost}> =
+	props => {
+		const {fitStyle, ghost} = props;
+		const url = useAssetUrl(ghost.assetId);
+
+		if (!url) {
+			return null;
+		}
+
+		return (
+			<img alt="" className="sprite-ghost" src={url} style={fitStyle} />
+		);
+	};
+
 /**
  * The sprite with its draggable origin cross and anchor dots.
  *
  * Everything here is stored as a FRACTION of the frame, never pixels (spec 04). That's
  * what lets uniform sizes today become per-frame sizes tomorrow without the scene YAML
- * changing.
+ * changing. Fractions are not clamped to 0..1: art routinely spills outside the box, and a
+ * hat brim or a sword tip is a fair place to pin an anchor. Handles run to the edges of the
+ * preview area instead.
  */
 export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	const {
 		anchors,
 		assetId,
 		fit,
+		ghosts,
 		onChangeAnchor,
 		onChangeFit,
 		onChangeOrigin,
 		onCommit,
 		onPickEnd,
-		onionAssetId,
-		onionFit,
 		origin,
 		picking,
 		size
 	} = props;
+	const area = React.useRef<HTMLDivElement>(null);
+	const art = React.useRef<HTMLImageElement>(null);
 	const frame = React.useRef<HTMLDivElement>(null);
 	const [dragging, setDragging] = React.useState<HandleId>();
+	/** The selected frame's own pixels, for drawing an outline around the art itself. */
+	const [natural, setNatural] = React.useState<{height: number; width: number}>();
 	/** Where a pan started: pointer position, and the offset it began from. */
 	const [panning, setPanning] = React.useState<{
 		from: Frac2;
@@ -91,14 +115,30 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 		y: number;
 	}>();
 	const url = useAssetUrl(assetId);
-	const onionUrl = useAssetUrl(onionAssetId);
 	const {t} = useTranslation();
+
+	/**
+	 * A cached blob URL can finish loading before React has attached its `onLoad`, so the
+	 * size is read here as well — otherwise the outline never appears on a frame the
+	 * editor has already shown once.
+	 */
+	React.useEffect(() => {
+		const el = art.current;
+
+		if (!url) {
+			setNatural(undefined);
+		} else if (el?.complete && el.naturalWidth > 0) {
+			setNatural({height: el.naturalHeight, width: el.naturalWidth});
+		}
+	}, [url]);
 
 	const activeFit = fit ?? DEFAULT_FIT;
 	const canFit = !!onChangeFit && !!url;
+	const artBox = useArtRect(art, frame);
+	const artRect = natural && artBox ? containRect(natural, artBox) : undefined;
 
 	/**
-	 * Fit rides on the image alone, so the guides, handles and onion skin stay put — you
+	 * Fit rides on the image alone, so the guides, handles and ghost frames stay put — you
 	 * are aligning art to the rig, not dragging the rig around. Scaling about the origin
 	 * keeps the feet planted, and the translate percentages read as fractions of the box
 	 * because the image is stretched across it. Matches `applyFit` in the DOM renderer.
@@ -111,6 +151,26 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 			transformOrigin: `${origin.x * 100}% ${origin.y * 100}%`
 		};
 	}
+
+	/**
+	 * A fraction may leave the box, but not the part of the preview the author can see:
+	 * a handle dropped past the edge would be unreachable afterwards.
+	 */
+	const clampToArea = React.useCallback((value: Frac2): Frac2 => {
+		const box = frame.current?.getBoundingClientRect();
+		const bounds = area.current?.getBoundingClientRect();
+
+		if (!box || !bounds) {
+			return value;
+		}
+
+		const limits = fractionLimits(box, bounds);
+
+		return {
+			x: round(Math.min(limits.maxX, Math.max(limits.minX, value.x))),
+			y: round(Math.min(limits.maxY, Math.max(limits.minY, value.y)))
+		};
+	}, []);
 
 	const move = React.useCallback(
 		(handle: HandleId, value: Frac2) => {
@@ -136,10 +196,13 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 			}
 
 			event.preventDefault();
-			move(dragging!, {
-				x: round((event.clientX - bounds.left) / bounds.width),
-				y: round((event.clientY - bounds.top) / bounds.height)
-			});
+			move(
+				dragging!,
+				clampToArea({
+					x: (event.clientX - bounds.left) / bounds.width,
+					y: (event.clientY - bounds.top) / bounds.height
+				})
+			);
 		}
 
 		function handleMouseUp() {
@@ -154,7 +217,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 			window.removeEventListener('mousemove', handleMouseMove);
 			window.removeEventListener('mouseup', handleMouseUp);
 		};
-	}, [dragging, move, onCommit]);
+	}, [clampToArea, dragging, move, onCommit]);
 
 	// Held in a ref so the pan listeners aren't torn down and rebuilt on every mousemove.
 	const fitRef = React.useRef(activeFit);
@@ -220,10 +283,12 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 			}
 
 			event.preventDefault();
-			onChangeOrigin({
-				x: round((event.clientX - bounds.left) / bounds.width),
-				y: round((event.clientY - bounds.top) / bounds.height)
-			});
+			onChangeOrigin(
+				clampToArea({
+					x: (event.clientX - bounds.left) / bounds.width,
+					y: (event.clientY - bounds.top) / bounds.height
+				})
+			);
 			onCommit();
 			onPickEnd?.();
 			return;
@@ -256,7 +321,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 		}
 
 		event.preventDefault();
-		move(handle, {x: round(value.x + delta.x), y: round(value.y + delta.y)});
+		move(handle, clampToArea({x: value.x + delta.x, y: value.y + delta.y}));
 		onCommit();
 	}
 
@@ -290,7 +355,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	}
 
 	return (
-		<div className="sprite-preview">
+		<div className="sprite-preview" ref={area}>
 			<div
 				className={classNames('sprite-preview-frame', {
 					pannable: canFit && !picking,
@@ -301,17 +366,23 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 				ref={frame}
 				style={{aspectRatio: `${size.w} / ${size.h}`}}
 			>
-				{onionUrl && (
-					<img
-						alt=""
-						className="sprite-onion"
-						src={onionUrl}
-						style={fitStyle(onionFit ?? DEFAULT_FIT)}
+				{(ghosts ?? []).map(ghost => (
+					<GhostFrame
+						fitStyle={fitStyle(ghost.fit ?? DEFAULT_FIT)}
+						ghost={ghost}
+						key={ghost.name}
 					/>
-				)}
+				))}
 				{url ? (
 					<img
 						alt={t('dialogs.slidersCharacters.previewAlt')}
+						onLoad={event =>
+							setNatural({
+								height: event.currentTarget.naturalHeight,
+								width: event.currentTarget.naturalWidth
+							})
+						}
+						ref={art}
 						src={url}
 						style={fitStyle(activeFit)}
 					/>
@@ -320,6 +391,30 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 						{t('dialogs.slidersCharacters.noFrame')}
 					</div>
 				)}
+
+				{/* The art's own edges, which `object-fit: contain` puts inside the box
+				    rather than on it. Follows the fit, so it reads as this frame's outline
+				    even after a pan or a scale. */}
+				{artRect && (
+					<div
+						className="sprite-art-outline"
+						data-testid="sprite-art-outline"
+						style={{
+							...fitStyle(activeFit),
+							height: artRect.height,
+							left: artRect.left,
+							top: artRect.top,
+							width: artRect.width
+						}}
+					/>
+				)}
+
+				{/* The box every frame is registered into: the character's own size, the
+				    thing scenes lay out with. Labelled, because a rectangle alone does not
+				    say which of the two rectangles on screen it is. */}
+				<span className="sprite-box-label">
+					{t('dialogs.slidersCharacters.boxLabel', {height: size.h, width: size.w})}
+				</span>
 
 				{/* Centre and floor guides, so the origin makes visual sense. */}
 				<div className="sprite-guide vertical" style={{left: percent(origin.x)}} />

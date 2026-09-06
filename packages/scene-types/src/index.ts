@@ -325,7 +325,7 @@ export interface Transition {
 /**
  * How one frame's art sits inside the character box — registration, not expression.
  * Sprite sheets rarely agree: a wave is drawn a little higher, an idle a little smaller.
- * This nudges each frame until they line up, which is what the editor's onion skin is
+ * This nudges each frame until they line up, which is what the editor's ghost frames are
  * for seeing.
  *
  * The rig does NOT move with it: `fit` nudges the ART, and a frame's `anchors` describe

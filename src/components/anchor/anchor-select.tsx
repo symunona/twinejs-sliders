@@ -5,11 +5,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {ButtonBar} from '../container/button-bar';
 import {CheckboxButton} from '../control/checkbox-button';
-import {
-	ANCHOR_PRESETS,
-	anchorPreset,
-	roundAnchor
-} from './anchor-presets';
+import {ANCHOR_PRESETS, anchorPreset} from './anchor-presets';
 import './anchor-select.css';
 
 export interface AnchorSelectProps {
@@ -83,10 +79,13 @@ export const AnchorSelect: React.FC<AnchorSelectProps> = props => {
 						value={picking}
 					/>
 				</ButtonBar>
+				{/* Read straight off the value, not through `roundAnchor`: an anchor may sit
+				    outside its art, and clamping the readout would report a point the
+				    marker is not on. */}
 				<p className="anchor-select-readout" data-readout="anchor">
 					{t('components.anchorSelect.readout', {
-						x: roundAnchor(origin).x.toFixed(3),
-						y: roundAnchor(origin).y.toFixed(3)
+						x: origin.x.toFixed(3),
+						y: origin.y.toFixed(3)
 					})}
 				</p>
 				{picking && pickHint && (

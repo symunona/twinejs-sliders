@@ -28,3 +28,17 @@
 .adjust-slider input[type='range'] {
 	width: 100%;
 }
+
+/* Typed values may go past the slider's ends, so the box has to hold more digits than the
+   readout it replaces. */
+.adjust-slider-number {
+	background: var(--white);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	color: var(--black);
+	font-family: var(--font-monospaced, monospace);
+	font-size: inherit;
+	padding: 0 2px;
+	text-align: right;
+	width: 6em;
+}

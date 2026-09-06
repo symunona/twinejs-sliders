@@ -1,5 +1,7 @@
 import {AssetMeta, CharacterFrame} from '@sliders/scene-types';
 import {
+	IconEye,
+	IconEyeOff,
 	IconPencil,
 	IconPhotoEdit,
 	IconRepeat,
@@ -26,7 +28,11 @@ export interface FrameListProps {
 	onEdit: (name: string) => void;
 	onRename: (name: string, newName: string) => void;
 	onSelect: (name: string) => void;
+	/** Turns a frame's ghost on and off. The selected frame is never a ghost. */
+	onToggleGhost: (name: string) => void;
 	selected?: string;
+	/** Frames drawn faintly behind the selected one. */
+	visible: string[];
 }
 
 export const FrameList: React.FC<FrameListProps> = props => {
@@ -39,7 +45,9 @@ export const FrameList: React.FC<FrameListProps> = props => {
 		onEdit,
 		onRename,
 		onSelect,
-		selected
+		onToggleGhost,
+		selected,
+		visible
 	} = props;
 	const [renaming, setRenaming] = React.useState('');
 	const {t} = useTranslation();
@@ -61,10 +69,12 @@ export const FrameList: React.FC<FrameListProps> = props => {
 					{Object.entries(frames).map(([name, frame]) => {
 						const meta = assets[frame.asset];
 						const looping = frame.loop !== false;
+						const ghosted = visible.includes(name);
 
 						return (
 							<li
 								className={classNames('frame-list-item', {
+									ghosted: ghosted && name !== selected,
 									selected: name === selected
 								})}
 								data-frame={name}
@@ -87,6 +97,22 @@ export const FrameList: React.FC<FrameListProps> = props => {
 									)}
 								</button>
 								<ButtonBar>
+									{/* The selected frame is already on screen in full, so it has
+									    nothing to show or hide. */}
+									{name !== selected && (
+										<IconButton
+											ariaChecked={ghosted}
+											icon={ghosted ? <IconEye /> : <IconEyeOff />}
+											iconOnly
+											label={
+												ghosted
+													? t('dialogs.slidersCharacters.hideFrame', {name})
+													: t('dialogs.slidersCharacters.showFrame', {name})
+											}
+											onClick={() => onToggleGhost(name)}
+											role="checkbox"
+										/>
+									)}
 									<IconButton
 										// Editing an animation would flatten it to one frame.
 										disabled={meta?.animated}
