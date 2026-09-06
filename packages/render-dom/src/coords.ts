@@ -254,6 +254,26 @@ export function characterMetrics(
 	};
 }
 
+/**
+ * An origin fraction, made safe. A missing key, a NaN or a number outside the frame would
+ * put a sprite somewhere no author asked for, and an asset manifest can be hand-edited or
+ * arrive from a bundle written by an older version.
+ */
+export function safeOrigin(origin: Frac2 | undefined): Frac2 {
+	if (!origin) {
+		return DEFAULT_ORIGIN;
+	}
+
+	return {
+		x: clampFrac(origin.x, DEFAULT_ORIGIN.x),
+		y: clampFrac(origin.y, DEFAULT_ORIGIN.y)
+	};
+}
+
+function clampFrac(value: number, fallback: number): number {
+	return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+}
+
 /** Sprite metrics for a prop, from its asset's pixel size and its own `scale`. */
 export function propMetrics(
 	box: StageBox,
@@ -266,6 +286,6 @@ export function propMetrics(
 	return {
 		width: Math.max(1, size.w) * pxPerDesignPx,
 		height: Math.max(1, size.h) * pxPerDesignPx,
-		origin
+		origin: safeOrigin(origin)
 	};
 }

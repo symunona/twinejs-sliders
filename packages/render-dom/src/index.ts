@@ -52,6 +52,7 @@ export {
 	computeStageBox,
 	propMetrics,
 	resolveZ,
+	safeOrigin,
 	safeZoom,
 	sceneToBox,
 	sortByZ,

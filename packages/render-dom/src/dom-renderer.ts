@@ -718,10 +718,12 @@ export class DomRenderer implements Renderer {
 			);
 		}
 
+		// A prop's origin is its asset's, so an author pins the art once in the asset
+		// editor rather than in every scene that places it.
 		return propMetrics(
 			this.box,
 			res.meta && res.meta.w > 0 && res.meta.h > 0 ? res.meta : PLACEHOLDER_PROP,
-			DEFAULT_ORIGIN,
+			res.meta?.origin ?? DEFAULT_ORIGIN,
 			res.entity.scale
 		);
 	}

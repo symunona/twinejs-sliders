@@ -21,7 +21,15 @@ export interface SpritePreviewProps {
 	onChangeOrigin: (value: Frac2) => void;
 	/** Called when a drag or nudge finishes, so the change can be written out at once. */
 	onCommit: () => void;
+	/** Called after a pick lands, so picking can go back off. One click, one anchor. */
+	onPickEnd?: () => void;
 	origin: Frac2;
+	/**
+	 * True while a click anywhere on the sprite places the origin, rather than panning the
+	 * frame. Driven by the anchor selector's custom mode, so placing an origin works the
+	 * same here as it does in the asset editor.
+	 */
+	picking?: boolean;
 	size: {w: number; h: number};
 }
 
@@ -67,9 +75,11 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 		onChangeFit,
 		onChangeOrigin,
 		onCommit,
+		onPickEnd,
 		onionAssetId,
 		onionFit,
 		origin,
+		picking,
 		size
 	} = props;
 	const frame = React.useRef<HTMLDivElement>(null);
@@ -196,7 +206,30 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	 * are the only other thing in here, and they take their own mousedown first.
 	 */
 	function handlePanStart(event: React.MouseEvent) {
-		if (!canFit || (event.target as HTMLElement).closest('.sprite-handle')) {
+		if ((event.target as HTMLElement).closest('.sprite-handle')) {
+			return;
+		}
+
+		// Picking beats panning, and works with no frame loaded: the origin belongs to the
+		// character, and a character with no art still has one.
+		if (picking) {
+			const bounds = frame.current?.getBoundingClientRect();
+
+			if (!bounds || bounds.width === 0 || bounds.height === 0) {
+				return;
+			}
+
+			event.preventDefault();
+			onChangeOrigin({
+				x: round((event.clientX - bounds.left) / bounds.width),
+				y: round((event.clientY - bounds.top) / bounds.height)
+			});
+			onCommit();
+			onPickEnd?.();
+			return;
+		}
+
+		if (!canFit) {
 			return;
 		}
 
@@ -260,8 +293,9 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 		<div className="sprite-preview">
 			<div
 				className={classNames('sprite-preview-frame', {
-					pannable: canFit,
-					panning: !!panning
+					pannable: canFit && !picking,
+					panning: !!panning,
+					picking
 				})}
 				onMouseDown={handlePanStart}
 				ref={frame}

@@ -399,6 +399,16 @@ export interface AssetMeta {
 	ownerCharacter?: string;
 	/** Set when this asset came out of the asset editor, not an upload. */
 	sourceAsset?: AssetId;
+	/**
+	 * Where this asset's art is pinned, as a fraction of its own pixels. A prop drawn at
+	 * `at: {x, y}` puts THIS point on that scene position, and scaling grows the art about
+	 * it, so a lamp post pinned at its base stays on the floor when it is resized.
+	 *
+	 * Absent means the default: bottom centre, the same feet-on-the-floor rule characters
+	 * follow. It is metadata, not pixels — an edit that only moves the anchor leaves the
+	 * bytes and the hash alone.
+	 */
+	origin?: Frac2;
 }
 
 /** Resolves asset ids to something a renderer can draw. */

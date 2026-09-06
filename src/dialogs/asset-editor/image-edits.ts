@@ -2,6 +2,7 @@
  * The pixel side of the asset editor. Kept free of React and of the DOM where
  * possible so the maths can be tested on its own.
  */
+import {Frac2} from '@sliders/scene-types';
 
 /** A crop rectangle, in source image pixels. */
 export interface CropRect {
@@ -207,6 +208,43 @@ export function drawCropOverlay(
 	context.strokeStyle = color;
 	context.strokeRect(x, y, width, height);
 	context.restore();
+}
+
+/**
+ * An anchor, moved from the source image's coordinates into the cropped image's.
+ *
+ * The editor shows the whole source with the crop drawn over it, so an anchor is placed
+ * against the source — but what gets saved is the crop, and the same fraction of a smaller
+ * picture is a different point. Output resizing needs no part in this: scaling the crop
+ * uniformly leaves every fraction of it where it was.
+ *
+ * An anchor outside the crop clamps to the nearest edge. It is the honest answer — the
+ * point it named is not in the image any more — and it keeps the value inside 0..1, which
+ * everything downstream assumes.
+ */
+export function anchorAfterCrop(
+	origin: Frac2,
+	crop: CropRect,
+	sourceWidth: number,
+	sourceHeight: number
+): Frac2 {
+	if (!(crop.w > 0) || !(crop.h > 0)) {
+		return origin;
+	}
+
+	return {
+		x: clampFraction((origin.x * sourceWidth - crop.x) / crop.w),
+		y: clampFraction((origin.y * sourceHeight - crop.y) / crop.h)
+	};
+}
+
+/** Three decimals, the same precision the character editor's handles write. */
+function clampFraction(value: number): number {
+	if (!Number.isFinite(value)) {
+		return 0;
+	}
+
+	return Math.round(Math.min(1, Math.max(0, value)) * 1000) / 1000;
 }
 
 /** Promise-flavored `canvas.toBlob`. */

@@ -1,4 +1,5 @@
 import {
+	anchorAfterCrop,
 	applyLut,
 	buildLut,
 	clampCrop,
@@ -113,5 +114,36 @@ describe('isNeutral and isUnedited', () => {
 
 		expect(isNeutral(edits)).toBe(false);
 		expect(isUnedited(edits, 320, 240)).toBe(false);
+	});
+});
+
+describe('anchorAfterCrop', () => {
+	it('leaves the anchor alone when the crop is the whole image', () => {
+		expect(
+			anchorAfterCrop({x: 0.25, y: 0.75}, {h: 240, w: 320, x: 0, y: 0}, 320, 240)
+		).toEqual({x: 0.25, y: 0.75});
+	});
+
+	it('re-reads the anchor against the cropped pixels', () => {
+		// The anchor sits at 160, 120 in the source; the crop starts at 80, 60 and is half
+		// the image, so the same pixel is the middle of what is left.
+		expect(
+			anchorAfterCrop({x: 0.5, y: 0.5}, {h: 120, w: 160, x: 80, y: 60}, 320, 240)
+		).toEqual({x: 0.5, y: 0.5});
+		expect(
+			anchorAfterCrop({x: 0.5, y: 1}, {h: 120, w: 160, x: 0, y: 0}, 320, 240)
+		).toEqual({x: 1, y: 1});
+	});
+
+	it('clamps an anchor the crop cut away to the nearest edge', () => {
+		expect(
+			anchorAfterCrop({x: 0.9, y: 0.1}, {h: 120, w: 160, x: 0, y: 120}, 320, 240)
+		).toEqual({x: 1, y: 0});
+	});
+
+	it('keeps the anchor when the crop is empty', () => {
+		expect(
+			anchorAfterCrop({x: 0.25, y: 0.75}, {h: 0, w: 0, x: 0, y: 0}, 320, 240)
+		).toEqual({x: 0.25, y: 0.75});
 	});
 });

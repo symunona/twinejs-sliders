@@ -196,3 +196,11 @@ not noticed afterwards.
 	color: var(--yellow);
 	flex: none;
 }
+
+/* Placing an anchor, rather than cropping. The cursor is the only thing that says which
+   drag the next one is, so it changes for the whole stage, not just the art. */
+
+.asset-editor-canvas.picking,
+.asset-editor-canvas.picking canvas {
+	cursor: cell;
+}

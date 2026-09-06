@@ -62,7 +62,9 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			}
 			title={dragPayload ? t('dialogs.slidersAssets.dragToStage') : undefined}
 		>
-			<AssetPreview alt={meta.name} assetId={meta.id} />
+			{/* Only when the asset carries one: a cross on every default-anchored tile is
+			    nine crosses saying nothing. */}
+			<AssetPreview alt={meta.name} assetId={meta.id} origin={meta.origin} />
 			<div className="sliders-tile-name">{meta.name}</div>
 			<div className="sliders-tile-detail">
 				{t('dialogs.slidersAssets.assetDetail', {

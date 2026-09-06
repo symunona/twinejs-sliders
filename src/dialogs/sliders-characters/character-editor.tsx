@@ -16,6 +16,7 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {AnchorSelect} from '../../components/anchor';
 import {ButtonBar} from '../../components/container/button-bar';
 import {CardContent} from '../../components/container/card';
 import {IconButton} from '../../components/control/icon-button';
@@ -51,6 +52,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	const [newAnchor, setNewAnchor] = React.useState('');
 	const [newAnchorOpen, setNewAnchorOpen] = React.useState(false);
 	const [onion, setOnion] = React.useState('');
+	/** True while a click on the sprite places the origin. Same control as the asset editor. */
+	const [picking, setPicking] = React.useState(false);
 	const [selectedFrame, setSelectedFrame] = React.useState<string | undefined>(
 		frameNames[0]
 	);
@@ -257,11 +260,28 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 						onChangeFit={handleChangeFit}
 						onChangeOrigin={origin => onChange({...character, origin})}
 						onCommit={onCommit}
+						onPickEnd={() => setPicking(false)}
 						onionAssetId={onion ? character.frames[onion]?.asset : undefined}
 						onionFit={onion ? character.frames[onion]?.fit : undefined}
 						origin={character.origin}
+						picking={picking}
 						size={character.size}
 					/>
+					<div className="character-editor-anchor">
+						<AnchorSelect
+							onChange={origin => {
+								onChange({...character, origin});
+								onCommit();
+							}}
+							onChangePicking={setPicking}
+							origin={character.origin}
+							pickHint={t('dialogs.slidersCharacters.originHint')}
+							picking={picking}
+						/>
+						<p className="character-editor-note">
+							{t('dialogs.slidersCharacters.originNote')}
+						</p>
+					</div>
 					{activeFrame && (
 						<div className="character-editor-fit">
 							<AdjustSlider

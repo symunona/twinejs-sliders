@@ -1,0 +1,42 @@
+.anchor-marker {
+	height: 0;
+	pointer-events: none;
+	position: absolute;
+	width: 0;
+	z-index: 1;
+}
+
+/* Arms of the cross. Drawn in the same orange as the character editor's origin handle,
+   with a white outline so they stay visible over any art. */
+
+.anchor-marker::before,
+.anchor-marker::after {
+	background: var(--dark-orange);
+	box-shadow: 0 0 0 1px var(--white-translucent);
+	content: '';
+	position: absolute;
+}
+
+.anchor-marker::before {
+	height: 22px;
+	left: -1.5px;
+	top: -11px;
+	width: 3px;
+}
+
+.anchor-marker::after {
+	height: 3px;
+	left: -11px;
+	top: -1.5px;
+	width: 22px;
+}
+
+.anchor-marker.small::before {
+	height: 12px;
+	top: -6px;
+}
+
+.anchor-marker.small::after {
+	left: -6px;
+	width: 12px;
+}

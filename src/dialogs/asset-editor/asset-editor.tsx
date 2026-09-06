@@ -1,4 +1,4 @@
-import {AssetId, AssetMeta} from '@sliders/scene-types';
+import {AssetId, AssetMeta, Frac2} from '@sliders/scene-types';
 import classNames from 'classnames';
 import {
 	IconAlertTriangle,
@@ -12,6 +12,13 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {
+	AnchorOverlay,
+	AnchorSelect,
+	DEFAULT_ANCHOR,
+	roundAnchor,
+	sameAnchor
+} from '../../components/anchor';
 import {ButtonBar} from '../../components/container/button-bar';
 import {DialogCard} from '../../components/container/dialog-card';
 import {CheckboxButton} from '../../components/control/checkbox-button';
@@ -42,6 +49,7 @@ import {
 	webGpuDescription
 } from './engine-types';
 import {
+	anchorAfterCrop,
 	canvasBlob,
 	CropRect,
 	cropFromDrag,
@@ -128,12 +136,21 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [background, setBackground] = React.useState<BackgroundSupport>();
 	const cancel = React.useRef<AbortController>();
 	const preview = React.useRef<HTMLCanvasElement>(null);
+	const canvasBox = React.useRef<HTMLDivElement>(null);
 	const [dragFrom, setDragFrom] = React.useState<{x: number; y: number}>();
 	const [edits, setEdits] = React.useState<ImageEdits>();
 	const [error, setError] = React.useState<string>();
 	const [lockAspect, setLockAspect] = React.useState(true);
 	const [meta, setMeta] = React.useState<AssetMeta>();
 	const [name, setName] = React.useState('');
+	/**
+	 * Where this asset is pinned, as a fraction of the SOURCE image. Kept in source
+	 * coordinates because that is what the preview shows and what a click on it means;
+	 * the crop is folded in on the way out, in `savedAnchor()`.
+	 */
+	const [origin, setOrigin] = React.useState<Frac2>(DEFAULT_ANCHOR);
+	/** True while the next click on the image places the anchor instead of cropping. */
+	const [picking, setPicking] = React.useState(false);
 	/** Kept so removing the background can be undone. */
 	const [original, setOriginal] = React.useState<HTMLCanvasElement>();
 	/** The cutout's alpha, kept so the tuning sliders don't re-run the model. */
@@ -250,6 +267,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 			setMeta(assetMeta);
 			setName(assetMeta ? `${assetMeta.name}-edit` : sourceImage?.name ?? '');
+			setOrigin(assetMeta?.origin ?? DEFAULT_ANCHOR);
 			setOriginal(canvas);
 			setSource(canvas);
 			setEdits(defaultEdits(canvas.width, canvas.height));
@@ -373,7 +391,17 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	function handlePointerDown(event: React.PointerEvent) {
 		const point = imagePoint(event);
 
-		if (!point || busy) {
+		if (!point || busy || !source) {
+			return;
+		}
+
+		// Picking is a one-shot mode: place the anchor, turn back into the crop tool.
+		// Leaving it armed makes the next crop drag silently move the anchor instead.
+		if (picking) {
+			setOrigin(
+				roundAnchor({x: point.x / source.width, y: point.y / source.height})
+			);
+			setPicking(false);
 			return;
 		}
 
@@ -409,6 +437,18 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		if (source) {
 			changeCrop({h: source.height, w: source.width, x: 0, y: 0});
 		}
+	}
+
+	/**
+	 * The anchor as the saved image will see it. The preview is the whole source, so the
+	 * anchor is placed against that; cropping moves every fraction of it.
+	 */
+	function savedAnchor(): Frac2 {
+		if (!source || !edits) {
+			return origin;
+		}
+
+		return anchorAfterCrop(origin, edits.crop, source.width, source.height);
 	}
 
 	/**
@@ -542,6 +582,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 		try {
 			await store.replace(meta.id, await editedFile(meta.name));
+
+			// Metadata, so it rides a second call rather than the bytes. Cropping moves the
+			// anchor even when nobody touched it, which is why this compares rather than
+			// checking whether the anchor controls were used.
+			const anchor = savedAnchor();
+
+			if (!sameAnchor(anchor, meta.origin ?? DEFAULT_ANCHOR)) {
+				await store.update(meta.id, {origin: anchor});
+			}
+
 			refreshAssetLibrary();
 			props.onSaved?.(meta.id);
 			props.onClose();
@@ -568,6 +618,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			const saved = await store.putAsset(await editedFile(saveName), {
 				kind: meta.kind,
 				name: saveName,
+				origin: savedAnchor(),
 				ownerCharacter: meta.ownerCharacter,
 				sourceAsset: meta.id,
 				tags: meta.tags
@@ -595,13 +646,19 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		edits !== undefined &&
 		(edits.crop.w !== source.width || edits.crop.h !== source.height);
 
+	/** The anchor is metadata, so moving it alone is still a change worth saving. */
+	const anchorChanged =
+		!detached && !sameAnchor(origin, meta?.origin ?? DEFAULT_ANCHOR);
+
 	// Nothing to write yet if the image is untouched, which is the same test
 	// the two save buttons make.
 	const saveDisabled =
 		busy ||
 		!source ||
 		!edits ||
-		(!backgroundRemoved && isUnedited(edits, source.width, source.height));
+		(!backgroundRemoved &&
+			!anchorChanged &&
+			isUnedited(edits, source.width, source.height));
 
 	useCommand({
 		enabled: !busy && !backgroundRemoved && !!background?.engine,
@@ -673,15 +730,31 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				<div className="asset-editor">
 					<div className="asset-editor-stage">
 						<div
-							className="asset-editor-canvas"
+							className={classNames('asset-editor-canvas', {picking})}
 							onPointerDown={handlePointerDown}
 							onPointerMove={handlePointerMove}
 							onPointerUp={handlePointerUp}
+							ref={canvasBox}
 						>
 							<canvas ref={preview} />
+							{!detached && (
+								<AnchorOverlay
+									art={preview}
+									container={canvasBox}
+									label={t('components.anchorSelect.readout', {
+										x: origin.x.toFixed(3),
+										y: origin.y.toFixed(3)
+									})}
+									origin={origin}
+								/>
+							)}
 						</div>
 						<p className="asset-editor-hint">
-							{t('dialogs.assetEditor.cropHint')}
+							{t(
+								picking
+									? 'dialogs.assetEditor.anchorHint'
+									: 'dialogs.assetEditor.cropHint'
+							)}
 						</p>
 					</div>
 					<div className="asset-editor-controls">
@@ -737,6 +810,22 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								/>
 							</ButtonBar>
 						</section>
+						{!detached && (
+							<section>
+								<h3>{t('dialogs.assetEditor.anchor')}</h3>
+								<AnchorSelect
+									disabled={busy}
+									onChange={setOrigin}
+									onChangePicking={setPicking}
+									origin={origin}
+									pickHint={t('dialogs.assetEditor.anchorHint')}
+									picking={picking}
+								/>
+								<p className="asset-editor-detail">
+									{t('dialogs.assetEditor.anchorNote')}
+								</p>
+							</section>
+						)}
 						<section>
 							<h3>{t('dialogs.assetEditor.size')}</h3>
 							<div className="asset-editor-size">

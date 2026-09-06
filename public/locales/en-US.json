@@ -66,6 +66,22 @@
 			"tagColorLabel": "Tag Color",
 			"tagNameLabel": "Tag Name"
 		},
+		"anchorSelect": {
+			"custom": "Pick On Image",
+			"preset": {
+				"top-left": "Top left",
+				"top-center": "Top centre",
+				"top-right": "Top right",
+				"middle-left": "Middle left",
+				"middle-center": "Middle centre",
+				"middle-right": "Middle right",
+				"bottom-left": "Bottom left",
+				"bottom-center": "Bottom centre",
+				"bottom-right": "Bottom right"
+			},
+			"presets": "Anchor presets",
+			"readout": "Anchor at {{x}}, {{y}}"
+		},
 		"dialogCard": {
 			"contentsCrashed": "Something went wrong with this dialog. Try closing it and opening it again."
 		},
@@ -242,6 +258,9 @@
 		},
 		"assetEditor": {
 			"adjust": "Adjust",
+			"anchor": "Anchor",
+			"anchorHint": "Click the image to place the anchor.",
+			"anchorNote": "Scenes place this asset by its anchor, and it grows about that point when scaled. Bottom centre keeps a prop standing on the floor.",
 			"animatedError": "This image is animated, so it can't be edited—editing would flatten it to a single frame.",
 			"apply": "Apply Edit",
 			"applyNote": "The edit goes back into the generation history at {{width}}×{{height}}. Nothing reaches the asset library until you save it there.",
@@ -411,6 +430,8 @@
 			"addAnchor": "Add Anchor",
 			"addAnchorPrompt": "What should this anchor be called?",
 			"addFrames": "Add Frames",
+			"anchorUnplaced": "not on this frame",
+			"anchorsToAllFrames": "Apply This Frame’s Anchors To All Frames",
 			"changeId": "ID: {{id}}",
 			"changeIdPrompt": "New ID for this character. Passages that already reference the old ID will not be updated.",
 			"deleteFrame": "Delete Frame",
@@ -418,8 +439,6 @@
 			"deletePrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
 			"dropFrames": "Drop image files here to add frames.",
 			"fitToAllFrames": "Apply This Fit To All Frames",
-			"anchorsToAllFrames": "Apply This Frame’s Anchors To All Frames",
-			"anchorUnplaced": "not on this frame",
 			"frameZoom": "Frame zoom",
 			"frames": "Frames",
 			"height": "Height",
@@ -432,6 +451,8 @@
 			"none": "No characters yet. Create one to start placing anchors.",
 			"onionSkin": "Onion Skin",
 			"origin": "Origin",
+			"originHint": "Click the sprite to place the origin.",
+			"originNote": "Scenes place this character by its origin. Feet at the bottom centre is the usual choice.",
 			"playsOnce": "Plays Once",
 			"previewAlt": "Selected frame",
 			"removeAnchor": "Remove the {{name}} anchor",

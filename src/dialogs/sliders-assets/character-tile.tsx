@@ -59,6 +59,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 				<AssetPreview
 					alt={character.name}
 					assetId={character.frames[frameNames[0]]?.asset}
+					origin={character.origin}
 				/>
 				<span className="sliders-tile-name">{character.name}</span>
 				<span className="sliders-tile-detail">

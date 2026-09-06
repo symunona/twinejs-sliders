@@ -3,7 +3,8 @@ import type {
 	AssetKind,
 	AssetMeta,
 	AssetResolver,
-	Character
+	Character,
+	Frac2
 } from '@sliders/scene-types';
 
 /** Which persistence layer ended up being used. Surfaced in the UI for support reasons. */
@@ -31,6 +32,8 @@ export interface PutAssetOptions {
 	ownerCharacter?: string;
 	/** Set when the asset is an edited copy of another one. */
 	sourceAsset?: AssetId;
+	/** Where the art is pinned, as a fraction. Defaults to bottom centre when absent. */
+	origin?: Frac2;
 }
 
 export interface PutAssetResult {

@@ -11,6 +11,7 @@ import {
 	computeStageBox,
 	propMetrics,
 	resolveZ,
+	safeOrigin,
 	safeZoom,
 	sceneToBox,
 	sortByZ,
@@ -152,6 +153,24 @@ describe('characterMetrics', () => {
 		expect(scaled.origin).toEqual(natural.origin);
 	});
 
+	it('pins the art at the origin it is given', () => {
+		const box = computeStageBox(1600, 900);
+
+		expect(propMetrics(box, {w: 540, h: 540}, {x: 0.5, y: 0.5}).origin).toEqual({
+			x: 0.5,
+			y: 0.5
+		});
+	});
+
+	it('defaults to feet on the floor when the asset has no origin', () => {
+		const box = computeStageBox(1600, 900);
+
+		expect(propMetrics(box, {w: 540, h: 540}).origin).toEqual(DEFAULT_ORIGIN);
+		expect(propMetrics(box, {w: 540, h: 540}, undefined).origin).toEqual(
+			DEFAULT_ORIGIN
+		);
+	});
+
 	it('falls back to natural size on a scale that would erase the sprite', () => {
 		const natural = characterMetrics(box, CHAR);
 
@@ -176,6 +195,24 @@ describe('propMetrics', () => {
 
 		expect(m.height).toBeCloseTo(270 * (900 / PROP_DESIGN_HEIGHT) * 0.6, 10);
 		expect(m.width).toBeCloseTo(540 * (900 / PROP_DESIGN_HEIGHT) * 0.6, 10);
+	});
+
+	it('pins the art at the origin it is given', () => {
+		const box = computeStageBox(1600, 900);
+
+		expect(propMetrics(box, {w: 540, h: 540}, {x: 0.5, y: 0.5}).origin).toEqual({
+			x: 0.5,
+			y: 0.5
+		});
+	});
+
+	it('defaults to feet on the floor when the asset has no origin', () => {
+		const box = computeStageBox(1600, 900);
+
+		expect(propMetrics(box, {w: 540, h: 540}).origin).toEqual(DEFAULT_ORIGIN);
+		expect(propMetrics(box, {w: 540, h: 540}, undefined).origin).toEqual(
+			DEFAULT_ORIGIN
+		);
 	});
 
 	it('falls back to natural size on a scale that would erase the sprite', () => {
@@ -344,5 +381,25 @@ describe('resolveZ', () => {
 		]);
 
 		expect(sorted.map(e => e.id)).toEqual(['far', 'a', 'b', 'near', 'forced']);
+	});
+});
+
+describe('safeOrigin', () => {
+	it('passes a usable origin through', () => {
+		expect(safeOrigin({x: 0.25, y: 0.75})).toEqual({x: 0.25, y: 0.75});
+	});
+
+	it('substitutes the default when there is none', () => {
+		expect(safeOrigin(undefined)).toEqual(DEFAULT_ORIGIN);
+	});
+
+	it('clamps an origin outside the sprite to its edge', () => {
+		expect(safeOrigin({x: -2, y: 4})).toEqual({x: 0, y: 1});
+	});
+
+	it('falls back per axis on a value that is not a number', () => {
+		// Story data can come from a hand-edited manifest, so half a broken origin should
+		// not take the good half down with it.
+		expect(safeOrigin({x: NaN, y: 0.25})).toEqual({x: DEFAULT_ORIGIN.x, y: 0.25});
 	});
 });
