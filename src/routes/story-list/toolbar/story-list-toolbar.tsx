@@ -3,7 +3,12 @@ import {useTranslation} from 'react-i18next';
 import {RouteToolbar} from '../../../components/route-toolbar';
 import {StorageQuota} from '../../../components/storage-quota/storage-quota';
 import {BuildInfo} from '../../story-edit/toolbar/build-info';
-import {BuildActions, AppActions, SyncActions} from '../../../route-actions';
+import {
+	BuildActions,
+	AppActions,
+	SyncActions,
+	SyncStatus
+} from '../../../route-actions';
 import {Story, useStoriesContext} from '../../../store/stories';
 import {LibraryActions} from './library/library-actions';
 import {StoryActions} from './story/story-actions';
@@ -26,6 +31,7 @@ export const StoryListToolbar: React.FC<StoryListToolbarProps> = props => {
 				<>
 					<BuildInfo />
 					<StorageQuota watch={stories} />
+					<SyncStatus />
 				</>
 			}
 			tabs={{

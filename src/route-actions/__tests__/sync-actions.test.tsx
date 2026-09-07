@@ -5,100 +5,66 @@ import {FakeStateProvider} from '../../test-util';
 import {fakeStory} from '../../test-util/fakes';
 import {ServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {emptyPresence} from '../../store/persistence/server/presence';
-import type {SyncRecords} from '../../store/persistence/server/sync-record';
 import {Story} from '../../store/stories';
 import {SyncActions} from '../sync-actions';
 
 describe('<SyncActions>', () => {
-	function renderComponent(
-		stories: Story[],
-		records: SyncRecords,
-		connected = true
-	) {
+	function renderComponent(story?: Story) {
 		return render(
-			<FakeStateProvider stories={stories}>
+			<FakeStateProvider stories={story ? [story] : []}>
 				<ServerSyncContext.Provider
 					value={{
 						actions: {} as never,
 						blurPassage: () => undefined,
 						client: {} as never,
 						clientsIn: () => [],
-						connected,
+						connected: true,
 						focusPassage: () => undefined,
 						ghosts: [],
 						index: [],
 						lock: () => undefined,
 						presence: emptyPresence(),
 						progress: {},
-						records,
-						socketConnected: connected,
+						records: {},
+						socketConnected: true,
 						stealPassage: () => undefined
 					}}
 				>
-					<SyncActions />
+					<SyncActions story={story} />
 				</ServerSyncContext.Provider>
 			</FakeStateProvider>
 		);
 	}
 
-	it('shows no timestamp badge when no story is marked for sync', () => {
-		renderComponent([fakeStory()], {});
-		expect(screen.queryByTestId('sync-status-badge')).not.toBeInTheDocument();
-	});
-
-	it('shows a pending label when a synced story has no record yet', () => {
-		const story = fakeStory();
-
-		story.sync = true;
-		renderComponent([story], {});
+	it('offers to publish a story that is not synced', () => {
+		renderComponent(fakeStory());
 		expect(
-			screen.getByText('routeActions.app.syncStatusPending')
+			screen.getByRole('button', {name: 'routeActions.app.syncPublish'})
 		).toBeInTheDocument();
 	});
 
-	it('shows the last sync time with no checkmark when a story is dirty', () => {
+	it('offers to unpublish a synced story', () => {
 		const story = fakeStory();
 
 		story.sync = true;
-		renderComponent([story], {
-			[story.id]: {
-				lastPushedAt: Date.parse('2026-08-21T10:12:00Z'),
-				pushedHash: 'mock-hash',
-				rev: 1,
-				state: 'dirty',
-				storyId: story.id
-			}
-		});
-
+		renderComponent(story);
 		expect(
-			screen.getByText('routeActions.app.syncStatus')
+			screen.getByRole('button', {name: 'routeActions.app.syncUnpublish'})
+		).toBeInTheDocument();
+	});
+
+	it('shows only settings when no story is selected', () => {
+		renderComponent();
+		expect(
+			screen.getByRole('button', {name: 'routeActions.app.syncSettings'})
 		).toBeInTheDocument();
 		expect(
-			document.querySelector('.sync-actions-status-tick')
+			screen.queryByRole('button', {name: 'routeActions.app.syncPublish'})
 		).not.toBeInTheDocument();
 	});
 
-	it('shows a checkmark when every synced story is idle', () => {
-		const story = fakeStory();
-
-		story.sync = true;
-		renderComponent([story], {
-			[story.id]: {
-				lastPushedAt: Date.parse('2026-08-21T10:12:00Z'),
-				pushedHash: 'mock-hash',
-				rev: 1,
-				state: 'idle',
-				storyId: story.id
-			}
-		});
-
-		expect(
-			document.querySelector('.sync-actions-status-tick')
-		).toBeInTheDocument();
-	});
-
 	it('is accessible', async () => {
-		const {container} = renderComponent([], {});
+		const {container} = renderComponent();
 
 		expect(await axe(container)).toHaveNoViolations();
 	});
