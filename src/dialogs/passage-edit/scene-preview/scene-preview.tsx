@@ -653,9 +653,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		beat > 0 ? parse.result?.beatSpans?.[beat - 1] : undefined,
 		block?.lineOffset ?? 0
 	);
-	/** The beat a bubble gesture writes to: the scrubber position, less the S0 stage. */
+	/**
+	 * The beat a bubble gesture writes to: the scrubber position, less the S0 stage.
+	 *
+	 * Never in full screen. That is reading mode — a tap anywhere steps forward — and the
+	 * bubble frame would swallow every tap that landed on the words.
+	 */
 	const bubbleBeat =
-		editable && (shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
+		editable &&
+		!fullScreen &&
+		(shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
 			? beat - 1
 			: undefined;
 

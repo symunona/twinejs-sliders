@@ -82,6 +82,21 @@ const MIN_WIDTH_FRACTION = 0.08;
 /** How far the pointer travels before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 3;
 
+/** The `[[link]]` under a point, if the pointer is over one. */
+function linkAt(x: number, y: number): HTMLElement | undefined {
+	for (const el of document.elementsFromPoint(x, y)) {
+		const link = (el as HTMLElement).closest?.('[data-sliders-link]') as
+			| HTMLElement
+			| undefined;
+
+		if (link) {
+			return link;
+		}
+	}
+
+	return undefined;
+}
+
 function clamp01(value: number): number {
 	return Math.min(1, Math.max(0, value));
 }
@@ -275,6 +290,24 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 
 	const begin = (event: React.PointerEvent, mode: Mode) => {
 		if (!measured) {
+			return;
+		}
+
+		// A `[[link]]` in the bubble keeps its click — ctrl-clicking one opens the passage
+		// it names, and the frame lies directly over the words. The link is under the
+		// pointer, not under the frame, so the point is what has to be asked.
+		const link = linkAt(event.clientX, event.clientY);
+
+		if (link) {
+			link.dispatchEvent(
+				new MouseEvent('click', {
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: event.ctrlKey,
+					metaKey: event.metaKey
+				})
+			);
+
 			return;
 		}
 
