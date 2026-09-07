@@ -1,6 +1,6 @@
 # Playwright suites
 
-`playwright.config.ts` sets `testDir: './e2e'` and starts vite on 5173 itself
+`playwright.config.ts` sets `testDir: './e2e'` and starts vite on 27020 itself
 (`reuseExistingServer`, so a dev server you already have is used as is). Chromium only.
 
 Two projects:

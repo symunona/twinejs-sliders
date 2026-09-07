@@ -162,7 +162,7 @@ export class TestServer {
 				env: {
 					...process.env,
 					AUTH_TOKEN,
-					// The editor is served from localhost:5173 and the API from
+					// The editor is served from localhost:27020 and the API from
 					// 127.0.0.1:<port>, so every request is cross-origin and preflighted.
 					CORS_ORIGINS: '*'
 				},

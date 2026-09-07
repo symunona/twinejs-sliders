@@ -126,8 +126,8 @@ const config: PlaywrightTestConfig = {
 	/* Run your local dev server before starting the tests.
 	   `npm run start` opens a browser window, which is unhelpful in CI/headless. */
 	webServer: {
-		command: 'npx vite --port 5173 --host 127.0.0.1 --clearScreen false',
-		port: 5173,
+		command: 'npx vite --port 27020 --host 127.0.0.1 --clearScreen false',
+		port: 27020,
 		reuseExistingServer: true,
 		timeout: 120 * 1000
 	}

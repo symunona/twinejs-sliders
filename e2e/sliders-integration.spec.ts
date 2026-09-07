@@ -185,15 +185,15 @@ test.describe('Sliders end to end', () => {
 		});
 		await shot(page, 'int-04-preview-real-sprites');
 
-		// Layers land where the scene said.
-		await expect(preview.locator('[data-entity-id="joren"]')).toHaveAttribute(
-			'data-layer',
-			'back'
-		);
-		await expect(preview.locator('[data-entity-id="mira"]')).toHaveAttribute(
-			'data-layer',
-			'mid'
-		);
+		// Draw order lands where the scene said. There are no layer elements any more:
+		// `layer:` desugars to `z`, so joren's `layer: back` has to show up as a lower
+		// z-index than mira's default inside the one entity container.
+		const zIndexOf = (id: string) =>
+			preview
+				.locator(`[data-entity-id="${id}"]`)
+				.evaluate(el => Number((el as HTMLElement).style.zIndex));
+
+		expect(await zIndexOf('joren')).toBeLessThan(await zIndexOf('mira'));
 
 		// --- beats drive dialogue -----------------------------------------
 		await expect(page.getByTestId('scene-preview-beat')).toHaveText('0 / 7');

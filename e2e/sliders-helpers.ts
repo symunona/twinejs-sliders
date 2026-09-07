@@ -1,6 +1,6 @@
 import {expect, Page} from '@playwright/test';
 
-export const BASE_URL = process.env.SLIDERS_E2E_URL ?? 'http://localhost:5173';
+export const BASE_URL = process.env.SLIDERS_E2E_URL ?? 'http://localhost:27020';
 
 /** Saving passage text is debounced; this waits long enough for it to land. */
 export async function waitForPassageSave() {

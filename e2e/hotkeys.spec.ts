@@ -1,8 +1,8 @@
 import {test, expect, Page} from '@playwright/test';
 
-// The dev server picks another port if 5173 is taken, so allow overriding.
+// The dev server picks another port if 27020 is taken, so allow overriding.
 
-const baseUrl = process.env.TWINE_E2E_URL ?? 'http://localhost:5173';
+const baseUrl = process.env.TWINE_E2E_URL ?? 'http://localhost:27020';
 
 async function skipWelcome(page: Page) {
 	await page.goto(baseUrl);

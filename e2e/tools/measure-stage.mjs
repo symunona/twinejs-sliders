@@ -1,5 +1,5 @@
 import {chromium} from '@playwright/test';
-const U='http://127.0.0.1:5173';
+const U='http://127.0.0.1:27020';
 const b=await chromium.launch(); const p=await b.newPage({viewport:{width:1400,height:1000}});
 await p.goto(U);
 const skip=p.getByRole('button',{name:'Skip'}), tab=p.getByRole('tab',{name:'Story'});
