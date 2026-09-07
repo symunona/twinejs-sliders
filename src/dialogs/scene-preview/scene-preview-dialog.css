@@ -1,0 +1,26 @@
+/* No box of its own: it exists to catch Escape on its way up the React tree (see the
+   component), so the preview stays the card's own flex child. */
+.scene-preview-dialog-keys {
+	display: contents;
+}
+
+/* The card decides how tall the preview is--in the column it shares the height with the
+   passage editor, maximized it gets the whole left area--so the stage takes what is left
+   instead of the `clamp()` it uses when it is sizing itself. */
+.scene-preview-dialog .scene-preview {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.scene-preview-dialog .scene-preview:not(.full-screen) .scene-stage {
+	flex-grow: 1;
+	height: auto;
+	/* Below this the stage is not worth looking at, and the card scrolls instead. */
+	min-height: 180px;
+}
+
+/* Full screen portals the preview to the body, so what is left inside the card is an
+   empty box that would otherwise paint a bar and a background over the column. */
+.scene-preview-dialog .scene-preview.full-screen {
+	display: none;
+}

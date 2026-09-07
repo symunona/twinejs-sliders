@@ -6,7 +6,8 @@ import {
 	createStory,
 	openPassage,
 	setPassageText,
-	setStoryFormat
+	setStoryFormat,
+	showScenePreview
 } from './sliders-helpers';
 
 /**
@@ -51,6 +52,7 @@ async function openSceneEditor(page: Page, storyName: string) {
 	await closeDialogs(page);
 	await openPassage(page, 'Untitled Passage');
 	await setPassageText(page, SCENE);
+	await showScenePreview(page);
 	await page.locator('.scene-stage').first().waitFor({timeout: 20000});
 }
 

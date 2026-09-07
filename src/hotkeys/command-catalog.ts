@@ -89,6 +89,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'build.publishToFile', scope: 'story-map'},
 	{id: 'build.exportAsTwee', scope: 'story-map'},
 
+	{id: 'scene.togglePreview', scope: 'story-map'},
 	{id: 'sliders.assets', scope: 'story-map'},
 	{id: 'sliders.characters', scope: 'story-map'},
 	{id: 'sliders.generator', scope: 'story-map'},
@@ -96,7 +97,6 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'passage.rename', scope: 'dialog'},
 	{id: 'dialog.maximize', scope: 'dialog'},
 
-	{id: 'scene.togglePreview', scope: 'scene-preview'},
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},
 	{id: 'scene.toggleLock', scope: 'scene-preview'},

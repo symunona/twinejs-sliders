@@ -20,7 +20,7 @@ import {
 } from './scene-preview/prefill-links';
 import {useSceneParse} from './scene-preview/use-scene-parse';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
-import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-panel/scene-preview-source-context';
+import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-source-context';
 import {PassageLockBanner} from './passage-lock-banner';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
@@ -62,8 +62,8 @@ export const PassageEditContents: React.FC<
 	// The scene text the author is looking at, undebounced (see `liveText` above).
 	const sceneText = liveText ?? passage.text;
 	/**
-	 * One parse for the whole dialog. The error list, the editor's own marks and the route's
-	 * preview panel all read it, and parsing three times would let them disagree about what
+	 * One parse for the whole dialog. The error list, the editor's own marks and the scene
+	 * preview dialog all read it, and parsing three times would let them disagree about what
 	 * the scene currently says.
 	 */
 	const parse = useSceneParse(sceneText, story.passages);
@@ -136,9 +136,9 @@ export const PassageEditContents: React.FC<
 		[dialogsDispatch, story]
 	);
 
-	// The scene preview is one view in the story edit route now, not a strip inside this
-	// dialog. All this editor does is offer what it is holding; the panel decides whose
-	// scene is on screen.
+	// The scene preview is a dialog of its own now, not a strip inside this one. All this
+	// editor does is offer what it is holding; the preview decides whose scene is on
+	// screen.
 	usePublishScenePreview({
 		disabled,
 		editor: cmEditor,

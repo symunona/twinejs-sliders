@@ -11,6 +11,7 @@ export * from './keyboard-shortcuts';
 export * from './passage-edit';
 export * from './passage-tags';
 export * from './scene-help';
+export * from './scene-preview';
 export * from './server-conflict';
 export * from './sliders-assets';
 export * from './sliders-characters';

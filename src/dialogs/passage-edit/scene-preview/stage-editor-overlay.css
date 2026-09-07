@@ -204,6 +204,10 @@
 	right: 0;
 }
 
+/* Above `.scene-preview-selection`, which is drawn over the top of the stage: a sprite
+   standing near the top of a narrow stage puts its nw/ne handles under that strip, and a
+   button there would swallow the only way to resize it. A handle is 9px and the buttons are
+   38px, so the patch of button lost this way costs far less than the handle would. */
 .stage-editor-handle {
 	background: #fff;
 	border: 1px solid #4ad4ff;
@@ -213,6 +217,7 @@
 	pointer-events: auto;
 	position: absolute;
 	width: 9px;
+	z-index: 5;
 }
 
 .stage-editor-handle.nw,

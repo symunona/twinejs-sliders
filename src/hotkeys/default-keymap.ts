@@ -63,6 +63,10 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'view.zoomReset': {bindings: ['0']},
 	'build.play': {bindings: ['mod+enter']},
 	'build.test': {bindings: ['mod+shift+enter']},
+	// The scene preview is a dialog now, opened from the Story toolbar like the asset
+	// manager, so its show/hide key belongs to the map. Bare `p` is already the fuzzy
+	// finder's, hence the shifted one.
+	'scene.togglePreview': {bindings: ['shift+p']},
 	'sliders.assets': {bindings: ['a']},
 	'sliders.characters': {bindings: ['c']},
 	'sliders.generator': {bindings: ['g']},
@@ -70,7 +74,6 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// Scene preview. Viewer keys, so they only fire once focus is inside the
 	// preview--pressing left in the passage text still moves the cursor.
 
-	'scene.togglePreview': {bindings: ['p']},
 	'scene.previousBeat': {bindings: ['left']},
 	'scene.nextBeat': {bindings: ['right']},
 	'scene.play': {bindings: ['k']},
@@ -79,7 +82,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// `mod+l` is what a lock wants to be and the one thing it cannot be: Chrome keeps it for
 	// the address bar and will not let a page have it (§2.1 of the hotkey defaults doc), so
 	// the chord is the shifted one. The bare `l` is the key that actually gets used, in the
-	// same family as `f`, `k` and `p` above.
+	// same family as `f` and `k` above.
 	'scene.toggleLock': {bindings: ['l', 'mod+shift+l']},
 
 	// Visual editor. The nudges take the arrow keys back off the scrubber while something

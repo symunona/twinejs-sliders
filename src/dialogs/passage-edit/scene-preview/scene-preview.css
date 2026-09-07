@@ -3,7 +3,6 @@
 @import '../../../styles/metrics.css';
 
 .scene-preview {
-	border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
@@ -34,20 +33,12 @@
 	padding: 2px 4px;
 }
 
-/* Where the preview is looked at, kept away from what is being looked at. */
+/* The way out of full screen, pushed away from the viewer controls. */
 .scene-preview-bar-right {
 	align-items: center;
 	display: flex;
 	gap: 2px;
 	margin-left: auto;
-}
-
-.scene-preview-title {
-	font-weight: bold;
-}
-
-.scene-preview-spacer {
-	flex-grow: 1;
 }
 
 .scene-preview-beat {

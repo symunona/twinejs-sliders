@@ -14,6 +14,7 @@ import {
 	openStory,
 	renamePassage,
 	setPassageText,
+	showScenePreview,
 	shot
 } from './sliders-helpers';
 
@@ -167,6 +168,7 @@ test.describe('Sliders end to end', () => {
 		await openPassage(page, 'Untitled Passage');
 		await renamePassage(page, first.name);
 		await setPassageText(page, first.text);
+		await showScenePreview(page);
 
 		const preview = page.getByTestId('scene-preview');
 
@@ -225,6 +227,7 @@ test.describe('Sliders end to end', () => {
 		await test.step('a from: scene inherits the stage it patches', async () => {
 			await closeDialogs(page);
 			await openPassage(page, 'Tavern - Fight');
+			await showScenePreview(page);
 
 			const preview = page.getByTestId('scene-preview');
 
@@ -247,6 +250,7 @@ test.describe('Sliders end to end', () => {
 		await test.step('entity removal with ~ takes characters off the stage', async () => {
 			await closeDialogs(page);
 			await openPassage(page, 'Street');
+			await showScenePreview(page);
 
 			const preview = page.getByTestId('scene-preview');
 
@@ -278,6 +282,7 @@ test.describe('Sliders end to end', () => {
 			// needing an unreachable one.
 			await openPassage(page, 'Street');
 			await setPassageText(page, BROKEN_PASSAGE.text);
+			await showScenePreview(page);
 
 			const errors = await openSceneErrors(page);
 

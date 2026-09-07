@@ -2,8 +2,7 @@
 @import '../../styles/metrics.css';
 
 .dialogs {
-	/* Clear of the sliders scene preview when it is docked along the bottom. */
-	bottom: calc(var(--grid-size) + var(--sliders-preview-dock-height, 0px));
+	bottom: var(--grid-size);
 	left: var(--grid-size);
 	pointer-events: none;
 	position: fixed;
@@ -15,7 +14,7 @@
 
 .dialogs {
 	align-items: flex-end;
-	bottom: calc(var(--grid-size) + var(--sliders-preview-dock-height, 0px));
+	bottom: var(--grid-size);
 	display: flex;
 	flex-direction: column;
 	grid-gap: var(--grid-size);
@@ -27,7 +26,7 @@
 		2 * var(--control-height) + var(--grid-size)
 	); /* below <top-bar> height */
 	left: var(--grid-size);
-	bottom: calc(var(--grid-size) + var(--sliders-preview-dock-height, 0px));
+	bottom: var(--grid-size);
 }
 
 .dialogs .dialog-card, .dialogs .background-dialog-card {

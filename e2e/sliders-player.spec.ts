@@ -4,7 +4,8 @@ import {
 	createStory,
 	openPassage,
 	setPassageText,
-	setStoryFormat
+	setStoryFormat,
+	showScenePreview
 } from './sliders-helpers';
 
 /**
@@ -30,6 +31,7 @@ async function openPlayer(page: Page, storyName: string) {
 	await closeDialogs(page);
 	await openPassage(page, 'Untitled Passage');
 	await setPassageText(page, SCENE);
+	await showScenePreview(page);
 	await page.locator('.scene-stage').first().waitFor({timeout: 20000});
 	await page.locator('.sliders-entity[data-entity-id="mira"]').waitFor({
 		timeout: 20000
@@ -101,7 +103,12 @@ test.describe('full screen player', () => {
 		test.setTimeout(180000);
 		await openPlayer(page, 'Player Small ' + Date.now());
 
-		await page.getByRole('button', {name: 'Full screen'}).click();
+		// The way OUT of full screen is the button in the preview's own bar. The dialog
+		// card's header has one too, but the card is behind the full screen portal.
+		await page
+			.getByTestId('scene-preview')
+			.getByRole('button', {name: 'Full screen'})
+			.click();
 		await page.waitForTimeout(400);
 
 		await expect(page.getByTestId('scene-preview-nav')).toHaveCount(0);

@@ -7,6 +7,7 @@ import {FindReplaceButton} from './find-replace-button';
 import {HistoryButton} from './history-button';
 import {JavaScriptButton} from './javascript-button';
 import {PassageTagsButton} from './passage-tags-button';
+import {ScenePreviewButton} from './scene-preview-button';
 import {SlidersAssetsButton} from './sliders-assets-button';
 import {SlidersCharactersButton} from './sliders-characters-button';
 import {SlidersGeneratorButton} from './sliders-generator-button';
@@ -32,6 +33,7 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 			<DetailsButton story={story} />
 			<PassageTagsButton story={story} />
 			<HistoryButton story={story} />
+			<ScenePreviewButton story={story} />
 			<SlidersAssetsButton />
 			<SlidersCharactersButton />
 			<SlidersGeneratorButton />

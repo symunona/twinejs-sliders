@@ -1,14 +1,10 @@
 import {
-	IconChevronDown,
+	IconArrowsMinimize,
 	IconChevronLeft,
 	IconChevronRight,
 	IconGridDots,
-	IconLayoutBottombar,
-	IconLayoutSidebar,
 	IconLock,
 	IconLockOpen,
-	IconMaximize,
-	IconMinimize,
 	IconPlayerPause,
 	IconPlayerPlay
 } from '@tabler/icons';
@@ -61,9 +57,6 @@ import {
 } from './use-scene-writer';
 import './scene-preview.css';
 
-/** Where the preview sits in the story edit route. */
-export type ScenePreviewMode = 'dock' | 'left';
-
 export interface ScenePreviewProps {
 	/**
 	 * `invalidate` is optional because the type belongs to the story format, which has no
@@ -92,19 +85,11 @@ export interface ScenePreviewProps {
 	 */
 	onOpenPassage?: (name: string) => void;
 	/**
-	 * Where the panel is parked, and how to move it. Owned by the panel--the layout
-	 * decides how much room to take out of the route, so it has to know before the bar
-	 * that changed it renders.
+	 * Covering the whole window, toolbar included. The one state the dialog system does
+	 * not provide, so it is the one state that is still ours: normal and maximized are
+	 * the card's own, and this is owned by `ScenePreviewDialog` because leaving it has to
+	 * put the card back where it came from.
 	 */
-	mode: ScenePreviewMode;
-	onModeChange: (next: ScenePreviewMode) => void;
-	/**
-	 * Collapsed to just the bar. Lifted for the same reason `mode` is, and because the
-	 * "first open comes up full screen" rule belongs with whoever persists it.
-	 */
-	open: boolean;
-	onOpenChange: (next: boolean) => void;
-	/** Transient, never persisted: full screen is a look, not a preference. */
 	fullScreen: boolean;
 	onFullScreenChange: (next: boolean) => void;
 }
@@ -162,19 +147,15 @@ async function textChanged(
  * Live scene preview for one passage's scene (spec 06), and the visual editor on top of it
  * (spec 07).
  *
- * Collapsible, and shown by the story edit route rather than by the passage dialog--which
- * is why the layout and the open state arrive as props.
+ * The contents of the scene preview dialog, so the title, the collapse and the maximize
+ * are the dialog card's--this is the bar and the stage under it, and nothing else.
  */
 export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	assets,
 	editor,
 	fullScreen,
-	mode,
 	onFullScreenChange,
-	onModeChange,
-	onOpenChange,
 	onOpenPassage,
-	open,
 	parse,
 	passages,
 	text
@@ -190,6 +171,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [beat, setBeat] = React.useState(0);
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
+	const root = React.useRef<HTMLDivElement>(null);
 	const mounted = React.useRef(true);
 	const [seal, setSeal] = React.useState(0);
 	const {clearPatch, holdPatch, mergePatch, patch, setPatch} = useScenePatch();
@@ -256,7 +238,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const {clear, select, selection} = useStageSelection({
 		block,
 		editor,
-		enabled: open,
+		enabled: true,
 		kindOf,
 		scene: parse.result?.scene,
 		stageIds
@@ -642,10 +624,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		});
 	}
 
-	function handleToggle() {
-		onOpenChange(!open);
-	}
-
 	function goToPreviousBeat() {
 		setPlaying(false);
 		setBeat(b => Math.max(0, b - 1));
@@ -696,6 +674,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		return () => window.clearTimeout(timer);
 	}, [beat, lastBeat, playing]);
 
+	// Full screen takes focus, for two reasons that happen to want the same thing: the
+	// preview's own keys resolve from where focus is, and Escape has to be the preview's
+	// rather than the dialog card's -- a header button still holding focus would close the
+	// whole dialog on the first press.
+	React.useEffect(() => {
+		if (fullScreen) {
+			root.current?.focus();
+		}
+	}, [fullScreen]);
+
 	React.useEffect(() => {
 		if (!fullScreen) {
 			return;
@@ -722,13 +710,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// focus is inside the preview, so left and right still move the cursor
 	// while the author is writing the scene above.
 
-	useCommand({
-		id: 'scene.togglePreview',
-		label: t('hotkeys.commands.scene.togglePreview'),
-		run: handleToggle,
-		scope: 'scene-preview'
-	});
-
 	// Beat navigation and nudging share the arrow keys, so exactly one of the two is ever
 	// enabled. The dispatcher skips disabled commands before it looks at bindings, which
 	// makes this deterministic rather than a race between registration orders — and
@@ -736,7 +717,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && beat > 0 && selection.length === 0,
+		enabled: beat > 0 && selection.length === 0,
 		id: 'scene.previousBeat',
 		label: t('hotkeys.commands.scene.previousBeat'),
 		run: goToPreviousBeat,
@@ -745,7 +726,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && (beat < lastBeat || !!nextScene) && selection.length === 0,
+		enabled: (beat < lastBeat || !!nextScene) && selection.length === 0,
 		id: 'scene.nextBeat',
 		label: t('hotkeys.commands.scene.nextBeat'),
 		run: goToNextBeat,
@@ -753,7 +734,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open,
 		id: 'scene.play',
 		label: t('hotkeys.commands.scene.play'),
 		run: togglePlaying,
@@ -761,7 +741,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open,
 		id: 'scene.fullScreen',
 		label: t('hotkeys.commands.scene.fullScreen'),
 		run: () => onFullScreenChange(!fullScreen),
@@ -770,7 +749,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	// Deselecting is not an edit, so it survives the lock.
 	useCommand({
-		enabled: open && selection.length > 0,
+		enabled: selection.length > 0,
 		id: 'scene.deselect',
 		label: t('hotkeys.commands.scene.deselect'),
 		run: clear,
@@ -778,7 +757,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open,
 		id: 'scene.toggleLock',
 		label: t('hotkeys.commands.scene.toggleLock'),
 		run: toggleLock,
@@ -787,7 +765,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.nudgeLeft',
 		label: t('hotkeys.commands.scene.nudgeLeft'),
 		run: () => nudge(-1, 0),
@@ -796,7 +774,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.nudgeRight',
 		label: t('hotkeys.commands.scene.nudgeRight'),
 		run: () => nudge(1, 0),
@@ -807,7 +785,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.nudgeUp',
 		label: t('hotkeys.commands.scene.nudgeUp'),
 		run: () => nudge(0, 1),
@@ -816,7 +794,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.nudgeDown',
 		label: t('hotkeys.commands.scene.nudgeDown'),
 		run: () => nudge(0, -1),
@@ -827,7 +805,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// through the same one-gesture-one-edit path the drag uses.
 
 	useCommand({
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.flip',
 		label: t('hotkeys.commands.scene.flip'),
 		run: flip,
@@ -835,7 +813,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.delete',
 		label: t('hotkeys.commands.scene.delete'),
 		run: remove,
@@ -844,7 +822,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.zBack',
 		label: t('hotkeys.commands.scene.zBack'),
 		run: () => stepZ(-1),
@@ -853,7 +831,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: open && editable && selection.length > 0,
+		enabled: editable && selection.length > 0,
 		id: 'scene.zFront',
 		label: t('hotkeys.commands.scene.zFront'),
 		run: () => stepZ(1),
@@ -877,202 +855,174 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const bar = (
 		<div className="scene-preview-bar">
 			<IconButton
-				icon={
-					open ? <IconChevronDown /> : <IconChevronRight />
-				}
+				disabled={beat <= 0}
+				icon={<IconChevronLeft />}
 				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.toggle')}
-				onClick={handleToggle}
-				selectable
-				selected={open}
+				label={t('dialogs.passageEdit.scenePreview.previousBeat')}
+				onClick={goToPreviousBeat}
 			/>
-			<span className="scene-preview-title">
-				{t('dialogs.passageEdit.scenePreview.title')}
+			<span className="scene-preview-beat" data-testid="scene-preview-beat">
+				{beat} / {lastBeat}
 			</span>
-			<span className="scene-preview-spacer" />
-			{open && (
-				<>
+			<IconButton
+				disabled={beat >= lastBeat && !nextScene}
+				icon={<IconChevronRight />}
+				iconOnly
+				label={
+					beat >= lastBeat && nextScene
+						? t('dialogs.passageEdit.scenePreview.nextScene', {
+								name: nextScene
+						  })
+						: t('dialogs.passageEdit.scenePreview.nextBeat')
+				}
+				onClick={goToNextBeat}
+			/>
+			<IconButton
+				icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.play')}
+				onClick={togglePlaying}
+			/>
+			{/* Sits beside the lock rather than in the selection row: the grid
+			    is how the author reads the stage, and nothing has to be
+			    selected to want to read it. */}
+			<IconButton
+				icon={<IconGridDots />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.grid')}
+				onClick={toggleGrid}
+				selectable
+				selected={grid}
+			/>
+			{/* Always here, selection or not: the lock is how the author stops
+			    the stage editing the file, so it cannot be a control that only
+			    appears once something has been grabbed. */}
+			<IconButton
+				icon={locked ? <IconLock /> : <IconLockOpen />}
+				iconOnly
+				label={t(
+					locked
+						? 'dialogs.passageEdit.scenePreview.unlock'
+						: 'dialogs.passageEdit.scenePreview.lock'
+				)}
+				onClick={toggleLock}
+				selectable
+				selected={locked}
+			/>
+			{/* Entering full screen is a header control on the dialog card, next to
+			    maximize. LEAVING it cannot be: full screen portals out of the card and
+			    the header goes with it, so the way back has to live in the bar. */}
+			{fullScreen && (
+				<span className="scene-preview-bar-right">
 					<IconButton
-						disabled={beat <= 0}
-						icon={<IconChevronLeft />}
+						icon={<IconArrowsMinimize />}
 						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.previousBeat')}
-						onClick={goToPreviousBeat}
+						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
+						onClick={() => onFullScreenChange(false)}
 					/>
-					<span className="scene-preview-beat" data-testid="scene-preview-beat">
+				</span>
+			)}
+		</div>
+	);
+
+	// The stage itself--everything below the bar.
+	const stageBody = (
+		<StageEditorOverlay
+			editable={editable}
+			grid={grid}
+			onAdvance={canAdvance ? goToNextBeat : undefined}
+			onCameraPatch={setCamera}
+			onCancel={handleCancel}
+			onCommit={handleCommit}
+			onDropAsset={handleDropAsset}
+			onDropFiles={handleDropFiles}
+			onPatch={setPatch}
+			parentOffsets={offsets}
+			onSelect={select}
+			onToggleFullScreen={() => onFullScreenChange(!fullScreen)}
+			player={fullScreen}
+			renderer={renderer}
+			seal={seal}
+			selection={selection}
+			stage={stage}
+		>
+			<SceneStage
+				animate={playing}
+				assets={assets}
+				beat={shownBeat}
+				onLink={handleLink}
+				onRenderer={handleRenderer}
+				stage={stage}
+			/>
+			{/* Over the stage rather than above it. A row that appeared with the
+			    selection would resize the stage under the pointer, and the whole scene
+			    would jump on the very click that selected a sprite. A click on the
+			    stage selects, so full screen moved to a double click; the bar button
+			    above is still the keyboard-accessible path. */}
+			<StageSelectionControls
+				assets={assets}
+				editable={editable}
+				entities={selectedEntities}
+				onDelete={remove}
+				onFlip={flip}
+				onFrame={setFrame}
+				onStepZ={stepZ}
+			/>
+			{/* The player's own controls, in the corner the stage needs least.
+			    Faint until asked for: full screen exists so the scene can fill
+			    the screen, and a bar of chrome across it would undo that. Inside
+			    the stage rather than under it, so the error list — which is the
+			    author's, not the reader's — never pushes it off the corner. */}
+			{fullScreen && lastBeat > 0 && (
+				<div className="scene-preview-nav" data-testid="scene-preview-nav">
+					<button
+						aria-label={t('dialogs.passageEdit.scenePreview.previousBeat')}
+						disabled={beat <= 0}
+						onClick={goToPreviousBeat}
+						type="button"
+					>
+						<IconChevronLeft />
+					</button>
+					<span className="scene-preview-nav-count">
 						{beat} / {lastBeat}
 					</span>
-					<IconButton
-						disabled={beat >= lastBeat && !nextScene}
-						icon={<IconChevronRight />}
-						iconOnly
-						label={
+					<button
+						aria-label={
 							beat >= lastBeat && nextScene
 								? t('dialogs.passageEdit.scenePreview.nextScene', {
 										name: nextScene
 								  })
 								: t('dialogs.passageEdit.scenePreview.nextBeat')
 						}
+						disabled={beat >= lastBeat && !nextScene}
 						onClick={goToNextBeat}
-					/>
-					<IconButton
-						icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.play')}
-						onClick={togglePlaying}
-					/>
-					{/* Sits beside the lock rather than in the selection row: the grid
-					    is how the author reads the stage, and nothing has to be
-					    selected to want to read it. */}
-					<IconButton
-						icon={<IconGridDots />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.grid')}
-						onClick={toggleGrid}
-						selectable
-						selected={grid}
-					/>
-					{/* Always here, selection or not: the lock is how the author stops
-					    the stage editing the file, so it cannot be a control that only
-					    appears once something has been grabbed. */}
-					<IconButton
-						icon={locked ? <IconLock /> : <IconLockOpen />}
-						iconOnly
-						label={t(
-							locked
-								? 'dialogs.passageEdit.scenePreview.unlock'
-								: 'dialogs.passageEdit.scenePreview.lock'
-						)}
-						onClick={toggleLock}
-						selectable
-						selected={locked}
-					/>
-					{/* How much of the route the preview takes, and how much of the
-					    screen. Grouped apart from the viewer controls because neither is
-					    about the scene — they are about where it is being looked at. */}
-					<span className="scene-preview-bar-right">
-						<IconButton
-							icon={
-								mode === 'dock' ? <IconLayoutSidebar /> : <IconLayoutBottombar />
-							}
-							iconOnly
-							label={t(
-								mode === 'dock'
-									? 'dialogs.passageEdit.scenePreview.viewLeft'
-									: 'dialogs.passageEdit.scenePreview.viewDock'
-							)}
-							onClick={() => onModeChange(mode === 'dock' ? 'left' : 'dock')}
-						/>
-						<IconButton
-							icon={fullScreen ? <IconMinimize /> : <IconMaximize />}
-							iconOnly
-							label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-							onClick={() => onFullScreenChange(!fullScreen)}
-						/>
-					</span>
-				</>
+						type="button"
+					>
+						<IconChevronRight />
+					</button>
+				</div>
 			)}
-		</div>
-	);
-
-	// The stage itself--everything below the bar.
-	const stageBody = open && (
-		<>
-			<StageEditorOverlay
-				editable={editable}
-				grid={grid}
-				onAdvance={canAdvance ? goToNextBeat : undefined}
-				onCameraPatch={setCamera}
-				onCancel={handleCancel}
-				onCommit={handleCommit}
-				onDropAsset={handleDropAsset}
-				onDropFiles={handleDropFiles}
-				onPatch={setPatch}
-				parentOffsets={offsets}
-				onSelect={select}
-				onToggleFullScreen={() => onFullScreenChange(!fullScreen)}
-				player={fullScreen}
-				renderer={renderer}
-				seal={seal}
-				selection={selection}
-				stage={stage}
-			>
-				<SceneStage
-					animate={playing}
-					assets={assets}
-					beat={shownBeat}
-					onLink={handleLink}
-					onRenderer={handleRenderer}
-					stage={stage}
-				/>
-				{/* Over the stage rather than above it. A row that appeared with the
-				    selection would resize the stage under the pointer, and the whole scene
-				    would jump on the very click that selected a sprite. A click on the
-				    stage selects, so full screen moved to a double click; the bar button
-				    above is still the keyboard-accessible path. */}
-				<StageSelectionControls
-					assets={assets}
-					editable={editable}
-					entities={selectedEntities}
-					onDelete={remove}
-					onFlip={flip}
-					onFrame={setFrame}
-					onStepZ={stepZ}
-				/>
-				{/* The player's own controls, in the corner the stage needs least.
-				    Faint until asked for: full screen exists so the scene can fill
-				    the screen, and a bar of chrome across it would undo that. Inside
-				    the stage rather than under it, so the error list — which is the
-				    author's, not the reader's — never pushes it off the corner. */}
-				{fullScreen && lastBeat > 0 && (
-					<div className="scene-preview-nav" data-testid="scene-preview-nav">
-						<button
-							aria-label={t('dialogs.passageEdit.scenePreview.previousBeat')}
-							disabled={beat <= 0}
-							onClick={goToPreviousBeat}
-							type="button"
-						>
-							<IconChevronLeft />
-						</button>
-						<span className="scene-preview-nav-count">
-							{beat} / {lastBeat}
-						</span>
-						<button
-							aria-label={
-								beat >= lastBeat && nextScene
-									? t('dialogs.passageEdit.scenePreview.nextScene', {
-											name: nextScene
-									  })
-									: t('dialogs.passageEdit.scenePreview.nextBeat')
-							}
-							disabled={beat >= lastBeat && !nextScene}
-							onClick={goToNextBeat}
-							type="button"
-						>
-							<IconChevronRight />
-						</button>
-					</div>
-				)}
-			</StageEditorOverlay>
-		</>
+		</StageEditorOverlay>
 	);
 
 	const body = (
 		<div
-			className={classNames('scene-preview', {
-				open,
-				'full-screen': fullScreen
-			})}
+			className={classNames('scene-preview', {'full-screen': fullScreen})}
 			data-hotkey-scope="scene-preview"
 			data-testid="scene-preview"
+			ref={root}
+			// So full screen can take focus off the dialog card's chrome. Never in the tab
+			// order: everything here is reachable through the controls in the bar.
+			tabIndex={-1}
 		>
 			{bar}
 			{stageBody}
 		</div>
 	);
 
-	// Full screen has to escape the panel, which is a fixed box the size of the dock.
-	// Portalling to the body also keeps it out of any transformed ancestor, where
-	// `position: fixed` would resolve against the ancestor rather than the viewport.
+	// Full screen has to escape the dialog stack, which is a transformed ancestor: a
+	// `position: fixed` box inside one resolves against the ancestor, not the viewport, so
+	// the preview would be trapped in the card. Portalling to the body is what makes the
+	// state work at all -- from the normal card and the maximized one alike.
 	return fullScreen ? createPortal(body, document.body) : body;
 };

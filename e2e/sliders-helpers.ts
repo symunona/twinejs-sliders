@@ -170,6 +170,26 @@ export async function openSceneErrors(page: Page) {
 	return page.getByTestId('scene-preview-errors');
 }
 
+/**
+ * Make sure the scene preview dialog is on screen.
+ *
+ * It lets itself in the first time a scene appears, but closing it is remembered -- and
+ * `closeDialogs` closes it along with everything else. Anything that clears the dialogs
+ * and then wants the preview back has to ask for it, the same way an author would.
+ */
+export async function showScenePreview(page: Page) {
+	const preview = page.getByTestId('scene-preview');
+
+	if (await preview.isVisible().catch(() => false)) {
+		return;
+	}
+
+	await page.getByRole('tab', {name: 'Story'}).click();
+	await page.getByRole('button', {name: 'Preview', exact: true}).click();
+	await preview.waitFor({timeout: 20000});
+	await page.getByRole('tab', {name: 'Passage'}).click();
+}
+
 export async function renamePassage(page: Page, newName: string) {
 	// There are several Rename buttons (route toolbar, passage dialog) and the route
 	// one is disabled whenever no passage is selected. Take the first enabled one.

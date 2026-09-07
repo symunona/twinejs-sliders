@@ -1,12 +1,12 @@
 import * as React from 'react';
-import type {SceneParse} from '../../../dialogs/passage-edit/scene-preview/use-scene-parse';
+import type {SceneParse} from '../../dialogs/passage-edit/scene-preview/use-scene-parse';
 
 /**
  * Everything the route-level preview needs in order to show one passage's scene.
  *
- * A passage editor publishes this; the panel is the only consumer. The `editor` is what
- * makes the preview writable — without it the stage is a picture, which is exactly what
- * the story map's fallback wants.
+ * A passage editor publishes this; the preview dialog is the only consumer. The `editor`
+ * is what makes the preview writable — without it the stage is a picture, which is exactly
+ * what the story map's fallback wants.
  */
 export interface ScenePreviewSource {
 	passageId: string;
@@ -17,7 +17,7 @@ export interface ScenePreviewSource {
 	parse: SceneParse;
 	editor?: CodeMirror.Editor;
 	onOpenPassage?: (name: string) => void;
-	/** A background card in the dialog stack. Never drives the panel. */
+	/** A background card in the dialog stack. Never drives the preview. */
 	disabled?: boolean;
 }
 
@@ -52,8 +52,8 @@ ScenePreviewSourceContext.displayName = 'ScenePreviewSource';
  *
  * Deliberately NOT React state. A publish happens on every keystroke, and state here would
  * re-render the whole story edit route — map included — for each one. The entries live in a
- * ref and interested components subscribe, so only the panel re-renders, exactly as only
- * the in-dialog preview used to.
+ * ref and interested components subscribe, so only the preview dialog re-renders, exactly
+ * as only the in-dialog preview used to.
  */
 export const ScenePreviewSourceProvider: React.FC = props => {
 	const entries = React.useRef(new Map<string, RegisteredSource>());
@@ -124,10 +124,10 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 };
 
 /**
- * Offers this passage editor's scene to the route panel.
+ * Offers this passage editor's scene to the preview dialog.
  *
  * The entry is refreshed whenever the text, the parse or the editor changes, and claims the
- * panel when the card comes to the front of the stack or its CodeMirror takes focus — the
+ * preview when the card comes to the front of the stack or its CodeMirror takes focus — the
  * two gestures that mean "this is the passage I am working on".
  */
 export function usePublishScenePreview(source: ScenePreviewSource): void {
@@ -172,7 +172,7 @@ export function usePublishScenePreview(source: ScenePreviewSource): void {
 	React.useEffect(() => () => unpublish(passageId), [passageId, unpublish]);
 }
 
-/** The passage the route panel should be showing, or undefined when no editor is open. */
+/** The passage the preview should be showing, or undefined when no editor is open. */
 export function useScenePreviewSource(): ScenePreviewSource | undefined {
 	const {active, subscribe} = React.useContext(ScenePreviewSourceContext);
 	const [source, setSource] = React.useState(active);
