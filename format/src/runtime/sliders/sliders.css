@@ -1,0 +1,126 @@
+/* The stage in the page column: a 16:9 box the passage flows around. */
+
+sliders-stage {
+	aspect-ratio: 16 / 9;
+	background: #111;
+	border-radius: 4px;
+	cursor: pointer;
+	display: block;
+	overflow: hidden;
+	position: relative;
+	user-select: none;
+	width: 100%;
+}
+
+/* Beat marker — the "there is more to read" triangle. */
+sliders-stage[data-waiting='beat']:after {
+	bottom: 0.5em;
+	color: #fff;
+	content: '\25b8';
+	font-size: 0.8em;
+	opacity: 0.55;
+	pointer-events: none;
+	position: absolute;
+	right: 0.6em;
+	z-index: 100;
+}
+
+.sliders-stage__error {
+	background: rgb(120 20 20 / 92%);
+	color: #fff;
+	font-size: 0.8em;
+	inset: 0;
+	margin: 0;
+	overflow: auto;
+	padding: 1em;
+	position: absolute;
+	white-space: pre-wrap;
+	z-index: 200;
+}
+
+/* Full screen: the page chrome gets out of the way and the stage takes the window. */
+
+body.sliders-cinema {
+	overflow: hidden;
+}
+
+body.sliders-cinema #backdrop {
+	background-color: #000;
+	display: block;
+	min-height: 100vh;
+	min-height: 100dvh;
+}
+
+body.sliders-cinema #page {
+	background-color: #000;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	display: block;
+	height: 100vh;
+	height: 100dvh;
+	margin: 0;
+	max-width: none;
+	min-height: 0;
+	padding: 0;
+	width: 100%;
+}
+
+body.sliders-cinema #page > header,
+body.sliders-cinema #page > footer {
+	display: none;
+}
+
+body.sliders-cinema #page > article,
+body.sliders-cinema #page > article > div {
+	display: block;
+	height: 100%;
+	position: relative;
+}
+
+body.sliders-cinema #page > article > div > p {
+	margin: 0;
+}
+
+body.sliders-cinema sliders-stage {
+	aspect-ratio: auto;
+	border-radius: 0;
+	inset: 0;
+	position: absolute;
+}
+
+/* Links sit over the bottom of the stage rather than under it. */
+body.sliders-cinema #page > article .fork {
+	background: linear-gradient(rgb(0 0 0 / 0%), rgb(0 0 0 / 75%));
+	bottom: 0;
+	left: 0;
+	padding: 3em 1em 0.75em;
+	position: absolute;
+	right: 0;
+	z-index: 60;
+}
+
+body.sliders-cinema #page > article .fork p .link {
+	color: #fff;
+}
+
+body.sliders-cinema #page > article .fork p .link + .link {
+	border-top-color: #ffffff4d;
+}
+
+body.sliders-cinema #page > warning-list,
+body.sliders-cinema #page > error-handler.active {
+	left: 0;
+	margin: 0;
+	max-height: 40vh;
+	max-height: 40dvh;
+	overflow: auto;
+	position: absolute;
+	right: 0;
+	top: 0;
+	z-index: 300;
+}
+
+body.sliders-cinema #page > error-handler.active {
+	z-index: 400;
+}

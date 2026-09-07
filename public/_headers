@@ -47,7 +47,7 @@
   Cache-Control: no-store
 
 # Fetched by URL when a story is published, played or previewed, and rewritten
-# in place on every format rebuild -- `sliders-0.1.0/format.js` keeps its name
+# in place on every format rebuild -- `sliders-<version>/format.js` keeps its name
 # forever. This is the one that made a Play show the previous player.
 #
 # These are no longer precached (they were 3.8MB of a 5.7MB precache, and the

@@ -1,0 +1,35 @@
+{
+  "name": "Sliders",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "author": "Sliders contributors",
+  "description": "A Twine story format for visual novels: YAML scenes, characters and art, on top of Chapbook.",
+  "license": "MIT",
+  "repository": "https://github.com/bendeguzrobot/twinejs-sliders",
+  "scripts": {
+    "build": "node scripts/build-format.mjs"
+  },
+  "dependencies": {
+    "@tabler/icons": "^2.46.0",
+    "fs-extra": "^11.4.0",
+    "lodash-es": "^4.17.21",
+    "marked": "^4.2.12",
+    "open-color": "^1.9.1",
+    "reasonable-colors": "^0.4.0",
+    "seedrandom": "^3.0.5",
+    "timestring": "^6.0.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/lodash-es": "^4.17.7",
+    "@types/marked": "^4.0.8",
+    "@types/seedrandom": "^3.0.5",
+    "@types/timestring": "^6.0.2",
+    "postcss-url": "^10.1.3",
+    "typescript": "^5.3.3",
+    "vite": "^4.1.4",
+    "vite-plugin-html": "^3.2.0",
+    "vite-plugin-singlefile": "^0.13.5"
+  }
+}

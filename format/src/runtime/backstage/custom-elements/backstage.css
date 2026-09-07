@@ -1,0 +1,101 @@
+@import 'reasonable-colors/reasonable-colors.css';
+
+body.backstage-visible #backdrop {
+	max-width: 67vw;
+}
+
+backstage-sidebar {
+	--backstage-grid: 10px;
+	background: var(--color-gray-2);
+	border-left: 1px solid var(--color-gray-3);
+	bottom: 0;
+	color: var(--color-gray-5);
+	display: block;
+	font-family: var(--font-system);
+	font-size: 13px;
+	position: fixed;
+	top: 0;
+	right: 0;
+	width: 33vw;
+}
+
+backstage-sidebar .content {
+	overflow: auto;
+	padding: var(--backstage-grid);
+	height: 100%;
+	width: 100%;
+}
+
+backstage-sidebar[collapsed] {
+	width: 0;
+}
+
+backstage-sidebar button[data-toggle-collapsed] {
+	background: var(--color-gray-2);
+	border-bottom: 1px solid var(--color-gray-3);
+	border-left: 1px solid var(--color-gray-3);
+	border-right: none;
+	border-top: 1px solid var(--color-gray-3);
+	border-bottom-left-radius: 60px;
+	border-bottom-right-radius: 0;
+	border-top-left-radius: 60px;
+	border-top-right-radius: 0;
+	color: var(--color-gray-5);
+	font-size: 20px;
+	height: 60px;
+	min-width: 30px;
+	padding: 0;
+	position: absolute;
+	top: 50%;
+	left: -30px;
+	transform: translateY(-50%);
+	width: 30px;
+}
+
+backstage-sidebar button[data-toggle-collapsed]:hover {
+	background: var(--color-gray-1);
+	cursor: pointer;
+}
+
+/* Shared styles for children. */
+
+backstage-sidebar button {
+	background: var(--color-gray-1);
+	border: 1px solid var(--color-gray-3);
+	border-radius: var(--backstage-grid);
+	color: var(--color-gray-5);
+	cursor: pointer;
+	font-size: 100%;
+	min-width: 40px;
+	padding: calc(var(--backstage-grid) / 2);
+}
+
+backstage-sidebar button:disabled {
+	color: var(--color-gray-3);
+	cursor: not-allowed;
+}
+
+backstage-sidebar button:not(:disabled):hover {
+	background: white;
+}
+
+backstage-sidebar details summary {
+	cursor: pointer;
+	font-size: 110%;
+	font-variant: small-caps;
+	padding: calc(var(--backstage-grid) / 2) 0;
+	text-transform: lowercase;
+}
+
+backstage-sidebar input, backstage-sidebar textarea {
+	background: var(--color-gray-1);
+	border: 1px solid var(--color-gray-3);
+	color: var(--color-gray-5);
+	font: 100% var(--font-system);
+	padding: calc(var(--backstage-grid) / 2);
+}
+
+backstage-sidebar table {
+	max-width: 100%;
+	width: 100%;
+}

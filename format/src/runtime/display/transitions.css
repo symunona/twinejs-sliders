@@ -1,0 +1,22 @@
+/*
+These are utility classes available for content. They aren't used for page transitions.
+*/
+
+.fade-in {
+	opacity: 0;
+	animation: fade-in 1s ease-out forwards;
+}
+
+.fade-out {
+	animation: fade-in 1s ease-out reverse forwards;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}

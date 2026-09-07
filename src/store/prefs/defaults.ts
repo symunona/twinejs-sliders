@@ -37,7 +37,7 @@ export const defaults = (): PrefsState => ({
 	},
 	storyFormat: {
 		name: 'Sliders',
-		version: '0.1.0'
+		version: '0.2.0'
 	},
 	storyFormatListFilter: 'current',
 	storyListSort: 'name',

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{STORY_NAME}}</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <state-css-variables>
+      <state-dark-theme-css-overrides>
+        <div id="backdrop">
+          <page-skip>
+            <page-transition>
+              <div id="page" aria-live="polite">
+                <header hidden></header>
+                <article></article>
+                <warning-list></warning-list>
+                <footer hidden></footer>
+                <error-handler></error-handler>
+                <page-skip-indicator></page-skip-indicator>
+              </div>
+            </page-transition>
+          </page-skip>
+        </div>
+      </state-dark-theme-css-overrides>
+    </state-css-variables>
+    <external-fonts></external-fonts>
+    <noscript>This requires JavaScript.</noscript>
+  </body>
+  <script src="index.ts" type="module"></script>
+  <%- storyData %>
+</html>

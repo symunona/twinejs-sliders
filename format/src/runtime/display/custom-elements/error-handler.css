@@ -1,0 +1,35 @@
+@import 'reasonable-colors/reasonable-colors.css';
+
+error-handler {
+	display: none;
+}
+
+error-handler.active {
+	background: var(--color-red-1);
+	color: var(--color-red-5);
+	display: block;
+	font-family: var(--font-system); 
+	font-size: max(90%, 16px);
+	padding: 0.5em;
+	border-left: 4px solid var(--color-red-2);
+	position: relative;
+	margin: 1em 0;
+	overflow: auto;
+}
+
+error-handler pre {
+	font-size: 90%;
+}
+
+error-handler a {
+	color: var(--color-red-4);
+}
+
+error-handler button {
+	appearance: none;
+	background: none;
+	border: none;
+	color: var(--color-red-4);
+	cursor: pointer;
+	padding: 0;
+}
