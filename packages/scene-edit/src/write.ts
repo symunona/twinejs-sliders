@@ -16,10 +16,12 @@
 import {isMap, isScalar} from 'yaml';
 import type {Pair, Scalar, YAMLMap} from 'yaml';
 import type {EntityId, EntityKind, EntityPatch} from '@sliders/scene-types';
-import {formatValue} from './format';
+import {formatNumber, formatValue} from './format';
 import {
+	BEAT_COMMANDS,
 	ENTITY_KEY_ORDER,
 	TOP_LEVEL_ORDER,
+	beatsSeqOf,
 	entityMapOf,
 	findPair,
 	indentAt,
@@ -625,4 +627,212 @@ export function removeEntity(
 	isPatchScene: boolean
 ): TextEdit | undefined {
 	return removeEntities(text, kind, [id], isPatchScene);
+}
+
+// ---------------------------------------------------------------------------
+// setBeatBubble
+// ---------------------------------------------------------------------------
+
+/** Written in this order, so a hand-edited map and a dragged one look the same. */
+const BUBBLE_KEY_ORDER = [
+	'as',
+	'place',
+	'at',
+	'w',
+	'bg',
+	'color',
+	'font',
+	'size'
+] as const;
+
+/** The geometry a drag or a resize produces. `null` removes the key. */
+export interface BubbleGeometry {
+	at?: {x: number; y: number} | null;
+	w?: number | null;
+}
+
+/** `[0.7, 0.25]` — fractions of the stage box, so never the bare-number `at:` form. */
+function formatBubbleValue(key: string, value: unknown): string {
+	if (key === 'at' && value && typeof value === 'object') {
+		const at = value as {x: number; y: number};
+
+		return `[${formatNumber(at.x)}, ${formatNumber(at.y)}]`;
+	}
+
+	return formatValue(key, value);
+}
+
+/**
+ * Where the beat at `index` lives, and what its body is.
+ *
+ * A beat is a one-pair map — `- mira: "…"` or `- box: {…}` — so the pair IS the beat, and
+ * a command beat (`wait`, `fx`, `mark`) has nothing to say and is refused.
+ */
+function locateBeat(
+	parsed: Parsed,
+	index: number
+): {map: YAMLMap; pair: Pair<unknown, unknown>; key: string} | undefined {
+	const beats = beatsSeqOf(parsed);
+	const item = beats?.items[index];
+
+	if (!isMap(item)) {
+		return undefined;
+	}
+
+	const map = item as YAMLMap;
+	const pair = (map.items as Pair<unknown, unknown>[])[0];
+	const key = pair ? keyName(pair) : undefined;
+
+	if (!pair || key === undefined) {
+		return undefined;
+	}
+
+	if (key !== 'box' && (BEAT_COMMANDS as readonly string[]).includes(key)) {
+		return undefined;
+	}
+
+	return {key, map, pair};
+}
+
+/**
+ * Set `bubble:` keys on one beat — how a dragged or resized bubble gets written down.
+ *
+ * Only the keys passed are touched, because the map is the author's: a bubble moved after
+ * `as: yell` was typed keeps the yell, and the whole map keeps its own formatting. The
+ * scalar forms (`- mira: "…"`, `- box: "…"`) are promoted to map form on the way, which is
+ * the one case where the beat's own text is rewritten — carried across verbatim, quotes
+ * and escapes included.
+ */
+export function setBeatBubble(
+	text: string,
+	index: number,
+	geometry: BubbleGeometry
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+
+	if (!parsed) {
+		return undefined;
+	}
+
+	const beat = locateBeat(parsed, index);
+
+	if (!beat) {
+		return undefined;
+	}
+
+	const entries = Object.entries(geometry).filter(
+		([, value]) => value !== undefined
+	);
+
+	if (entries.length === 0) {
+		return undefined;
+	}
+
+	const body = beat.pair.value;
+
+	// The beat is already a map: write into (or beside) whatever `bubble:` it has.
+	if (isMap(body)) {
+		const existing = findPair(body as YAMLMap, 'bubble');
+
+		if (existing && isMap(existing.value)) {
+			return writeBubbleKeys(parsed, existing.value as YAMLMap, entries);
+		}
+
+		if (existing) {
+			// `bubble: yell` — the scalar shorthand. Keep the token as `as:` rather than
+			// dropping the author's style on the floor to make room for a position.
+			const token = isScalar(existing.value)
+				? (existing.value as Scalar).value
+				: undefined;
+			const range = rangeOf(existing.value);
+
+			return range
+				? {
+						from: range[0],
+						insert: formatBubbleMap([
+							...(typeof token === 'string' ? [['as', token] as const] : []),
+							...entries
+						]),
+						to: range[1]
+				  }
+				: undefined;
+		}
+
+		return insertIntoMap(
+			parsed,
+			body as YAMLMap,
+			'bubble',
+			formatBubbleMap(entries)
+		);
+	}
+
+	// A bare scalar beat. Promote it, keeping the source text of the line exactly.
+	const range = rangeOf(body);
+
+	if (!range) {
+		return undefined;
+	}
+
+	const said = text.slice(range[0], range[1]);
+	const textKey = beat.key === 'box' ? 'text' : 'say';
+
+	return {
+		from: range[0],
+		insert: `{${textKey}: ${said}, bubble: ${formatBubbleMap(entries)}}`,
+		to: range[1]
+	};
+}
+
+function formatBubbleMap(
+	entries: readonly (readonly [string, unknown])[]
+): string {
+	const kept = entries.filter(([, value]) => value !== null);
+	const ordered = [...kept].sort(
+		(a, b) =>
+			BUBBLE_KEY_ORDER.indexOf(a[0] as (typeof BUBBLE_KEY_ORDER)[number]) -
+			BUBBLE_KEY_ORDER.indexOf(b[0] as (typeof BUBBLE_KEY_ORDER)[number])
+	);
+
+	return `{${ordered
+		.map(([key, value]) => `${key}: ${formatBubbleValue(key, value)}`)
+		.join(', ')}}`;
+}
+
+/** One edit per key, folded into a single splice so a gesture stays one undo. */
+function writeBubbleKeys(
+	parsed: Parsed,
+	map: YAMLMap,
+	entries: readonly (readonly [string, unknown])[]
+): TextEdit | undefined {
+	const edits: TextEdit[] = [];
+
+	for (const [key, value] of entries) {
+		const existing = findPair(map, key);
+		const edit =
+			value === null
+				? existing
+					? removePairEdit(parsed, map, existing)
+					: undefined
+				: existing
+				? spliceValue(parsed, existing, formatBubbleValue(key, value))
+				: insertIntoMap(parsed, map, key, formatBubbleValue(key, value));
+
+		if (edit) {
+			edits.push(edit);
+		}
+	}
+
+	return mergeEdits(parsed.text, edits);
+}
+
+function spliceValue(
+	parsed: Parsed,
+	pair: Pair<unknown, unknown>,
+	formatted: string
+): TextEdit | undefined {
+	const range = rangeOf(pair.value);
+
+	return range
+		? {from: range[0], insert: formatted, to: range[1]}
+		: insertValueAfterKey(parsed.text, pair, formatted);
 }

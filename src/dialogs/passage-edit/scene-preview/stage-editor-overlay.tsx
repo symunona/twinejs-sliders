@@ -728,7 +728,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		if (
 			(event.button !== 0 && event.button !== 1) ||
 			(event.target as HTMLElement).closest?.(
-				'a, .scene-preview-nav, .scene-preview-selection'
+				'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor'
 			)
 		) {
 			return;
@@ -884,7 +884,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	function handleDoubleClick(event: React.MouseEvent) {
 		if (
 			(event.target as HTMLElement).closest?.(
-				'a, .scene-preview-nav, .scene-preview-selection'
+				'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor'
 			)
 		) {
 			return;

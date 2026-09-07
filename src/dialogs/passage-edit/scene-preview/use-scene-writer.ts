@@ -19,10 +19,15 @@ import {
 	removeEntities,
 	removeEntityKey,
 	removeSceneKey,
+	setBeatBubble,
 	setEntityKey,
 	setSceneKey
 } from '@sliders/scene-edit';
-import type {EntityTarget, TextEdit} from '@sliders/scene-edit';
+import type {
+	BubbleGeometry,
+	EntityTarget,
+	TextEdit
+} from '@sliders/scene-edit';
 import type {
 	Beat,
 	Camera,
@@ -192,10 +197,30 @@ export interface SceneKeyWrite {
 	formatted?: string;
 }
 
-export type SceneWrite = EntityKeyWrite | EntityStructWrite | SceneKeyWrite;
+/**
+ * A bubble dragged or resized on the stage.
+ *
+ * Addressed by beat rather than by entity: the same character can speak twice in a scene
+ * with the bubble parked somewhere else each time, so the line is what owns the geometry.
+ * `beat` is an index into `scene.beats`, i.e. the scrubber position minus one.
+ */
+export interface BubbleWrite {
+	bubble: BubbleGeometry;
+	beat: number;
+}
+
+export type SceneWrite =
+	| BubbleWrite
+	| EntityKeyWrite
+	| EntityStructWrite
+	| SceneKeyWrite;
 
 export function isSceneKeyWrite(write: SceneWrite): write is SceneKeyWrite {
 	return 'sceneKey' in write;
+}
+
+export function isBubbleWrite(write: SceneWrite): write is BubbleWrite {
+	return 'bubble' in write;
 }
 
 export function isStructWrite(write: SceneWrite): write is EntityStructWrite {
@@ -266,6 +291,10 @@ export function buildWriteEdit(
 	context: SceneWriteContext,
 	write: SceneWrite
 ): TextEdit | undefined {
+	if (isBubbleWrite(write)) {
+		return setBeatBubble(context.blockText, write.beat, write.bubble);
+	}
+
 	if (isSceneKeyWrite(write)) {
 		return write.formatted === undefined
 			? removeSceneKey(context.blockText, write.sceneKey)
@@ -300,7 +329,7 @@ export function buildWriteEdits(
 	const removed = new Map<EntityKind, EntityId[]>();
 
 	for (const write of writes) {
-		if (isStructWrite(write) && write.struct === 'remove') {
+		if (!isBubbleWrite(write) && isStructWrite(write) && write.struct === 'remove') {
 			removed.set(write.kind, [...(removed.get(write.kind) ?? []), write.id]);
 			continue;
 		}

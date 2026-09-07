@@ -15,10 +15,18 @@ import {useTranslation} from 'react-i18next';
 import {IconButton} from '../../../components/control/icon-button';
 import {useCommand} from '../../../hotkeys';
 import {extractSceneBlock, IndexedPassage} from '@sliders/scene-index';
-import {AssetResolver, Camera, EntityId, Vec2} from '@sliders/scene-types';
+import {
+	AssetResolver,
+	BubbleStyle,
+	Camera,
+	EntityId,
+	Vec2
+} from '@sliders/scene-types';
 import {parseLinkText} from '@sliders/render-dom';
 import type {DomRenderer} from '@sliders/render-dom';
+import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
+import {BubbleEditor} from './bubble-editor';
 import {
 	assetDropWrites,
 	deleteWrites,
@@ -216,6 +224,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 	// State N is produced by beat N-1; S0 has no beat.
 	const shownBeat = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
+	/**
+	 * What a live bubble drag is painting with.
+	 *
+	 * Held here rather than inside `BubbleEditor` because the bubble it moves is the
+	 * renderer's: the draft has to travel down through `SceneStage` into the dialogue
+	 * layer, so the author drags the real thing rather than an outline of it.
+	 */
+	const [bubbleDraft, setBubbleDraft] = React.useState<BubbleStyle>();
+	const drawnBeat = React.useMemo(() => {
+		if (!shownBeat || !bubbleDraft) {
+			return shownBeat;
+		}
+
+		return shownBeat.kind === 'say' || shownBeat.kind === 'box'
+			? {...shownBeat, style: bubbleDraft}
+			: shownBeat;
+	}, [bubbleDraft, shownBeat]);
 
 	/**
 	 * Does the beat on screen ask the reader to choose?
@@ -404,6 +429,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const handleCommit = React.useCallback(
 		(writes: SceneWrite[], origin: string = DRAG_ORIGIN) =>
 			commit(writes, origin),
+		[commit]
+	);
+
+	const handleBubbleCommit = React.useCallback(
+		(beatIndex: number, geometry: BubbleGeometry) =>
+			commit([{beat: beatIndex, bubble: geometry}], DRAG_ORIGIN),
 		[commit]
 	);
 
@@ -607,6 +638,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * reuses that path rather than inventing a second one the gestures would have to learn.
 	 */
 	const editable = !!editor && !locked;
+	/** The beat a bubble gesture writes to: the scrubber position, less the S0 stage. */
+	const bubbleBeat =
+		editable && (shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
+			? beat - 1
+			: undefined;
 
 	function toggleGrid() {
 		setGrid(value => {
@@ -949,7 +985,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			<SceneStage
 				animate={playing}
 				assets={assets}
-				beat={shownBeat}
+				beat={drawnBeat}
 				onLink={handleLink}
 				onRenderer={handleRenderer}
 				stage={stage}
@@ -959,6 +995,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			    would jump on the very click that selected a sprite. A click on the
 			    stage selects, so full screen moved to a double click; the bar button
 			    above is still the keyboard-accessible path. */}
+			<BubbleEditor
+				beat={bubbleBeat}
+				editable={editable}
+				onCommit={handleBubbleCommit}
+				onDraft={setBubbleDraft}
+				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
+			/>
 			<StageSelectionControls
 				assets={assets}
 				editable={editable}

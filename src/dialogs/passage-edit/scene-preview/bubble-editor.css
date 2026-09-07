@@ -1,0 +1,57 @@
+/* Zero-size anchor: it exists only so the component can reach the stage editor's DOM. */
+.scene-bubble-editor-root {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+/*
+The bubble's own frame. Transparent until the author touches it: a permanent box around
+every line of dialogue would read as part of the scene rather than as a handle.
+*/
+
+.scene-bubble-editor {
+	position: absolute;
+	z-index: 6;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	pointer-events: none;
+}
+
+.scene-bubble-editor:hover {
+	border-color: rgb(255 255 255 / 45%);
+}
+
+.scene-bubble-editor.selected {
+	border-color: var(--bright-accent, #2f81f7);
+	box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
+}
+
+/* The grab area is the whole bubble, so a drag can start on the words. */
+.scene-bubble-editor-body {
+	position: absolute;
+	inset: 0;
+	cursor: move;
+	pointer-events: auto;
+}
+
+.scene-bubble-editor-handle {
+	position: absolute;
+	top: 50%;
+	width: 10px;
+	height: 10px;
+	margin-top: -5px;
+	border: 1px solid rgb(0 0 0 / 45%);
+	border-radius: 50%;
+	background: var(--bright-accent, #2f81f7);
+	cursor: ew-resize;
+	pointer-events: auto;
+}
+
+.scene-bubble-editor-handle.west {
+	left: -5px;
+}
+
+.scene-bubble-editor-handle.east {
+	right: -5px;
+}

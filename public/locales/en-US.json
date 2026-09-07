@@ -365,7 +365,8 @@
 				"zBack": "Send backward",
 				"zFront": "Bring forward",
 				"frame": "Frame",
-				"frameAuto": "Automatic"
+				"frameAuto": "Automatic",
+				"moveBubble": "Move this bubble"
 			},
 			"lock": {
 				"lockedBy": "{{name}} is editing this passage",

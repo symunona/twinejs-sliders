@@ -19,8 +19,10 @@ export {
 	removeEntities,
 	removeEntity,
 	removeEntityKey,
+	setBeatBubble,
 	setEntityKey
 } from './write';
+export type {BubbleGeometry} from './write';
 export type {EntityTarget, LineSpan, TextEdit} from './types';
 
 /** Apply an edit. Here so tests and callers cannot disagree about what an edit means. */
