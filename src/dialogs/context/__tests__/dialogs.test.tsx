@@ -61,6 +61,40 @@ describe('<Dialogs>', () => {
 		expect(screen.getByText('mock child 2')).toBeInTheDocument();
 	});
 
+	it('renders a component marked stackToBottom last, whenever it was opened', () => {
+		const BottomComponent: React.FC<{children?: React.ReactNode}> & {
+			stackToBottom?: boolean;
+		} = ({children}) => <div>{children}</div>;
+
+		BottomComponent.stackToBottom = true;
+
+		renderComponent({
+			dialogs: [
+				{
+					collapsed: false,
+					component: BottomComponent,
+					highlighted: false,
+					maximized: false,
+					props: {children: 'bottom child'}
+				},
+				{
+					collapsed: false,
+					component: MockComponent,
+					highlighted: false,
+					maximized: false,
+					props: {children: 'mock child 1'}
+				}
+			]
+		});
+
+		const rendered = screen
+			.getByText('bottom child')
+			.compareDocumentPosition(screen.getByText('mock child 1'));
+
+		// The other dialog precedes it in the document, i.e. the marked one moved down.
+		expect(rendered & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+	});
+
 	it('sets the collapsed prop on the dialog component', () => {
 		renderComponent({
 			dialogs: [

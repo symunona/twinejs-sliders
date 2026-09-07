@@ -31,7 +31,9 @@ export interface ScenePreviewDialogProps extends DialogComponentProps {
  * The fallback has no CodeMirror to write through, so it is a picture -- every gesture is
  * a text edit (spec 07), and there is no text to edit without an editor.
  */
-export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> = props => {
+export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
+	stackToBottom?: boolean;
+} = props => {
 	const {onClose, storyId, ...other} = props;
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {stories} = useUndoableStoriesContext();
@@ -123,3 +125,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> = props => {
 		</DialogCard>
 	);
 };
+
+// Under the passage editor in the column, not over it--see `stackWeight()` in
+// dialogs/context/dialogs.tsx.
+ScenePreviewDialog.stackToBottom = true;

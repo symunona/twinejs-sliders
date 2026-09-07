@@ -28,18 +28,14 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 
 	return (
 		<RouteToolbar
+			leadingControls={<SyncStatus />}
 			pinnedControls={
 				<>
 					<ZoomButtons story={story} />
 					<UndoRedoButtons />
 				</>
 			}
-			statusControls={
-				<>
-					<StoryPresence storyId={story.id} />
-					<SyncStatus />
-				</>
-			}
+			statusControls={<StoryPresence storyId={story.id} />}
 			trailingControls={<BuildInfo />}
 			tabs={{
 				[t('common.passage')]: (

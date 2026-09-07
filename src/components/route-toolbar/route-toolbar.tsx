@@ -8,6 +8,11 @@ import './route-toolbar.css';
 
 export interface RouteToolbarProps {
 	helpUrl?: string;
+	/**
+	 * Shown on the top row, immediately after the tabs and left-aligned--the
+	 * pinned controls opposite it are pushed to the right edge.
+	 */
+	leadingControls?: React.ReactNode;
 	pinnedControls?: React.ReactNode;
 	/**
 	 * Shown on the second row, immediately after the selected tab's buttons.
@@ -24,6 +29,7 @@ export interface RouteToolbarProps {
 export const RouteToolbar: React.FC<RouteToolbarProps> = props => {
 	const {
 		helpUrl = 'https://twinery.org/2guide',
+		leadingControls,
 		pinnedControls,
 		statusControls,
 		trailingControls,
@@ -46,6 +52,11 @@ export const RouteToolbar: React.FC<RouteToolbarProps> = props => {
 							</Tab>
 						))}
 					</TabList>
+					{leadingControls && (
+						<div className="route-toolbar-leading-controls">
+							{leadingControls}
+						</div>
+					)}
 					<div className="route-toolbar-pinned-controls">
 						{pinnedControls}
 						<IconButton

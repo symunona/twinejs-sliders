@@ -20,6 +20,11 @@
 	height: var(--control-height);
 }
 
+.route-toolbar .route-toolbar-leading-controls {
+	align-items: center;
+	display: flex;
+}
+
 .route-toolbar .route-toolbar-pinned-controls {
 	display: flex;
 	justify-content: flex-end;
