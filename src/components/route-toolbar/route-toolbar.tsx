@@ -9,11 +9,26 @@ import './route-toolbar.css';
 export interface RouteToolbarProps {
 	helpUrl?: string;
 	pinnedControls?: React.ReactNode;
+	/**
+	 * Shown on the second row, immediately after the selected tab's buttons.
+	 * This is where ambient state that isn't an action belongs--who else is in
+	 * the story, whether sync is connected--so that it sits beside the buttons
+	 * instead of competing with them for the top row.
+	 */
+	statusControls?: React.ReactNode;
+	/** Shown on the second row, pushed to its right edge. */
+	trailingControls?: React.ReactNode;
 	tabs: Record<string, React.ReactNode>;
 }
 
 export const RouteToolbar: React.FC<RouteToolbarProps> = props => {
-	const {helpUrl = 'https://twinery.org/2guide', pinnedControls, tabs} = props;
+	const {
+		helpUrl = 'https://twinery.org/2guide',
+		pinnedControls,
+		statusControls,
+		trailingControls,
+		tabs
+	} = props;
 	const {t} = useTranslation();
 
 	return (
@@ -40,10 +55,22 @@ export const RouteToolbar: React.FC<RouteToolbarProps> = props => {
 						/>
 					</div>
 				</div>
-				<div>
-					{Object.entries(tabs).map(([tabName, tabContent]) => (
-						<TabPanel key={tabName}>{tabContent}</TabPanel>
-					))}
+				<div className="route-toolbar-bottom">
+					<div className="route-toolbar-panels">
+						{Object.entries(tabs).map(([tabName, tabContent]) => (
+							<TabPanel key={tabName}>{tabContent}</TabPanel>
+						))}
+					</div>
+					{statusControls && (
+						<div className="route-toolbar-status-controls">
+							{statusControls}
+						</div>
+					)}
+					{trailingControls && (
+						<div className="route-toolbar-trailing-controls">
+							{trailingControls}
+						</div>
+					)}
 				</div>
 			</Tabs>
 		</div>

@@ -741,11 +741,11 @@
 	"routes": {
 		"storyEdit": {
 			"buildInfo": {
-				"daysAgo": "Built: {{value}}d ago",
+				"daysAgo": "build from {{value}}d ago",
 				"details": "Built {{time}} (commit {{commit}})",
-				"hoursAgo": "{{value}}h ago",
-				"justNow": "just now",
-				"minutesAgo": "{{value}}m ago",
+				"hoursAgo": "build from {{value}}h ago",
+				"justNow": "build from just now",
+				"minutesAgo": "build from {{value}}m ago",
 				"unknownCommit": "unknown"
 			},
 			"toolbar": {

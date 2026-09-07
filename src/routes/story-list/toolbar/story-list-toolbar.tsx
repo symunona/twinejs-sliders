@@ -27,13 +27,9 @@ export const StoryListToolbar: React.FC<StoryListToolbarProps> = props => {
 
 	return (
 		<RouteToolbar
-			pinnedControls={
-				<>
-					<BuildInfo />
-					<StorageQuota watch={stories} />
-					<SyncStatus />
-				</>
-			}
+			pinnedControls={<StorageQuota watch={stories} />}
+			statusControls={<SyncStatus />}
+			trailingControls={<BuildInfo />}
 			tabs={{
 				[t('common.story')]: <StoryActions selectedStory={selectedStory} />,
 				[t('routes.storyList.library')]: <LibraryActions />,

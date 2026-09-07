@@ -17,6 +17,12 @@
  */
 import {registerSW} from 'virtual:pwa-register';
 
+// How often an open tab asks whether a new worker has been published. Without
+// this, the only time the browser checks is a navigation--so a tab left open
+// across a deploy keeps running the old build until somebody reloads it.
+
+const updateCheckInterval = 60000;
+
 export function registerServiceWorker() {
 	if (!('serviceWorker' in navigator)) {
 		// Electron loads the build off the filesystem, where there is no worker
@@ -40,5 +46,20 @@ export function registerServiceWorker() {
 		window.location.reload();
 	});
 
-	registerSW({immediate: true});
+	registerSW({
+		immediate: true,
+		onRegisteredSW(_url, registration) {
+			if (!registration) {
+				return;
+			}
+
+			window.setInterval(() => {
+				// An update check is a network request; skip it while the tab is in
+				// the background, where nobody is waiting to see the new build.
+				if (document.visibilityState === 'visible') {
+					void registration.update();
+				}
+			}, updateCheckInterval);
+		}
+	});
 }

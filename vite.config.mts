@@ -86,14 +86,47 @@ export default defineConfig({
 			includeAssets: ['locales/**', 'pwa/**'],
 			workbox: {
 				globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
-				// Story formats are 3.8MB of a 5.7MB build, and precaching them
-				// meant the new worker could not activate until all of it had
-				// downloaded -- which is the window a deploy spends still serving
-				// the old build. They are fetched by URL when a story is played or
-				// previewed, so a runtime cache is enough: the first play of a
-				// given format needs the network, every play after it does not.
+				// Story formats are 3.8MB of a 5.7MB build, and precaching them meant
+				// the new worker could not activate until all of it had downloaded --
+				// which is the window a deploy spends still serving the old build. They
+				// are fetched by URL when a story is played or previewed, so a runtime
+				// cache is enough: the first play of a given format needs the network,
+				// every play after it does not.
 				globIgnores: ['story-formats/**'],
+				// No NavigationRoute bound to the precached index.html. That default is
+				// what made a deploy need several refreshes: it answers every navigation
+				// out of the precache, so the first refresh after a deploy is guaranteed
+				// to render the OLD index.html and therefore the old bundle. The new
+				// worker only takes over once it has finished precaching, so "how many
+				// refreshes does a deploy need" was really "how long did that download
+				// take", and refreshing in the middle of it did nothing but wait.
+				navigateFallback: undefined,
+				// ...and no directory index either. Dropping the NavigationRoute is not
+				// enough on its own: the precache route matches a URL ending in "/" by
+				// appending `directoryIndex`, so "/" still resolved to the precached
+				// index.html and answered every navigation before any runtime route was
+				// consulted. Twine is a hash router, so "/" is the only navigation the
+				// app ever makes, and this is exactly the request that has to reach the
+				// network.
+				directoryIndex: null,
 				runtimeCaching: [
+					{
+						// Navigations off the network first, so refresh #1 after a deploy
+						// always shows the new build -- the HTML is current and its
+						// hash-named assets are in no cache yet, so they are fetched too.
+						// This cache is what keeps the app working offline, and because it
+						// is written on every successful navigation it holds the last build
+						// actually seen rather than the last one precached.
+						urlPattern: ({request}) => request.mode === 'navigate',
+						handler: 'NetworkFirst',
+						options: {
+							cacheName: 'html',
+							// Offline should not mean a long stare at a blank page before
+							// the cached copy appears.
+							networkTimeoutSeconds: 3,
+							expiration: {maxEntries: 8}
+						}
+					},
 					{
 						urlPattern: /\/story-formats\//,
 						handler: 'StaleWhileRevalidate',

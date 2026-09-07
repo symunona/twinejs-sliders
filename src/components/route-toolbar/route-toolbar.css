@@ -26,6 +26,27 @@
 	flex-grow: 1;
 }
 
+/* The second row: the selected tab's buttons, then ambient status beside them,
+   then anything trailing pinned to the right edge. */
+
+.route-toolbar .route-toolbar-bottom {
+	align-items: center;
+	display: flex;
+	height: var(--control-height);
+}
+
+.route-toolbar .route-toolbar-status-controls {
+	align-items: center;
+	display: flex;
+}
+
+.route-toolbar .route-toolbar-trailing-controls {
+	align-items: center;
+	display: flex;
+	margin-left: auto;
+	padding-right: var(--grid-size);
+}
+
 .route-toolbar .react-tabs__tab-panel {
 	display: none;
 }
