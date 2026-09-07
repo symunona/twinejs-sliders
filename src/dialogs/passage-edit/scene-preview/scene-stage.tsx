@@ -169,17 +169,38 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 		// Each beat owns exactly one of the two surfaces, so stale text can't linger.
 		if (beat?.kind === 'say') {
+			const onStage = rendererRef.current?.characterOf(beat.who)?.bubble;
+
 			dialogue.setBubbles([
 				{
-					style: mergeBubbleStyle(
-						rendererRef.current?.characterOf(beat.who)?.bubble,
-						beat.style
-					),
+					style: mergeBubbleStyle(onStage, beat.style),
 					text: beat.text,
 					who: beat.who
 				}
 			]);
 			dialogue.setBox(null);
+
+			// A speaker who is not on stage — a narrator, a voice through a door — still has
+			// a character in the library, and their defaults arrive a tick later.
+			if (!onStage) {
+				let live = true;
+
+				void assetsRef.current.character(beat.who).then(character => {
+					if (live && character?.bubble) {
+						dialogue.setBubbles([
+							{
+								style: mergeBubbleStyle(character.bubble, beat.style),
+								text: beat.text,
+								who: beat.who
+							}
+						]);
+					}
+				});
+
+				return () => {
+					live = false;
+				};
+			}
 		} else if (beat?.kind === 'box') {
 			dialogue.setBubbles([]);
 			dialogue.setBox(beat.text, beat.style);

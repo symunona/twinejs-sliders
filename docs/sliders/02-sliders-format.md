@@ -235,6 +235,48 @@ bg is the backdrop, outside the layer stack.
 | `- fx: thunder` | fire an effect |
 | `- mark: tense` | name this state so `from:` can target it. Renders nothing. |
 
+## Speech styles
+
+Two keys on a say beat, and the same two inside a `box:` map:
+
+| Form | Means |
+|---|---|
+| `- mira: {say: "…", as: yell}` | style token, shorthand for `bubble: {as: yell}` |
+| `- mira: {say: "…", bubble: {…}}` | the long form: style, placement and geometry |
+| `- box: {text: "…", as: narrator}` | narration takes the same tokens |
+
+`bubble:` keys:
+
+| Key | Means |
+|---|---|
+| `as` | style token |
+| `place` | `auto` (hang off the speaker) · `top` · `bottom` · `left` · `right` · the four corners · `centre` |
+| `at` | `[x, y]`, the bubble's centre as fractions of the stage box. Beats `place`. |
+| `w` | width, fraction of the stage width |
+| `bg` `color` `font` `size` | one-off overrides, written as CSS custom properties |
+
+Presets with CSS in the renderer: `normal`, `bold`, `italic`, `bold-italic`, `yell` (spiky
+burst), `whisper`, `narrator`. **Any other token is legal**: it reaches the DOM as
+`data-style="token"` on `.sliders-bubble` / `.sliders-box`, and the story's own stylesheet
+paints it. That is the extension point — no format change needed for a new look.
+
+```css
+/* In the story stylesheet. */
+.sliders-bubble[data-style='curse'] {
+  background: #200;
+  color: #f66;
+  font-family: Georgia, serif;
+}
+```
+
+A character carries defaults in its manifest (`bubble: {as, place}`, set in the character
+editor), and a beat's own keys merge over them key by key. A narrator is a character with
+`place: top` and no frames: nothing on stage to point at, so the bubble draws no tail.
+
+In the editor, dragging a bubble writes `at:` and the side handles write `w:` — both onto
+the beat, since the same character can speak twice and want the bubble somewhere else each
+time.
+
 ## Links (D3)
 
 Wiki-style. **Always write the target inline**, because Twine's own editor parses `[[…]]`

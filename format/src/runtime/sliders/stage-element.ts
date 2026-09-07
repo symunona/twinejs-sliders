@@ -166,10 +166,7 @@ export class SlidersStage extends CustomElement {
 					this.dialogue?.say(beat.who, beat.text, {
 						// The speaking character's own `bubble:` is the default; the beat's
 						// `as:`/`bubble:` overrides it key by key.
-						style: mergeBubbleStyle(
-							this.renderer?.characterOf(beat.who)?.bubble,
-							beat.style
-						)
+						style: mergeBubbleStyle(await this.bubbleDefaults(beat.who), beat.style)
 					});
 					this.waitForReader();
 					return;
@@ -191,6 +188,23 @@ export class SlidersStage extends CustomElement {
 		}
 
 		this.removeAttribute('data-waiting');
+	}
+
+	/**
+	 * A speaker's own bubble defaults.
+	 *
+	 * The entity on stage first, since it is already resolved, then the cast manifest — a
+	 * narrator speaks without standing anywhere, and their character exists only in the
+	 * manifest.
+	 */
+	private async bubbleDefaults(who: string) {
+		const onStage = this.renderer?.characterOf(who);
+
+		if (onStage) {
+			return onStage.bubble;
+		}
+
+		return (await manifestResolver.character(who))?.bubble;
 	}
 
 	/**
