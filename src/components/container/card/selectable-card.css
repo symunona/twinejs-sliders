@@ -7,3 +7,9 @@
 	background: var(--light-blue);
 	background: color-mix(in lch, var(--light-blue), var(--light-yellow));
 }
+/* A card that cannot be picked yet — its story is still arriving. Pointer events stay on
+   so the cursor can say so; the handlers themselves are the thing that is off. */
+
+.selectable-card.disabled {
+	cursor: progress;
+}

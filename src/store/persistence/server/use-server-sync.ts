@@ -141,6 +141,18 @@ export function reconcileDecision(input: ReconcileInput): ReconcileAction {
 
 export type SyncProgress = CheckoutProgress | AssetSyncProgress;
 
+/**
+ * Is this story coming down rather than going up? Checkout is the only half that leaves a
+ * story on screen with art missing, so it is the only half the story list blocks on. The
+ * two progress shapes are told apart by phase: `scan`/`diff`/`upload`/`manifest` are a
+ * push, and a push has nothing to wait for.
+ */
+export function isCheckoutProgress(
+	progress?: SyncProgress
+): progress is CheckoutProgress {
+	return progress?.phase === 'story' || progress?.phase === 'assets';
+}
+
 export interface ServerSyncActions {
 	/** Marks a local story synced and writes it to the server for the first time. */
 	publish(story: Story, options?: {newIdentity?: boolean}): Promise<void>;

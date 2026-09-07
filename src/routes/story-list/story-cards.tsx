@@ -6,6 +6,7 @@ import {CardGroup} from '../../components/container/card-group';
 import {GhostStoryCard} from '../../components/story/ghost-story-card';
 import {StoryCard} from '../../components/story/story-card';
 import {StoryCardPresence} from '../../components/story/story-card-sync-badge';
+import type {CheckoutProgress} from '../../store/persistence/server/checkout-story';
 import type {
 	StoryIndexEntry,
 	SyncRecord
@@ -24,6 +25,11 @@ const cardWidth = '360px';
 export interface StoryCardsProps {
 	/** How far each in-flight checkout has got, 0 to 1, by story ID. */
 	checkoutProgress?: Record<string, number | undefined>;
+	/**
+	 * Stories whose text has landed but whose art is still downloading, by story ID. Their
+	 * cards show a loader and cannot be selected until the download ends.
+	 */
+	checkingOut?: Record<string, CheckoutProgress | undefined>;
 	/** Stories on the server with no local copy. Drawn last, dimmed. */
 	ghosts?: StoryIndexEntry[];
 	onCheckOutGhost?: (entry: StoryIndexEntry) => Promise<unknown> | unknown;
@@ -40,6 +46,7 @@ export interface StoryCardsProps {
 
 export const StoryCards: React.FC<StoryCardsProps> = props => {
 	const {
+		checkingOut,
 		checkoutProgress,
 		ghosts,
 		onCheckOutGhost,
@@ -89,6 +96,7 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 					{list.map(story => (
 						<CSSTransition classNames="pop" key={story.id} timeout={200}>
 							<StoryCard
+								loading={checkingOut?.[story.id]}
 								onChangeTagColor={handleChangeTagColor}
 								onEdit={() => history.push(`/stories/${story.id}`)}
 								onRemoveTag={name => handleRemoveTag(story, name)}

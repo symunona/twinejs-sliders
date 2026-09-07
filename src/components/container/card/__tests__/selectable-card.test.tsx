@@ -159,6 +159,43 @@ describe('<SelectableCard>', () => {
 		});
 	});
 
+	describe('when the card is disabled', () => {
+		let onDoubleClick: jest.Mock;
+		let onSelect: jest.Mock;
+
+		beforeEach(() => {
+			onDoubleClick = jest.fn();
+			onSelect = jest.fn();
+			renderComponent({disabled: true, onDoubleClick, onSelect});
+		});
+
+		it('marks itself disabled to assistive technology', () => {
+			expect(screen.getByRole('button')).toHaveAttribute(
+				'aria-disabled',
+				'true'
+			);
+		});
+
+		it('takes itself out of the tab order', () => {
+			expect(screen.getByRole('button')).toHaveAttribute('tabindex', '-1');
+		});
+
+		it('does not select when clicked', () => {
+			fireEvent.click(screen.getByRole('button'));
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		it('does not select when the Enter key is pressed', () => {
+			fireEvent.keyDown(screen.getByRole('button'), {key: 'Enter'});
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		it('does not double-click through', () => {
+			fireEvent.doubleClick(screen.getByRole('button'));
+			expect(onDoubleClick).not.toHaveBeenCalled();
+		});
+	});
+
 	it('is accessible', async () => {
 		const {container} = renderComponent();
 

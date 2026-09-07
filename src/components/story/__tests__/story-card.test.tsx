@@ -164,6 +164,41 @@ describe('<StoryCard>', () => {
 		);
 	});
 
+	describe("while the story's artwork is downloading", () => {
+		it('shows a loader with the file count', () => {
+			renderComponent({loading: {done: 1, phase: 'assets', total: 2}});
+			expect(
+				screen.getByText('components.storyCard.loadingAssetsCount')
+			).toBeInTheDocument();
+			expect(screen.getByTestId('story-card-loading-progress')).toHaveValue(
+				0.5
+			);
+		});
+
+		it('cannot be selected or opened', () => {
+			const onEdit = jest.fn();
+			const onSelect = jest.fn();
+
+			renderComponent({
+				loading: {done: 0, phase: 'assets', total: 3},
+				onEdit,
+				onSelect
+			});
+
+			const card = screen.getByRole('button', {name: /.+/});
+
+			fireEvent.click(card);
+			fireEvent.doubleClick(card);
+			expect(onSelect).not.toHaveBeenCalled();
+			expect(onEdit).not.toHaveBeenCalled();
+		});
+	});
+
+	it('shows no loader when the story is complete', () => {
+		renderComponent();
+		expect(screen.queryByTestId('story-card-loading')).not.toBeInTheDocument();
+	});
+
 	it('is accessible', async () => {
 		const {container} = renderComponent();
 

@@ -1,5 +1,7 @@
+import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import type {CheckoutProgress} from '../../store/persistence/server/checkout-story';
 import type {SyncRecord} from '../../store/persistence/server/server.types';
 import {Story} from '../../store/stories';
 import {Color} from '../../util/color';
@@ -13,6 +15,12 @@ import {StoryCardPresence, StoryCardSyncBadge} from './story-card-sync-badge';
 const dateFormatter = new Intl.DateTimeFormat([]);
 
 export interface StoryCardProps extends CardProps {
+	/**
+	 * Set while the story is here but its art is still coming down. The card says so and
+	 * refuses to be selected: opening it now shows placeholders where the backgrounds
+	 * belong, which reads as a broken story rather than an unfinished download.
+	 */
+	loading?: CheckoutProgress;
 	onChangeTagColor: (name: string, color: Color) => void;
 	onRemoveTag: (name: string) => void;
 	onEdit: () => void;
@@ -27,6 +35,7 @@ export interface StoryCardProps extends CardProps {
 
 export const StoryCard: React.FC<StoryCardProps> = props => {
 	const {
+		loading,
 		onChangeTagColor,
 		onEdit,
 		onRemoveTag,
@@ -40,9 +49,10 @@ export const StoryCard: React.FC<StoryCardProps> = props => {
 	const {t} = useTranslation();
 
 	return (
-		<div className="story-card">
+		<div className={classNames('story-card', {loading: !!loading})}>
 			<SelectableCard
 				{...otherProps}
+				disabled={!!loading}
 				label={story.name}
 				onDoubleClick={onEdit}
 				onSelect={onSelect}
@@ -66,6 +76,31 @@ export const StoryCard: React.FC<StoryCardProps> = props => {
 							</p>
 						</div>
 					</div>
+					{loading && (
+						<div
+							className="story-card-loading"
+							data-testid="story-card-loading"
+						>
+							<span>
+								{/* A file count, not a bar alone: one 16 MB background holds the bar
+								    still for long enough to read as stuck. */}
+								{loading.phase === 'assets' && loading.total > 0
+									? t('components.storyCard.loadingAssetsCount', {
+											done: loading.done,
+											total: loading.total
+										})
+									: t('components.storyCard.loadingAssets')}
+							</span>
+							<progress
+								className="story-card-loading-progress"
+								data-testid="story-card-loading-progress"
+								max={1}
+								value={
+									loading.total > 0 ? loading.done / loading.total : undefined
+								}
+							/>
+						</div>
+					)}
 					<div className="story-card-sync">
 						<StoryCardSyncBadge
 							presence={presence}

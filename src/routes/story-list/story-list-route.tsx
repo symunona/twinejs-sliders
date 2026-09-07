@@ -9,7 +9,11 @@ import {
 	useDialogsContext
 } from '../../dialogs';
 import {StoryCardPresence} from '../../components/story/story-card-sync-badge';
-import {useServerSyncContext} from '../../store/persistence/server';
+import {
+	isCheckoutProgress,
+	useServerSyncContext,
+	type CheckoutProgress
+} from '../../store/persistence/server';
 import {usePrefsContext} from '../../store/prefs';
 import {useDonationCheck} from '../../store/prefs/use-donation-check';
 import {
@@ -104,6 +108,22 @@ export const InnerStoryListRoute: React.FC = () => {
 		return result;
 	}, [progress]);
 
+	// A checkout writes the story before it writes the art (`checkoutStory`), so between
+	// those two the card is a real card with half its pictures missing. Mark it loading
+	// until the art lands: the card says so, and refuses to be selected or opened.
+
+	const checkingOut = React.useMemo(() => {
+		const result: Record<string, CheckoutProgress | undefined> = {};
+
+		for (const [storyId, value] of Object.entries(progress ?? {})) {
+			if (isCheckoutProgress(value)) {
+				result[storyId] = value;
+			}
+		}
+
+		return result;
+	}, [progress]);
+
 	// Any stories no longer visible should be deselected.
 
 	React.useEffect(() => {
@@ -113,6 +133,17 @@ export const InnerStoryListRoute: React.FC = () => {
 			}
 		}
 	}, [selectedStories, stories, storiesDispatch, visibleStories]);
+
+	// A story already selected when its checkout starts — a re-checkout of something in
+	// the library — would otherwise leave the toolbar acting on it while it downloads.
+
+	React.useEffect(() => {
+		for (const story of selectedStories) {
+			if (checkingOut[story.id]) {
+				storiesDispatch(deselectStory(story));
+			}
+		}
+	}, [checkingOut, selectedStories, storiesDispatch]);
 
 	React.useEffect(() => {
 		if (shouldShowDonationPrompt()) {
@@ -142,12 +173,15 @@ export const InnerStoryListRoute: React.FC = () => {
 							<p>{t('routes.storyList.noStories')}</p>
 						) : (
 							<StoryCards
+								checkingOut={checkingOut}
 								checkoutProgress={checkoutProgress}
 								ghosts={visibleGhosts}
 								onCheckOutGhost={entry => actions.checkout(entry.id)}
-								onSelectStory={story =>
-									storiesDispatch(selectStory(story, true))
-								}
+								onSelectStory={story => {
+									if (!checkingOut[story.id]) {
+										storiesDispatch(selectStory(story, true));
+									}
+								}}
 								presence={storyPresence}
 								stories={localStories}
 								syncedStories={syncedStories}

@@ -44,3 +44,24 @@
 .story-card .selectable-card > .card {
 	position: relative;
 }
+
+/* While the art is downloading the card is inert, and the summary is dimmed so it reads as
+   "not ready" rather than "empty story". The loader keeps full contrast — it is the part
+   with something to say. */
+
+.story-card.loading .story-card-summary,
+.story-card.loading .tags {
+	opacity: 0.5;
+}
+
+.story-card .story-card-loading {
+	display: flex;
+	align-items: center;
+	gap: var(--grid-size);
+	margin-bottom: var(--grid-size);
+}
+
+.story-card .story-card-loading-progress {
+	flex-grow: 1;
+	width: auto;
+}
