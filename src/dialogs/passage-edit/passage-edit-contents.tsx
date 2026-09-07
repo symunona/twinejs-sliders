@@ -18,10 +18,9 @@ import {
 	interceptScenePrefill,
 	sceneLinkSeeds
 } from './scene-preview/prefill-links';
-import {ScenePreview} from './scene-preview/scene-preview';
 import {useSceneParse} from './scene-preview/use-scene-parse';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
-import {usePreviewResolver} from './scene-preview/use-preview-resolver';
+import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-panel/scene-preview-source-context';
 import {PassageLockBanner} from './passage-lock-banner';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
@@ -45,11 +44,6 @@ export const PassageEditContents: React.FC<
 	// `PassageText`), which is fine for the story map and useless for the scene preview:
 	// a drag has to read the document the author is looking at.
 	const [liveText, setLiveText] = React.useState<string>();
-	/**
-	 * Whether the scene stage is detached into its own OS window. Lifted up here, out of
-	 * `ScenePreview`, so the toolbar button and the preview's own state agree about it.
-	 */
-	const [poppedOut, setPoppedOut] = React.useState(false);
 	const {ErrorBoundary, error, reset: resetError} = useErrorBoundary();
 	const {prefs} = usePrefsContext();
 	const {blurPassage, focusPassage, lock, stealPassage} =
@@ -57,7 +51,6 @@ export const PassageEditContents: React.FC<
 	const {dispatch, stories} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {formats} = useStoryFormatsContext();
-	const previewAssets = usePreviewResolver();
 	const passage = passageWithId(stories, storyId, passageId);
 	const story = storyWithId(stories, storyId);
 	const storyFormat = formatWithNameAndVersion(
@@ -69,9 +62,9 @@ export const PassageEditContents: React.FC<
 	// The scene text the author is looking at, undebounced (see `liveText` above).
 	const sceneText = liveText ?? passage.text;
 	/**
-	 * One parse for the whole dialog. The error list, the editor's own marks and the
-	 * preview all read it, and parsing three times would let them disagree about what the
-	 * scene currently says.
+	 * One parse for the whole dialog. The error list, the editor's own marks and the route's
+	 * preview panel all read it, and parsing three times would let them disagree about what
+	 * the scene currently says.
 	 */
 	const parse = useSceneParse(sceneText, story.passages);
 	/**
@@ -127,14 +120,6 @@ export const PassageEditContents: React.FC<
 	// else entirely — find and replace, undo — the store is the one that is right.
 	React.useEffect(() => setLiveText(undefined), [passage.text]);
 
-	// A background card's popup would keep showing a passage the author is no longer
-	// looking at, and its stage would still be writing into text they can't see.
-	React.useEffect(() => {
-		if (disabled) {
-			setPoppedOut(false);
-		}
-	}, [disabled]);
-
 	/**
 	 * Ctrl/cmd-click on a link inside a scene bubble. Opens the passage it points at, the
 	 * same editor stack a double click on the story map opens. A link to a passage that does
@@ -150,6 +135,19 @@ export const PassageEditContents: React.FC<
 		},
 		[dialogsDispatch, story]
 	);
+
+	// The scene preview is one view in the story edit route now, not a strip inside this
+	// dialog. All this editor does is offer what it is holding; the panel decides whose
+	// scene is on screen.
+	usePublishScenePreview({
+		disabled,
+		editor: cmEditor,
+		onOpenPassage: handleOpenPassage,
+		parse,
+		passageId,
+		storyId,
+		text: sceneText
+	});
 
 	const handlePassageTextChange = React.useCallback(
 		(text: string) => {
@@ -201,9 +199,7 @@ export const PassageEditContents: React.FC<
 					<PassageToolbar
 						disabled={readOnly}
 						editor={cmEditor}
-						onTogglePopout={() => setPoppedOut(value => !value)}
 						passage={passage}
-						poppedOut={poppedOut}
 						story={story}
 						useCodeMirror={prefs.useCodeMirror}
 					/>
@@ -241,16 +237,6 @@ export const PassageEditContents: React.FC<
 					onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
 				/>
 			)}
-			<ScenePreview
-				assets={previewAssets}
-				editor={cmEditor}
-				onOpenPassage={handleOpenPassage}
-				onPoppedOutChange={setPoppedOut}
-				parse={parse}
-				passages={story.passages}
-				poppedOut={poppedOut}
-				text={sceneText}
-			/>
 		</div>
 	);
 };

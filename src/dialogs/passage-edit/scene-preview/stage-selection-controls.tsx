@@ -95,18 +95,11 @@ export const StageSelectionControls: React.FC<
 		single && single.kind !== 'prop' ? single.ref : undefined
 	);
 
-	// The row is always in the layout, even with nothing to put in it. It sits directly
-	// above the stage, and in full screen the stage takes whatever height is left — so a row
-	// that appeared with the selection would resize the stage under the pointer and the whole
-	// scene would jump on the click that selected it.
+	// Nothing to offer, nothing to draw. The row floats OVER the stage rather than sitting
+	// above it, so it can come and go without moving the scene — which is what the empty
+	// placeholder used to be for.
 	if (entities.length === 0 || !editable) {
-		return (
-			<div
-				aria-hidden
-				className="scene-preview-selection empty"
-				data-testid="scene-preview-selection"
-			/>
-		);
+		return null;
 	}
 
 	return (

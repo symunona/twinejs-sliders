@@ -1,10 +1,9 @@
-import {IconPictureInPictureOn, IconResize} from '@tabler/icons';
+import {IconResize} from '@tabler/icons';
 import {Editor} from 'codemirror';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {UndoRedoButtons} from '../../components/codemirror';
 import {ButtonBar} from '../../components/container/button-bar';
-import {IconButton} from '../../components/control/icon-button';
 import {MenuButton} from '../../components/control/menu-button';
 import {RenamePassageButton} from '../../components/passage/rename-passage-button';
 import {TestPassageButton} from '../../routes/story-edit/toolbar/passage/test-passage-button';
@@ -24,18 +23,13 @@ import {TagCardButton} from '../../components/tag/tag-card-button';
 export interface PassageToolbarProps {
 	disabled?: boolean;
 	editor?: Editor;
-	/** Whether the scene stage is currently popped out into its own window. */
-	poppedOut?: boolean;
-	/** Toggles the pop-out. Absent means the button is not shown (no scene to preview yet). */
-	onTogglePopout?: () => void;
 	passage: Passage;
 	story: Story;
 	useCodeMirror: boolean;
 }
 
 export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
-	const {disabled, editor, onTogglePopout, passage, poppedOut, story, useCodeMirror} =
-		props;
+	const {disabled, editor, passage, story, useCodeMirror} = props;
 	const {dispatch} = useUndoableStoriesContext();
 	const {t} = useTranslation();
 	const passageTags = storyPassageTags(story);
@@ -122,16 +116,6 @@ export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
 				story={story}
 			/>
 			<TestPassageButton hotkeyScope={null} passage={passage} story={story} />
-			{onTogglePopout && (
-				<IconButton
-					icon={<IconPictureInPictureOn />}
-					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.popOut')}
-					onClick={onTogglePopout}
-					selectable
-					selected={poppedOut}
-				/>
-			)}
 		</ButtonBar>
 	);
 };

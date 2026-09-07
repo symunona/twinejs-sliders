@@ -1,16 +1,23 @@
 @import '../../styles/colors.css';
 @import '../../styles/metrics.css';
 
+/* No `min-height` here. It is left over from 17034fb5, when this was `position: relative`
+   and had to reach the bottom of the window itself; 2bc9dcd8 made it `position: fixed` with
+   top and bottom insets, which already sizes the box, so the property was a duplicate of
+   the height it computes. It stops being a duplicate the moment `bottom` is not 0 — it
+   would hold the box at full window height and push the bottom of the scroller under the
+   preview panel, where it can never be scrolled to. */
 .main-content {
 	background: var(--off-white);
-	min-height: calc(100vh - 2 * var(--control-height));
 	overflow: auto;
 	position: fixed;
 	top: calc(2 * var(--control-height));
 	/* height of <top-bar> */
-	left: 0;
+	/* The sliders scene preview is a fixed panel that this scroller must not run under.
+	   It publishes its own size; every other route leaves the variables unset. */
+	left: var(--sliders-preview-left-width, 0px);
 	right: 0;
-	bottom: 0;
+	bottom: var(--sliders-preview-dock-height, 0px);
 }
 
 .main-content:focus {

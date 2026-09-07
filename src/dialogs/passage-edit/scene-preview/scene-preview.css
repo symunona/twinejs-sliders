@@ -1,3 +1,5 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/depth.css';
 @import '../../../styles/metrics.css';
 
 .scene-preview {
@@ -7,8 +9,11 @@
 	flex-shrink: 0;
 }
 
+/* The same surface the toolbar and the menus are painted on, so full screen looks like
+   part of the app in either theme. `--dialog-background-color` used to be named here and
+   is defined nowhere, which is why full screen was literally white. */
 .scene-preview.full-screen {
-	background: var(--dialog-background-color, #fff);
+	background: var(--white);
 	bottom: 0;
 	left: 0;
 	position: fixed;
@@ -20,12 +25,21 @@
 /* Pinned: in full screen the stage takes the rest of the column, so the bar has to keep its
    height whatever lands in it — an error badge appearing must not push the stage down. */
 .scene-preview-bar {
+	background: var(--white);
 	align-items: center;
 	display: flex;
 	flex-shrink: 0;
 	gap: 2px;
 	min-height: var(--control-height);
 	padding: 2px 4px;
+}
+
+/* Where the preview is looked at, kept away from what is being looked at. */
+.scene-preview-bar-right {
+	align-items: center;
+	display: flex;
+	gap: 2px;
+	margin-left: auto;
 }
 
 .scene-preview-title {
@@ -55,20 +69,29 @@
 	background: #f3c8c8;
 }
 
-/* Only FILLED with something selected, but always present: the stage below it grows into
-   whatever height is left, so a row that came and went would resize the stage — and the
-   whole scene would jump — on the very click that selected a sprite. The keyboard is the
-   fast path; this row is how the gestures are found in the first place. */
+/* Drawn OVER the stage, so appearing and disappearing with the selection costs the stage
+   no height and the scene never jumps on the click that selected a sprite. Translucent
+   because the sprite it speaks for is very often right underneath it, and transparent to
+   the pointer except at the controls themselves — the ground under this strip still pans. */
 .scene-preview-selection {
 	align-items: center;
-	border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.15));
-	box-sizing: content-box;
+	background: var(--white-translucent);
 	display: flex;
-	flex-shrink: 0;
 	flex-wrap: wrap;
 	gap: 6px;
-	min-height: var(--control-height);
+	left: 0;
 	padding: 2px 4px;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	top: 0;
+	/* Over the marker layer: a selection box drawn round a sprite at the top of the stage
+	   must not cross the controls that sprite is being edited with. */
+	z-index: 4;
+}
+
+.scene-preview-selection > * {
+	pointer-events: auto;
 }
 
 .scene-preview-badge svg {
@@ -204,26 +227,4 @@
 
 .scene-preview-errors .hint {
 	opacity: 0.7;
-}
-
-/* Popped out into its own window. The bar stays behind in the passage editor, so the stage
-   is the only thing in that window and should have all of it — the inline
-   `clamp(180px, 34vh, 420px)` would otherwise leave most of it empty. These sit at the end
-   of the file on purpose: they match `.scene-preview .scene-stage` in specificity and have
-   to win on order, while full screen (one class more specific) still wins over them. */
-.scene-preview-popout-root {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-}
-
-.scene-preview-popout-root > .scene-preview {
-	border-top: 0;
-	flex-grow: 1;
-}
-
-.scene-preview-popout-root .scene-stage {
-	flex-grow: 1;
-	height: auto;
-	max-height: none;
 }

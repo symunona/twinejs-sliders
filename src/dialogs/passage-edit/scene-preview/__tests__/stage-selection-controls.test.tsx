@@ -62,26 +62,19 @@ function selects() {
 }
 
 describe('<StageSelectionControls>', () => {
-	// The row itself always exists — it holds the stage's height steady, which is why the
-	// scene no longer jumps on the click that selects a sprite. What must not appear is any
-	// control inside it.
+	// The row floats over the stage, so it costs the stage no height and simply is not there
+	// when it has nothing to say. An empty placeholder would sit on the scene for nothing.
 
-	it('keeps the row but offers no controls without a selection', () => {
+	it('renders nothing without a selection', () => {
 		renderControls([]);
 
-		const row = screen.getByTestId('scene-preview-selection');
-
-		expect(row).toHaveAttribute('aria-hidden', 'true');
-		expect(row).toBeEmptyDOMElement();
+		expect(screen.queryByTestId('scene-preview-selection')).toBeNull();
 	});
 
-	it('keeps the row but offers no controls when there is no editor to write to', () => {
+	it('renders nothing when there is no editor to write to', () => {
 		renderControls(['mira'], {editable: false});
 
-		const row = screen.getByTestId('scene-preview-selection');
-
-		expect(row).toHaveAttribute('aria-hidden', 'true');
-		expect(row).toBeEmptyDOMElement();
+		expect(screen.queryByTestId('scene-preview-selection')).toBeNull();
 	});
 
 	it('offers the character manifest frames, plus automatic', async () => {

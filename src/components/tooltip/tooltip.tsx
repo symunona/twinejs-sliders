@@ -23,7 +23,9 @@ export const Tooltip: React.FC<TooltipProps> = props => {
 	const [tooltipEl, setTooltipEl] = React.useState<HTMLDivElement | null>(null);
 	const [arrowEl, setArrowEl] = React.useState<HTMLDivElement | null>(null);
 	const [visible, setVisible] = React.useState(false);
-	const [appearTimeout, setAppearTimeout] = React.useState<number>();
+	// A ref, not state: the timer is bookkeeping, and holding it in state re-ran the effect
+	// below on every hover, tearing the anchor's listeners down and rebuilding them.
+	const appearTimeout = React.useRef<number>();
 	const {styles, attributes} = usePopper(anchor, tooltipEl, {
 		modifiers: [{name: 'arrow', options: {element: arrowEl}}, {name: 'flip'}],
 		placement: position,
@@ -31,25 +33,41 @@ export const Tooltip: React.FC<TooltipProps> = props => {
 	});
 
 	React.useEffect(() => {
-		const handleOnEnter = () =>
-			setAppearTimeout(window.setTimeout(() => setVisible(true), 500));
-		const handleOnLeave = () => {
-			if (appearTimeout) {
-				window.clearTimeout(appearTimeout);
+		const clearAppear = () => {
+			if (appearTimeout.current !== undefined) {
+				window.clearTimeout(appearTimeout.current);
+				appearTimeout.current = undefined;
 			}
-
+		};
+		const handleOnEnter = () => {
+			clearAppear();
+			appearTimeout.current = window.setTimeout(() => {
+				appearTimeout.current = undefined;
+				setVisible(true);
+			}, 500);
+		};
+		const handleOnLeave = () => {
+			clearAppear();
 			setVisible(false);
 		};
 
-		if (anchor) {
-			anchor.addEventListener('pointerenter', handleOnEnter);
-			anchor.addEventListener('pointerleave', handleOnLeave);
-			return () => {
-				anchor.removeEventListener('pointerenter', handleOnEnter);
-				anchor.removeEventListener('pointerleave', handleOnLeave);
-			};
+		if (!anchor) {
+			return;
 		}
-	}, [anchor, appearTimeout]);
+
+		anchor.addEventListener('pointerenter', handleOnEnter);
+		anchor.addEventListener('pointerleave', handleOnLeave);
+
+		// The timer has to die with the component, not only with a pointerleave. A button
+		// that is unmounted or reparented while the pointer is still on it — the scene
+		// preview portalling itself to the body when it goes full screen — never gets one,
+		// and the pending timer would then set state on something that is gone.
+		return () => {
+			clearAppear();
+			anchor.removeEventListener('pointerenter', handleOnEnter);
+			anchor.removeEventListener('pointerleave', handleOnLeave);
+		};
+	}, [anchor]);
 
 	return (
 		<CSSTransition

@@ -173,13 +173,6 @@ export interface StageEditorOverlayProps {
 	 * pointer and turning it on cannot change what a click does.
 	 */
 	grid?: boolean;
-	/**
-	 * The window whose `pointermove`/`pointerup`/`pointercancel` continue a drag. Defaults to
-	 * `window`. When the stage is popped out into its own browser window, a drag started
-	 * there fires its pointer events on THAT window, not the one this module loaded in--for
-	 * the same reason full screen already avoids pointer capture (see below).
-	 */
-	ownerWindow?: Window;
 }
 
 /**
@@ -274,7 +267,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onDropFiles,
 		onPatch,
 		onSelect,
-		ownerWindow = window,
 		parentOffsets,
 		onToggleFullScreen,
 		player,
@@ -465,6 +457,12 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 					if (current.editable) {
 						current.onCommit([cameraWrite(next)], CAMERA_ORIGIN);
+					} else {
+						// `camera:` is part of the scene, not a viewport control: a pan that
+						// stayed would look exactly like a scene whose camera had been moved.
+						// With nothing to write it into there is no text coming to replace the
+						// patch, so the stage snaps back to what the passage actually says.
+						current.onCameraPatch?.(undefined);
 					}
 				}
 
@@ -577,6 +575,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 				if (current.editable) {
 					current.onCommit(writes);
+				} else {
+					// Same bargain as the pan above: nothing to write the move into, so no
+					// text is coming to replace the optimistic patch and it must not stay.
+					current.onPatch({});
 				}
 			}
 		},
@@ -604,16 +606,16 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			}
 		};
 
-		ownerWindow.addEventListener('pointermove', move);
-		ownerWindow.addEventListener('pointerup', up);
-		ownerWindow.addEventListener('pointercancel', cancel);
+		window.addEventListener('pointermove', move);
+		window.addEventListener('pointerup', up);
+		window.addEventListener('pointercancel', cancel);
 
 		return () => {
-			ownerWindow.removeEventListener('pointermove', move);
-			ownerWindow.removeEventListener('pointerup', up);
-			ownerWindow.removeEventListener('pointercancel', cancel);
+			window.removeEventListener('pointermove', move);
+			window.removeEventListener('pointerup', up);
+			window.removeEventListener('pointercancel', cancel);
 		};
-	}, [endGesture, onCancel, ownerWindow, runGesture]);
+	}, [endGesture, onCancel, runGesture]);
 
 	/**
 	 * Scroll-zoom, on Ctrl/Cmd + wheel only.
@@ -720,11 +722,14 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	function handlePointerDown(event: React.PointerEvent) {
 		// Links inside bubbles are real anchors (D3) and the marker layer does not cover
 		// them, so a click on one is a click on the link, not on the stage. The player's
-		// corner controls sit inside the stage for the same reason and are read the same
-		// way: a press on them is theirs, and must not also pan or turn the page.
+		// corner controls and the selection row sit inside the stage for the same reason
+		// and are read the same way: a press on them is theirs, and must not also pan, clear
+		// the selection the row is speaking for, or turn the page.
 		if (
 			(event.button !== 0 && event.button !== 1) ||
-			(event.target as HTMLElement).closest?.('a, .scene-preview-nav')
+			(event.target as HTMLElement).closest?.(
+				'a, .scene-preview-nav, .scene-preview-selection'
+			)
 		) {
 			return;
 		}
@@ -877,7 +882,11 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}
 
 	function handleDoubleClick(event: React.MouseEvent) {
-		if ((event.target as HTMLElement).closest?.('a, .scene-preview-nav')) {
+		if (
+			(event.target as HTMLElement).closest?.(
+				'a, .scene-preview-nav, .scene-preview-selection'
+			)
+		) {
 			return;
 		}
 

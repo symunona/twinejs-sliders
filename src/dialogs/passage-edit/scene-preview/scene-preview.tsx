@@ -3,6 +3,8 @@ import {
 	IconChevronLeft,
 	IconChevronRight,
 	IconGridDots,
+	IconLayoutBottombar,
+	IconLayoutSidebar,
 	IconLock,
 	IconLockOpen,
 	IconMaximize,
@@ -36,7 +38,6 @@ import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import {StageSelectionControls} from './stage-selection-controls';
 import {roundCoord} from './stage-geometry';
-import {usePopoutWindow} from './use-popout-window';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
@@ -59,6 +60,9 @@ import {
 	type SceneWrite
 } from './use-scene-writer';
 import './scene-preview.css';
+
+/** Where the preview sits in the story edit route. */
+export type ScenePreviewMode = 'dock' | 'left';
 
 export interface ScenePreviewProps {
 	/**
@@ -88,20 +92,22 @@ export interface ScenePreviewProps {
 	 */
 	onOpenPassage?: (name: string) => void;
 	/**
-	 * Whether the stage is currently detached into its own OS window. Controlled by the
-	 * toolbar rather than owned here, so the same toggle works from outside the collapsed
-	 * preview too. Optional and defaulted off so existing callers and tests are unaffected.
+	 * Where the panel is parked, and how to move it. Owned by the panel--the layout
+	 * decides how much room to take out of the route, so it has to know before the bar
+	 * that changed it renders.
 	 */
-	poppedOut?: boolean;
+	mode: ScenePreviewMode;
+	onModeChange: (next: ScenePreviewMode) => void;
 	/**
-	 * Called whenever the pop-out state should change--including when the author closes
-	 * that window natively, which this component cannot prevent and has to report instead.
+	 * Collapsed to just the bar. Lifted for the same reason `mode` is, and because the
+	 * "first open comes up full screen" rule belongs with whoever persists it.
 	 */
-	onPoppedOutChange?: (next: boolean) => void;
+	open: boolean;
+	onOpenChange: (next: boolean) => void;
+	/** Transient, never persisted: full screen is a look, not a preference. */
+	fullScreen: boolean;
+	onFullScreenChange: (next: boolean) => void;
 }
-
-const OPEN_KEY = 'sliders.preview.open';
-const SEEN_KEY = 'sliders.preview.seen';
 
 /**
  * The lock survives the dialog, the passage and the session.
@@ -153,33 +159,28 @@ async function textChanged(
 }
 
 /**
- * Live scene preview under the passage text (spec 06), and the visual editor on top of it
+ * Live scene preview for one passage's scene (spec 06), and the visual editor on top of it
  * (spec 07).
  *
- * Collapsible, remembers its state, and opens full screen the very first time so the
- * feature is discoverable.
+ * Collapsible, and shown by the story edit route rather than by the passage dialog--which
+ * is why the layout and the open state arrive as props.
  */
 export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	assets,
 	editor,
-	parse,
-	text,
-	passages,
+	fullScreen,
+	mode,
+	onFullScreenChange,
+	onModeChange,
+	onOpenChange,
 	onOpenPassage,
-	poppedOut = false,
-	onPoppedOutChange = () => {}
+	open,
+	parse,
+	passages,
+	text
 }) => {
 	const {t} = useTranslation();
 	const store = useAssetStore();
-	const {container: popoutContainer, popout} = usePopoutWindow(
-		poppedOut,
-		t('dialogs.passageEdit.scenePreview.title'),
-		() => onPoppedOutChange(false)
-	);
-	const [open, setOpen] = React.useState(
-		() => window.localStorage.getItem(OPEN_KEY) !== 'false'
-	);
-	const [fullScreen, setFullScreen] = React.useState(false);
 	const [locked, setLocked] = React.useState(
 		() => window.localStorage.getItem(LOCKED_KEY) === 'true'
 	);
@@ -309,18 +310,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			shiftHeld.current = event.shiftKey;
 		};
 
-		// The popup has its own document--a capture listener on the main one never sees a
-		// key pressed while focus is over there, so the shift flag has to be sampled on both.
-		const popupDoc = poppedOut && popout ? popout.document : undefined;
-
 		document.addEventListener('keydown', sample, true);
-		popupDoc?.addEventListener('keydown', sample, true);
 
-		return () => {
-			document.removeEventListener('keydown', sample, true);
-			popupDoc?.removeEventListener('keydown', sample, true);
-		};
-	}, [popout, poppedOut]);
+		return () => document.removeEventListener('keydown', sample, true);
+	}, []);
 
 	// The parse is debounced, so for a moment after a write the parsed stage still holds
 	// the OLD position. Patch entries are dropped one by one as the parse agrees with
@@ -649,18 +642,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		});
 	}
 
-	// The first time the user opens the preview it comes up full screen (D12). Tied to
-	// the click rather than to "a scene appeared", which would hijack the screen while
-	// they're still typing the block out.
 	function handleToggle() {
-		const next = !open;
-
-		setOpen(next);
-
-		if (next && !window.localStorage.getItem(SEEN_KEY)) {
-			window.localStorage.setItem(SEEN_KEY, '1');
-			setFullScreen(true);
-		}
+		onOpenChange(!open);
 	}
 
 	function goToPreviousBeat() {
@@ -693,10 +676,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		setPlaying(p => !p);
 	}
 
-	React.useEffect(() => {
-		window.localStorage.setItem(OPEN_KEY, String(open));
-	}, [open]);
-
 	// Keep the scrubber in range when the author edits beats out from under it.
 	React.useEffect(() => {
 		setBeat(current => Math.min(current, lastBeat));
@@ -727,25 +706,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			// preventDefault, so the first Escape drops the selection and the second one
 			// leaves full screen.
 			if (event.key === 'Escape' && !event.defaultPrevented) {
-				setFullScreen(false);
+				onFullScreenChange(false);
 			}
 		};
 
-		// Full screen while popped out fills the POPUP window, so Escape pressed there has
-		// to be heard too--the main window's listener never sees it. It has to be the
-		// document rather than the window: the popped-out stage stops keys from bubbling
-		// on to the passage dialog (see the portal below), and that stops them reaching
-		// the window as well. Listeners on the document itself still run.
-		const popupDocument = poppedOut && popout ? popout.document : undefined;
-
+		// The document rather than the window: full screen portals the preview to the body,
+		// and a listener on the window would sit above anything that stops propagation on
+		// the way up. Listeners on the document itself still run.
 		document.addEventListener('keydown', onKey);
-		popupDocument?.addEventListener('keydown', onKey);
 
-		return () => {
-			document.removeEventListener('keydown', onKey);
-			popupDocument?.removeEventListener('keydown', onKey);
-		};
-	}, [fullScreen, popout, poppedOut]);
+		return () => document.removeEventListener('keydown', onKey);
+	}, [fullScreen, onFullScreenChange]);
 
 	// Viewer keys, unmodified, in the preview's own scope: they only fire once
 	// focus is inside the preview, so left and right still move the cursor
@@ -793,7 +764,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		enabled: open,
 		id: 'scene.fullScreen',
 		label: t('hotkeys.commands.scene.fullScreen'),
-		run: () => setFullScreen(f => !f),
+		run: () => onFullScreenChange(!fullScreen),
 		scope: 'scene-preview'
 	});
 
@@ -976,33 +947,37 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						selectable
 						selected={locked}
 					/>
-					<IconButton
-						icon={fullScreen ? <IconMinimize /> : <IconMaximize />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-						onClick={() => setFullScreen(f => !f)}
-					/>
+					{/* How much of the route the preview takes, and how much of the
+					    screen. Grouped apart from the viewer controls because neither is
+					    about the scene — they are about where it is being looked at. */}
+					<span className="scene-preview-bar-right">
+						<IconButton
+							icon={
+								mode === 'dock' ? <IconLayoutSidebar /> : <IconLayoutBottombar />
+							}
+							iconOnly
+							label={t(
+								mode === 'dock'
+									? 'dialogs.passageEdit.scenePreview.viewLeft'
+									: 'dialogs.passageEdit.scenePreview.viewDock'
+							)}
+							onClick={() => onModeChange(mode === 'dock' ? 'left' : 'dock')}
+						/>
+						<IconButton
+							icon={fullScreen ? <IconMinimize /> : <IconMaximize />}
+							iconOnly
+							label={t('dialogs.passageEdit.scenePreview.fullScreen')}
+							onClick={() => onFullScreenChange(!fullScreen)}
+						/>
+					</span>
 				</>
 			)}
 		</div>
 	);
 
-	// The stage itself--everything below the bar. Popped out, this is the part that
-	// travels to the popup window; the bar always stays put in the passage editor.
+	// The stage itself--everything below the bar.
 	const stageBody = open && (
 		<>
-			{/* A click on the stage selects, so full screen moved to a double
-			    click. The toolbar button above is still the keyboard-accessible
-			    path, and `scene.fullScreen` still works. */}
-			<StageSelectionControls
-				assets={assets}
-				editable={editable}
-				entities={selectedEntities}
-				onDelete={remove}
-				onFlip={flip}
-				onFrame={setFrame}
-				onStepZ={stepZ}
-			/>
 			<StageEditorOverlay
 				editable={editable}
 				grid={grid}
@@ -1013,10 +988,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDropAsset={handleDropAsset}
 				onDropFiles={handleDropFiles}
 				onPatch={setPatch}
-				ownerWindow={poppedOut && popout ? popout : window}
 				parentOffsets={offsets}
 				onSelect={select}
-				onToggleFullScreen={() => setFullScreen(f => !f)}
+				onToggleFullScreen={() => onFullScreenChange(!fullScreen)}
 				player={fullScreen}
 				renderer={renderer}
 				seal={seal}
@@ -1030,6 +1004,20 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					onLink={handleLink}
 					onRenderer={handleRenderer}
 					stage={stage}
+				/>
+				{/* Over the stage rather than above it. A row that appeared with the
+				    selection would resize the stage under the pointer, and the whole scene
+				    would jump on the very click that selected a sprite. A click on the
+				    stage selects, so full screen moved to a double click; the bar button
+				    above is still the keyboard-accessible path. */}
+				<StageSelectionControls
+					assets={assets}
+					editable={editable}
+					entities={selectedEntities}
+					onDelete={remove}
+					onFlip={flip}
+					onFrame={setFrame}
+					onStepZ={stepZ}
 				/>
 				{/* The player's own controls, in the corner the stage needs least.
 				    Faint until asked for: full screen exists so the scene can fill
@@ -1069,45 +1057,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		</>
 	);
 
-	// Popped out, the stage lives in the popup's own document--a separate DOM tree, so it
-	// needs its OWN copy of the classes the stage's CSS keys off (`.scene-preview
-	// .scene-stage`, `.scene-preview.full-screen .scene-stage`), not just whatever ancestor
-	// the bar happens to have. Full screen inside the popup fills that window: `position:
-	// fixed` on a plain, untransformed body resolves against the popup's own viewport.
-	if (poppedOut && popoutContainer) {
-		return (
-			<>
-				<div
-					className={classNames('scene-preview', {open})}
-					data-hotkey-scope="scene-preview"
-					data-testid="scene-preview"
-				>
-					{bar}
-				</div>
-				{createPortal(
-					<div
-						className={classNames('scene-preview', {
-							open,
-							'full-screen': fullScreen
-						})}
-						data-hotkey-scope="scene-preview"
-						data-testid="scene-preview-stage"
-						// A portal moves the DOM, not the React tree, so keys pressed in
-						// the other window still bubble as React events into the passage
-						// dialog above--where Escape closes the dialog, taking this window
-						// with it. Nothing up there should react to typing that happened in
-						// a separate window. Hotkeys are unaffected: they listen on this
-						// window's document directly, not through React.
-						onKeyDown={event => event.stopPropagation()}
-					>
-						{stageBody}
-					</div>,
-					popoutContainer
-				)}
-			</>
-		);
-	}
-
 	const body = (
 		<div
 			className={classNames('scene-preview', {
@@ -1122,8 +1071,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		</div>
 	);
 
-	// The passage dialog stack is a transformed ancestor, which would make
-	// `position: fixed` resolve against IT rather than the viewport. Portal to the body
-	// so full screen is actually full screen.
+	// Full screen has to escape the panel, which is a fixed box the size of the dock.
+	// Portalling to the body also keeps it out of any transformed ancestor, where
+	// `position: fixed` would resolve against the ancestor rather than the viewport.
 	return fullScreen ? createPortal(body, document.body) : body;
 };
