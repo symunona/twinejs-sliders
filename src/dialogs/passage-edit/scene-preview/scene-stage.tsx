@@ -1,5 +1,10 @@
 import * as React from 'react';
-import {DialogueLayer, DomRenderer, LinkHandler} from '@sliders/render-dom';
+import {
+	DialogueLayer,
+	DomRenderer,
+	LinkHandler,
+	mergeBubbleStyle
+} from '@sliders/render-dom';
 import {AssetResolver, Beat, Stage, Transition} from '@sliders/scene-types';
 import {diffStages} from '@sliders/scene-core';
 
@@ -124,11 +129,20 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 		// Each beat owns exactly one of the two surfaces, so stale text can't linger.
 		if (beat?.kind === 'say') {
-			dialogue.setBubbles([{who: beat.who, text: beat.text}]);
+			dialogue.setBubbles([
+				{
+					style: mergeBubbleStyle(
+						rendererRef.current?.characterOf(beat.who)?.bubble,
+						beat.style
+					),
+					text: beat.text,
+					who: beat.who
+				}
+			]);
 			dialogue.setBox(null);
 		} else if (beat?.kind === 'box') {
 			dialogue.setBubbles([]);
-			dialogue.setBox(beat.text);
+			dialogue.setBox(beat.text, beat.style);
 		} else {
 			dialogue.setBubbles([]);
 			dialogue.setBox(null);

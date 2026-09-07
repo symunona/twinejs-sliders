@@ -9,7 +9,7 @@
  */
 
 import {applyScene, diffStages, resolveStage, runBeats} from '@sliders/scene-core';
-import {DialogueLayer, DomRenderer} from '@sliders/render-dom';
+import {DialogueLayer, DomRenderer, mergeBubbleStyle} from '@sliders/render-dom';
 import type {Beat, Scene, SceneError, Stage} from '@sliders/scene-types';
 import {go} from '../actions';
 import {createLoggers} from '../logger';
@@ -163,13 +163,20 @@ export class SlidersStage extends CustomElement {
 			switch (beat.kind) {
 				case 'say':
 					this.dialogue?.setBox(null);
-					this.dialogue?.say(beat.who, beat.text);
+					this.dialogue?.say(beat.who, beat.text, {
+						// The speaking character's own `bubble:` is the default; the beat's
+						// `as:`/`bubble:` overrides it key by key.
+						style: mergeBubbleStyle(
+							this.renderer?.characterOf(beat.who)?.bubble,
+							beat.style
+						)
+					});
 					this.waitForReader();
 					return;
 
 				case 'box':
 					this.dialogue?.clear();
-					this.dialogue?.setBox(beat.text);
+					this.dialogue?.setBox(beat.text, beat.style);
 					this.waitForReader();
 					return;
 

@@ -12,14 +12,19 @@
 import {LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument} from 'yaml';
 import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {
+	BUBBLE_KEYS,
+	BUBBLE_PLACES,
 	LAYERS,
 	LAYER_BASELINE,
 	LAYER_Z,
 	type Beat,
+	type BubblePlace,
+	type BubbleStyle,
 	type Camera,
 	type EntityKind,
 	type EntityPatch,
 	type EntityPatchBody,
+	type Frac2,
 	type Layer,
 	type ParseResult,
 	type Scene,
@@ -61,6 +66,12 @@ export const ENTITY_KEYS = [
 
 /** Beat map keys that are commands rather than a speaker id. */
 export const BEAT_COMMAND_KEYS = ['box', 'wait', 'fx', 'mark'] as const;
+
+/** Keys accepted inside a `box:` map. The scalar form `box: "text"` stays the short way. */
+export const BOX_KEYS = ['text', 'as', 'bubble'] as const;
+
+/** Keys a beat may add to its speaker's entry beyond the entity keys. */
+export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
 
 export const CAMERA_KEYS = ['at', 'zoom'] as const;
 
@@ -370,6 +381,187 @@ function parseAt(
 	return undefined;
 }
 
+
+// ---------------------------------------------------------------------------
+// Bubble style
+// ---------------------------------------------------------------------------
+
+/** `at: [0.5, 0.2]` inside a `bubble:` — fractions of the stage box, not scene units. */
+function parseFrac2(ctx: Ctx, node: unknown, what: string): Frac2 | undefined {
+	if (!isSeq(node) || (node as YAMLSeq).items.length !== 2) {
+		addError(ctx, 'bad-coordinate', `${what} must be two numbers, [x, y].`, node, {
+			hint: 'Bubble positions are fractions of the stage box: [0, 0] is its top left.'
+		});
+		return undefined;
+	}
+
+	const items = (node as YAMLSeq).items;
+	const x = asNumber(ctx, items[0], `${what} x`);
+	const y = asNumber(ctx, items[1], `${what} y`);
+
+	if (x === undefined || y === undefined) {
+		return undefined;
+	}
+
+	return {x, y};
+}
+
+/**
+ * `as: yell` or the long form `bubble: {as: yell, place: top, w: 0.4}`.
+ *
+ * An unknown `as:` token is NOT an error. Presets are the styles the renderer ships CSS
+ * for, and a story is free to invent its own and paint them in its stylesheet — the token
+ * reaches the DOM either way. `place:` is the opposite: it changes where the renderer puts
+ * the bubble, so a typo there has to be caught.
+ */
+function parseBubbleStyle(
+	ctx: Ctx,
+	node: unknown,
+	what: string
+): BubbleStyle | undefined {
+	if (isScalar(node)) {
+		const token = asString(ctx, node, what);
+
+		return token === undefined ? undefined : {as: token};
+	}
+
+	if (!isMap(node)) {
+		addError(
+			ctx,
+			'bad-value',
+			`${what} must be a style name or a map of style keys.`,
+			node
+		);
+		return undefined;
+	}
+
+	const style: BubbleStyle = {};
+
+	for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+		const key = keyName(pair);
+
+		if (key === undefined) {
+			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+			continue;
+		}
+
+		switch (key) {
+			case 'as': {
+				const token = asString(ctx, pair.value, 'as');
+
+				if (token !== undefined) {
+					style.as = token;
+				}
+
+				break;
+			}
+
+			case 'place': {
+				const place = asString(ctx, pair.value, 'place');
+
+				if (place === undefined) {
+					break;
+				}
+
+				if (!(BUBBLE_PLACES as readonly string[]).includes(place)) {
+					addError(ctx, 'bad-value', `Unknown place '${place}'.`, pair.value, {
+						hint: `place: is one of ${BUBBLE_PLACES.join(', ')}.`
+					});
+					break;
+				}
+
+				style.place = place as BubblePlace;
+				break;
+			}
+
+			case 'at': {
+				const at = parseFrac2(ctx, pair.value, 'bubble at');
+
+				if (at) {
+					style.at = at;
+				}
+
+				break;
+			}
+
+			case 'w': {
+				const w = asNumber(ctx, pair.value, 'w');
+
+				if (w === undefined) {
+					break;
+				}
+
+				if (w <= 0 || w > 1) {
+					addError(
+						ctx,
+						'bad-value',
+						`Bubble width of ${w} is outside 0 to 1.`,
+						pair.value,
+						{hint: 'w: is a fraction of the stage width. 0.4 is a wide bubble.'}
+					);
+					break;
+				}
+
+				style.w = w;
+				break;
+			}
+
+			case 'size': {
+				const size = asNumber(ctx, pair.value, 'size');
+
+				if (size === undefined) {
+					break;
+				}
+
+				if (size <= 0) {
+					addError(
+						ctx,
+						'bad-value',
+						`Text size of ${size} is not a size.`,
+						pair.value,
+						{hint: 'size: multiplies the stage text size. 1 is normal.'}
+					);
+					break;
+				}
+
+				style.size = size;
+				break;
+			}
+
+			case 'bg':
+			case 'color':
+			case 'font': {
+				const value = asString(ctx, pair.value, key);
+
+				if (value !== undefined) {
+					style[key] = value;
+				}
+
+				break;
+			}
+
+			default:
+				addError(ctx, 'unknown-key', `Unknown bubble key '${key}'.`, pair.key, {
+					hint: keyHint(key, BUBBLE_KEYS)
+				});
+		}
+	}
+
+	return Object.keys(style).length > 0 ? style : undefined;
+}
+
+/** `as:` and `bubble:` land in the same object; whichever key is written later wins. */
+function mergeBubbleStyle(
+	base: BubbleStyle | undefined,
+	extra: BubbleStyle | undefined
+): BubbleStyle | undefined {
+	if (!base) {
+		return extra;
+	}
+
+	return extra ? {...base, ...extra} : base;
+}
+
 // ---------------------------------------------------------------------------
 // Entities
 // ---------------------------------------------------------------------------
@@ -386,6 +578,8 @@ interface EntityBody {
 	layerZ?: number;
 	say?: string;
 	sayNode?: unknown;
+	/** From `as:` and `bubble:`. Only a beat can carry these. */
+	style?: BubbleStyle;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
 	ofNode?: unknown;
 }
@@ -401,7 +595,7 @@ function parseEntityBody(
 	selfId?: string
 ): EntityBody {
 	const body: EntityBody = {patch: {}};
-	const valid = allowSay ? [...ENTITY_KEYS, 'say'] : ENTITY_KEYS;
+	const valid = allowSay ? [...ENTITY_KEYS, ...SAY_KEYS] : ENTITY_KEYS;
 	/**
 	 * Scanned up front because YAML map order is the author's, not ours: `{at: 0.4, of: table}`
 	 * has to read the same as `{of: table, at: 0.4}`, and `at` is otherwise parsed before the
@@ -604,6 +798,22 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'as':
+			case 'bubble': {
+				if (!allowSay) {
+					addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+						hint: `${key}: styles a line of dialogue, so it only belongs to a beat.`
+					});
+					break;
+				}
+
+				body.style = mergeBubbleStyle(
+					body.style,
+					parseBubbleStyle(ctx, pair.value, key)
+				);
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					hint: keyHint(key, valid)
@@ -783,6 +993,55 @@ function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 	}
 }
 
+/**
+ * The long form of a narration beat: `box: {text: "…", as: narrator, bubble: {place: top}}`.
+ *
+ * Same shape as a say beat's map, minus the stage patch — a box has no speaker to move.
+ */
+function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
+	let text: string | undefined;
+	let style: BubbleStyle | undefined;
+	let textNode: unknown;
+
+	for (const pair of map.items as Pair<unknown, unknown>[]) {
+		const key = keyName(pair);
+
+		if (key === undefined) {
+			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+			continue;
+		}
+
+		switch (key) {
+			case 'text': {
+				text = asString(ctx, pair.value, 'text');
+				textNode = pair.value;
+				break;
+			}
+
+			case 'as':
+			case 'bubble': {
+				style = mergeBubbleStyle(style, parseBubbleStyle(ctx, pair.value, key));
+				break;
+			}
+
+			default:
+				addError(ctx, 'unknown-key', `Unknown box key '${key}'.`, pair.key, {
+					hint: keyHint(key, BOX_KEYS)
+				});
+		}
+	}
+
+	if (text === undefined) {
+		addError(ctx, 'bad-value', 'A box: map needs text.', map, {
+			hint: 'box: {text: "The candle gutters.", as: narrator}'
+		});
+		return undefined;
+	}
+
+	collectLinks(ctx, text, textNode ?? map);
+	return {index, kind: 'box', text, ...(style ? {style} : {})};
+}
+
 function parseBeat(
 	ctx: Ctx,
 	key: string,
@@ -791,6 +1050,10 @@ function parseBeat(
 ): Beat | undefined {
 	switch (key) {
 		case 'box': {
+			if (isMap(pair.value)) {
+				return parseBoxMap(ctx, pair.value as YAMLMap, index);
+			}
+
 			const text = asString(ctx, pair.value, 'box');
 
 			if (text === undefined) {
@@ -857,7 +1120,8 @@ function parseBeat(
 						kind: 'say',
 						text: body.say,
 						who,
-						...(hasPatch ? {patch: body.patch} : {})
+						...(hasPatch ? {patch: body.patch} : {}),
+						...(body.style ? {style: body.style} : {})
 					};
 				}
 
@@ -866,7 +1130,10 @@ function parseBeat(
 						ctx,
 						'bad-value',
 						`Beat for '${who}' changes nothing and says nothing.`,
-						pair.value
+						pair.value,
+						body.style
+							? {hint: 'A style needs a line to paint: add say: to this beat.'}
+							: undefined
 					);
 					return undefined;
 				}

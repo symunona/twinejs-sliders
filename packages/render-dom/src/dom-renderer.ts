@@ -228,6 +228,18 @@ export class DomRenderer implements Renderer {
 		this.notify();
 	}
 
+	/**
+	 * The character an entity is drawing, if it is drawing one.
+	 *
+	 * Exposed for the dialogue layer's benefit: a character carries its own `bubble:`
+	 * defaults, and whoever builds a bubble spec has to merge those under the beat's own
+	 * style. The renderer is the only thing that has already resolved the manifest, so
+	 * asking it is cheaper than every caller resolving the cast a second time.
+	 */
+	characterOf(entityId: EntityId): Character | undefined {
+		return this.entities.get(entityId)?.character;
+	}
+
 	measure(entityId: EntityId, anchor: string): Vec2 | null {
 		const rec = this.entities.get(entityId);
 

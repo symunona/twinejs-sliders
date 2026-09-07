@@ -10,7 +10,7 @@
  * screen readers come for free.
  */
 
-import type {EntityId, Vec2} from '@sliders/scene-types';
+import type {BubblePlace, BubbleStyle, EntityId, Vec2} from '@sliders/scene-types';
 import type {StageBox} from './coords';
 import {injectStyles} from './styles';
 
@@ -29,6 +29,11 @@ export interface BubbleSpec {
 	name?: string;
 	/** Anchor to hang off. `bubble` is the one every character manifest must define (D2). */
 	anchor?: string;
+	/**
+	 * Look and placement. Already merged from the speaking character's defaults and the
+	 * beat's own keys by the time it gets here — this layer never reads a character.
+	 */
+	style?: BubbleStyle;
 }
 
 /**
@@ -82,6 +87,7 @@ export class DialogueLayer {
 	private mountEl?: HTMLElement;
 	private rootEl?: HTMLDivElement;
 	private boxEl?: HTMLDivElement;
+	private boxStyle?: BubbleStyle;
 	private renderer?: MeasuringRenderer;
 
 	private bubbles = new Map<EntityId, BubbleRecord>();
@@ -167,8 +173,8 @@ export class DialogueLayer {
 		this.reposition();
 	}
 
-	/** The narration bottom bar. `null` hides it. */
-	setBox(text: string | null): void {
+	/** The narration bar. `null` hides it. */
+	setBox(text: string | null, style?: BubbleStyle): void {
 		if (!this.rootEl || !this.doc) {
 			return;
 		}
@@ -176,6 +182,7 @@ export class DialogueLayer {
 		if (text === null || text === undefined) {
 			this.boxEl?.remove();
 			this.boxEl = undefined;
+			this.boxStyle = undefined;
 
 			return;
 		}
@@ -186,6 +193,9 @@ export class DialogueLayer {
 			this.rootEl.appendChild(this.boxEl);
 			this.fadeIn(this.boxEl);
 		}
+
+		this.boxStyle = style;
+		applyStyleAttributes(this.boxEl, style);
 
 		if (this.boxEl.dataset.text !== text) {
 			this.boxEl.dataset.text = text;
@@ -247,13 +257,42 @@ export class DialogueLayer {
 	}
 
 	private positionBubble(rec: BubbleRecord, box: StageBox): void {
+		const style = rec.spec.style;
 		const anchorName = rec.spec.anchor ?? 'bubble';
 		const anchor = this.renderer?.measure(rec.spec.who, anchorName) ?? null;
 		const el = rec.el;
 		const margin = this.opts.margin ?? 12;
 		const gap = this.opts.tailGap ?? 12;
+
+		// Width first: it decides how tall the text wraps, and both are read below.
+		el.style.width = style?.w ? `${style.w * box.width}px` : '';
+
 		const w = el.offsetWidth;
 		const h = el.offsetHeight;
+		const pinned = pinnedRect(style, box, w, h, margin);
+
+		if (pinned) {
+			// The author said where this goes. The tail still points home when the speaker is
+			// on stage — a bubble parked on the left with a tail reaching right reads as
+			// theirs — and simply disappears for a narrator with nobody to point at.
+			el.dataset.anchored = anchor ? 'true' : 'false';
+			el.style.transform = `translate(${pinned.left}px, ${pinned.top}px)`;
+
+			const tail = anchor ? tailToward(anchor, pinned, w, h) : undefined;
+
+			if (!tail) {
+				el.dataset.side = 'above';
+				rec.tail.style.display = 'none';
+
+				return;
+			}
+
+			el.dataset.side = tail.side;
+			rec.tail.style.display = '';
+			this.placeTail(rec, tail.side, tail.offset);
+
+			return;
+		}
 
 		if (!anchor) {
 			// Speaker is not on stage (bad `who`, or an exit already finished). Still show the
@@ -276,15 +315,20 @@ export class DialogueLayer {
 		// anchors, so it leans the other way for free.
 		const mouth = this.renderer?.measure(rec.spec.who, MOUTH_ANCHOR) ?? null;
 		const place = placeBubble({anchor, mouth, box, w, h, gap, margin});
-		const along = place.tail - TAIL_HALF;
 
 		el.dataset.side = place.side;
 		el.style.transform = `translate(${place.left}px, ${place.top}px)`;
+		this.placeTail(rec, place.side, place.tail);
+	}
 
-		// The tail rides the edge facing the anchor: horizontally under/over a bubble that sits
-		// above/below, vertically beside one that sits left/right. Clear the other axis or a
-		// leftover inline value fights the stylesheet after a side change.
-		const horizontal = place.side === 'above' || place.side === 'below';
+	/**
+	 * The tail rides the edge facing the anchor: horizontally under or over a bubble that sits
+	 * above or below, vertically beside one that sits left or right. The other axis is
+	 * cleared, or a leftover inline value fights the stylesheet after a side change.
+	 */
+	private placeTail(rec: BubbleRecord, side: BubbleSide, offset: number): void {
+		const along = offset - TAIL_HALF;
+		const horizontal = side === 'above' || side === 'below';
 
 		rec.tail.style.left = horizontal ? `${along}px` : '';
 		rec.tail.style.top = horizontal ? '' : `${along}px`;
@@ -297,13 +341,32 @@ export class DialogueLayer {
 
 		// The narration bar spans the stage box, not the letterbox bars.
 		const box = this.renderer.stageBox();
+		const style = this.boxStyle;
+		const el = this.boxEl;
+		const margin = this.opts.margin ?? 12;
 
-		this.boxEl.style.left = `${box.left}px`;
-		this.boxEl.style.right = 'auto';
-		this.boxEl.style.width = `${box.width}px`;
-		this.boxEl.style.bottom = `${
-			Math.max(0, (this.mountEl?.clientHeight ?? 0) - (box.top + box.height))
-		}px`;
+		el.style.width = `${(style?.w ?? 1) * box.width}px`;
+
+		const w = el.offsetWidth;
+		const h = el.offsetHeight;
+		const pinned = pinnedRect(style, box, w, h, margin);
+
+		if (pinned) {
+			el.dataset.pinned = 'true';
+			el.style.left = `${pinned.left}px`;
+			el.style.top = `${pinned.top}px`;
+			el.style.bottom = 'auto';
+
+			return;
+		}
+
+		el.dataset.pinned = 'false';
+		el.style.left = `${box.left}px`;
+		el.style.top = 'auto';
+		el.style.bottom = `${Math.max(
+			0,
+			(this.mountEl?.clientHeight ?? 0) - (box.top + box.height)
+		)}px`;
 	}
 
 	// -----------------------------------------------------------------------
@@ -332,6 +395,8 @@ export class DialogueLayer {
 	}
 
 	private renderBubbleContent(rec: BubbleRecord): void {
+		applyStyleAttributes(rec.el, rec.spec.style);
+
 		const key = `${rec.spec.name ?? ''} ${rec.spec.text}`;
 
 		if (rec.rendered === key) {
@@ -402,6 +467,152 @@ export class DialogueLayer {
 			event
 		);
 	};
+}
+
+
+// ---------------------------------------------------------------------------
+// Style
+// ---------------------------------------------------------------------------
+
+/**
+ * A style reaches CSS two ways: the token as `data-style`, so a preset or a story's own
+ * rule can match on it, and the one-off colour keys as custom properties, so they layer
+ * over whatever the preset already set instead of replacing it.
+ */
+/**
+ * A character's own `bubble:` defaults, with the beat's keys over the top.
+ *
+ * Merging is per key rather than all-or-nothing on purpose: a narrator whose character
+ * says `place: top` keeps that placement when one line of theirs is written `as: yell`.
+ */
+export function mergeBubbleStyle(
+	base: BubbleStyle | undefined,
+	over: BubbleStyle | undefined
+): BubbleStyle | undefined {
+	if (!base) {
+		return over;
+	}
+
+	return over ? {...base, ...over} : base;
+}
+
+export function applyStyleAttributes(
+	el: HTMLElement,
+	style: BubbleStyle | undefined
+): void {
+	if (style?.as) {
+		el.dataset.style = style.as;
+	} else {
+		delete el.dataset.style;
+	}
+
+	setVar(el, '--sliders-bubble-bg', style?.bg);
+	setVar(el, '--sliders-bubble-color', style?.color);
+	setVar(el, '--sliders-bubble-font', style?.font);
+	setVar(el, '--sliders-bubble-size', style?.size ? `${style.size}em` : undefined);
+}
+
+function setVar(el: HTMLElement, name: string, value: string | undefined): void {
+	if (value) {
+		el.style.setProperty(name, value);
+	} else {
+		el.style.removeProperty(name);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Pinned placement
+// ---------------------------------------------------------------------------
+
+/**
+ * Where an authored `at:` or `place:` puts the bubble, or undefined when the author said
+ * nothing and it should hang off the speaker.
+ *
+ * `at` is the bubble's CENTRE in fractions of the stage box, which is what the editor
+ * writes when a bubble is dragged: a centre survives a resize, where a corner would drift.
+ * Both are clamped into the box, so a bubble can be parked half off stage in the YAML and
+ * still be readable.
+ */
+export function pinnedRect(
+	style: BubbleStyle | undefined,
+	box: StageBox,
+	w: number,
+	h: number,
+	margin: number
+): {left: number; top: number} | undefined {
+	const minLeft = box.left + margin;
+	const maxLeft = box.left + box.width - w - margin;
+	const minTop = box.top + margin;
+	const maxTop = box.top + box.height - h - margin;
+
+	if (style?.at) {
+		return {
+			left: clamp(box.left + style.at.x * box.width - w / 2, minLeft, maxLeft),
+			top: clamp(box.top + style.at.y * box.height - h / 2, minTop, maxTop)
+		};
+	}
+
+	const place = style?.place;
+
+	if (!place || place === 'auto') {
+		return undefined;
+	}
+
+	const centreX = box.left + (box.width - w) / 2;
+	const centreY = box.top + (box.height - h) / 2;
+	const left = place.includes('left')
+		? minLeft
+		: place.includes('right')
+		? maxLeft
+		: centreX;
+	const top = place.startsWith('top')
+		? minTop
+		: place.startsWith('bottom')
+		? maxTop
+		: centreY;
+
+	return {left: clamp(left, minLeft, maxLeft), top: clamp(top, minTop, maxTop)};
+}
+
+/**
+ * Which edge of a pinned bubble faces the speaker, and where along it the tail goes.
+ *
+ * Returns nothing when the anchor is inside the bubble: a tail pointing at something the
+ * bubble is already covering is noise, and drawing it would put a spike over the text.
+ */
+export function tailToward(
+	anchor: Vec2,
+	rect: {left: number; top: number},
+	w: number,
+	h: number
+): {side: BubbleSide; offset: number} | undefined {
+	const dx = anchor.x - (rect.left + w / 2);
+	const dy = anchor.y - (rect.top + h / 2);
+
+	if (Math.abs(dx) < w / 2 && Math.abs(dy) < h / 2) {
+		return undefined;
+	}
+
+	// `side` names where the BUBBLE sits relative to the anchor, so an anchor below the
+	// bubble means the bubble is 'above' and the tail hangs off its bottom edge.
+	const side: BubbleSide =
+		Math.abs(dy) >= Math.abs(dx)
+			? dy > 0
+				? 'above'
+				: 'below'
+			: dx > 0
+			? 'left'
+			: 'right';
+	const horizontal = side === 'above' || side === 'below';
+	const span = horizontal ? w : h;
+	const lo = TAIL_HALF + TAIL_INSET;
+	const offset = clamp(
+		horizontal ? anchor.x - rect.left : anchor.y - rect.top,
+		lo,
+		Math.max(lo, span - lo)
+	);
+
+	return {offset, side};
 }
 
 // ---------------------------------------------------------------------------

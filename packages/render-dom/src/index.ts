@@ -16,7 +16,16 @@
 export {DomRenderer, ENTER_RISE} from './dom-renderer';
 export type {DomRendererOptions} from './dom-renderer';
 
-export {DialogueLayer, parseLinkText, placeBubble, preferredSide} from './dialogue';
+export {
+	DialogueLayer,
+	applyStyleAttributes,
+	mergeBubbleStyle,
+	parseLinkText,
+	pinnedRect,
+	placeBubble,
+	preferredSide,
+	tailToward
+} from './dialogue';
 export type {
 	BubblePlacement,
 	BubbleSide,

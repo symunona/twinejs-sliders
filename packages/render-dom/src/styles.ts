@@ -188,8 +188,10 @@ export const DIALOGUE_CSS = `
 	min-width: 64px;
 	padding: 10px 14px;
 	border-radius: 14px;
-	background: #fdfdfb;
-	color: #14161c;
+	background: var(--sliders-bubble-bg, #fdfdfb);
+	color: var(--sliders-bubble-color, #14161c);
+	font-family: var(--sliders-bubble-font, inherit);
+	font-size: var(--sliders-bubble-size, 1em);
 	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 	pointer-events: auto;
 	white-space: pre-wrap;
@@ -221,28 +223,28 @@ export const DIALOGUE_CSS = `
 	bottom: -11px;
 	border-left: 9px solid transparent;
 	border-right: 9px solid transparent;
-	border-top: 12px solid #fdfdfb;
+	border-top: 12px solid var(--sliders-bubble-bg, #fdfdfb);
 }
 
 .sliders-bubble[data-side='below'] .sliders-bubble-tail {
 	top: -11px;
 	border-left: 9px solid transparent;
 	border-right: 9px solid transparent;
-	border-bottom: 12px solid #fdfdfb;
+	border-bottom: 12px solid var(--sliders-bubble-bg, #fdfdfb);
 }
 
 .sliders-bubble[data-side='left'] .sliders-bubble-tail {
 	right: -11px;
 	border-top: 9px solid transparent;
 	border-bottom: 9px solid transparent;
-	border-left: 12px solid #fdfdfb;
+	border-left: 12px solid var(--sliders-bubble-bg, #fdfdfb);
 }
 
 .sliders-bubble[data-side='right'] .sliders-bubble-tail {
 	left: -11px;
 	border-top: 9px solid transparent;
 	border-bottom: 9px solid transparent;
-	border-right: 12px solid #fdfdfb;
+	border-right: 12px solid var(--sliders-bubble-bg, #fdfdfb);
 }
 
 .sliders-box {
@@ -252,8 +254,13 @@ export const DIALOGUE_CSS = `
 	bottom: 0;
 	box-sizing: border-box;
 	padding: 16px 22px;
-	background: linear-gradient(to top, rgba(4, 6, 12, 0.94), rgba(4, 6, 12, 0.72));
-	color: #eef1f7;
+	background: var(
+		--sliders-bubble-bg,
+		linear-gradient(to top, rgba(4, 6, 12, 0.94), rgba(4, 6, 12, 0.72))
+	);
+	color: var(--sliders-bubble-color, #eef1f7);
+	font-family: var(--sliders-bubble-font, inherit);
+	font-size: var(--sliders-bubble-size, 1em);
 	pointer-events: auto;
 	white-space: pre-wrap;
 	opacity: 1;
@@ -261,6 +268,81 @@ export const DIALOGUE_CSS = `
 }
 
 .sliders-box[data-entering='true'] { opacity: 0; }
+
+/* -------------------------------------------------------------------------
+   Presets — what \`as:\` names. A token with no rule here is not an error: it
+   lands on the element as data-style and the story's own stylesheet paints it.
+   ------------------------------------------------------------------------- */
+
+.sliders-bubble[data-style='bold'],
+.sliders-box[data-style='bold'] { font-weight: 700; }
+
+.sliders-bubble[data-style='italic'],
+.sliders-box[data-style='italic'] { font-style: italic; }
+
+.sliders-bubble[data-style='bold-italic'],
+.sliders-box[data-style='bold-italic'] {
+	font-style: italic;
+	font-weight: 700;
+}
+
+.sliders-bubble[data-style='whisper'],
+.sliders-box[data-style='whisper'] {
+	font-size: calc(var(--sliders-bubble-size, 1em) * 0.85);
+	font-style: italic;
+	opacity: 0.8;
+}
+
+/* The shout. A spiky outline needs a real polygon, so the burst is a clip-path on a
+   pseudo-element behind the text: clipping the bubble itself would cut the text off at
+   the spikes, and the padding here is what keeps words inside the star's body. */
+.sliders-bubble[data-style='yell'] {
+	background: none;
+	box-shadow: none;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	padding: 22px 30px;
+	text-transform: uppercase;
+}
+
+.sliders-bubble[data-style='yell']:before {
+	background: var(--sliders-bubble-bg, #fff6e8);
+	clip-path: polygon(
+		50% 0%, 58% 9%, 66% 3%, 70% 13%, 80% 9%, 81% 19%, 92% 18%, 88% 27%,
+		99% 30%, 91% 38%, 100% 46%, 90% 51%, 98% 60%, 87% 62%, 92% 72%, 81% 71%,
+		82% 81%, 71% 78%, 68% 88%, 59% 83%, 51% 92%, 44% 83%, 35% 89%, 31% 79%,
+		20% 82%, 21% 71%, 10% 72%, 15% 62%, 4% 60%, 12% 51%, 2% 46%, 11% 38%,
+		3% 30%, 14% 27%, 10% 18%, 21% 19%, 22% 9%, 32% 13%, 36% 3%, 44% 9%
+	);
+	content: '';
+	filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.35));
+	inset: -14px -18px;
+	position: absolute;
+	z-index: -1;
+}
+
+/* The spikes ARE the outline, so a tail pointing out of one reads as a stray triangle. */
+.sliders-bubble[data-style='yell'] .sliders-bubble-tail { display: none !important; }
+
+/* A narrator is not a speaker: a wide plate, no tail, no shoulder to hang off. */
+.sliders-bubble[data-style='narrator'] {
+	background: var(--sliders-bubble-bg, rgba(6, 8, 14, 0.88));
+	color: var(--sliders-bubble-color, #eef1f7);
+	font-style: italic;
+	max-width: 70%;
+	text-align: center;
+}
+
+.sliders-bubble[data-style='narrator'] .sliders-bubble-tail { display: none !important; }
+
+.sliders-box[data-style='narrator'] { text-align: center; }
+
+/* Pinned by at:/place:, so the bar is a plate rather than a full-width band. */
+.sliders-box[data-pinned='true'] {
+	border-radius: 12px;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+	right: auto;
+}
 
 .sliders-link {
 	color: #4a3bd6;

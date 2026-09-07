@@ -172,17 +172,106 @@ export type EntityPatchBody = Partial<
 	of?: EntityId | null;
 };
 
+// ---------------------------------------------------------------------------
+// Bubble styling (spec 02, "Speech styles")
+// ---------------------------------------------------------------------------
+
+/**
+ * The styles the renderer ships CSS for. A story may use any other token as well — it
+ * reaches the DOM as `data-style` and the story's own stylesheet paints it — so this list
+ * is what autocomplete offers and what the editor stops warning about, not a closed set.
+ */
+export const BUBBLE_PRESETS = [
+	'normal',
+	'bold',
+	'italic',
+	'bold-italic',
+	'yell',
+	'whisper',
+	'narrator'
+] as const;
+
+export type BubblePreset = (typeof BUBBLE_PRESETS)[number];
+
+/**
+ * Where a bubble sits when it is not hanging off its speaker.
+ *
+ * `auto` is the default and the only one that follows a character: the bubble hangs off
+ * their `bubble` anchor and leans the way the anchor lies from their mouth. Every other
+ * value pins the bubble to a part of the stage box, which is what a narrator or a
+ * disembodied voice wants — the speaker need not be on stage at all.
+ */
+export const BUBBLE_PLACES = [
+	'auto',
+	'top',
+	'bottom',
+	'left',
+	'right',
+	'top-left',
+	'top-right',
+	'bottom-left',
+	'bottom-right',
+	'centre'
+] as const;
+
+export type BubblePlace = (typeof BUBBLE_PLACES)[number];
+
+/** Keys a `bubble:` map accepts. Exported so the editor can hint and document them. */
+export const BUBBLE_KEYS = [
+	'as',
+	'place',
+	'at',
+	'w',
+	'bg',
+	'color',
+	'font',
+	'size'
+] as const;
+
+/**
+ * How one line is painted, and where.
+ *
+ * Three tiers, and a scene only ever writes the ones it wants: `as` names a look shared by
+ * the whole story, `place` moves the bubble to a part of the stage, and `at`/`w` are what
+ * dragging and resizing the bubble in the editor write down. The colour keys are the
+ * escape hatch for a one-off — they become CSS custom properties on the bubble, so they
+ * compose with a preset rather than replacing it.
+ */
+export interface BubbleStyle {
+	/** Preset name, or any token the story's stylesheet defines. */
+	as?: string;
+	place?: BubblePlace;
+	/**
+	 * Explicit position: the bubble's CENTRE, in fractions of the stage box measured from
+	 * its top left. Wins over `place`.
+	 */
+	at?: Frac2;
+	/** Width as a fraction of the stage box's width. */
+	w?: number;
+	/** Background colour. Any CSS colour. */
+	bg?: string;
+	/** Text colour. */
+	color?: string;
+	/** Font family, e.g. `Georgia, serif`. */
+	font?: string;
+	/** Text size multiplier. 1 is the stage's normal size. */
+	size?: number;
+}
+
 export interface SayBeat extends BeatBase {
 	kind: 'say';
 	who: EntityId;
 	text: string;
 	/** Stage mutations applied when this beat runs. */
 	patch?: EntityPatchBody;
+	/** Merged over the speaking character's own `bubble:` defaults. */
+	style?: BubbleStyle;
 }
 
 export interface BoxBeat extends BeatBase {
 	kind: 'box';
 	text: string;
+	style?: BubbleStyle;
 }
 
 export interface WaitBeat extends BeatBase {
@@ -403,6 +492,11 @@ export interface CharacterFrame {
 export interface Character {
 	id: string;
 	name: string;
+	/**
+	 * This character's default look and placement, so a narrator is written once here
+	 * rather than on every line they speak. A beat's own `as:`/`bubble:` merges over it.
+	 */
+	bubble?: BubbleStyle;
 	size: {w: number; h: number};
 	/** Fraction of the frame. Default {x:0.5,y:1} = feet, bottom centre. */
 	origin: Frac2;
