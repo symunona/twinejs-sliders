@@ -192,3 +192,40 @@ describe('sceneHintContext()', () => {
 		});
 	});
 });
+
+describe('beat completions', () => {
+	const block = [
+		'[scene]',
+		'cast:',
+		'  mira: {at: -0.4}',
+		'  joren: {at: 0.3}',
+		'beats:',
+		'  - '
+	];
+
+	it('offers the scene cast for a beat key', () => {
+		const context = sceneHintContext(block, 0, block.length, {
+			ch: 4,
+			line: 5
+		});
+
+		expect(context?.slot).toEqual({kind: 'speaker'});
+		expect(context?.scaffold).toBe(true);
+	});
+
+	it('offers styles after as:', () => {
+		const lines = [...block.slice(0, 5), '  - mira: {say: "Hi", as: '];
+
+		expect(
+			sceneHintContext(lines, 0, lines.length, {ch: 26, line: 5})?.slot
+		).toEqual({kind: 'style'});
+	});
+
+	it('offers places after place:', () => {
+		const lines = [...block.slice(0, 5), '  - mira: {say: "Hi", bubble: {place: '];
+
+		expect(
+			sceneHintContext(lines, 0, lines.length, {ch: 38, line: 5})?.slot
+		).toEqual({kind: 'place'});
+	});
+});

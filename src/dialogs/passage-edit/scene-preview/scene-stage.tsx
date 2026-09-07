@@ -24,6 +24,13 @@ export interface SceneStageProps {
 	 * passing an inline arrow function cannot cause a remount — see above.
 	 */
 	onRenderer?: (renderer: DomRenderer | undefined) => void;
+	/**
+	 * The story's stylesheet, injected next to the stage so a bubble token the story paints
+	 * itself (`as: ghostly`) previews the way it will play. Scoped to this element rather
+	 * than the document: the story's CSS is written against the player's page, and letting
+	 * a `body {}` rule out of the stage would restyle the editor.
+	 */
+	stylesheet?: string;
 }
 
 /**
@@ -38,10 +45,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	beat,
 	onLink,
 	onRenderer,
-	stage
+	stage,
+	stylesheet
 }) => {
 	const hostRef = React.useRef<HTMLDivElement>(null);
 	const rendererRef = React.useRef<DomRenderer>();
+	const styleRef = React.useRef<HTMLStyleElement>();
 	const dialogueRef = React.useRef<DialogueLayer>();
 	const prevStageRef = React.useRef<Stage>();
 	// Held in refs so remounting never depends on their identity.
@@ -119,6 +128,37 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		prevStageRef.current = stage;
 		void renderer.apply(stage, transitions);
 	}, [animate, ready, stage]);
+
+	/**
+	 * The story's CSS, as one style element inside the stage.
+	 *
+	 * Rewritten in place rather than remounted, so editing the stylesheet does not restart
+	 * the transitions running on the stage under it.
+	 */
+	React.useEffect(() => {
+		const host = hostRef.current;
+
+		if (!host) {
+			return;
+		}
+
+		if (!stylesheet?.trim()) {
+			styleRef.current?.remove();
+			styleRef.current = undefined;
+
+			return;
+		}
+
+		if (!styleRef.current) {
+			styleRef.current = document.createElement('style');
+			styleRef.current.dataset.slidersStoryStyles = 'true';
+			host.appendChild(styleRef.current);
+		}
+
+		styleRef.current.textContent = stylesheet;
+	}, [stylesheet]);
+
+	React.useEffect(() => () => styleRef.current?.remove(), []);
 
 	React.useEffect(() => {
 		const dialogue = dialogueRef.current;

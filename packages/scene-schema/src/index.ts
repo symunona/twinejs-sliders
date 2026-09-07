@@ -7,9 +7,11 @@
 
 export {
 	BEAT_COMMAND_KEYS,
+	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	SAY_KEYS,
 	TOP_LEVEL_KEYS,
 	emptyScene,
 	parseScene

@@ -16,12 +16,19 @@ import {useTranslation} from 'react-i18next';
 import {Tab, TabList, TabPanel, Tabs} from 'react-tabs';
 import {
 	BEAT_COMMAND_KEYS,
+	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	SAY_KEYS,
 	TOP_LEVEL_KEYS
 } from '@sliders/scene-schema';
-import {LAYERS} from '@sliders/scene-types';
+import {
+	BUBBLE_KEYS,
+	BUBBLE_PLACES,
+	BUBBLE_PRESETS,
+	LAYERS
+} from '@sliders/scene-types';
 import {DEFAULT_DURATIONS} from '@sliders/scene-core';
 import {DialogCard} from '../../components/container/dialog-card';
 import {DialogComponentProps} from '../dialogs.types';
@@ -71,6 +78,34 @@ const BEAT_HELP: KeyHelp<typeof BEAT_COMMAND_KEYS> = {
 	wait: 'Pause, in seconds.'
 };
 
+const SAY_HELP: KeyHelp<typeof SAY_KEYS> = {
+	as: 'The bubble style, by name. Shorthand for bubble: {as: …}.',
+	bubble: 'Bubble style and placement, as a map. See the keys below.',
+	say: 'What this entity says. Everything else in the beat is a stage change.'
+};
+
+const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
+	as: 'The style, by name. Same tokens a bubble uses.',
+	bubble: 'Style and placement, as a map.',
+	text: 'The narration itself. box: "…" is the short way of writing this.'
+};
+
+const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
+	as: `Style token. Ships with: ${BUBBLE_PRESETS.join(
+		', '
+	)}. Any other name is yours to paint in the story stylesheet.`,
+	at:
+		'[x, y] — the bubble\'s centre, as fractions of the stage box from its top left. Wins over place:. This is what dragging a bubble in the preview writes.',
+	bg: 'Background colour. Any CSS colour.',
+	color: 'Text colour.',
+	font: 'Font family, e.g. Georgia, serif.',
+	place: `Where the bubble sits: ${BUBBLE_PLACES.join(
+		', '
+	)}. auto hangs it off the speaker.`,
+	size: 'Text size multiplier. 1 is the stage default.',
+	w: 'Width, as a fraction of the stage width. Resizing a bubble in the preview writes this.'
+};
+
 const LINK_HELP: KeyHelp<typeof LINK_KEYS> = {
 	icon: 'Icon name shown on the choice.',
 	if: 'Only offer this choice when the condition holds. See the warning below.',
@@ -100,6 +135,13 @@ const KeyTable: React.FC<{
 		</tbody>
 	</table>
 );
+
+const BUBBLE_SAMPLE = `beats:
+  - mira: {say: "Get out.", as: bold-italic}
+  - joren: {say: "MOVE!", as: yell}
+  - narrator: {say: "The lamps go out.", as: narrator, bubble: {place: top, w: 0.6}}
+  - mira: {say: "Over here.", bubble: {at: [0.7, 0.25], w: 0.3}}
+  - box: {text: "Somewhere, a door.", as: whisper}`;
 
 const CONVERSATION_SAMPLE = `[scene]
 id: tavern-night              # also the backdrop, with no bg: line
@@ -301,6 +343,24 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 								))}
 							</tbody>
 						</table>
+						<h3>Speaking</h3>
+						<KeyTable keys={SAY_KEYS} help={SAY_HELP} />
+						<h3>Narration, the long way</h3>
+						<p>
+							<code>box: &quot;text&quot;</code> is the short form. Written as a
+							map it takes a style too.
+						</p>
+						<KeyTable keys={BOX_KEYS} help={BOX_HELP} />
+						<h3>Bubble style and placement</h3>
+						<p>
+							A character can carry its own defaults in the character editor; a
+							beat&apos;s own keys merge over them. Styles the renderer does not
+							ship CSS for still reach the page as{' '}
+							<code>data-style=&quot;name&quot;</code>, so the story stylesheet
+							can paint anything.
+						</p>
+						<KeyTable keys={BUBBLE_KEYS} help={BUBBLE_HELP} />
+						<Sample>{BUBBLE_SAMPLE}</Sample>
 						<h3>A conversation</h3>
 						<Sample>{CONVERSATION_SAMPLE}</Sample>
 					</TabPanel>

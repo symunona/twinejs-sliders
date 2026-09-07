@@ -119,6 +119,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					onOpenPassage={source?.onOpenPassage ?? handleOpenPassage}
 					parse={parse}
 					passages={story.passages}
+					stylesheet={story.stylesheet}
 					text={source?.text ?? fallback?.text ?? ''}
 				/>
 			</div>

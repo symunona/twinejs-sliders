@@ -16,7 +16,13 @@ import CodeMirror, {Editor} from 'codemirror';
 import * as React from 'react';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
-import {AssetMeta, Character, LAYERS} from '@sliders/scene-types';
+import {
+	AssetMeta,
+	BUBBLE_PLACES,
+	BUBBLE_PRESETS,
+	Character,
+	LAYERS
+} from '@sliders/scene-types';
 import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-context';
 import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
 
@@ -27,6 +33,9 @@ import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
  */
 export const FX_IDS = ['cold', 'dark', 'flash', 'rain', 'warm'];
 
+/** Beat keys that are commands rather than a speaker, offered after the cast. */
+const BEAT_COMMAND_NAMES = ['box', 'wait', 'fx', 'mark'];
+
 /** What the cursor is sitting in, and therefore what to offer. */
 export type HintSlot =
 	| {kind: 'bg'}
@@ -36,7 +45,13 @@ export type HintSlot =
 	| {kind: 'entities'}
 	| {kind: 'frame'; entity: string}
 	| {kind: 'layer'}
-	| {kind: 'fx'};
+	| {kind: 'fx'}
+	/** A beat's own key: who speaks this line. */
+	| {kind: 'speaker'}
+	/** `as:` — a bubble style token. */
+	| {kind: 'style'}
+	/** `place:` — where the bubble sits. */
+	| {kind: 'place'};
 
 export interface SceneHintContext {
 	slot: HintSlot;
@@ -342,6 +357,12 @@ export function sceneHintContext(
 			case 'to':
 				return found({kind: 'passage'});
 
+			case 'as':
+				return found({kind: 'style'});
+
+			case 'place':
+				return found({kind: 'place'});
+
 			case 'ref': {
 				// `ref:` names a character under `cast:` and an asset under
 				// `props:`, so the block the entity lives in decides.
@@ -382,6 +403,14 @@ export function sceneHintContext(
 		case 'fx':
 			return found({kind: 'fx'});
 
+		// A beat's key is its speaker, so the cast on stage is what belongs here — but only
+		// in key position. Beat text is prose, and a `[[link]]` written inside it must
+		// still be the link completion's business, not a list of characters.
+		case 'beats':
+			return /^\s*(?:-\s*)?$/.test(line.slice(0, start))
+				? found({kind: 'speaker'}, true)
+				: undefined;
+
 		default:
 			return undefined;
 	}
@@ -419,7 +448,9 @@ function namesForSlot(
 	all: AssetMeta[],
 	characters: Character[],
 	refs: Map<string, string>,
-	passages: string[]
+	passages: string[],
+	/** Entity ids this scene declares, in the order it declares them. */
+	sceneIds: string[] = []
 ): string[] {
 	switch (slot.kind) {
 		case 'bg':
@@ -444,6 +475,32 @@ function namesForSlot(
 
 		case 'layer':
 			return [...LAYERS];
+
+		/**
+		 * Whoever is on stage, then the rest of the cast, then the commands.
+		 *
+		 * On-stage ids lead because a beat almost always belongs to someone already in the
+		 * scene; the wider cast follows for the narrator or the voice from off stage, who
+		 * are spoken by characters that were never given an entity.
+		 */
+		case 'speaker': {
+			const known = new Set(sceneIds);
+
+			return [
+				...sceneIds,
+				...characters
+					.map(character => character.id)
+					.filter(id => !known.has(id))
+					.sort(),
+				...BEAT_COMMAND_NAMES
+			];
+		}
+
+		case 'style':
+			return [...BUBBLE_PRESETS];
+
+		case 'place':
+			return [...BUBBLE_PLACES];
 
 		case 'fx':
 			return [...FX_IDS];
@@ -487,6 +544,56 @@ function entityRefs(blockText: string): Map<string, string> {
  * show-hint hands the whole insertion over once an entry carries a `hint`, and
  * still signals `pick` afterwards, so the recently-used list keeps working.
  */
+/**
+ * What a picked beat key gets written as, with the part to type over selected.
+ *
+ * A speaker wants empty quotes to type the line into; the commands each want their own
+ * kind of value, and `wait: 1` with the 1 selected is faster to correct than a bare colon
+ * to complete by hand.
+ */
+const BEAT_SCAFFOLDS: Record<string, {prefix: string; value: string; suffix: string}> = {
+	box: {prefix: ': "', suffix: '"', value: ''},
+	fx: {prefix: ': ', suffix: '', value: 'rain'},
+	mark: {prefix: ': ', suffix: '', value: 'here'},
+	wait: {prefix: ': ', suffix: '', value: '1'}
+};
+
+const SAY_SCAFFOLD = {prefix: ': "', suffix: '"', value: ''};
+
+/** Writes `name: …` and selects the value, the way `insertEntity` does for a cast entry. */
+function insertBeat(name: string) {
+	const shape = BEAT_SCAFFOLDS[name] ?? SAY_SCAFFOLD;
+
+	return (
+		cm: Editor,
+		data: {from: CodeMirror.Position; to: CodeMirror.Position},
+		completion: {from?: CodeMirror.Position; to?: CodeMirror.Position}
+	) => {
+		const from = completion.from ?? data.from;
+		const to = completion.to ?? data.to;
+
+		cm.replaceRange(
+			`${name}${shape.prefix}${shape.value}${shape.suffix}`,
+			from,
+			to,
+			'complete'
+		);
+
+		const valueStart = from.ch + name.length + shape.prefix.length;
+
+		cm.setSelection(
+			{ch: valueStart, line: from.line},
+			{ch: valueStart + shape.value.length, line: from.line}
+		);
+	};
+}
+
+function beatText(name: string): string {
+	const shape = BEAT_SCAFFOLDS[name] ?? SAY_SCAFFOLD;
+
+	return `${name}${shape.prefix}${shape.value}${shape.suffix}`;
+}
+
 function insertEntity(name: string) {
 	return (
 		cm: Editor,
@@ -551,12 +658,14 @@ export function sceneCompletion(
 
 	const {end, needsSpace, scaffold, slot, start, suffix, typed} = context;
 	const candidate = typed.toLowerCase();
+	const refs = block ? entityRefs(block.text) : new Map<string, string>();
 	const all = namesForSlot(
 		slot,
 		library.all,
 		library.characters,
-		block ? entityRefs(block.text) : new Map(),
-		passages
+		refs,
+		passages,
+		[...refs.keys()]
 	);
 	const matched = all.filter(name => name.toLowerCase().includes(candidate));
 	// The whole name under the cursor, not just the part before it.
@@ -580,9 +689,15 @@ export function sceneCompletion(
 			// The name is what shows and what gets remembered; `text` is only
 			// what lands in the document, scaffold and spaces and all.
 			displayText: name,
-			hint: scaffold ? insertEntity(name) : undefined,
+			hint: scaffold
+				? slot.kind === 'speaker'
+					? insertBeat(name)
+					: insertEntity(name)
+				: undefined,
 			text: scaffold
-				? `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
+				? slot.kind === 'speaker'
+					? beatText(name)
+					: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
 				: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
 		}))
 	};

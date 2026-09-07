@@ -400,6 +400,14 @@ export interface ParseResult {
 	 * the story, and only the editor can see those.
 	 */
 	linkIfSpans?: Record<string, SceneSpan>;
+	/**
+	 * Where each beat was written, index-aligned with `scene.beats`.
+	 *
+	 * The editor highlights the line the preview is standing on, the way a debugger
+	 * highlights the statement it is stopped at — which needs the beat's own range, and a
+	 * beat can be a nested block several lines long.
+	 */
+	beatSpans?: SceneSpan[];
 }
 
 /** A place in the scene text. 1-indexed, same as `SceneError`. */

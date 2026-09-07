@@ -83,6 +83,13 @@ Marks in the passage editor itself. The line tint says where, the underline says
 which text, and the tooltip below says what.
 */
 
+/* The beat the preview is stopped on. Warm rather than loud: it follows the scrubber and
+   would be a strobe at anything stronger. */
+.CodeMirror .sliders-active-beat {
+	background: rgba(47, 129, 247, 0.14);
+	box-shadow: inset 2px 0 0 rgba(47, 129, 247, 0.8);
+}
+
 .CodeMirror .sliders-error-line {
 	background: rgba(176, 0, 32, 0.08);
 }

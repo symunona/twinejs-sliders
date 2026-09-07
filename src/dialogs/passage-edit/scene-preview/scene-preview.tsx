@@ -45,6 +45,7 @@ import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
+import {useActiveBeatMark} from './use-active-beat-mark';
 import {useStageSelection} from './use-stage-selection';
 import {
 	applyCameraPatch,
@@ -81,6 +82,12 @@ export interface ScenePreviewProps {
 	parse: SceneParse;
 	/** The whole story. Needed only so `from:` can resolve across passages. */
 	passages?: IndexedPassage[];
+	/**
+	 * The story's own stylesheet, so a bubble styled `as: ghostly` looks the same here as
+	 * it will in the player — the published page carries this CSS, and without it the
+	 * preview shows every custom token as a plain bubble.
+	 */
+	stylesheet?: string;
 	/**
 	 * The passage's CodeMirror. Every visual edit is a text edit through this document and
 	 * never around it, so Twine's undo works for free (spec 07). Absent when the author
@@ -166,6 +173,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	onOpenPassage,
 	parse,
 	passages,
+	stylesheet,
 	text
 }) => {
 	const {t} = useTranslation();
@@ -638,6 +646,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * reuses that path rather than inventing a second one the gestures would have to learn.
 	 */
 	const editable = !!editor && !locked;
+
+	// The beat on screen, lit up in the text the author is typing in.
+	useActiveBeatMark(
+		editor ?? undefined,
+		beat > 0 ? parse.result?.beatSpans?.[beat - 1] : undefined,
+		block?.lineOffset ?? 0
+	);
 	/** The beat a bubble gesture writes to: the scrubber position, less the S0 stage. */
 	const bubbleBeat =
 		editable && (shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
@@ -989,6 +1004,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onLink={handleLink}
 				onRenderer={handleRenderer}
 				stage={stage}
+				stylesheet={stylesheet}
 			/>
 			{/* Over the stage rather than above it. A row that appeared with the
 			    selection would resize the stage under the pointer, and the whole scene

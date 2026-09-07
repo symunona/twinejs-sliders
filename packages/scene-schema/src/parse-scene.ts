@@ -106,6 +106,8 @@ interface Ctx {
 	 * the target spans are: a condition names story variables, and the parser has no story.
 	 */
 	linkIfNodes: Map<string, unknown>;
+	/** Where each beat was written, in `scene.beats` order. Reported as `beatSpans`. */
+	beatNodes: unknown[];
 	/** `mira: ~` nodes, legal only once we know whether `from:` was set. */
 	pendingRemovals: {id: string; node: unknown}[];
 	/** `of:` edges declared in THIS block, with the node to point an error at. */
@@ -989,6 +991,9 @@ function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 
 		if (beat) {
 			scene.beats.push(beat);
+			// The whole `- …` item, not just its value: the highlight covers the beat as
+			// the author sees it, dash and all.
+			ctx.beatNodes.push(item);
 		}
 	}
 }
@@ -1323,6 +1328,7 @@ export function parseScene(text: string): ParseResult {
 	const scene = emptyScene();
 	const lineCounter = new LineCounter();
 	const ctx: Ctx = {
+		beatNodes: [],
 		errors: [],
 		inlineLinks: new Map(),
 		linkIfNodes: new Map(),
@@ -1610,5 +1616,11 @@ export function parseScene(text: string): ParseResult {
 		}
 	}
 
-	return {errors: ctx.errors, linkIfSpans, linkSpans, scene};
+	return {
+		beatSpans: ctx.beatNodes.map(node => spanOf(ctx, node)),
+		errors: ctx.errors,
+		linkIfSpans,
+		linkSpans,
+		scene
+	};
 }

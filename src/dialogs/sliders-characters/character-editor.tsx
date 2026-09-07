@@ -2,6 +2,10 @@ import {anchorNames, slugify} from '@sliders/asset-store';
 import {
 	AssetId,
 	AssetMeta,
+	BUBBLE_PLACES,
+	BUBBLE_PRESETS,
+	BubblePlace,
+	BubbleStyle,
 	Character,
 	CharacterFrame,
 	DEFAULT_FIT,
@@ -22,6 +26,7 @@ import {CardContent} from '../../components/container/card';
 import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
+import {TextSelect} from '../../components/control/text-select';
 import {useCommand} from '../../hotkeys';
 import {AdjustSlider} from '../asset-editor/adjust-slider';
 import {FrameList} from './frame-list';
@@ -42,6 +47,25 @@ function parseSize(value: string, fallback: number): number {
 	const parsed = Number.parseInt(value, 10);
 
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * One key of a character's bubble defaults, with the whole `bubble:` dropped once nothing
+ * is left in it — an empty map in the manifest would say "this character has opinions"
+ * when it has none.
+ */
+function withBubble(character: Character, patch: Partial<BubbleStyle>): Character {
+	const bubble: BubbleStyle = {...character.bubble, ...patch};
+
+	for (const key of Object.keys(bubble) as (keyof BubbleStyle)[]) {
+		if (bubble[key] === undefined) {
+			delete bubble[key];
+		}
+	}
+
+	return Object.keys(bubble).length > 0
+		? {...character, bubble}
+		: {...character, bubble: undefined};
 }
 
 export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
@@ -361,6 +385,38 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					>
 						{t('dialogs.slidersCharacters.name')}
 					</TextInput>
+					{/* Where this character's lines are painted and parked, unless a beat says
+					    otherwise. A narrator is written once here rather than on every line
+					    they speak. */}
+					<TextSelect
+						onChange={event =>
+							onChange(withBubble(character, {as: event.target.value || undefined}))
+						}
+						options={[
+							{label: t('dialogs.slidersCharacters.bubbleStyleDefault'), value: ''},
+							...BUBBLE_PRESETS.map(preset => ({label: preset, value: preset}))
+						]}
+						orientation="vertical"
+						value={character.bubble?.as ?? ''}
+					>
+						{t('dialogs.slidersCharacters.bubbleStyle')}
+					</TextSelect>
+					<TextSelect
+						onChange={event =>
+							onChange(
+								withBubble(character, {
+									place: (event.target.value || undefined) as
+										| BubblePlace
+										| undefined
+								})
+							)
+						}
+						options={BUBBLE_PLACES.map(place => ({label: place, value: place}))}
+						orientation="vertical"
+						value={character.bubble?.place ?? 'auto'}
+					>
+						{t('dialogs.slidersCharacters.bubblePlace')}
+					</TextSelect>
 					<TextInput
 						onChange={event =>
 							onChange({
