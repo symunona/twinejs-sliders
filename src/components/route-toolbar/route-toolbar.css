@@ -40,6 +40,33 @@
 	height: var(--control-height);
 }
 
+/* The toolbar is exactly two control heights tall, and the rest of the app
+   (main content, dialogs, the fuzzy finder) positions itself against that
+   constant. So the second row must stay one row: a `.button-bar` is
+   `flex-wrap: wrap` by default, and a tab with more buttons than fit -- Story,
+   in a story -- wrapped onto a second line, which centred an 80px bar in a 40px
+   row and laid its first button over the tabs above, swallowing their clicks.
+
+   Unwrapped, the buttons shrink to fit instead, wrapping their own labels. If
+   even that isn't enough the row scrolls sideways; its scrollbar is hidden
+   because it would eat most of a 40px row, and the row still scrolls with the
+   wheel and when a button offscreen takes focus. */
+
+.route-toolbar .route-toolbar-panels {
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+}
+
+.route-toolbar .route-toolbar-panels::-webkit-scrollbar {
+	display: none;
+}
+
+.route-toolbar .route-toolbar-panels .button-bar {
+	flex-wrap: nowrap;
+}
+
 .route-toolbar .route-toolbar-status-controls {
 	align-items: center;
 	display: flex;
