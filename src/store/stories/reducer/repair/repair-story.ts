@@ -2,7 +2,7 @@ import {v4 as uuid} from '@lukeed/uuid';
 import {satisfies} from 'semver';
 import {Story} from '../../stories.types';
 import {storyDefaults} from '../../defaults';
-import {StoryFormat} from '../../../story-formats';
+import {StoryFormat, newestFormatNamed} from '../../../story-formats';
 import {repairPassage} from './repair-passage';
 
 function logRepair(
@@ -95,25 +95,32 @@ export function repairStory(
 	) {
 		// If the story has a nonexistent story format, try to match it to one that
 		// does, using semver as a guide.
+		//
+		// Failing that, take the newest format with the same NAME, which is what the
+		// preferences repair does. Caret ranges are minor-locked below 1.0.0, so
+		// `^0.1.0` does not admit `0.2.0`: without this fallback, publishing 0.2.0 of a
+		// 0.x format silently moves every story written in it onto whatever the user's
+		// default format happens to be — a different language, in the same passages.
 
-		const repairFormat = allFormats.find(
-			format =>
-				format.name === story.storyFormat &&
-				satisfies(format.version, '^' + story.storyFormatVersion)
-		);
+		const repairFormat =
+			allFormats.find(
+				format =>
+					format.name === story.storyFormat &&
+					satisfies(format.version, '^' + story.storyFormatVersion)
+			) ?? newestFormatNamed(allFormats, story.storyFormat);
 
 		if (repairFormat) {
 			logRepair(
 				story,
 				'storyFormat',
 				repairFormat.name,
-				'no match in existing formats but found one that satisfies semver'
+				'no match in existing formats, using another version of the same format'
 			);
 			logRepair(
 				story,
 				'storyFormatVersion',
 				repairFormat.version,
-				'no match in existing formats but found one that satisfies semver'
+				'no match in existing formats, using another version of the same format'
 			);
 			repairs.storyFormat = repairFormat.name;
 			repairs.storyFormatVersion = repairFormat.version;

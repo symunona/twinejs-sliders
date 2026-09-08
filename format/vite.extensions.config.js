@@ -1,3 +1,4 @@
+import {resolve} from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(async () => ({
@@ -21,6 +22,17 @@ export default defineConfig(async () => ({
 				}
 			}
 		}
+	},
+	resolve: {
+		alias: [
+			// Same aliases the runtime build uses: the scene key lists the editor mode
+			// highlights against are the parser's own, so a schema change reaches the
+			// editor on the same commit.
+			{
+				find: /^@sliders\/(.*)$/,
+				replacement: resolve(process.cwd(), '../packages/$1/src/index.ts')
+			}
+		]
 	},
 	root: './src/twine-extensions',
 	server: {

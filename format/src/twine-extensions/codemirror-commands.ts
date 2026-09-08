@@ -1,4 +1,5 @@
 import {Editor} from 'codemirror';
+import {sceneCommands, sceneInsertText} from './sliders/scene-commands';
 
 function makeInsertTextCommands(commands: Record<string, string>) {
 	return Object.keys(commands).reduce(
@@ -40,6 +41,7 @@ function makeWrapTextCommands(
 }
 
 export const commands = {
+  ...sceneCommands,
   ...makeWrapTextCommands({
     boldText: {
       matcher: /^(?:__|\*\*)(.+)(?:__|\*\*)$/,
@@ -59,6 +61,7 @@ export const commands = {
     }
   }),
   ...makeInsertTextCommands({
+    ...sceneInsertText,
     insertAfter: '\n[after 1 second]\nText\n\n[continued]',
     insertAppend: '\n[append]\n',
     insertBlockquote: '\n<blockquote>Text</blockquote>\n',

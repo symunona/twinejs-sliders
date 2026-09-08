@@ -7,9 +7,9 @@
  * a `from:` patch pointing at it.
  *
  * localStorage is the channel because format extensions cannot see anything of
- * Twine's — they are handed a CodeMirror instance and nothing else. THE READER
- * IS IN ANOTHER REPO: sliders-format/src/twine-extensions/last-scene.ts. Both
- * sides must agree on the key and the record shape below.
+ * Twine's — they are handed a CodeMirror instance and nothing else. The reader is
+ * `format/src/twine-extensions/sliders/last-scene.ts`; both sides must agree on
+ * the keys and the record shape below.
  */
 
 import * as React from 'react';

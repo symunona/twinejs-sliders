@@ -9,8 +9,8 @@
  * is still the only place an author learns what a link may carry.
  *
  * Everything here is a pure string rewrite of the text about to be inserted. The command
- * itself lives in the story format, in another repo (see `use-last-scene.ts`), and hands
- * us nothing but the text.
+ * itself lives in the story format (`format/src/twine-extensions/sliders/skeletons.ts`)
+ * and hands us nothing but the text.
  */
 
 /** A link the author already wrote: what to call it, and where it goes. */

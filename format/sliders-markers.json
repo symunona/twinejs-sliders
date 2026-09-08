@@ -1,0 +1,21 @@
+{
+  "comment": "Strings that must survive into a built format.js. See format/README.md, 'Do not lose the Sliders half'. Every entry names the feature it protects; deleting one is a deliberate act that belongs in the same commit as the removal.",
+  "hydrate": [
+    {"feature": "Scene toolbar menu", "find": "Insert Scene"},
+    {"feature": "Scene menu label the editor hangs Scene Help on", "find": "\"Scene\""},
+    {"feature": "Insert Scene command", "find": "insertScene"},
+    {"feature": "Insert Last Scene command", "find": "insertLastScene"},
+    {"feature": "Overlay on Last Scene command", "find": "insertLastSceneOverlay"},
+    {"feature": "Cast and Props snippet", "find": "insertSceneCast"},
+    {"feature": "Beats snippet", "find": "insertSceneBeats"},
+    {"feature": "Links snippet", "find": "insertSceneLinks"},
+    {"feature": "Last-scene handoff written by the editor", "find": "sliders-last-scene"},
+    {"feature": "Scene block syntax highlighting", "find": "[scene]"},
+    {"feature": "Scene keys highlighted from the schema", "find": "camera"},
+    {"feature": "Story-map arrows from a scene links: block", "find": "links"}
+  ],
+  "source": [
+    {"feature": "The <sliders-stage> element", "find": "sliders-stage"},
+    {"feature": "The [scene] modifier", "find": "scene"}
+  ]
+}

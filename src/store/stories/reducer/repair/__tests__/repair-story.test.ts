@@ -115,8 +115,46 @@ describe('repairStory', () => {
 			});
 		});
 
-		it('assigns the default format if none match semver', () => {
+		it('assigns the newest version of the same format if none match semver', () => {
 			allFormats[1].version = '2.0.0';
+			story.storyFormatVersion = '1.1.0';
+
+			expect(repairStory(story, [story], allFormats, defaultFormat)).toEqual({
+				...story,
+				storyFormatVersion: '2.0.0'
+			});
+		});
+
+		it('assigns the newest version of the same format across a 0.x minor', () => {
+			// `^0.1.0` does not admit `0.2.0`, so semver alone would move the story onto
+			// the default format--a different format language in the same passages.
+			allFormats[1].version = '0.2.0';
+			story.storyFormatVersion = '0.1.0';
+
+			expect(repairStory(story, [story], allFormats, defaultFormat)).toEqual({
+				...story,
+				storyFormatVersion: '0.2.0'
+			});
+		});
+
+		it('prefers the version semver matches over a newer one', () => {
+			const older = fakeUnloadedStoryFormat({
+				name: allFormats[1].name,
+				version: '1.2.0'
+			});
+
+			allFormats[1].version = '2.0.0';
+			allFormats.push(older);
+			story.storyFormatVersion = '1.1.0';
+
+			expect(repairStory(story, [story], allFormats, defaultFormat)).toEqual({
+				...story,
+				storyFormatVersion: '1.2.0'
+			});
+		});
+
+		it('assigns the default format when no version of it is installed', () => {
+			story.storyFormat = 'not-installed';
 			story.storyFormatVersion = '1.1.0';
 
 			expect(repairStory(story, [story], allFormats, defaultFormat)).toEqual({

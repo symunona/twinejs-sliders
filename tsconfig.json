@@ -21,5 +21,5 @@
 			"@sliders/*": ["packages/*/src"]
 		}
 	},
-	"include": ["src", "packages/*/src"]
+	"include": ["src", "packages/*/src", "format/src/twine-extensions"]
 }

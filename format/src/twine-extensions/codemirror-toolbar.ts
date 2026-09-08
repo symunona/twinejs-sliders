@@ -8,6 +8,8 @@ import brushIcon from '../../node_modules/@tabler/icons/icons/brush.svg?raw';
 import frameIcon from '../../node_modules/@tabler/icons/icons/frame.svg?raw';
 import handClickIcon from '../../node_modules/@tabler/icons/icons/hand-click.svg?raw';
 import linkIcon from '../../node_modules/@tabler/icons/icons/link.svg?raw';
+import masksTheaterIcon from '../../node_modules/@tabler/icons/icons/masks-theater.svg?raw';
+import {sceneMenu} from './sliders/scene-toolbar';
 
 /**
  * @see https://github.com/klembot/twinejs/blob/develop/EXTENDING.md#codemirror-toolbar
@@ -37,6 +39,7 @@ export function toolbar(
   const hasSelection = editor.getDoc().somethingSelected();
 
   return [
+    sceneMenu(iconSource(masksTheaterIcon, foregroundColor), hasSelection),
     {
       type: 'menu',
       icon: iconSource(brushIcon, foregroundColor),

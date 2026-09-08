@@ -11,6 +11,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {build, loadConfigFromFile} from 'vite';
+import {assertSlidersFormat} from './format-guard.mjs';
 
 process.env.NODE_ENV = 'production';
 
@@ -49,6 +50,10 @@ const format = {
 	url: pkg.repository,
 	version: pkg.version
 };
+
+// Chapbook is vendored here, so a re-copy of it can silently take the Sliders layer
+// with it. Fail the build rather than ship a format that is quietly plain Chapbook.
+assertSlidersFormat(format);
 
 await fs.mkdirp(dest);
 await fs.writeFile(
