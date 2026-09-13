@@ -1,6 +1,7 @@
-import {IconPlus} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {CardContent} from '../container/card';
+import {SelectableCard} from '../container/card/selectable-card';
 import {GhostPassage} from '../../util/broken-link-ghosts';
 import './ghost-passage-card.css';
 
@@ -12,9 +13,11 @@ export interface GhostPassageCardProps {
 /**
  * A passage that is linked to but does not exist yet, drawn where it would land.
  *
- * Not a `PassageCard`: it has no id to select, drag, edit or lock, and every one of
- * those affordances would have to be disabled one at a time. It is a button, and the
- * only thing it does is become a real passage.
+ * Deliberately the same card as an empty passage — `.passage-card.empty` is already the
+ * dashed, translucent look this needs, and the map should not teach two different shapes
+ * for "a passage". It is not a `PassageCard` only because it has no passage: nothing to
+ * select, drag, rename, lock or badge, and every one of those would have to be switched
+ * off one at a time. Click or Enter makes it real, after which the real card takes over.
  */
 export const GhostPassageCard: React.FC<GhostPassageCardProps> = React.memo(
 	props => {
@@ -29,22 +32,30 @@ export const GhostPassageCard: React.FC<GhostPassageCardProps> = React.memo(
 			}),
 			[ghost.height, ghost.left, ghost.top, ghost.width]
 		);
+		const handleCreate = React.useCallback(() => onCreate(ghost), [
+			ghost,
+			onCreate
+		]);
 
 		return (
-			<button
-				className="ghost-passage-card"
+			<div
+				className="passage-card empty ghost-passage-card"
 				data-testid={`ghost-passage-${ghost.name}`}
-				onClick={() => onCreate(ghost)}
 				style={style}
-				title={t('components.ghostPassageCard.create', {name: ghost.name})}
-				type="button"
 			>
-				<span className="ghost-passage-name">{ghost.name}</span>
-				<span className="ghost-passage-hint">
-					<IconPlus />
-					{t('components.ghostPassageCard.label')}
-				</span>
-			</button>
+				<SelectableCard
+					label={ghost.name}
+					onDoubleClick={handleCreate}
+					onSelect={handleCreate}
+				>
+					<h2>{ghost.name}</h2>
+					<CardContent>
+						<span className="placeholder">
+							{t('components.ghostPassageCard.placeholder')}
+						</span>
+					</CardContent>
+				</SelectableCard>
+			</div>
 		);
 	}
 );
