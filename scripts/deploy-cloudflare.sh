@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
 # Build the static Twine/Sliders web app and deploy it to Cloudflare Pages.
 #
-#   ./scripts/deploy-cloudflare.sh
-#   npm run deploy-cloudflare
+#   npm run deploy-cloudflare                        # the default target
+#   npm run deploy-cloudflare twine.tmpx.space       # a named one
+#   npm run deploy-cloudflare twine                  # same thing, short
+#   npm run deploy-cloudflare list                   # what is known
+#   npm run deploy-cloudflare twine dry-run          # resolve it, build nothing
 #
-# WHERE it goes is one variable, DEPLOY_TARGET: the public hostname. The Pages
-# project is its first DNS label, so twine-ig.tmpx.space deploys to the project
-# "twine-ig". Set it in the repo's .env (or .env.local, which overrides .env and
-# is never committed), or pass it for one run:
+# The keywords take dashes too (`--list`), but only when this script is run
+# directly: `npm run` keeps a leading-dash argument for itself unless it comes
+# after a `--`. Hence the bare spellings.
 #
-#   DEPLOY_TARGET=twine-foo.tmpx.space npm run deploy-cloudflare
+# WHERE it goes is the public hostname, given as the first argument. A bare
+# label gets DEFAULT_ZONE appended, so `twine-ig` means twine-ig.tmpx.space.
+#
+# The Pages project is usually the hostname's first DNS label, but not always —
+# twine.tmpx.space lives in a project called "twine-sliders" — so TARGETS below
+# maps the exceptions. Keep new ones there rather than in your memory: a wrong
+# project name fails as "project X does not exist", which reads like a
+# credentials problem and is not one.
+#
+# With no argument the target comes from DEPLOY_TARGET in the environment, then
+# the repo's .env (or .env.local, which overrides .env and is never committed),
+# then DEFAULT_TARGET below. PROJECT_NAME in the environment still wins over the
+# table, for a project this script has never heard of.
 #
 # Requires CLOUDFLARE_API_TOKEN. Put it in ~/.config/cloudflare.env
 # (see cloudflare.env.example next to it) so it does not have to live in your
@@ -45,9 +59,77 @@ env_file_value() {
 	printf '%s' "$value"
 }
 
-DEPLOY_TARGET="${DEPLOY_TARGET:-$(env_file_value DEPLOY_TARGET)}"
-DEPLOY_TARGET="${DEPLOY_TARGET:-twine-ig.tmpx.space}"
-PROJECT_NAME="${PROJECT_NAME:-${DEPLOY_TARGET%%.*}}"
+# hostname -> Cloudflare Pages project, for the hostnames whose project is not
+# simply their first DNS label. Anything absent here uses that label.
+declare -A TARGETS=(
+	[twine.tmpx.space]=twine-sliders
+	[twine-ig.tmpx.space]=twine-ig
+)
+
+DEFAULT_TARGET=twine-ig.tmpx.space
+DEFAULT_ZONE=tmpx.space
+
+usage() {
+	echo "usage: npm run deploy-cloudflare [hostname|label] [dry-run]"
+	echo ""
+	echo "known targets:"
+
+	local host
+	for host in "${!TARGETS[@]}"; do
+		printf '    %-24s -> project %s%s\n' "$host" "${TARGETS[$host]}" \
+			"$([[ $host == "$DEFAULT_TARGET" ]] && echo ' (default)')"
+	done | sort
+
+	echo ""
+	echo "Any other hostname works too; its project defaults to the first DNS"
+	echo "label, or set PROJECT_NAME to say otherwise."
+}
+
+# Order does not matter, and the keywords are accepted with or without dashes:
+# `npm run` keeps any leading-dash argument for itself unless it is written
+# after a `--`, so `npm run deploy-cloudflare --list` never reaches this script.
+DRY_RUN=
+TARGET_ARG=
+
+while [[ $# -gt 0 ]]; do
+	case "${1#--}" in
+		list | help | h)
+			usage
+			exit 0
+			;;
+		dry-run | dry)
+			DRY_RUN=1
+			;;
+		'')
+			# A bare `--`, which npm uses to stop eating arguments. Not ours.
+			;;
+		*)
+			if [[ -n $TARGET_ARG ]]; then
+				echo "ERROR: more than one target given: '$TARGET_ARG' and '$1'" >&2
+				echo "" >&2
+				usage >&2
+				exit 1
+			fi
+
+			TARGET_ARG="$1"
+			;;
+	esac
+
+	shift
+done
+
+if [[ -n $TARGET_ARG ]]; then
+	DEPLOY_TARGET="$TARGET_ARG"
+else
+	DEPLOY_TARGET="${DEPLOY_TARGET:-$(env_file_value DEPLOY_TARGET)}"
+	DEPLOY_TARGET="${DEPLOY_TARGET:-$DEFAULT_TARGET}"
+fi
+
+# A bare label is this zone's. Anything already dotted is taken as written, so a
+# host outside tmpx.space still deploys.
+[[ $DEPLOY_TARGET == *.* ]] || DEPLOY_TARGET="$DEPLOY_TARGET.$DEFAULT_ZONE"
+
+PROJECT_NAME="${PROJECT_NAME:-${TARGETS[$DEPLOY_TARGET]:-${DEPLOY_TARGET%%.*}}}"
 PUBLIC_URL="https://$DEPLOY_TARGET"
 
 # Load the token file first, so the check below can see it. set -a exports
@@ -79,6 +161,14 @@ cd "$REPO_ROOT"
 
 echo "==> Target:  $PUBLIC_URL"
 echo "==> Project: $PROJECT_NAME"
+
+# Enough to check a target resolves the way you meant before spending a build on
+# it — the mistake this script exists to make hard.
+if [[ -n $DRY_RUN ]]; then
+	echo "==> Dry run, stopping before the build."
+	exit 0
+fi
+
 echo "==> Building (npm run build:web)"
 npm run build:web
 
