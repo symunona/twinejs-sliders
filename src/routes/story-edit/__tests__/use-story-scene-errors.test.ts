@@ -39,26 +39,33 @@ describe('storySceneErrors()', () => {
 		expect(Object.keys(counts)).toEqual([bad.id]);
 	});
 
-	it('flags a link pointing at a passage that does not exist', () => {
+	it('does not flag a link pointing at a passage that does not exist', () => {
+		// It is a warning, not an error: the map draws the target as a ghost and one
+		// click creates it. A card badge would call an unwritten passage a mistake.
 		const start = fakePassage({
 			name: 'Start',
 			text: ['[scene]', 'id: start', 'links:', '  on: Nowhere At All'].join('\n')
 		});
 
-		expect(storySceneErrors([start])[start.id]).toBeGreaterThan(0);
+		expect(storySceneErrors([start])).toEqual({});
 	});
 
-	it('clears a link error once the target passage appears', () => {
+	it('clears an error once the story around the passage changes', () => {
 		// Same passage text both times: the cache must not answer from the run where
-		// the target was missing.
+		// nothing set `torch`.
 		const start = fakePassage({
 			name: 'Start',
-			text: ['[scene]', 'id: start', 'links:', '  on: Street'].join('\n')
+			text: ['[scene]', 'id: start', 'links:', '  on: {to: Start, if: torch}'].join(
+				'\n'
+			)
 		});
 
 		expect(storySceneErrors([start])[start.id]).toBeGreaterThan(0);
 		expect(
-			storySceneErrors([start, fakePassage({name: 'Street', text: 'Prose.'})])
+			storySceneErrors([
+				start,
+				fakePassage({name: 'Vars', text: 'torch: true\n--\nProse.'})
+			])
 		).toEqual({});
 	});
 });

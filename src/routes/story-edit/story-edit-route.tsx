@@ -9,6 +9,10 @@ import {useServerSyncContext} from '../../store/persistence/server/use-server-sy
 import {usePrefsContext} from '../../store/prefs';
 import {storyWithId} from '../../store/stories';
 import {
+	brokenLinkGhosts,
+	GhostPassage
+} from '../../util/broken-link-ghosts';
+import {
 	UndoableStoriesContextProvider,
 	useUndoableStoriesContext
 } from '../../store/undoable-stories';
@@ -28,7 +32,7 @@ import './story-edit-route.css';
 export const InnerStoryEditRoute: React.FC = () => {
 	const {storyId} = useParams<{storyId: string}>();
 	const {prefs} = usePrefsContext();
-	const {stories} = useUndoableStoriesContext();
+	const {dispatch, stories} = useUndoableStoriesContext();
 	const story = storyWithId(stories, storyId);
 	const [fuzzyFinderOpen, setFuzzyFinderOpen] = React.useState(false);
 	const mainContent = React.useRef<HTMLDivElement>(null);
@@ -42,6 +46,28 @@ export const InnerStoryEditRoute: React.FC = () => {
 	} = usePassageChangeHandlers(story);
 	const visibleZoom = useZoomTransition(story.zoom, mainContent.current);
 	const sceneErrorCounts = useStorySceneErrors(story.passages);
+	// Links with no passage behind them, drawn as dashed placeholders. A scene's `links:`
+	// cannot auto-create the way `[[…]]` does, so this is how an author gets from a link
+	// to the passage it names.
+	const ghosts = React.useMemo(() => brokenLinkGhosts(story), [story]);
+	const handleCreateGhost = React.useCallback(
+		(ghost: GhostPassage) => {
+			if (story.passages.some(passage => passage.name === ghost.name)) {
+				return;
+			}
+
+			// Created at the rect it was drawn at, so the card does not jump on click.
+			dispatch(
+				{
+					type: 'createPassages',
+					storyId: story.id,
+					props: [{left: ghost.left, name: ghost.name, top: ghost.top}]
+				},
+				'undoChange.newPassage'
+			);
+		},
+		[dispatch, story.id, story.passages]
+	);
 	const {blurPassage, focusPassage, presence} = useServerSyncContext();
 	// Passage id -> the other editor holding it. Empty with no socket, and the map draws
 	// exactly as it always has.
@@ -80,6 +106,8 @@ export const InnerStoryEditRoute: React.FC = () => {
 					errorCounts={sceneErrorCounts}
 					formatName={story.storyFormat}
 					formatVersion={story.storyFormatVersion}
+					ghosts={ghosts}
+					onCreateGhost={handleCreateGhost}
 					onDeselect={handleDeselectPassage}
 					onDrag={handleDragPassages}
 					onEdit={handleEditPassage}

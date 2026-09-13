@@ -11,6 +11,12 @@
  *     text supplies. The parser reports where each one was written as `linkSpans`.
  *   - plain `[[…]]` links in the prose outside the block, which is a way out of the scene
  *     just as much as a `links:` entry is.
+ *
+ * These are WARNINGS, not errors. Pointing at a passage that does not exist yet is how
+ * authors work — the story map draws the target as a dashed ghost and creating it is one
+ * click (`util/broken-link-ghosts`), exactly as `[[not written yet]]` behaves. What the
+ * list adds on top of the ghost is the typo case: "did you mean 'Tavern'?" for a
+ * `to: Tavren` the author never meant to create.
  */
 
 import {ParseResult, SceneError} from '@sliders/scene-types';
@@ -127,7 +133,7 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 			endLine: span?.endLine === undefined ? undefined : span.endLine + blockOffset,
 			message: missingMessage(link.name, link.to),
 			missingPassage: link.to,
-			severity: 'error'
+			severity: 'warning'
 		});
 	}
 
@@ -170,7 +176,7 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 				line: i + 1,
 				message: `[[${name}]] points at a passage that doesn't exist.`,
 				missingPassage: name,
-				severity: 'error'
+				severity: 'warning'
 			});
 		}
 	}

@@ -31,7 +31,9 @@ describe('linkTargetErrors()', () => {
 		expect(errors[0]).toMatchObject({
 			code: 'unknown-passage',
 			line: 3,
-			severity: 'error'
+			// A warning: the map offers to create the passage, so this is only a
+			// problem when the name is a typo, which the hint covers.
+			severity: 'warning'
 		});
 		expect(errors[0].message).toContain('Streetz');
 		expect(errors[0].hint).toContain('Street');

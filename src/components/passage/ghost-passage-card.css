@@ -1,0 +1,57 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+.ghost-passage-card {
+	align-items: center;
+	background: hsla(0, 100%, 100%, 0.25);
+	border: 2px dashed var(--gray);
+	border-radius: var(--corner-round);
+	color: var(--gray);
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	font-family: inherit;
+	font-size: 85%;
+	gap: calc(var(--grid-size) / 4);
+	justify-content: center;
+	padding: calc(var(--grid-size) / 2);
+	position: absolute;
+	text-align: center;
+	user-select: none;
+}
+
+.ghost-passage-card:hover,
+.ghost-passage-card:focus-visible {
+	background: hsla(212, 90%, 60%, 0.12);
+	border-color: var(--blue);
+	color: var(--dark-blue);
+}
+
+.ghost-passage-name {
+	font-size: 110%;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	/* Long names truncate rather than spilling out of a fixed-size card. */
+	max-height: 50%;
+}
+
+.ghost-passage-hint {
+	align-items: center;
+	display: flex;
+	font-style: italic;
+	gap: calc(var(--grid-size) / 4);
+	opacity: 0.8;
+}
+
+/*
+The map shrinks cards past a certain zoom; a ghost's hint text is unreadable well before
+the name is, so it goes first.
+*/
+.compact-passage-cards .ghost-passage-hint {
+	display: none;
+}
+
+.compact-passage-cards .ghost-passage-name {
+	font-size: 160%;
+	max-height: 100%;
+}

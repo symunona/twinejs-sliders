@@ -100,6 +100,10 @@
 			"percentageIsntNumber": "Please enter a number.",
 			"percentageNotPositive": "Please enter a number greater than 0."
 		},
+		"ghostPassageCard": {
+			"create": "Create the passage “{{name}}”",
+			"label": "Create"
+		},
 		"indentButtons": {
 			"indent": "Indent",
 			"unindent": "Unindent"
