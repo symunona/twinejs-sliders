@@ -29,6 +29,19 @@ export interface LinkValidationInput {
 	passageNames: string[];
 }
 
+/**
+ * An `unknown-passage` error, plus the name the author actually wrote.
+ *
+ * The error list offers to create the missing passage, and it needs the bare name to do
+ * it. Digging it back out of `message` would be a parse of English; carrying it is one
+ * optional field, and `SceneError` (which lives in `@sliders/scene-types`, shared with the
+ * parser and the CLI) stays free of anything only the editor cares about.
+ */
+export interface LinkTargetError extends SceneError {
+	/** Absent on any error that is not a missing passage target. */
+	missingPassage?: string;
+}
+
 /** `http://…`, `mailto:…` — someone else's problem, not a passage. */
 const EXTERNAL_RE = /^\w+:\/\/\/?\w|^mailto:/i;
 
@@ -84,7 +97,7 @@ function missingHint(to: string, passageNames: string[]): string {
  * Lines are absolute — the caller has already offset the parser's own errors, and these
  * never went through that mapping.
  */
-export function linkTargetErrors(input: LinkValidationInput): SceneError[] {
+export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] {
 	const {blockLines, blockOffset, passageNames, result, text} = input;
 
 	if (passageNames.length === 0) {
@@ -92,7 +105,7 @@ export function linkTargetErrors(input: LinkValidationInput): SceneError[] {
 	}
 
 	const exists = new Set(passageNames);
-	const errors: SceneError[] = [];
+	const errors: LinkTargetError[] = [];
 	const links = result?.scene.links ?? {};
 	const spans = result?.linkSpans ?? {};
 
@@ -113,6 +126,7 @@ export function linkTargetErrors(input: LinkValidationInput): SceneError[] {
 			endCol: span?.endCol,
 			endLine: span?.endLine === undefined ? undefined : span.endLine + blockOffset,
 			message: missingMessage(link.name, link.to),
+			missingPassage: link.to,
 			severity: 'error'
 		});
 	}
@@ -155,6 +169,7 @@ export function linkTargetErrors(input: LinkValidationInput): SceneError[] {
 				endLine: i + 1,
 				line: i + 1,
 				message: `[[${name}]] points at a passage that doesn't exist.`,
+				missingPassage: name,
 				severity: 'error'
 			});
 		}

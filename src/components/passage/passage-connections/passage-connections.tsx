@@ -4,7 +4,16 @@ import {Point} from '../../../util/geometry';
 import {PassageConnectionGroup} from './passage-connection-group';
 import {LinkMarkers} from './link-markers';
 import {StartConnection} from './start-connection';
+import {subtractConnections} from './subtract-connections';
 import {useFormatReferenceParser} from '../../../store/use-format-reference-parser';
+import {passageLinks} from '../../../util/passage-links';
+
+/**
+ * The link pass. A scene's `links:` entries are links, not references — an author who
+ * writes only scenes should see the same solid arrows and broken-link markers as one who
+ * writes `[[…]]`. Module-level so it stays referentially stable across renders.
+ */
+const linkParser = (text: string) => passageLinks(text, true);
 
 export interface PassageConnectionsProps {
 	formatName: string;
@@ -21,7 +30,7 @@ export const PassageConnections: React.FC<PassageConnectionsProps> = props => {
 	const {formatName, formatVersion, offset, passages, startPassageId} = props;
 	const referenceParser = useFormatReferenceParser(formatName, formatVersion);
 	const {draggable: draggableLinks, fixed: fixedLinks} = React.useMemo(
-		() => passageConnections(passages),
+		() => passageConnections(passages, linkParser),
 		[passages]
 	);
 	const {
@@ -31,6 +40,21 @@ export const PassageConnections: React.FC<PassageConnectionsProps> = props => {
 		passages,
 		referenceParser
 	]);
+
+	// The format reports scene links too, so drop anything the link pass has already
+	// drawn solid--see `subtract-connections`.
+	const drawnLinks = React.useMemo(
+		() => [draggableLinks.connections, fixedLinks.connections],
+		[draggableLinks, fixedLinks]
+	);
+	const draggableReferenceConnections = React.useMemo(
+		() => subtractConnections(draggableReferences.connections, drawnLinks),
+		[draggableReferences, drawnLinks]
+	);
+	const fixedReferenceConnections = React.useMemo(
+		() => subtractConnections(fixedReferences.connections, drawnLinks),
+		[drawnLinks, fixedReferences]
+	);
 
 	const startPassage = React.useMemo(
 		() => passages.find(passage => passage.id === startPassageId),
@@ -49,14 +73,14 @@ export const PassageConnections: React.FC<PassageConnectionsProps> = props => {
 			<PassageConnectionGroup {...fixedLinks} offset={noOffset} />
 			<PassageConnectionGroup
 				broken={emptySet}
-				connections={draggableReferences.connections}
+				connections={draggableReferenceConnections}
 				offset={offset}
 				self={emptySet}
 				variant="reference"
 			/>
 			<PassageConnectionGroup
 				broken={emptySet}
-				connections={fixedReferences.connections}
+				connections={fixedReferenceConnections}
 				offset={noOffset}
 				self={emptySet}
 				variant="reference"

@@ -20,6 +20,13 @@ import {
  * The intent is to delete passages that were automatically created in the past,
  * but the user has removed the link through editing without ever editing the
  * passage.
+ *
+ * Deliberately `parseLinks` and not `passageLinks`: this is the other half of
+ * `createNewlyLinkedPassages`, and it must see exactly the links that one created. A
+ * scene's `links:` block is never auto-created (a YAML target is complete on every
+ * keystroke, so it would spawn a passage per character typed), so nothing here may delete
+ * off one either--halfway through retyping `to: Tavern` the target reads `to: Tav`, and
+ * an empty `Tavern` would be gone.
  */
 export function deleteOrphanedPassages(
 	story: Story,

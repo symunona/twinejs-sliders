@@ -1,7 +1,11 @@
 /**
  * @jest-environment-options {"customExportConditions": ["node"]}
  */
-import {parsePassageReferences} from '../references';
+import {
+	parsePassageReferences,
+	scanLinkTargets,
+	sceneLinkTargets
+} from '../references';
 import {parseScene} from '../parse-scene';
 
 const PASSAGE = `mood: tense
@@ -21,6 +25,85 @@ links:
 [note]
 Director: she should feel cornered.
 `;
+
+describe('sceneLinkTargets', () => {
+	it('reads the shorthand form', () => {
+		expect(
+			sceneLinkTargets(['links:', '  back: Other Passage'].join('\n'))
+		).toEqual(new Map([['back', 'Other Passage']]));
+	});
+
+	it('reads the flow map form', () => {
+		expect(
+			sceneLinkTargets(
+				['links:', '  onward: {to: Next Passage, if: has_weapon}'].join('\n')
+			)
+		).toEqual(new Map([['onward', 'Next Passage']]));
+	});
+
+	it('reads an entry whose keys are on their own lines', () => {
+		expect(
+			sceneLinkTargets(
+				['links:', '  onward:', '    to: Next Passage', '    if: x'].join('\n')
+			)
+		).toEqual(new Map([['onward', 'Next Passage']]));
+	});
+
+	it('reads the whole block written inline', () => {
+		expect(
+			sceneLinkTargets(
+				'links: {onward: {to: Next Passage}, back: Other Passage}'
+			)
+		).toEqual(
+			new Map([
+				['onward', 'Next Passage'],
+				['back', 'Other Passage']
+			])
+		);
+	});
+
+	it('reads a second inline block later in the text', () => {
+		// The flow-map regex is module-level, so a stale lastIndex would drop entries.
+		const text = [
+			'links: {a: {to: One}}',
+			'--',
+			'links: {b: {to: Two}}'
+		].join('\n');
+
+		expect(sceneLinkTargets(text)).toEqual(
+			new Map([
+				['a', 'One'],
+				['b', 'Two']
+			])
+		);
+	});
+
+	it('strips quotes and trailing comments', () => {
+		expect(
+			sceneLinkTargets(
+				['links:', '  back: "Other Passage"   # shorthand'].join('\n')
+			)
+		).toEqual(new Map([['back', 'Other Passage']]));
+	});
+
+	it('stops at the end of the block', () => {
+		expect(
+			sceneLinkTargets(
+				['links:', '  back: Other Passage', 'beats:', '  - box: "Hi"'].join('\n')
+			)
+		).toEqual(new Map([['back', 'Other Passage']]));
+	});
+
+	it('is not confused by a links: block that is still being typed', () => {
+		expect(sceneLinkTargets(['links:', '  onward:'].join('\n'))).toEqual(
+			new Map()
+		);
+	});
+
+	it('is the same function as the older scanLinkTargets name', () => {
+		expect(scanLinkTargets).toBe(sceneLinkTargets);
+	});
+});
 
 describe('parsePassageReferences', () => {
 	it('finds inline targets', () => {

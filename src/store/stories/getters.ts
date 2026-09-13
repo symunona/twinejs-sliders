@@ -3,6 +3,7 @@ import uniq from 'lodash/uniq';
 import {Passage, StorySearchFlags, Story} from './stories.types';
 import {createRegExp} from '../../util/regexp';
 import {parseLinks} from '../../util/parse-links';
+import {passageLinks} from '../../util/passage-links';
 
 export function passageWithId(
 	stories: Story[],
@@ -160,10 +161,13 @@ export function storyPassageTags(story: Story) {
 }
 
 export function storyStats(story: Story) {
+	// `passageLinks`, not `parseLinks`: a scene's `links:` entry is a way out of the
+	// passage exactly like a `[[…]]` is, and an author who only writes scenes would
+	// otherwise be told their story has no links and nothing broken in it.
 	const links = story.passages.reduce<string[]>(
 		(links, passage) => [
 			...links,
-			...parseLinks(passage.text).filter(link => links.indexOf(link) === -1)
+			...passageLinks(passage.text).filter(link => links.indexOf(link) === -1)
 		],
 		[]
 	);

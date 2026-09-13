@@ -16,7 +16,11 @@ export {
 	emptyScene,
 	parseScene
 } from './parse-scene';
-export {parsePassageReferences, scanLinkTargets} from './references';
+export {
+	parsePassageReferences,
+	scanLinkTargets,
+	sceneLinkTargets
+} from './references';
 export {scanWikiLinks} from './links';
 export type {WikiLink} from './links';
 export {keyHint, levenshtein, nearestKey} from './levenshtein';

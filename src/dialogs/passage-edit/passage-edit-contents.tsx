@@ -3,7 +3,12 @@ import {useTranslation} from 'react-i18next';
 import useErrorBoundary from 'use-error-boundary';
 import {ErrorMessage} from '../../components/error';
 import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
-import {passageWithId, storyWithId, updatePassage} from '../../store/stories';
+import {
+	newPassagePositions,
+	passageWithId,
+	storyWithId,
+	updatePassage
+} from '../../store/stories';
 import {
 	formatWithNameAndVersion,
 	useStoryFormatsContext
@@ -136,6 +141,33 @@ export const PassageEditContents: React.FC<
 		[dialogsDispatch, story]
 	);
 
+	/**
+	 * The fix offered on a link whose target does not exist. A scene's `links:` block is
+	 * never auto-created the way `[[…]]` is — a YAML target is a complete link on every
+	 * keystroke, so creation has to be something the author asks for (see
+	 * `createNewlyLinkedPassages`). Placement is shared with that automatic path so both
+	 * put the new card in the same place.
+	 */
+	const handleCreatePassage = React.useCallback(
+		(name: string) => {
+			if (story.passages.some(existing => existing.name === name)) {
+				return;
+			}
+
+			const [position] = newPassagePositions(story, passage, 1);
+
+			dispatch(
+				{
+					type: 'createPassages',
+					storyId: story.id,
+					props: [{...position, name}]
+				},
+				'undoChange.newPassage'
+			);
+		},
+		[dispatch, passage, story]
+	);
+
 	// The scene preview is a dialog of its own now, not a strip inside this one. All this
 	// editor does is offer what it is holding; the preview decides whose scene is on
 	// screen.
@@ -234,6 +266,7 @@ export const PassageEditContents: React.FC<
 			{parse.hasScene && (
 				<SceneErrors
 					errors={parse.errors}
+					onCreatePassage={readOnly ? undefined : handleCreatePassage}
 					onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
 				/>
 			)}

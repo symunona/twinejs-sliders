@@ -5,14 +5,21 @@ import {
 	StoriesState,
 	Story
 } from '../stories.types';
-import {passageDefaults} from '../defaults';
-import {rectsIntersect} from '../../../util/geometry';
+import {newPassagePositions} from './new-passage-positions';
 import {parseLinks} from '../../../util/parse-links';
 
 /**
  * Creates newly linked passages from a passage. You shouldn't need to call this
  * directly--it will be invoked automatically by updatePassage() if you change
  * the passage text.
+ *
+ * Deliberately `parseLinks` and not `passageLinks`: a scene's `links:` entries are NOT
+ * auto-created. `[[…]]` has a closing delimiter, so a link only exists once the author
+ * has finished typing it, but YAML `to: Tavern` is complete on every keystroke — this
+ * would spawn `T`, `Ta`, `Tav`… as the author types, and `deleteOrphanedPassages` would
+ * then delete off any typo. Scene link targets get an explicit "Create passage" fix in
+ * the passage editor's error list instead (see
+ * `dialogs/passage-edit/scene-errors/scene-errors.tsx`).
  */
 export function createNewlyLinkedPassages(
 	story: Story,
@@ -34,63 +41,12 @@ export function createNewlyLinkedPassages(
 			return;
 		}
 
-		const passageDefs = passageDefaults();
-		const passageGap = 25;
-
-		let top = passage.top + passage.height + passageGap;
-		const newPassagesWidth =
-			toCreate.length * passageDefs.width + (toCreate.length - 1) * passageGap;
-
-		// Horizontally center the passages.
-
-		let left = passage.left + (passage.width - newPassagesWidth) / 2;
-
-		// Move them to avoid overlaps.
-
-		const needsMoving = () =>
-			story.passages.some(passage =>
-				rectsIntersect(passage, {
-					left,
-					top,
-					height: passageDefs.height,
-					width: newPassagesWidth
-				})
-			);
-
-		while (needsMoving()) {
-			// Try rightward.
-
-			left += passageDefs.width + passageGap;
-
-			if (!needsMoving()) {
-				break;
-			}
-
-			// Try leftward.
-
-			left -= 2 * (passageDefs.width + passageGap);
-
-			if (!needsMoving()) {
-				break;
-			}
-
-			// Move downward and try again.
-
-			left += passageDefs.width + passageGap;
-			top += passageDefs.height + passageGap;
-		}
-
-		// Actually create them.
+		const positions = newPassagePositions(story, passage, toCreate.length);
 
 		dispatch({
 			type: 'createPassages',
 			storyId: story.id,
-			props: toCreate.map(name => {
-				const result = {left, name, top};
-
-				left += passageDefs.width + passageGap;
-				return result;
-			})
+			props: toCreate.map((name, index) => ({...positions[index], name}))
 		});
 	};
 }

@@ -6,11 +6,16 @@ import {
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {SceneError} from '@sliders/scene-types';
+import {LinkTargetError} from '../scene-preview/validate-links';
 import './scene-errors.css';
 
 export interface SceneErrorsProps {
-	errors: SceneError[];
+	errors: LinkTargetError[];
+	/**
+	 * Offered on an error that names a passage the story does not have. Absent when the
+	 * caller cannot write to the story.
+	 */
+	onCreatePassage?: (name: string) => void;
 	/** Clicking an error jumps the editor to its line. */
 	onGoToLine?: (line: number) => void;
 }
@@ -25,6 +30,7 @@ export interface SceneErrorsProps {
  */
 export const SceneErrors: React.FC<SceneErrorsProps> = ({
 	errors,
+	onCreatePassage,
 	onGoToLine
 }) => {
 	const [open, setOpen] = React.useState(false);
@@ -72,6 +78,24 @@ export const SceneErrors: React.FC<SceneErrorsProps> = ({
 							<span className="line">{error.line}</span>
 							<span className="message">{error.message}</span>
 							{error.hint && <span className="hint">{error.hint}</span>}
+							{onCreatePassage && error.missingPassage && (
+								// Offered next to the hint, never instead of it: "did you mean
+								// 'Tavern'?" and "create 'Tavren'" are both plausible fixes for a
+								// typo, and only the author knows which one they meant.
+								<button
+									className="scene-errors-create"
+									data-testid="scene-errors-create-passage"
+									onClick={event => {
+										event.stopPropagation();
+										onCreatePassage(error.missingPassage!);
+									}}
+									type="button"
+								>
+									{t('dialogs.passageEdit.sceneErrors.createPassage', {
+										name: error.missingPassage
+									})}
+								</button>
+							)}
 						</li>
 					))}
 				</ul>

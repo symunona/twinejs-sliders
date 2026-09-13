@@ -326,6 +326,7 @@
 			"passageTextEditorLabel": "Passage Text",
 			"passageTextPlaceholder": "Enter the body text of your passage here. To link to another passage, put two square brackets around its name, [[like this]].",
 			"sceneErrors": {
+				"createPassage": "Create “{{name}}”",
 				"valid": "Valid Scene ✅",
 				"showErrors": "Show Errors ({{count}})",
 				"showErrors_plural": "Show Errors ({{count}})",

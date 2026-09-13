@@ -1,10 +1,10 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import * as React from 'react';
-import {SceneError} from '@sliders/scene-types';
 import {FakeStateProvider} from '../../../../test-util';
+import {LinkTargetError} from '../../scene-preview/validate-links';
 import {SceneErrors} from '../scene-errors';
 
-function error(overrides: Partial<SceneError> = {}): SceneError {
+function error(overrides: Partial<LinkTargetError> = {}): LinkTargetError {
 	return {
 		code: 'bad-value',
 		col: 1,
@@ -15,14 +15,22 @@ function error(overrides: Partial<SceneError> = {}): SceneError {
 	};
 }
 
-function renderErrors(errors: SceneError[], onGoToLine = jest.fn()) {
+function renderErrors(
+	errors: LinkTargetError[],
+	onGoToLine = jest.fn(),
+	onCreatePassage?: jest.Mock
+) {
 	render(
 		<FakeStateProvider>
-			<SceneErrors errors={errors} onGoToLine={onGoToLine} />
+			<SceneErrors
+				errors={errors}
+				onCreatePassage={onCreatePassage}
+				onGoToLine={onGoToLine}
+			/>
 		</FakeStateProvider>
 	);
 
-	return {onGoToLine};
+	return {onCreatePassage, onGoToLine};
 }
 
 // The test i18n stub returns the key, so the header is checked by which key it asks
@@ -67,5 +75,57 @@ describe('<SceneErrors>', () => {
 		renderErrors([error({hint: "Did you mean 'cast'?"})]);
 		fireEvent.click(screen.getByTestId('scene-errors-header'));
 		expect(screen.getByText("Did you mean 'cast'?")).toBeInTheDocument();
+	});
+
+	describe('the create passage fix', () => {
+		const missing = () =>
+			error({
+				code: 'unknown-passage',
+				hint: "Did you mean 'Tavern'?",
+				message: "Link 'on' points at a passage that doesn't exist: 'Tavren'.",
+				missingPassage: 'Tavren'
+			});
+
+		it('creates the passage the error names', () => {
+			const onCreatePassage = jest.fn();
+
+			renderErrors([missing()], jest.fn(), onCreatePassage);
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			fireEvent.click(screen.getByTestId('scene-errors-create-passage'));
+			expect(onCreatePassage).toHaveBeenCalledWith('Tavren');
+		});
+
+		// A near miss could be either a typo or a passage yet to be written, so the
+		// author gets both fixes and picks.
+		it('leaves the did-you-mean hint visible beside it', () => {
+			renderErrors([missing()], jest.fn(), jest.fn());
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			expect(screen.getByText("Did you mean 'Tavern'?")).toBeInTheDocument();
+		});
+
+		it('does not jump the editor to the line as well', () => {
+			const onGoToLine = jest.fn();
+
+			renderErrors([missing()], onGoToLine, jest.fn());
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			fireEvent.click(screen.getByTestId('scene-errors-create-passage'));
+			expect(onGoToLine).not.toHaveBeenCalled();
+		});
+
+		it('is absent on an error that names no missing passage', () => {
+			renderErrors([error()], jest.fn(), jest.fn());
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			expect(
+				screen.queryByTestId('scene-errors-create-passage')
+			).not.toBeInTheDocument();
+		});
+
+		it('is absent when the caller offers no way to create one', () => {
+			renderErrors([missing()]);
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			expect(
+				screen.queryByTestId('scene-errors-create-passage')
+			).not.toBeInTheDocument();
+		});
 	});
 });

@@ -8,6 +8,7 @@ export * from './find-replace';
 export * from './highlight-passages';
 export * from './import-stories';
 export * from './move-passages';
+export * from './new-passage-positions';
 export * from './rename-passage-tag';
 export * from './rename-story-tag';
 export * from './select-passage';

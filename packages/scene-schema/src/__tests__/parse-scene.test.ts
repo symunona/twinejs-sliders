@@ -472,6 +472,50 @@ describe('parseScene', () => {
 			expect(scene.beats[0].kind).toBe('say');
 		});
 
+		it('names the missing indent when a beat body is written as siblings', () => {
+			const {scene, errors} = parseScene(
+				'beats:\n  - mira:\n    at: [0.1, 0.2]\n    frame: idle\n'
+			);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0].message).toBe(
+				"Indent these under `mira:` — at this indent they are separate beat keys, not mira's."
+			);
+			// Anchored at the first key that should have moved, not at the speaker.
+			expect(errors[0].line).toBe(3);
+			expect(scene.beats).toEqual([]);
+		});
+
+		it('still parses the first beat when only its body exploded', () => {
+			const {scene, errors} = parseScene(
+				'beats:\n  - mira: "hi"\n    frame: idle\n'
+			);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0].message).toContain('Indent these under `mira:`');
+			expect(scene.beats).toHaveLength(1);
+			expect(scene.beats[0].kind).toBe('say');
+		});
+
+		it('keeps the generic message when the extra key is a second beat', () => {
+			const {errors} = parseScene('beats:\n  - wait: 1\n    mark: x\n');
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0].message).toBe(
+				'A beat has exactly one key. Split this into two beats.'
+			);
+		});
+
+		it('accepts the correctly indented body', () => {
+			const {scene, errors} = parseScene(
+				'beats:\n  - mira:\n      at: [0.1, 0.2]\n      frame: idle\n      say: Hello\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.beats).toHaveLength(1);
+			expect((scene.beats[0] as SayBeat).text).toBe('Hello');
+		});
+
 		it('keeps indices contiguous when a beat is dropped', () => {
 			const {scene, errors} = parseScene(
 				'beats:\n  - mira: "one"\n  - just a string\n  - mira: "two"\n'
@@ -526,6 +570,68 @@ describe('parseScene', () => {
 			const {errors} = parseScene('links:\n  stay: {if: brave}\n');
 
 			expect(codes(errors)).toEqual(['bad-value']);
+		});
+	});
+
+	// YAML 1.2 reads `04` as the number 4, so the resolved value of a passage called `04`
+	// used to be the string "4" — a link to a passage nobody has, and one the story map's
+	// own line scanner still drew at `04`.
+	describe('names that look like numbers', () => {
+		it('keeps the digits of a shorthand target', () => {
+			const {scene, errors} = parseScene('links:\n  a: 04\n  c: 007\n');
+
+			expect(errors).toEqual([]);
+			expect(scene.links.a.to).toBe('04');
+			expect(scene.links.c.to).toBe('007');
+		});
+
+		it('keeps the digits of a to: target', () => {
+			const {scene, errors} = parseScene(
+				'links:\n  a: {to: 04}\n  c: {to: 007}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.links.a.to).toBe('04');
+			expect(scene.links.c.to).toBe('007');
+		});
+
+		it('leaves a target YAML already made a string alone', () => {
+			const {scene, errors} = parseScene(
+				'links:\n  a: {to: 04 some passage}\n  b: {to: "04"}\n  c: {to: Tavern}\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.links.a.to).toBe('04 some passage');
+			expect(scene.links.b.to).toBe('04');
+			expect(scene.links.c.to).toBe('Tavern');
+		});
+
+		it('keeps the digits of the other name slots', () => {
+			const {scene, errors} = parseScene(
+				'id: 04\nfrom: 03\nbg: 007\ncast:\n  02: {frame: 01}\nprops:\n  05: {of: 02}\nbeats:\n  - mark: 06\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.id).toBe('04');
+			expect(scene.from).toBe('03');
+			expect(scene.bg).toBe('007');
+			expect(scene.entities['02']).toMatchObject({frame: '01'});
+			expect(scene.entities['05']).toMatchObject({of: '02'});
+			expect(scene.beats[0]).toEqual({index: 0, kind: 'mark', name: '06'});
+		});
+
+		it('still resolves the slots that really are numbers', () => {
+			const {scene, errors} = parseScene(
+				'cast:\n  mira: {at: 0.50, z: 3, scale: 1.0}\nbeats:\n  - wait: 0.5\n'
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.entities.mira).toMatchObject({
+				at: {x: 0.5, y: LAYER_BASELINE},
+				scale: 1,
+				z: 3
+			});
+			expect(scene.beats[0]).toEqual({index: 0, kind: 'wait', seconds: 0.5});
 		});
 	});
 

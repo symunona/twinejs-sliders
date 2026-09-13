@@ -252,6 +252,42 @@ function asString(ctx: Ctx, node: unknown, what: string): string | undefined {
 	return undefined;
 }
 
+/**
+ * `asString`, but for a slot that NAMES something — a passage, a scene, an entity, an
+ * asset. Takes the scalar's source text whenever YAML resolved it to a non-string.
+ *
+ * A passage called `04` is written `to: 04`, and the YAML 1.2 core schema reads that as
+ * the NUMBER 4; `String(4)` is `"4"`, so the link quietly pointed at a passage nobody has.
+ * The story map disagreed as well — its own line scanner reads raw text and drew the arrow
+ * at `04` — so the arrow and the player went to different places. `007`, `1.50` and `True`
+ * are all the same trap. Ordinary text (dialogue, `if:` expressions, style tokens) keeps
+ * normal scalar resolution: only a name is allowed to ignore what YAML made of it.
+ *
+ * Only PLAIN scalars are read from source. `.source` on a quoted scalar has its quotes
+ * stripped but its escapes still raw, and a plain scalar may fold over several lines, so
+ * once YAML has produced a string that string is always the better answer.
+ */
+function asSourceString(
+	ctx: Ctx,
+	node: unknown,
+	what: string
+): string | undefined {
+	if (isScalar(node)) {
+		const scalar = node as Scalar;
+
+		if (
+			scalar.type === 'PLAIN' &&
+			typeof scalar.source === 'string' &&
+			typeof scalar.value !== 'string' &&
+			scalar.value !== null
+		) {
+			return scalar.source;
+		}
+	}
+
+	return asString(ctx, node, what);
+}
+
 function asNumber(ctx: Ctx, node: unknown, what: string): number | undefined {
 	const value = scalarValue(node);
 
@@ -285,7 +321,13 @@ function keyName(pair: Pair<unknown, unknown>): string | undefined {
 		}
 
 		if (typeof value === 'number' || typeof value === 'boolean') {
-			return String(value);
+			// An entity id or link name of `04:` resolves to the number 4 — the same trap
+			// asSourceString exists for. The text the author typed is the name they meant.
+			const source = (key as Scalar).source;
+
+			return (key as Scalar).type === 'PLAIN' && typeof source === 'string'
+				? source
+				: String(value);
 		}
 	}
 
@@ -607,7 +649,9 @@ function parseEntityBody(
 		pair =>
 			keyName(pair) === 'of' &&
 			!isNullNode(pair.value) &&
-			typeof scalarValue(pair.value) === 'string'
+			// Any non-null scalar, not just a resolved string: `of: 04` is a parent named
+			// `04` (see asSourceString), and the baseline has to agree with what `of:` took.
+			isScalar(pair.value)
 	);
 	const baseline = relative ? 0 : LAYER_BASELINE;
 
@@ -639,7 +683,7 @@ function parseEntityBody(
 					break;
 				}
 
-				const parent = asString(ctx, pair.value, 'of');
+				const parent = asSourceString(ctx, pair.value, 'of');
 
 				if (parent === undefined) {
 					break;
@@ -698,7 +742,7 @@ function parseEntityBody(
 			}
 
 			case 'frame': {
-				const frame = asString(ctx, pair.value, 'frame');
+				const frame = asSourceString(ctx, pair.value, 'frame');
 
 				if (frame !== undefined) {
 					body.patch.frame = frame;
@@ -769,7 +813,7 @@ function parseEntityBody(
 			}
 
 			case 'ref': {
-				const ref = asString(ctx, pair.value, 'ref');
+				const ref = asSourceString(ctx, pair.value, 'ref');
 
 				if (ref !== undefined) {
 					body.ref = ref;
@@ -950,6 +994,32 @@ function collectLinks(ctx: Ctx, text: string, node: unknown): void {
 	}
 }
 
+/**
+ * The commonest beat mistake: the speaker's body written one indent short, so YAML makes
+ * it the speaker's SIBLINGS instead of the speaker's value.
+ *
+ *     - mira:
+ *       at: [0.1, 0.2]     <- same column as `mira`, so a beat key of its own
+ *       frame: idle
+ *
+ * Told apart from a genuine two-key beat (`- wait: 1` merged into `- mark: x`) by what the
+ * extra keys ARE: every one of them belongs to an entity body, and the first key is a
+ * speaker id rather than one of the beat commands, which take a value and never a body.
+ */
+function isExplodedBeat(key: string, extras: Pair<unknown, unknown>[]): boolean {
+	if ((BEAT_COMMAND_KEYS as readonly string[]).includes(key)) {
+		return false;
+	}
+
+	const bodyKeys: readonly string[] = [...ENTITY_KEYS, ...SAY_KEYS];
+
+	return extras.every(extra => {
+		const name = keyName(extra);
+
+		return name !== undefined && bodyKeys.includes(name);
+	});
+}
+
 function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 	for (const item of seq.items) {
 		if (!isMap(item)) {
@@ -969,21 +1039,47 @@ function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 			continue;
 		}
 
-		for (const extra of pairs.slice(1)) {
-			addError(
-				ctx,
-				'bad-value',
-				'A beat has exactly one key. Split this into two beats.',
-				extra.key
-			);
-		}
-
 		const pair = pairs[0];
 		const key = keyName(pair);
 
 		if (key === undefined) {
 			addError(ctx, 'bad-value', 'A beat key must be plain text.', pair.key);
 			continue;
+		}
+
+		const extras = pairs.slice(1);
+
+		if (extras.length > 0) {
+			if (isExplodedBeat(key, extras)) {
+				// One error, naming the real mistake. The three the generic path used to
+				// produce ("two keys" twice, then "needs dialogue or a stage change") all
+				// describe the SAME missing indent, and none of them says so.
+				addError(
+					ctx,
+					'bad-value',
+					`Indent these under \`${key}:\` — at this indent they are separate beat keys, not ${key}'s.`,
+					extras[0].key,
+					{
+						hint: `Everything '${key}' does belongs one level deeper than \`${key}:\`.`
+					}
+				);
+
+				// `mira:` alone is empty, and "needs dialogue or a stage change" is that
+				// same indent again, not a second problem. Only the beat that DOES carry
+				// something of its own is worth parsing on.
+				if (isNullNode(pair.value)) {
+					continue;
+				}
+			} else {
+				for (const extra of extras) {
+					addError(
+						ctx,
+						'bad-value',
+						'A beat has exactly one key. Split this into two beats.',
+						extra.key
+					);
+				}
+			}
 		}
 
 		const index = scene.beats.length;
@@ -1078,7 +1174,7 @@ function parseBeat(
 		}
 
 		case 'mark': {
-			const name = asString(ctx, pair.value, 'mark');
+			const name = asSourceString(ctx, pair.value, 'mark');
 
 			return name === undefined ? undefined : {index, kind: 'mark', name};
 		}
@@ -1172,7 +1268,7 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 
 		if (isScalar(pair.value) && !isNullNode(pair.value)) {
 			// Shorthand: `stay: Tavern Fight`.
-			const to = asString(ctx, pair.value, `link '${name}'`);
+			const to = asSourceString(ctx, pair.value, `link '${name}'`);
 
 			if (to !== undefined) {
 				scene.links[name] = {name, to};
@@ -1203,7 +1299,12 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 			}
 
 			if ((LINK_KEYS as readonly string[]).includes(key)) {
-				const value = asString(ctx, prop.value, `link ${key}`);
+				// `to:` names a passage, the other three are text the player reads or an
+				// expression it evaluates.
+				const value =
+					key === 'to'
+						? asSourceString(ctx, prop.value, 'link to')
+						: asString(ctx, prop.value, `link ${key}`);
 
 				if (value !== undefined) {
 					link[key as 'to' | 'if' | 'icon' | 'transition'] = value;
@@ -1398,7 +1499,7 @@ export function parseScene(text: string): ParseResult {
 
 		switch (key) {
 			case 'id': {
-				const id = asString(ctx, pair.value, 'id');
+				const id = asSourceString(ctx, pair.value, 'id');
 
 				if (id !== undefined) {
 					scene.id = id;
@@ -1412,7 +1513,7 @@ export function parseScene(text: string): ParseResult {
 					break; // `from: ~` is the documented "no parent" placeholder.
 				}
 
-				const from = asString(ctx, pair.value, 'from');
+				const from = asSourceString(ctx, pair.value, 'from');
 
 				if (from !== undefined) {
 					scene.from = from;
@@ -1427,7 +1528,7 @@ export function parseScene(text: string): ParseResult {
 					break;
 				}
 
-				const bg = asString(ctx, pair.value, 'bg');
+				const bg = asSourceString(ctx, pair.value, 'bg');
 
 				if (bg !== undefined) {
 					scene.bg = bg;

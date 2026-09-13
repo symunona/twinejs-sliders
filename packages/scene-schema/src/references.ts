@@ -3,12 +3,28 @@
  *
  * This runs over RAW passage text with no YAML parse at all — it feeds the map, not the
  * runtime, so a cheap regex is both fine and correct. It must survive half-typed scenes.
+ *
+ * Twine asks a format for the passages a passage points at, and answers with arrows.
+ * Chapbook's own answer only knows `{link to: …}` and `[[wiki links]]`; a scene's choices
+ * live under `links:` instead, so without this a scene-driven story draws as a field of
+ * unconnected cards. The format's CodeMirror extensions read `sceneLinkTargets` from here
+ * (`format/src/twine-extensions/parse-references.ts`) so the map, the CLI and the editor
+ * lint all agree about what a `links:` block says.
+ *
+ * Deliberately a line scanner and not `parseScene`: it runs on every passage on every
+ * keystroke, it must survive a half-typed block, and it only ever needs the `to:` of each
+ * entry.
  */
 
 import {scanWikiLinks} from './links';
 
+/** `links:` at any indent, capturing whatever follows on the same line. */
 const LINKS_LINE_RE = /^(\s*)links\s*:\s*(.*)$/;
+
+/** `key: value` on one line, capturing indent, key and value. */
 const ENTRY_LINE_RE = /^(\s*)([^\s:#][^:]*?)\s*:\s*(.*)$/;
+
+/** `to:` inside a flow map — `{to: Somewhere, if: x}`. */
 const TO_IN_FLOW_RE = /(?:^|[{,])\s*to\s*:\s*([^,}]*)/;
 
 function indentOf(line: string): number {
@@ -32,11 +48,22 @@ function unquote(raw: string): string {
 }
 
 /**
- * Map of link name -> target, harvested from any `links:` block in the text. Understands
- * the flow form (`stay: {to: X}`), the block form (`stay:` / `  to: X`) and the scalar
- * shorthand (`stay: X`).
+ * Map of link name -> target, harvested from any `links:` block in the text.
+ *
+ * Every spelling that is legal (spec 02) is read:
+ *
+ * ```yaml
+ * links:
+ *   back: Other Passage                              # scalar shorthand
+ *   onward: {to: Next Passage, if: has_weapon}        # flow entry
+ *   away:                                            # block entry
+ *     to: Somewhere Else
+ * ```
+ *
+ * …and the whole block written inline, `links: {onward: {to: X}, back: Y}`. Quotes and
+ * trailing `#` comments are stripped from the target.
  */
-export function scanLinkTargets(text: string): Map<string, string> {
+export function sceneLinkTargets(text: string): Map<string, string> {
 	const out = new Map<string, string>();
 	const lines = text.split('\n');
 
@@ -144,6 +171,12 @@ export function scanLinkTargets(text: string): Map<string, string> {
 }
 
 /**
+ * Older name for {@link sceneLinkTargets}, kept because twine-cli's `map` and `lint`
+ * import it. Same function, not a copy — the point of this file.
+ */
+export const scanLinkTargets = sceneLinkTargets;
+
+/**
  * Every passage this passage links to, in order of first appearance, deduped.
  *
  * Handles both authored forms:
@@ -155,7 +188,7 @@ export function parsePassageReferences(text: string): string[] {
 		return [];
 	}
 
-	const targets = scanLinkTargets(text);
+	const targets = sceneLinkTargets(text);
 	const seen = new Set<string>();
 	const out: string[] = [];
 

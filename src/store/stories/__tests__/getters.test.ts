@@ -2,6 +2,7 @@ import {
 	passageWithId,
 	passageWithName,
 	storyPassageTags,
+	storyStats,
 	storyWithId,
 	storyWithName,
 	storyTags,
@@ -291,6 +292,41 @@ describe('storyTags()', () => {
 		delete (stories[0] as any).tags;
 		stories[1].tags = ['a'];
 		expect(storyTags(stories)).toEqual(['a']);
+	});
+});
+
+describe('storyStats()', () => {
+	it('counts [[links]]', () => {
+		const story = fakeStory(0);
+
+		story.passages = [
+			fakePassage({name: 'a', text: '[[b]]'}),
+			fakePassage({name: 'b', text: ''})
+		];
+
+		expect(storyStats(story).links).toEqual(['b']);
+		expect(storyStats(story).brokenLinks).toEqual([]);
+	});
+
+	it("counts a scene's links: entries", () => {
+		const story = fakeStory(0);
+
+		story.passages = [
+			fakePassage({name: 'a', text: '[scene]\nlinks:\n  on: b'}),
+			fakePassage({name: 'b', text: ''})
+		];
+
+		expect(storyStats(story).links).toEqual(['b']);
+	});
+
+	it('reports a scene link pointing at a passage that does not exist as broken', () => {
+		const story = fakeStory(0);
+
+		story.passages = [
+			fakePassage({name: 'a', text: '[scene]\nlinks:\n  on: nowhere'})
+		];
+
+		expect(storyStats(story).brokenLinks).toEqual(['nowhere']);
 	});
 });
 

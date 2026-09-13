@@ -78,6 +78,24 @@ preview rather than pushing the text the author is typing in.
 	opacity: 0.7;
 }
 
+.scene-errors .scene-preview-errors .scene-errors-create {
+	background: none;
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	color: inherit;
+	cursor: pointer;
+	flex-shrink: 0;
+	font: inherit;
+	line-height: 1.2;
+	margin-left: auto;
+	padding: 0 6px;
+	white-space: nowrap;
+}
+
+.scene-errors .scene-preview-errors .scene-errors-create:hover {
+	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+}
+
 /*
 Marks in the passage editor itself. The line tint says where, the underline says exactly
 which text, and the tooltip below says what.

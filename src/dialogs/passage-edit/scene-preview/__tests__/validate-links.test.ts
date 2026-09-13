@@ -1,16 +1,20 @@
 import {parseSceneText} from '../use-scene-parse';
-import {linkTargetErrors} from '../validate-links';
+import {linkTargetErrors, LinkTargetError} from '../validate-links';
 
 const passages = ['Street', 'Tavern Fight', 'Cellar'].map(name => ({
 	name,
 	text: ''
 }));
 
-/** Every unknown-passage error the parse of `text` produces. */
+/**
+ * Every unknown-passage error the parse of `text` produces. `parseSceneText` widens these
+ * back to `SceneError` on the way through, so the cast is what makes `missingPassage`
+ * visible again.
+ */
 function unknown(text: string, names = passages) {
 	return parseSceneText(text, names).errors.filter(
 		error => error.code === 'unknown-passage'
-	);
+	) as LinkTargetError[];
 }
 
 describe('linkTargetErrors()', () => {
@@ -101,6 +105,17 @@ describe('linkTargetErrors()', () => {
 			[]
 		);
 	});
+
+	// The error list offers to create the passage, and needs the bare name to do it.
+	it('carries the missing name on a links: target', () =>
+		expect(
+			unknown('[scene]\nlinks:\n  stay: {to: Nowhere}\n')[0]
+		).toMatchObject({missingPassage: 'Nowhere'}));
+
+	it('carries the missing name on a prose link', () =>
+		expect(
+			unknown('[scene]\nbg: tavern\n[continued]\n[[go->Nowhere]]\n')[0]
+		).toMatchObject({missingPassage: 'Nowhere'}));
 
 	it('takes the passage list as given, parse or no parse', () => {
 		expect(
