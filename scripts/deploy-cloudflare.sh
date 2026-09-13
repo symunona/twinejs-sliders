@@ -179,7 +179,7 @@ if [[ ! -f "dist/web/index.html" ]]; then
 fi
 
 echo "==> Deploying dist/web to Cloudflare Pages project '$PROJECT_NAME'"
-npx wrangler@4 pages deploy dist/web \
+npx --no-install wrangler pages deploy dist/web \
 	--project-name "$PROJECT_NAME" \
 	--branch main \
 	--commit-dirty=true

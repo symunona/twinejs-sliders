@@ -117,7 +117,8 @@
 		"vite": "^5.3.1",
 		"vite-plugin-checker": "^0.6.4",
 		"vite-plugin-node-polyfills": "^0.22.0",
-		"vite-plugin-pwa": "^0.20.0"
+		"vite-plugin-pwa": "^0.20.0",
+		"wrangler": "^4.131.1"
 	},
 	"scripts": {
 		"analyze": "run-s build:web build:analyze",
