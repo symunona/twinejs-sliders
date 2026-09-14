@@ -1,4 +1,11 @@
 import {extractSceneBlock} from '@sliders/scene-index';
+import {
+	BOX_KEYS,
+	CAMERA_KEYS,
+	ENTITY_KEYS,
+	LINK_KEYS,
+	SAY_KEYS
+} from '@sliders/scene-schema';
 import {sceneHintContext} from '../use-scene-hints';
 
 /**
@@ -183,12 +190,84 @@ describe('sceneHintContext()', () => {
 			expect(contextAt('[scene]\nid: tavern-nig|')).toBeUndefined();
 		});
 
-		it('says nothing for a top-level key being typed', () => {
-			expect(contextAt('[scene]\ncam|')).toBeUndefined();
+		it('says nothing in beat text', () => {
+			expect(
+				contextAt('[scene]\nbeats:\n  - mira: "she looked up, |slowly"')
+			).toBeUndefined();
 		});
 
-		it('says nothing inside an entity that has no known key yet', () => {
-			expect(contextAt('[scene]\ncast:\n  mira: {|}')).toBeUndefined();
+		it('says nothing for a link name, which is the author\'s own', () => {
+			expect(contextAt('[scene]\nlinks: {st|')).toBeUndefined();
+		});
+	});
+
+	describe('keys', () => {
+		it('offers the top-level keys for a key being typed', () => {
+			expect(contextAt('[scene]\ncam|')).toMatchObject({
+				slot: {id: 'top', kind: 'keys'},
+				typed: 'cam'
+			});
+		});
+
+		it('offers entity keys inside a flow entity', () => {
+			expect(contextAt('[scene]\ncast:\n  mira: {|}')).toMatchObject({
+				slot: {id: 'entity', kind: 'keys', names: ENTITY_KEYS}
+			});
+		});
+
+		it('offers entity keys after a comma in a flow entity', () => {
+			expect(contextAt('[scene]\ncast:\n  mira: {at: 0, fl|}')).toMatchObject({
+				slot: {id: 'entity', kind: 'keys'},
+				typed: 'fl'
+			});
+		});
+
+		it('offers entity keys in block form too', () => {
+			expect(contextAt('[scene]\ncast:\n  mira:\n    |')).toMatchObject({
+				slot: {id: 'entity', kind: 'keys'}
+			});
+		});
+
+		it('lets a beat say as well as move', () => {
+			expect(contextAt('[scene]\nbeats:\n  - mira: {|}')).toMatchObject({
+				slot: {id: 'beat', kind: 'keys', names: [...ENTITY_KEYS, ...SAY_KEYS]}
+			});
+		});
+
+		it('offers bubble keys inside a nested bubble', () => {
+			expect(
+				contextAt('[scene]\nbeats:\n  - mira: {say: "hi", bubble: {pl|}}')
+			).toMatchObject({slot: {id: 'bubble', kind: 'keys'}, typed: 'pl'});
+		});
+
+		it('offers camera keys', () => {
+			expect(contextAt('[scene]\ncamera: {zo|}')).toMatchObject({
+				slot: {id: 'camera', kind: 'keys', names: CAMERA_KEYS}
+			});
+		});
+
+		it('offers box keys', () => {
+			expect(contextAt('[scene]\nbeats:\n  - box: {t|}')).toMatchObject({
+				slot: {id: 'box', kind: 'keys', names: BOX_KEYS}
+			});
+		});
+
+		it('offers link keys under a link name', () => {
+			expect(contextAt('[scene]\nlinks: {stay: {t|}}')).toMatchObject({
+				slot: {id: 'link', kind: 'keys', names: LINK_KEYS}
+			});
+		});
+
+		it('still reads a value after a key in the same flow map', () => {
+			expect(contextAt('[scene]\ncast:\n  mira: {frame: an|}')).toMatchObject({
+				slot: {entity: 'mira', kind: 'frame'}
+			});
+		});
+
+		it('leaves a brace in beat text alone', () => {
+			expect(
+				contextAt('[scene]\nbeats:\n  - mira: "worth {|"')
+			).toBeUndefined();
 		});
 	});
 });

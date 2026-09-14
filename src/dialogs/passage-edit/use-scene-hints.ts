@@ -15,9 +15,18 @@
 import CodeMirror, {Editor} from 'codemirror';
 import * as React from 'react';
 import {extractSceneBlock} from '@sliders/scene-index';
-import {parseScene} from '@sliders/scene-schema';
+import {
+	BOX_KEYS,
+	CAMERA_KEYS,
+	ENTITY_KEYS,
+	LINK_KEYS,
+	SAY_KEYS,
+	TOP_LEVEL_KEYS,
+	parseScene
+} from '@sliders/scene-schema';
 import {
 	AssetMeta,
+	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
 	Character,
@@ -51,7 +60,12 @@ export type HintSlot =
 	/** `as:` — a bubble style token. */
 	| {kind: 'style'}
 	/** `place:` — where the bubble sits. */
-	| {kind: 'place'};
+	| {kind: 'place'}
+	/**
+	 * Key position in a map whose schema is known: the scene root, an entity, a
+	 * `bubble:`, a link. `id` only names the MRU bucket.
+	 */
+	| {kind: 'keys'; id: string; names: readonly string[]};
 
 export interface SceneHintContext {
 	slot: HintSlot;
@@ -153,6 +167,21 @@ function tokenAround(
 }
 
 /**
+ * The innermost key in text that runs up to (but not including) a colon or an
+ * opening brace. A beat is a list item, so `- fx` has to yield `fx`; only a dash
+ * followed by space is a list marker, since a name may start with one.
+ */
+function innerKey(keyPart: string): string | undefined {
+	const boundary = Math.max(
+		keyPart.lastIndexOf('{'),
+		keyPart.lastIndexOf('['),
+		keyPart.lastIndexOf(',')
+	);
+
+	return keyPart.slice(boundary + 1).replace(/^\s*-\s+/, '').trim() || undefined;
+}
+
+/**
  * The key whose VALUE the cursor is in, or undefined when the cursor is in key
  * position. Understands both `bg: tav` and the flow form
  * `mira: {at: -0.4, frame: ar`, where the innermost key is what matters.
@@ -168,16 +197,61 @@ function valueKey(before: string, tokenStart: number): string | undefined {
 		return undefined;
 	}
 
-	const keyPart = head.slice(0, -1);
-	const boundary = Math.max(
-		keyPart.lastIndexOf('{'),
-		keyPart.lastIndexOf('['),
-		keyPart.lastIndexOf(',')
-	);
+	return innerKey(head.slice(0, -1));
+}
 
-	// A beat is a list item, so `- fx: rain` has to yield `fx`, not `- fx`. Only
-	// a dash followed by space is a list marker; a name may start with one.
-	return keyPart.slice(boundary + 1).replace(/^\s*-\s+/, '').trim() || undefined;
+/**
+ * Where the cursor sits among the flow containers still open on this line:
+ * `owners` is the key each unclosed `{`/`[` hangs off, innermost first, and
+ * `keyPosition` is true when the innermost one is a `{` with no `:` typed since
+ * its last separator -- which is exactly the moment an author wants to be told
+ * what keys the map accepts.
+ *
+ * `valueKey()` cannot answer this on its own: it strips a trailing `{` before
+ * looking for the colon, so `mira: {` and `mira: tav` look identical to it.
+ */
+function flowContext(head: string): {keyPosition: boolean; owners: string[]} {
+	const stack: {inValue: boolean; opener: string; owner?: string}[] = [];
+
+	for (let i = 0; i < head.length; i++) {
+		const char = head[i];
+
+		if (char === '"' || char === "'") {
+			// A quoted scalar can hold anything, braces included.
+			const close = head.indexOf(char, i + 1);
+
+			i = close === -1 ? head.length : close;
+		} else if (char === '{' || char === '[') {
+			stack.push({inValue: false, opener: char, owner: ownerBefore(head, i)});
+		} else if (char === '}' || char === ']') {
+			stack.pop();
+		} else if (char === ',') {
+			if (stack.length > 0) {
+				stack[stack.length - 1].inValue = false;
+			}
+		} else if (char === ':') {
+			if (stack.length > 0) {
+				stack[stack.length - 1].inValue = true;
+			}
+		}
+	}
+
+	const top = stack[stack.length - 1];
+
+	return {
+		keyPosition: top !== undefined && top.opener === '{' && !top.inValue,
+		owners: stack
+			.map(level => level.owner)
+			.filter((owner): owner is string => owner !== undefined)
+			.reverse()
+	};
+}
+
+/** The key a flow container at `open` hangs off, if it hangs off one at all. */
+function ownerBefore(head: string, open: number): string | undefined {
+	const before = head.slice(0, open).replace(/\s+$/, '');
+
+	return before.endsWith(':') ? innerKey(before.slice(0, -1)) : undefined;
 }
 
 /**
@@ -212,6 +286,73 @@ function enclosingKeys(
 	}
 
 	return chain;
+}
+
+/**
+ * What may be written in KEY position, given the chain of keys enclosing the
+ * cursor innermost-first. An empty chain is the scene root.
+ *
+ * The chain is the flow containers still open on the line followed by the block
+ * keys above it, so `- mira: {bubble: {` and a `bubble:` written out over three
+ * indented lines reach the same answer.
+ */
+function keySlotFor(chain: string[]): HintSlot | undefined {
+	const [owner, parent] = chain;
+	const keys = (id: string, names: readonly string[]): HintSlot => ({
+		id,
+		kind: 'keys',
+		names
+	});
+
+	switch (owner) {
+		case undefined:
+			return keys('top', TOP_LEVEL_KEYS);
+
+		case 'bubble':
+			return keys('bubble', BUBBLE_KEYS);
+
+		case 'box':
+			return keys('box', BOX_KEYS);
+
+		case 'camera':
+			return keys('camera', CAMERA_KEYS);
+
+		case 'cast':
+			return {kind: 'cast'};
+
+		case 'props':
+			return {kind: 'props'};
+
+		case 'entities':
+			return {kind: 'entities'};
+
+		case 'fx':
+			return {kind: 'fx'};
+
+		// A link's key is its own name, which only the author knows.
+		case 'links':
+			return undefined;
+	}
+
+	// Anything else in key position is an id -- an entity, or a link -- and what
+	// it accepts depends on the block it was declared in.
+
+	switch (parent) {
+		case 'links':
+			return keys('link', LINK_KEYS);
+
+		case 'cast':
+		case 'props':
+		case 'entities':
+			return keys('entity', ENTITY_KEYS);
+
+		// A beat is an entity patch that may also speak.
+		case 'beats':
+			return keys('beat', [...ENTITY_KEYS, ...SAY_KEYS]);
+
+		default:
+			return undefined;
+	}
 }
 
 /**
@@ -321,7 +462,8 @@ export function sceneHintContext(
 
 	const line = lines[cursor.line] ?? '';
 	const {end, start, typed} = tokenAround(line, cursor.ch);
-	const key = valueKey(line, start);
+	const flow = flowContext(line.slice(0, start));
+	const key = flow.keyPosition ? undefined : valueKey(line, start);
 	// Measured past the END of the name, not past the cursor: `mi|ra` on its own line is
 	// still an author writing one entity, and should still get a body written for it.
 	const restIsEmpty = line.slice(end).trim() === '';
@@ -390,35 +532,44 @@ export function sceneHintContext(
 
 	// Key position: the enclosing block decides what names belong here.
 
-	switch (enclosingKeys(lines, blockStart, cursor.line)[0]) {
-		case 'cast':
-			return found({kind: 'cast'}, true);
+	const chain = [
+		...flow.owners,
+		...enclosingKeys(lines, blockStart, cursor.line)
+	];
 
-		case 'props':
-			return found({kind: 'props'}, true);
-
-		case 'entities':
-			return found({kind: 'entities'}, true);
-
-		case 'fx':
-			return found({kind: 'fx'});
-
-		// A beat's key is its speaker, so the cast on stage is what belongs here — but only
-		// in key position. Beat text is prose, and a `[[link]]` written inside it must
-		// still be the link completion's business, not a list of characters.
-		case 'beats':
-			return /^\s*(?:-\s*)?$/.test(line.slice(0, start))
-				? found({kind: 'speaker'}, true)
-				: undefined;
-
-		default:
-			return undefined;
+	// A beat's key is its speaker, so the cast on stage is what belongs here — but only in
+	// key position. Beat text is prose, and a `[[link]]` written inside it must still be
+	// the link completion's business, not a list of characters.
+	if (chain[0] === 'beats') {
+		return /^\s*(?:-\s*)?$/.test(line.slice(0, start))
+			? found({kind: 'speaker'}, true)
+			: undefined;
 	}
+
+	const slot = keySlotFor(chain);
+
+	if (!slot) {
+		return undefined;
+	}
+
+	return found(
+		slot,
+		slot.kind === 'cast' || slot.kind === 'props' || slot.kind === 'entities'
+	);
 }
 
 /** MRU bucket for a slot. Frames are per-character; the rest are app-wide. */
 function slotKey(slot: HintSlot): string {
-	return slot.kind === 'frame' ? `frame:${slot.entity}` : slot.kind;
+	switch (slot.kind) {
+		case 'frame':
+			return `frame:${slot.entity}`;
+
+		case 'keys':
+			return `keys:${slot.id}`;
+
+		default:
+			return slot.kind;
+	}
 }
 
 /**
@@ -453,6 +604,10 @@ function namesForSlot(
 	sceneIds: string[] = []
 ): string[] {
 	switch (slot.kind) {
+		// Schema order, not alphabetical: the arrays read the way the docs do.
+		case 'keys':
+			return [...slot.names];
+
 		case 'bg':
 			return assetNames(all, ['bg']);
 
@@ -683,6 +838,9 @@ export function sceneCompletion(
 	const bucket = slotKey(slot);
 	const completion = {
 		from: {ch: start, line: cursor.line},
+		// Read back by the caller, which reopens the dropdown after a key is
+		// picked so the author goes straight on to its value.
+		slotKind: slot.kind,
 		to: {ch: end, line: cursor.line},
 		list: orderByRecent(names, bucket).map(({name, recent}) => ({
 			className: recent ? 'sliders-hint-recent' : undefined,
@@ -694,11 +852,16 @@ export function sceneCompletion(
 					? insertBeat(name)
 					: insertEntity(name)
 				: undefined,
-			text: scaffold
-				? slot.kind === 'speaker'
-					? beatText(name)
-					: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
-				: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
+			text:
+				// A key is only ever half a line, so it writes its own colon and
+				// leaves the cursor where the value goes.
+				slot.kind === 'keys'
+					? `${name}: `
+					: scaffold
+					? slot.kind === 'speaker'
+						? beatText(name)
+						: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
+					: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
 		}))
 	};
 
@@ -724,9 +887,25 @@ export function useSceneHints(
 	libraryRef.current = library;
 	passagesRef.current = passageNames;
 
-	return React.useCallback((editor: Editor) => {
-		const complete = () =>
-			sceneCompletion(editor, libraryRef.current, passagesRef.current);
+	return React.useCallback(function open(editor: Editor) {
+		const complete = () => {
+			const result = sceneCompletion(
+				editor,
+				libraryRef.current,
+				passagesRef.current
+			);
+
+			// Picking a key writes `key: ` and stops. The value is what the author
+			// came for, so offer it without a second Ctrl-Space. Deferred because
+			// show-hint is still tearing the old dropdown down at pick time.
+			if (result?.slotKind === 'keys') {
+				CodeMirror.on(result, 'pick', () =>
+					window.setTimeout(() => open(editor), 0)
+				);
+			}
+
+			return result;
+		};
 		const opening = complete();
 
 		if (!opening) {

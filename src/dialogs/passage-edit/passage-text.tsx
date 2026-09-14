@@ -134,6 +134,16 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		(editor: CodeMirror.Editor) => {
 			onEditorChange(editor);
 
+			// Opening a flow map is a question: what goes in here? Answer it without
+			// waiting for Ctrl-Space. The hint itself decides whether the brace is in
+			// a scene at all, so this is safe in prose and in other formats.
+
+			editor.on('inputRead', (instance, change) => {
+				if (change.text.length === 1 && change.text[0].endsWith('{')) {
+					autocompleteSceneNames(instance);
+				}
+			});
+
 			// The potential combination of loading a mode and the dialog entrance
 			// animation seems to mess up CodeMirror's cursor rendering. The delay below
 			// is intended to run after the animation completes.
@@ -143,7 +153,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 				editor.refresh();
 			}, 400);
 		},
-		[onEditorChange]
+		[autocompleteSceneNames, onEditorChange]
 	);
 
 	// Emulate the above behavior re: focus if we aren't using CodeMirror.
