@@ -9,6 +9,7 @@ import {axe} from 'jest-axe';
 import * as React from 'react';
 import {
 	fakeLoadedStoryFormat,
+	fakeStory,
 	FakeStateProvider,
 	FakeStateProviderProps
 } from '../../../test-util';
@@ -44,6 +45,7 @@ describe('<StoryFormatToolbar>', () => {
 				<StoryFormatToolbar
 					editor={{off: jest.fn(), on: jest.fn()} as any}
 					onExecCommand={jest.fn()}
+					story={fakeStory()}
 					storyFormat={fakeLoadedStoryFormat()}
 					{...props}
 				/>
@@ -163,25 +165,35 @@ describe('<StoryFormatToolbar>', () => {
 	// Needs a more accurate mock of <MenuButton>.
 	it.todo('displays icon-only menu buttons properly');
 
-	it('renders nothing if the editor prop is undefined', () => {
+	// The bar's own Edit Scene and Asset Manager buttons are always there--they aren't
+	// the format's--so these check that no format item appears, not that the bar is
+	// empty.
+
+	it('renders no format items if the editor prop is undefined', () => {
 		renderComponent({editor: undefined});
-		expect(document.body.textContent).toBe('');
+		expect(
+			screen.queryByRole('button', {name: 'mock-label'})
+		).not.toBeInTheDocument();
 	});
 
-	it('renders nothing if the toolbar factory function is not actually a function', () => {
+	it('renders no format items if the toolbar factory function is not actually a function', () => {
 		jest.spyOn(console, 'error').mockReturnValue();
 		useFormatToolbarMock.mockReturnValue({notAFunction: true});
 		renderComponent();
-		expect(document.body.textContent).toBe('');
+		expect(
+			screen.queryByRole('button', {name: 'mock-label'})
+		).not.toBeInTheDocument();
 	});
 
-	it('renders nothing if the toolbar factory function throws an error', () => {
+	it('renders no format items if the toolbar factory function throws an error', () => {
 		jest.spyOn(console, 'error').mockReturnValue();
 		useFormatToolbarMock.mockReturnValue(() => {
 			throw new Error();
 		});
 		renderComponent();
-		expect(document.body.textContent).toBe('');
+		expect(
+			screen.queryByRole('button', {name: 'mock-label'})
+		).not.toBeInTheDocument();
 	});
 
 	it('skips toolbar items with unknown types', () => {
@@ -206,7 +218,7 @@ describe('<StoryFormatToolbar>', () => {
 	it('updates after running a command', async () => {
 		renderComponent();
 		useFormatToolbarMock.mockClear();
-		fireEvent.click(screen.getByRole('button'));
+		fireEvent.click(screen.getByRole('button', {name: 'mock-label'}));
 		await waitFor(() => expect(useFormatToolbarMock).toBeCalledTimes(1));
 	});
 

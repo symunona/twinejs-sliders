@@ -11,6 +11,19 @@ import {useCommand} from '../../../../hotkeys';
 import {Story} from '../../../../store/stories';
 
 export interface ScenePreviewButtonProps {
+	/**
+	 * Fire the shortcut even while the author is typing. Only the passage editor's copy
+	 * wants this; the map's key is unmodified enough to land in a text field.
+	 */
+	allowInInput?: boolean;
+	/**
+	 * Command this button answers to. The passage editor shows a second copy of it under
+	 * its own ID, because the two want different keys--one is pressed with the map in
+	 * front, the other with the cursor in the scene text.
+	 */
+	commandId?: string;
+	hotkeyScope?: string;
+	label?: string;
 	story: Story;
 }
 
@@ -22,7 +35,13 @@ export interface ScenePreviewButtonProps {
  * way round, which is why this clears the dismissal.
  */
 export const ScenePreviewButton: React.FC<ScenePreviewButtonProps> = props => {
-	const {story} = props;
+	const {
+		allowInInput,
+		commandId = 'scene.togglePreview',
+		hotkeyScope = 'story-map',
+		label,
+		story
+	} = props;
 	const {dialogs, dispatch} = useDialogsContext();
 	const {t} = useTranslation();
 	const openIndex = dialogs.findIndex(
@@ -45,16 +64,17 @@ export const ScenePreviewButton: React.FC<ScenePreviewButtonProps> = props => {
 	}, [dispatch, openIndex, story.id]);
 
 	useCommand({
-		id: 'scene.togglePreview',
-		label: t('hotkeys.commands.scene.togglePreview'),
+		allowInInput,
+		id: commandId,
+		label: t(`hotkeys.commands.${commandId}`),
 		run: handleClick,
-		scope: 'story-map'
+		scope: hotkeyScope
 	});
 
 	return (
 		<IconButton
 			icon={<IconMovie />}
-			label={t('routes.storyEdit.toolbar.scenePreview')}
+			label={label ?? t('routes.storyEdit.toolbar.scenePreview')}
 			onClick={handleClick}
 			selectable
 			selected={openIndex !== -1}

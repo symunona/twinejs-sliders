@@ -29,6 +29,9 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 
 	'app.keyboardShortcuts': {bindings: ['mod+shift+?']},
 	'app.preferences': {bindings: ['mod+,']},
+	// In the catalog since the AI dialog moved out of Preferences, but never given a
+	// key; it's listed here so the shortcuts dialog can offer to bind it.
+	'app.ai': {bindings: []},
 
 	// Dialogs. Dialogs are mostly text fields, so this has to be a chord that
 	// produces no character and that CodeMirror doesn't use.
@@ -70,6 +73,14 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'sliders.assets': {bindings: ['a']},
 	'sliders.characters': {bindings: ['c']},
 	'sliders.generator': {bindings: ['g']},
+
+	// Passage editor. Focus lives in CodeMirror the whole time these are wanted, so
+	// they have to be chords that type nothing. Alt+letter is that on Linux and
+	// Windows; on macOS Option+P is a real character (π), and `event.key` is what the
+	// dispatcher matches on, so these are dead there until someone rebinds them.
+
+	'scene.edit': {bindings: ['alt+p']},
+	'scene.assets': {bindings: ['alt+a']},
 
 	// Scene preview. Viewer keys, so they only fire once focus is inside the
 	// preview--pressing left in the passage text still moves the cursor.

@@ -6,7 +6,8 @@ import {
 	Passage,
 	selectPassage,
 	selectPassagesInRect,
-	Story
+	Story,
+	updatePassage
 } from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {Point, Rect} from '../../util/geometry';
@@ -59,6 +60,16 @@ export function usePassageChangeHandlers(story: Story) {
 		[dialogsDispatch, story.id]
 	);
 
+	const handleRenamePassage = React.useCallback(
+		(passage: Passage, name: string) =>
+			// Don't create newly linked passages here, for the reason the toolbar's rename
+			// button gives: the update would see the new links before it saw the new name.
+			undoableStoriesDispatch(
+				updatePassage(story, passage, {name}, {dontUpdateOthers: true})
+			),
+		[story, undoableStoriesDispatch]
+	);
+
 	const handleSelectPassage = React.useCallback(
 		(passage: Passage, exclusive: boolean) =>
 			undoableStoriesDispatch(selectPassage(story, passage, exclusive)),
@@ -92,6 +103,7 @@ export function usePassageChangeHandlers(story: Story) {
 		handleDeselectPassage,
 		handleDragPassages,
 		handleEditPassage,
+		handleRenamePassage,
 		handleSelectPassage,
 		handleSelectRect
 	};

@@ -24,6 +24,8 @@ export interface PassageMapProps {
 	onDeselect: (passage: Passage) => void;
 	onDrag: (change: Point) => void;
 	onEdit: (passage: Passage) => void;
+	/** Renaming from a card title. Omitted leaves titles inert. */
+	onRename?: (passage: Passage, name: string) => void;
 	onSelect: (passage: Passage, exclusive: boolean) => void;
 	/** Passage ID -> the name of the other editor holding it. Soft locks, spec 11. */
 	passageLocks?: Record<string, string>;
@@ -93,6 +95,7 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 		onDeselect,
 		onDrag,
 		onEdit,
+		onRename,
 		onSelect,
 		passageLocks,
 		passages,
@@ -119,6 +122,16 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 	const ghostIds = React.useMemo(
 		() => new Set((ghosts ?? []).map(ghost => ghost.id)),
 		[ghosts]
+	);
+	// Ghosts are not in this: a link target with no passage behind it is exactly the
+	// name a rename should be allowed to claim.
+	const passageNames = React.useMemo(
+		() => new Set(passages.map(passage => passage.name)),
+		[passages]
+	);
+	const nameTaken = React.useCallback(
+		(name: string) => passageNames.has(name),
+		[passageNames]
 	);
 	const passageBounds = React.useMemo(() => {
 		// Need to inject a fake rect at the very top-left corner to anchor the
@@ -251,12 +264,14 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 			<PassageCardGroup
 				errorCounts={errorCounts}
 				ghostIds={ghostIds}
+				nameTaken={nameTaken}
 				onCreate={onCreateGhost}
 				onDeselect={onDeselect}
 				onDragStart={handleDragStart}
 				onDrag={handleDrag}
 				onDragStop={handleDragStop}
 				onEdit={onEdit}
+				onRename={onRename}
 				onSelect={handleSelect}
 				passageLocks={passageLocks}
 				passages={mapPassages}

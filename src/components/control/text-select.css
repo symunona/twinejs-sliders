@@ -33,10 +33,12 @@
 
 .text-select-control select option {
 	/*
-	Needed for Firefox dark mode; otherwise it'll try to use var(--dark-gray) from
-	the select and make it unreadable.
+	Options inherit the select's color (var(--dark-gray)) and, in some browsers,
+	nothing at all for their background — which lands white on white in dark mode.
+	Paint both from the theme instead of leaving either to the browser.
 	*/
-	color: initial;
+	background-color: var(--white);
+	color: var(--black);
 }
 
 .text-select-control select:focus-visible {

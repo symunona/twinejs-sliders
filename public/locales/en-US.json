@@ -113,7 +113,8 @@
 			"errors_plural": "This passage has {{count}} scene errors.",
 			"placeholderClick": "Double-click this passage to edit it.",
 			"placeholderGhost": "Click to create this passage.",
-			"placeholderTouch": "Tap this passage, then choose Edit from the Passage tab to edit it."
+			"placeholderTouch": "Tap this passage, then choose Edit from the Passage tab to edit it.",
+			"renameTitle": "Click to rename this passage"
 		},
 		"passageFuzzyFinder": {
 			"noResults": "No matches.",
@@ -334,6 +335,7 @@
 				"showWarnings": "Show Warnings ({{count}})",
 				"showWarnings_plural": "Show Warnings ({{count}})"
 			},
+			"editScene": "Edit Scene",
 			"hideToolbars": "Hide toolbars",
 			"showToolbars": "Show toolbars",
 			"setAsStart": "Start Story Here",
@@ -343,7 +345,7 @@
 			"sizeTall": "Tall",
 			"sizeWide": "Wide",
 			"scenePreview": {
-				"title": "Preview",
+				"title": "Scene Editor",
 				"errorCount": "{{count}} error",
 				"errorCount_plural": "{{count}} errors",
 				"warningCount": "{{count}} warning",
@@ -761,7 +763,7 @@
 				"goTo": "Go To",
 				"javaScript": "JavaScript",
 				"passageTags": "Passage Tags",
-				"scenePreview": "Preview",
+				"scenePreview": "Scene Editor",
 				"slidersAssets": "Assets",
 				"slidersCharacters": "Characters",
 				"snapToGrid": "Snap to Grid",
@@ -982,7 +984,9 @@
 				"generator": "Asset Generator"
 			},
 			"scene": {
-				"togglePreview": "Show or Hide Scene Preview",
+				"togglePreview": "Show or Hide Scene Editor",
+				"edit": "Edit Scene",
+				"assets": "Asset Manager",
 				"previousBeat": "Previous Beat",
 				"nextBeat": "Next Beat",
 				"play": "Play or Pause Scene",
@@ -1031,7 +1035,7 @@
 			"passage-editor": "Passage Text",
 			"fuzzy-finder": "Search Box",
 			"keybindings": "Keyboard Shortcuts",
-			"scene-preview": "Scene Preview",
+			"scene-preview": "Scene Editor",
 			"sliders-assets": "Asset Manager",
 			"asset-editor": "Image Editor",
 			"sliders-characters": "Character Editor",

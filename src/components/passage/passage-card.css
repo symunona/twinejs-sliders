@@ -36,6 +36,39 @@
 	overflow: ellipsis;
 }
 
+/*
+Renaming happens in the title itself, so the field has to sit exactly where the text was
+and inherit everything about it--anything else makes the card jump as it opens.
+*/
+
+.passage-card-title.renameable {
+	cursor: text;
+}
+
+.passage-card-rename {
+	display: block;
+}
+
+.passage-card-rename input {
+	background: var(--white);
+	border: 1px solid var(--blue);
+	border-radius: var(--corner-round);
+	color: var(--black);
+	display: block;
+	font: inherit;
+	margin: 0;
+	padding: 0;
+	width: 100%;
+}
+
+.passage-card-rename input[aria-invalid='true'] {
+	border-color: var(--red);
+}
+
+.passage-card-rename input:focus-visible {
+	outline: none;
+}
+
 .passage-card .tag-badges {
 	bottom: calc(var(--grid-size) / 2);
 	flex-direction: row-reverse;

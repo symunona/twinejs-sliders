@@ -214,7 +214,14 @@ export const PassageEditContents: React.FC<
 	}
 
 	return (
-		<div className="passage-edit-contents" aria-hidden={disabled}>
+		// `passage-editor` has been in the scope list all along with nothing declaring it.
+		// It does now: commands that belong to writing a scene shouldn't fire from every
+		// other dialog the way a `dialog`-scoped one would.
+		<div
+			className="passage-edit-contents"
+			aria-hidden={disabled}
+			data-hotkey-scope="passage-editor"
+		>
 			{prefs.passageEditorToolbars && (
 				<>
 					<PassageToolbar
@@ -229,6 +236,7 @@ export const PassageEditContents: React.FC<
 							disabled={readOnly}
 							editor={cmEditor}
 							onExecCommand={handleExecCommand}
+							story={story}
 							storyFormat={storyFormat}
 						/>
 					)}

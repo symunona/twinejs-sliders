@@ -14,6 +14,9 @@ import {
 } from '../../components/control/menu-button';
 import {useDialogsContext} from '../context';
 import {SceneHelpDialog} from '../scene-help';
+import {ScenePreviewButton} from '../../routes/story-edit/toolbar/story/scene-preview-button';
+import {SlidersAssetsButton} from '../../routes/story-edit/toolbar/story/sliders-assets-button';
+import {Story} from '../../store/stories';
 import './story-format-toolbar.css';
 
 /**
@@ -27,11 +30,12 @@ export interface StoryFormatToolbarProps {
 	disabled?: boolean;
 	editor?: CodeMirror.Editor;
 	onExecCommand: (name: string) => void;
+	story: Story;
 	storyFormat: StoryFormat;
 }
 
 export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
-	const {disabled, editor, onExecCommand, storyFormat} = props;
+	const {disabled, editor, onExecCommand, story, storyFormat} = props;
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const appTheme = useComputedTheme();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
@@ -98,6 +102,30 @@ export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
 		Promise.resolve().then(tryToSetToolbar);
 	}
 
+	// Not the format's own commands, but the two things an author reaches for while
+	// writing a scene, so they sit beside the Scene menu rather than a toolbar tab away
+	// behind the dialog. A format with no Scene menu gets them at the end of the bar.
+
+	const sceneButtons = (
+		<>
+			<ScenePreviewButton
+				allowInInput
+				commandId="scene.edit"
+				hotkeyScope="passage-editor"
+				label={t('dialogs.passageEdit.editScene')}
+				story={story}
+			/>
+			<SlidersAssetsButton
+				allowInInput
+				commandId="scene.assets"
+				hotkeyScope="passage-editor"
+			/>
+		</>
+	);
+	const hasSceneMenu = toolbarItems.some(
+		item => item.type === 'menu' && item.label === sceneMenuLabel
+	);
+
 	return (
 		<div className="story-format-toolbar" ref={containerRef}>
 			<ButtonBar>
@@ -153,7 +181,7 @@ export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
 								);
 							}
 
-							return (
+							const menu = (
 								<MenuButton
 									disabled={disabled || (!sceneMenu && item.disabled)}
 									icon={<img src={item.icon} alt="" />}
@@ -163,11 +191,21 @@ export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
 									label={item.label}
 								/>
 							);
+
+							return sceneMenu ? (
+								<React.Fragment key={index}>
+									{menu}
+									{sceneButtons}
+								</React.Fragment>
+							) : (
+								menu
+							);
 						}
 					}
 
 					return null;
 				})}
+				{!hasSceneMenu && sceneButtons}
 			</ButtonBar>
 		</div>
 	);

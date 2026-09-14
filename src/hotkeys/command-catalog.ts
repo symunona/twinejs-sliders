@@ -97,6 +97,9 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'passage.rename', scope: 'dialog'},
 	{id: 'dialog.maximize', scope: 'dialog'},
 
+	{id: 'scene.edit', scope: 'passage-editor'},
+	{id: 'scene.assets', scope: 'passage-editor'},
+
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},
 	{id: 'scene.toggleLock', scope: 'scene-preview'},

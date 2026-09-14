@@ -39,6 +39,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 		handleDeselectPassage,
 		handleDragPassages,
 		handleEditPassage,
+		handleRenamePassage,
 		handleSelectPassage,
 		handleSelectRect
 	} = usePassageChangeHandlers(story);
@@ -98,6 +99,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 					onDeselect={handleDeselectPassage}
 					onDrag={handleDragPassages}
 					onEdit={handleEditPassage}
+					onRename={handleRenamePassage}
 					onSelect={handleSelectPassage}
 					onSelectRect={handleSelectRect}
 					passageLocks={passageLocks}
