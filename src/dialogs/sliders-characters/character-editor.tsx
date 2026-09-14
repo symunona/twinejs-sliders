@@ -357,6 +357,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					)}
 					<ButtonBar>
 						<PromptButton
+							commandId="slidersCharacters.addAnchor"
 							disabled={!activeFrame}
 							icon={<IconCrosshair />}
 							label={t('dialogs.slidersCharacters.addAnchor')}

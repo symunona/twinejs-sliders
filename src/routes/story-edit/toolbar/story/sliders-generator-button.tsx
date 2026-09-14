@@ -29,6 +29,7 @@ export const SlidersGeneratorButton: React.FC = () => {
 
 	return (
 		<IconButton
+			commandId="sliders.generator"
 			icon={<IconWand />}
 			label={t('routes.storyEdit.toolbar.slidersGenerator')}
 			onClick={handleClick}

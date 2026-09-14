@@ -63,6 +63,7 @@ export const EnabledRenamePassageButton: React.FC<EnabledRenamePassageButtonProp
 
 	return (
 		<PromptButton
+			commandId={hotkeyScope === null ? undefined : 'passage.rename'}
 			icon={<IconWriting />}
 			label={t('common.rename')}
 			onChangeOpen={setOpen}

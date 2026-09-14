@@ -31,12 +31,14 @@ export const UndoRedoButtons: React.FC = () => {
 	return (
 		<>
 			<IconButton
+				commandId="story.undo"
 				disabled={!undo}
 				icon={<IconArrowBack />}
 				label={undoLabel ?? t('common.undo')}
 				onClick={undo}
 			/>
 			<IconButton
+				commandId="story.redo"
 				disabled={!redo}
 				icon={<IconArrowForward />}
 				label={redoLabel ?? t('common.redo')}

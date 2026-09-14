@@ -86,6 +86,7 @@ export const DeleteStoryButton: React.FC<DeleteStoryButtonProps> = ({
 	if (!syncRecord) {
 		return (
 			<ConfirmButton
+				commandId="story.delete"
 				confirmIcon={<IconTrash />}
 				onChangeOpen={setConfirmOpen}
 				open={confirmOpen}
@@ -104,6 +105,7 @@ export const DeleteStoryButton: React.FC<DeleteStoryButtonProps> = ({
 		<span className="confirm-button">
 			<CardButton
 				ariaLabel={prompt}
+				commandId="story.delete"
 				disabled={!story}
 				icon={<IconTrash />}
 				label={t('common.delete')}

@@ -31,6 +31,7 @@ export const CreatePassageButton: React.FC<CreatePassageButtonProps> = props => 
 
 	return (
 		<IconButton
+			commandId="passage.create"
 			icon={<IconPlus />}
 			label={t('common.new')}
 			onClick={handleClick}

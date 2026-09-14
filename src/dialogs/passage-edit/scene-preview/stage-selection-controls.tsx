@@ -105,6 +105,7 @@ export const StageSelectionControls: React.FC<
 	return (
 		<div className="scene-preview-selection" data-testid="scene-preview-selection">
 			<IconButton
+			commandId="scene.flip"
 				icon={<IconFlipHorizontal />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.flip')}
@@ -115,12 +116,14 @@ export const StageSelectionControls: React.FC<
 			{/* Depth is one number now, so these are the buttons the layer select used to
 			    be. They step `z:`, exactly as `[` / `]` and mod+down / mod+up do. */}
 			<IconButton
+			commandId="scene.zBack"
 				icon={<IconArrowDown />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.zBack')}
 				onClick={() => onStepZ(-1)}
 			/>
 			<IconButton
+			commandId="scene.zFront"
 				icon={<IconArrowUp />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.zFront')}
@@ -146,6 +149,7 @@ export const StageSelectionControls: React.FC<
 				</TextSelect>
 			)}
 			<IconButton
+			commandId="scene.delete"
 				icon={<IconTrash />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.remove')}

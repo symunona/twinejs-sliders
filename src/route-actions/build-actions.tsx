@@ -151,6 +151,7 @@ export const BuildActions: React.FC<BuildActionsProps> = ({story}) => {
 			<CardButton
 				ariaLabel={testError?.message ?? ''}
 				disabled={!story}
+				commandId="build.test"
 				icon={<IconTool />}
 				label={t('routeActions.build.test')}
 				onChangeOpen={() => setTestError(undefined)}
@@ -170,6 +171,7 @@ export const BuildActions: React.FC<BuildActionsProps> = ({story}) => {
 			<CardButton
 				ariaLabel={playError?.message ?? ''}
 				disabled={!story}
+				commandId="build.play"
 				icon={<IconPlayerPlay />}
 				label={t('routeActions.build.play')}
 				onChangeOpen={() => setPlayError(undefined)}
@@ -189,6 +191,7 @@ export const BuildActions: React.FC<BuildActionsProps> = ({story}) => {
 			<CardButton
 				ariaLabel={proofError?.message ?? ''}
 				disabled={!story}
+				commandId="build.proof"
 				icon={<IconEyeglass />}
 				label={t('routeActions.build.proof')}
 				onChangeOpen={() => setProofError(undefined)}
@@ -208,6 +211,7 @@ export const BuildActions: React.FC<BuildActionsProps> = ({story}) => {
 			<CardButton
 				ariaLabel={publishError?.message ?? ''}
 				disabled={!story}
+				commandId="build.publishToFile"
 				icon={<IconFileText />}
 				label={t('routeActions.build.publishToFile')}
 				onChangeOpen={() => setPublishError(undefined)}
@@ -226,6 +230,7 @@ export const BuildActions: React.FC<BuildActionsProps> = ({story}) => {
 			</CardButton>
 			<IconButton
 				disabled={!story}
+				commandId="build.exportAsTwee"
 				icon={<IconFileTwee />}
 				label={t('routeActions.build.exportAsTwee')}
 				onClick={handleExportAsTwee}

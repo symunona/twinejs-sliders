@@ -63,6 +63,7 @@ export const CreateStoryButton: React.FC = () => {
 
 	return (
 		<PromptButton
+			commandId="story.create"
 			icon={<IconPlus />}
 			onChangeOpen={setPromptOpen}
 			open={promptOpen}

@@ -302,6 +302,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		>
 			<ButtonBar>
 				<PromptButton
+					commandId="slidersCharacters.create"
 					icon={<IconUserPlus />}
 					label={t('dialogs.slidersCharacters.newCharacter')}
 					onChange={event => setNewCharacterName(event.target.value)}
@@ -323,6 +324,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 							value={newId}
 						/>
 						<ConfirmButton
+							commandId="slidersCharacters.delete"
 							confirmVariant="danger"
 							icon={<IconTrash />}
 							label={t('common.delete')}

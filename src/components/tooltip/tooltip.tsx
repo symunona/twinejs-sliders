@@ -6,7 +6,17 @@ import './tooltip.css';
 
 export interface TooltipProps {
 	anchor: HTMLElement | null;
-	label: string;
+	/**
+	 * Extra content shown beside the label, e.g. the keyboard shortcut the
+	 * anchor is bound to. Unlike `label`, this never duplicates an
+	 * `aria-label`--a shortcut is visual sugar only.
+	 */
+	keys?: React.ReactNode;
+	/**
+	 * Omitted when the anchor already shows its label onscreen and the tooltip
+	 * exists only to carry `keys`.
+	 */
+	label?: string;
 	position?: Placement;
 }
 
@@ -19,7 +29,7 @@ export interface TooltipProps {
 // not be. That content should be placed in an `aria-label` attribute instead.
 
 export const Tooltip: React.FC<TooltipProps> = props => {
-	const {anchor, label, position = 'top'} = props;
+	const {anchor, keys, label, position = 'top'} = props;
 	const [tooltipEl, setTooltipEl] = React.useState<HTMLDivElement | null>(null);
 	const [arrowEl, setArrowEl] = React.useState<HTMLDivElement | null>(null);
 	const [visible, setVisible] = React.useState(false);
@@ -86,7 +96,10 @@ export const Tooltip: React.FC<TooltipProps> = props => {
 				{...attributes.popper}
 			>
 				<div className="tooltip-arrow" ref={setArrowEl} style={styles.arrow} />
-				<div className="tooltip-label">{label}</div>
+				<div className="tooltip-label">
+					{label}
+					{keys}
+				</div>
 			</div>
 		</CSSTransition>
 	);

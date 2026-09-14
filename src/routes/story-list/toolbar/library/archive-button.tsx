@@ -25,6 +25,7 @@ export const ArchiveButton: React.FC = () => {
 
 	return (
 		<IconButton
+			commandId="library.archive"
 			icon={<IconPackage />}
 			label={t('routes.storyList.toolbar.archive')}
 			onClick={handleClick}

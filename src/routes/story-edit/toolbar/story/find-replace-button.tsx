@@ -43,6 +43,7 @@ export const FindReplaceButton: React.FC<FindReplaceButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="story.findReplace"
 			icon={<IconSearch />}
 			label={t('routes.storyEdit.toolbar.findAndReplace')}
 			onClick={handleClick}

@@ -31,6 +31,7 @@ export const SelectAllPassagesButton: React.FC<SelectAllPassagesButtonProps> = p
 
 	return (
 		<IconButton
+			commandId="passage.selectAll"
 			icon={<IconMarquee />}
 			label={t('common.selectAll')}
 			onClick={handleClick}

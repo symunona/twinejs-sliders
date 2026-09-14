@@ -1,4 +1,5 @@
 export * from './command-catalog';
+export * from './command-key-chip';
 export * from './commands.types';
 export * from './conflicts';
 export * from './default-keymap';

@@ -75,6 +75,7 @@ export const TagStoryButton: React.FC<TagStoryButtonProps> = props => {
 
 	return (
 		<TagCardButton
+			commandId="story.tag"
 			allTags={allStoryTags}
 			disabled={!story}
 			id={`story-tag-input-${story?.id ?? 'none'}`}

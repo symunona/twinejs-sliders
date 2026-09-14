@@ -11,6 +11,10 @@ import {IconCheck} from '@tabler/icons';
 import {useControlledOpen} from './use-controlled-open';
 
 export interface UncheckableLabeledMenuItem {
+	/**
+	 * The command this item runs, if it has one--see `IconButtonProps`.
+	 */
+	commandId?: string;
 	disabled?: boolean;
 	label: string;
 	onClick: () => void;
@@ -95,6 +99,7 @@ export const MenuButton: React.FC<MenuButtonProps> = props => {
 								return 'checkable' in item ? (
 									<CheckboxButton
 										checkedIcon={<IconCheck />}
+										commandId={item.commandId}
 										disabled={item.disabled}
 										key={index}
 										label={item.label}
@@ -104,6 +109,7 @@ export const MenuButton: React.FC<MenuButtonProps> = props => {
 									/>
 								) : (
 									<IconButton
+										commandId={item.commandId}
 										disabled={item.disabled}
 										icon={<IconEmpty />}
 										key={index}

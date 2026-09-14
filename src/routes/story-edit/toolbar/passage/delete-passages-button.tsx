@@ -47,6 +47,7 @@ export const DeletePassagesButton: React.FC<
 
 	return (
 		<IconButton
+			commandId="passage.delete"
 			disabled={disabled}
 			icon={<IconTrash />}
 			label={

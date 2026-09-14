@@ -76,6 +76,7 @@ const EnabledRenameStoryButton: React.FC<EnabledRenameStoryButtonProps> = props 
 
 	return (
 		<PromptButton
+			commandId={hotkeyScope === null ? undefined : 'story.rename'}
 			icon={<IconWriting />}
 			label={t('common.rename')}
 			onChangeOpen={setOpen}

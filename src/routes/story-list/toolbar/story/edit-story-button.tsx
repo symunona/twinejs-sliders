@@ -28,6 +28,7 @@ export const EditStoryButton: React.FC<EditStoryButtonProps> = ({story}) => {
 
 	return (
 		<IconButton
+			commandId="story.edit"
 			disabled={!story}
 			icon={<IconEdit />}
 			label={t('common.edit')}

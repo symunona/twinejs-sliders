@@ -22,6 +22,7 @@ export const ImportStoryButton: React.FC = () => {
 
 	return (
 		<IconButton
+			commandId="library.import"
 			icon={<IconFileImport />}
 			label={t('common.import')}
 			onClick={handleClick}

@@ -21,6 +21,7 @@ export const GoToPassageButton: React.FC<GoToPassageButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="passage.goTo"
 			icon={<IconFocus2 />}
 			label={t('routes.storyEdit.toolbar.goTo')}
 			onClick={onOpenFuzzyFinder}

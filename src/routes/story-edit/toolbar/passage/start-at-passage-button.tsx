@@ -38,6 +38,7 @@ export const StartAtPassageButton: React.FC<StartAtPassageButtonProps> = props =
 
 	return (
 		<IconButton
+			commandId="passage.startAt"
 			disabled={!passage || passage.id === story.startPassage}
 			icon={<IconRocket />}
 			label={t('routes.storyEdit.toolbar.startStoryHere')}

@@ -64,11 +64,13 @@ export const AppActions: React.FC = () => {
 	return (
 		<ButtonBar>
 			<IconButton
+				commandId="app.preferences"
 				icon={<IconSettings />}
 				label={t('routeActions.app.preferences')}
 				onClick={handlePreferences}
 			/>
 			<IconButton
+				commandId="app.ai"
 				icon={<IconRobot />}
 				label={t('routeActions.app.ai')}
 				onClick={handleAi}
@@ -82,6 +84,7 @@ export const AppActions: React.FC = () => {
 				}
 			/>
 			<IconButton
+				commandId="app.keyboardShortcuts"
 				icon={<IconKeyboard />}
 				label={t('dialogs.keyboardShortcuts.title')}
 				onClick={handleKeyboardShortcuts}

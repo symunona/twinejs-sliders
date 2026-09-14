@@ -36,6 +36,7 @@ export const DeselectAllPassagesButton: React.FC<
 
 	return (
 		<IconButton
+			commandId="passage.deselectAll"
 			disabled={!selectedPassages.length}
 			icon={<IconMarqueeOff />}
 			label={t('common.deselectAll')}

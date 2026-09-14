@@ -179,6 +179,7 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 						{headerControls}
 						{maximizable && (
 							<IconButton
+								commandId="dialog.maximize"
 								icon={maximized ? <IconMinimize /> : <IconMaximize />}
 								iconOnly
 								label={

@@ -13,6 +13,10 @@ import {useControlledOpen} from '../control/use-controlled-open';
 import './tag-card-button.css';
 
 export interface TagCardButtonProps {
+	/**
+	 * The command this button runs, if it has one--see `IconButtonProps`.
+	 */
+	commandId?: string;
 	disabled?: boolean;
 	allTags: string[];
 	id: string;
@@ -41,6 +45,7 @@ export interface TagCardButtonProps {
 export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 	const {
 		allTags,
+		commandId,
 		disabled,
 		id,
 		onAdd,
@@ -124,6 +129,7 @@ export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 		<span className="tag-card-button">
 			<CardButton
 				ariaLabel={t('common.tags')}
+				commandId={commandId}
 				disabled={disabled}
 				onChangeOpen={handleChangeOpen}
 				open={open}

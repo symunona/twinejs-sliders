@@ -34,6 +34,7 @@ export const JavaScriptButton: React.FC<JavaScriptButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="story.javascript"
 			icon={<IconBraces />}
 			label={t('routes.storyEdit.toolbar.javaScript')}
 			onClick={handleClick}

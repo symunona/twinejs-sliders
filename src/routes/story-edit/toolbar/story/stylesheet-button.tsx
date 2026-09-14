@@ -34,6 +34,7 @@ export const StylesheetButton: React.FC<StylesheetButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="story.stylesheet"
 			icon={<IconHash />}
 			label={t('routes.storyEdit.toolbar.stylesheet')}
 			onClick={handleClick}

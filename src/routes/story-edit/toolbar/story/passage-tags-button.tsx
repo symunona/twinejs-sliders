@@ -34,6 +34,7 @@ export const PassageTagsButton: React.FC<PassageTagsButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="story.passageTags"
 			icon={<IconTags />}
 			label={t('routes.storyEdit.toolbar.passageTags')}
 			onClick={handleClick}

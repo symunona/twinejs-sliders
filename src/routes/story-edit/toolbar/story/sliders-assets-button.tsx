@@ -44,6 +44,7 @@ export const SlidersAssetsButton: React.FC<SlidersAssetsButtonProps> = props => 
 
 	return (
 		<IconButton
+			commandId={commandId}
 			icon={<IconPhoto />}
 			label={t('routes.storyEdit.toolbar.slidersAssets')}
 			onClick={handleClick}

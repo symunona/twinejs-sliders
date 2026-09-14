@@ -366,6 +366,7 @@ export const AssetGeneratorDialog: React.FC<
 						    press but Stop, so it takes the Generate button's place. */}
 						{busy ? (
 							<IconButton
+								commandId="assetGenerator.stop"
 								icon={<IconX />}
 								label={t('dialogs.assetGenerator.stop')}
 								onClick={() => cancel.current?.abort()}
@@ -373,6 +374,7 @@ export const AssetGeneratorDialog: React.FC<
 							/>
 						) : (
 							<IconButton
+								commandId="assetGenerator.generate"
 								disabled={!usable || prompt.trim() === ''}
 								icon={<IconWand />}
 								label={t('dialogs.assetGenerator.generate')}

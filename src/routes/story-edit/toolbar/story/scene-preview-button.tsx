@@ -73,6 +73,7 @@ export const ScenePreviewButton: React.FC<ScenePreviewButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId={commandId}
 			icon={<IconMovie />}
 			label={label ?? t('routes.storyEdit.toolbar.scenePreview')}
 			onClick={handleClick}

@@ -34,6 +34,7 @@ export const DetailsButton: React.FC<DetailsButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="story.details"
 			icon={<IconInfoCircle />}
 			label={t('common.details')}
 			onClick={handleClick}

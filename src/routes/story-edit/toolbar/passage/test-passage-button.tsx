@@ -32,6 +32,7 @@ export const TestPassageButton: React.FC<TestPassageButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId={hotkeyScope === null ? undefined : 'passage.test'}
 			disabled={!passage}
 			icon={<IconTool />}
 			label={t('routes.storyEdit.toolbar.testFromHere')}

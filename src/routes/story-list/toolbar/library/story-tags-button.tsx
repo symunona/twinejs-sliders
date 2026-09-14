@@ -22,6 +22,7 @@ export const StoryTagsButton: React.FC = () => {
 
 	return (
 		<IconButton
+			commandId="library.storyTags"
 			icon={<IconTags />}
 			label={t('routes.storyList.toolbar.storyTags')}
 			onClick={handleClick}

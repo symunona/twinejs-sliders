@@ -37,6 +37,7 @@ export const DuplicateStoryButton: React.FC<DuplicateStoryButtonProps> = ({
 
 	return (
 		<IconButton
+			commandId="story.duplicate"
 			disabled={!story}
 			icon={<IconCopy />}
 			label={t('common.duplicate')}

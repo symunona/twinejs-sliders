@@ -913,6 +913,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const bar = (
 		<div className="scene-preview-bar">
 			<IconButton
+			commandId="scene.previousBeat"
 				disabled={beat <= 0}
 				icon={<IconChevronLeft />}
 				iconOnly
@@ -923,6 +924,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				{beat} / {lastBeat}
 			</span>
 			<IconButton
+			commandId="scene.nextBeat"
 				disabled={beat >= lastBeat && !nextScene}
 				icon={<IconChevronRight />}
 				iconOnly
@@ -936,6 +938,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onClick={goToNextBeat}
 			/>
 			<IconButton
+			commandId="scene.play"
 				icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.play')}
@@ -956,6 +959,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			    the stage editing the file, so it cannot be a control that only
 			    appears once something has been grabbed. */}
 			<IconButton
+			commandId="scene.toggleLock"
 				icon={locked ? <IconLock /> : <IconLockOpen />}
 				iconOnly
 				label={t(
@@ -973,6 +977,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			{fullScreen && (
 				<span className="scene-preview-bar-right">
 					<IconButton
+						commandId="scene.fullScreen"
 						icon={<IconArrowsMinimize />}
 						iconOnly
 						label={t('dialogs.passageEdit.scenePreview.fullScreen')}

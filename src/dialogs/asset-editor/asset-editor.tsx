@@ -803,6 +803,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 							</p>
 							<ButtonBar>
 								<IconButton
+									commandId="assetEditor.resetCrop"
 									disabled={!cropped}
 									icon={<IconCrop />}
 									label={t('dialogs.assetEditor.resetCrop')}
@@ -889,6 +890,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 							)}
 							<ButtonBar>
 								<IconButton
+									commandId="assetEditor.removeBackground"
 									disabled={busy || backgroundRemoved || !background?.engine}
 									icon={<IconWand />}
 									label={t('dialogs.assetEditor.removeBackground')}
@@ -903,6 +905,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								)}
 								{backgroundRemoved && !progress && (
 									<IconButton
+										commandId="assetEditor.restoreBackground"
 										disabled={busy}
 										icon={<IconEraser />}
 										label={t('dialogs.assetEditor.restoreBackground')}
@@ -1038,6 +1041,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 							)}
 							<ButtonBar>
 								<IconButton
+									commandId="assetEditor.saveAsNew"
 									disabled={saveDisabled}
 									icon={<IconDeviceFloppy />}
 									label={t(
@@ -1050,6 +1054,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								/>
 								{!detached && (
 									<ConfirmButton
+										commandId="assetEditor.replace"
 										confirmVariant="danger"
 										disabled={saveDisabled}
 										icon={<IconArrowsExchange />}

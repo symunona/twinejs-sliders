@@ -4,12 +4,30 @@
 }
 
 .tooltip-label {
+	align-items: center;
 	background-color: var(--dark-gray);
 	border-radius: var(--corner-round);
 	color: var(--white);
+	display: flex;
 	font-size: 12px; /* Must be hardcoded in case it's on a header element */
 	font-weight: normal;
+	gap: var(--grid-size);
 	padding: var(--grid-size);
+}
+
+/* A tooltip is dark whatever the theme is, so the keys can't wear the chip's
+   usual light-gray-on-white: they're drawn out of the tooltip's own color
+   instead. Size is pinned here too, against the tooltip's hardcoded font size
+   rather than the surrounding UI's, so a tooltip on a header doesn't get huge
+   keys. */
+
+.tooltip-label .key-chip kbd {
+	background: rgba(255, 255, 255, 0.16);
+	border-color: rgba(255, 255, 255, 0.3);
+	box-shadow: none;
+	color: var(--white);
+	font-size: 11px;
+	min-width: calc(var(--grid-size) * 2);
 }
 
 .tooltip-arrow {

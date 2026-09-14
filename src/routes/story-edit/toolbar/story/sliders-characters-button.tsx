@@ -23,6 +23,7 @@ export const SlidersCharactersButton: React.FC = () => {
 
 	return (
 		<IconButton
+			commandId="sliders.characters"
 			icon={<IconUsers />}
 			label={t('routes.storyEdit.toolbar.slidersCharacters')}
 			onClick={handleClick}

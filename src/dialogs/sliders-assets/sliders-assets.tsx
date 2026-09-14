@@ -222,6 +222,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 				)}
 				{!kind && !importing && (
 					<PromptButton
+						commandId="slidersAssets.newCharacter"
 						icon={<IconUserPlus />}
 						label={t('dialogs.slidersAssets.newCharacter')}
 						onChange={event => setNewCharacterName(event.target.value)}

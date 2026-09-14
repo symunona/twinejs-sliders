@@ -35,6 +35,7 @@ export const EditPassagesButton: React.FC<EditPassagesButtonProps> = props => {
 
 	return (
 		<IconButton
+			commandId="passage.edit"
 			disabled={passages.length === 0}
 			icon={<IconEdit />}
 			label={
