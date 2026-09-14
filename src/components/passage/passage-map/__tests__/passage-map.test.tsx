@@ -53,6 +53,21 @@ describe('<PassageMap>', () => {
 		).toBeInTheDocument();
 	});
 
+	// Ghosts go into the same array as the real passages: one set of cards, one connector
+	// pass, so the two cannot be drawn by code that drifts apart.
+	it('renders ghosts alongside the passages, in both cards and connectors', () => {
+		const passages = [fakePassage({name: 'a'})];
+		const ghosts = [fakePassage({name: 'Cellar'})];
+
+		renderComponent({ghosts, passages, startPassageId: passages[0].id});
+		expect(
+			screen.getByTestId('mock-passage-card-group-a-Cellar')
+		).toBeInTheDocument();
+		expect(
+			screen.getByTestId('mock-passage-connections-a-Cellar')
+		).toBeInTheDocument();
+	});
+
 	it('changes the offset on <PassageConnections> when a drag occurs', () => {
 		const passages = [fakePassage(), fakePassage()];
 

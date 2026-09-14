@@ -18,31 +18,35 @@ import {newPassagePositions} from '../store/stories/action-creators/new-passage-
 import {passageDefaults} from '../store/stories/defaults';
 import {passageLinks} from './passage-links';
 
-export interface GhostPassage {
-	height: number;
-	left: number;
-	/** The passages linking here. Every one of them gets a connector drawn. */
-	linkedFrom: Passage[];
-	/** The name the author wrote, and the name the passage will be created under. */
-	name: string;
-	top: number;
-	width: number;
-}
+/**
+ * A ghost is an ordinary `Passage`, so the map draws it with the ordinary card and
+ * `passageConnections` resolves links into it without knowing ghosts exist. The same
+ * trick `withSlidersManifests` plays for publishing: a synthetic passage handed to one
+ * consumer.
+ *
+ * It must never reach `story.passages` — that array is the serialization boundary, walked
+ * unfiltered by save, publish and sync. `story: ''` is the tripwire for that: every store
+ * action looks its passage up by story id, so a ghost that got into one throws instead of
+ * quietly writing a passage nobody created.
+ */
+function ghostPassage(
+	name: string,
+	position: {left: number; top: number}
+): Passage {
+	const defaults = passageDefaults();
 
-/** Enough of a passage for the connector geometry, which only reads a rect. */
-export function ghostAsPassage(ghost: GhostPassage): Passage {
 	return {
-		height: ghost.height,
+		height: defaults.height,
 		highlighted: false,
-		id: `ghost-${ghost.name}`,
-		left: ghost.left,
-		name: ghost.name,
+		id: `ghost-${name}`,
+		left: position.left,
+		name,
 		selected: false,
 		story: '',
 		tags: [],
 		text: '',
-		top: ghost.top,
-		width: ghost.width
+		top: position.top,
+		width: defaults.width
 	};
 }
 
@@ -55,13 +59,13 @@ export function ghostAsPassage(ghost: GhostPassage): Passage {
  * space, or two passages linking to two different missing names would stack their rows
  * on top of each other.
  *
- * A name linked from several passages is one ghost, owned by the first passage that
- * mentions it; the others just draw a connector to it.
+ * A name linked from several passages is one ghost, placed by the first passage that
+ * mentions it; the others need no record here, because the connector pass re-reads every
+ * passage's text and finds the ghost by name like any other target.
  */
-export function brokenLinkGhosts(story: Story): GhostPassage[] {
+export function brokenLinkGhosts(story: Story): Passage[] {
 	const existing = new Set(story.passages.map(passage => passage.name));
-	const ghosts = new Map<string, GhostPassage>();
-	const defaults = passageDefaults();
+	const ghosts = new Map<string, Passage>();
 
 	// Pass 1: who links to what, in passage order, skipping names that exist.
 
@@ -77,17 +81,12 @@ export function brokenLinkGhosts(story: Story): GhostPassage[] {
 		}
 	}
 
-	// Pass 2: place the ones this passage is first to ask for, then note the rest as
-	// extra connectors into a ghost someone else owns.
+	// Pass 2: place the ones this passage is first to ask for.
 
 	let occupied = story.passages;
 
 	for (const [passage, names] of wanted) {
 		const fresh = names.filter(name => !ghosts.has(name));
-
-		for (const name of names) {
-			ghosts.get(name)?.linkedFrom.push(passage);
-		}
 
 		if (fresh.length === 0) {
 			continue;
@@ -100,19 +99,13 @@ export function brokenLinkGhosts(story: Story): GhostPassage[] {
 		);
 
 		const placed = fresh.map((name, index) => {
-			const ghost: GhostPassage = {
-				...positions[index],
-				height: defaults.height,
-				linkedFrom: [passage],
-				name,
-				width: defaults.width
-			};
+			const ghost = ghostPassage(name, positions[index]);
 
 			ghosts.set(name, ghost);
 			return ghost;
 		});
 
-		occupied = [...occupied, ...placed.map(ghostAsPassage)];
+		occupied = [...occupied, ...placed];
 	}
 
 	return Array.from(ghosts.values());

@@ -20,6 +20,11 @@ export interface MarqueeablePassageMapProps
  * Marries a MarqueeSelection with a PassageMap. This handles displaying a
  * temporary selection while the user drags around the marquee selection
  * *without* persisting the change, for performance.
+ *
+ * Only real passages are marked selected below, because only they are in this component's
+ * `passages` prop--ghosts travel in their own prop and are merged in by `PassageMap`. That
+ * is deliberate: `selectPassagesInRect` commits against `story.passages`, so a ghost caught
+ * under the marquee would light up here and revert the moment the drag ended.
  */
 export const MarqueeablePassageMap: React.FC<
 	MarqueeablePassageMapProps

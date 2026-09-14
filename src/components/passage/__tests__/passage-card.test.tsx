@@ -263,6 +263,82 @@ describe('<PassageCard>', () => {
 		expect(document.querySelector('.passage-card.is-locked')).toBeNull();
 	});
 
+	// A ghost is a link target the story has no passage for yet--the same card, with
+	// everything that would touch the store left unwired. See `brokenLinkGhosts`.
+
+	describe('when the card is a ghost', () => {
+		const passage = fakePassage({name: 'Cellar', story: '', text: ''});
+
+		it('marks the card so it can be drawn as a proposal', () => {
+			renderComponent({ghost: true, passage});
+			expect(document.querySelector('.passage-card.ghost')).toBeInTheDocument();
+			expect(screen.getByTestId('ghost-passage-Cellar')).toBeInTheDocument();
+		});
+
+		it('says the click will create the passage', () => {
+			renderComponent({ghost: true, passage});
+			expect(
+				screen.getByText('components.passageCard.placeholderGhost')
+			).toBeInTheDocument();
+		});
+
+		it('creates the passage when clicked or double-clicked', () => {
+			const onCreate = jest.fn();
+
+			renderComponent({ghost: true, onCreate, passage});
+			fireEvent.click(screen.getByText(passage.name));
+			expect(onCreate.mock.calls).toEqual([[passage]]);
+			fireEvent.dblClick(screen.getByText(passage.name));
+			expect(onCreate.mock.calls).toEqual([[passage], [passage]]);
+		});
+
+		// `selectPassage` and `deselectPassage` throw on a passage its story does not
+		// have, and there is nothing to edit until the passage exists.
+		it('never selects, deselects or edits', () => {
+			const onDeselect = jest.fn();
+			const onEdit = jest.fn();
+			const onSelect = jest.fn();
+
+			renderComponent({
+				ghost: true,
+				onCreate: jest.fn(),
+				onDeselect,
+				onEdit,
+				onSelect,
+				passage
+			});
+			fireEvent.mouseDown(screen.getByText(passage.name));
+			fireEvent.mouseDown(screen.getByText(passage.name), {shiftKey: true});
+			fireEvent.click(screen.getByText(passage.name));
+			fireEvent.dblClick(screen.getByText(passage.name));
+			expect(onDeselect).not.toHaveBeenCalled();
+			expect(onEdit).not.toHaveBeenCalled();
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+
+		// It could never look dragged--a ghost is never selected, and only a selected card
+		// moves with the drag offset--so the drag would be a gesture with no feedback that
+		// ended in a move of a passage that does not exist.
+		it('is not draggable', () => {
+			const onDragStart = jest.fn();
+
+			renderComponent({ghost: true, onDragStart, passage});
+			fireEvent.mouseDown(screen.getByText(passage.name));
+			expect(onDragStart).not.toHaveBeenCalled();
+
+			cleanup();
+			renderComponent({onDragStart, passage});
+			fireEvent.mouseDown(screen.getByText(passage.name));
+			expect(onDragStart).toHaveBeenCalled();
+		});
+
+		it('is accessible', async () => {
+			const {container} = renderComponent({ghost: true, passage});
+
+			expect(await axe(container)).toHaveNoViolations();
+		});
+	});
+
 	it.todo('passes through drag events');
 
 	it('is accessible', async () => {

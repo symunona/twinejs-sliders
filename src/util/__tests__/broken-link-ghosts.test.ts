@@ -1,4 +1,4 @@
-import {brokenLinkGhosts, ghostAsPassage} from '../broken-link-ghosts';
+import {brokenLinkGhosts} from '../broken-link-ghosts';
 import {fakePassage, fakeStory} from '../../test-util';
 import {Passage, Story} from '../../store/stories';
 import {rectsIntersect} from '../geometry';
@@ -24,7 +24,20 @@ describe('brokenLinkGhosts()', () => {
 
 		expect(ghosts).toHaveLength(1);
 		expect(ghosts[0].name).toBe('Street');
-		expect(ghosts[0].linkedFrom).toEqual([start]);
+	});
+
+	// A ghost is an ordinary passage so the map can draw it with the ordinary card, and
+	// `story: ''` is what stops it being mistaken for one of the story's own: every store
+	// action looks its passage up by story id and throws instead of writing.
+	it('is a passage of no story, with no text', () => {
+		const start = fakePassage({name: 'Start', text: scene(['on: Street'])});
+		const story = storyOf([start]);
+		const [ghost] = brokenLinkGhosts(story);
+
+		expect(ghost.story).toBe('');
+		expect(ghost.text).toBe('');
+		expect(ghost.selected).toBe(false);
+		expect(story.passages).toEqual([start]);
 	});
 
 	it('covers plain [[…]] links too', () => {
@@ -56,7 +69,7 @@ describe('brokenLinkGhosts()', () => {
 		const ghosts = brokenLinkGhosts(storyOf([start, other]));
 
 		expect(ghosts).toHaveLength(1);
-		expect(ghosts[0].linkedFrom).toEqual([start, other]);
+		expect(ghosts[0].name).toBe('Street');
 	});
 
 	it('does not overlap ghosts with each other or with real passages', () => {
@@ -81,10 +94,7 @@ describe('brokenLinkGhosts()', () => {
 			width: 100
 		});
 		const story = storyOf([left, right]);
-		const rects = [
-			...story.passages,
-			...brokenLinkGhosts(story).map(ghostAsPassage)
-		];
+		const rects = [...story.passages, ...brokenLinkGhosts(story)];
 
 		for (let i = 0; i < rects.length; i++) {
 			for (let j = i + 1; j < rects.length; j++) {

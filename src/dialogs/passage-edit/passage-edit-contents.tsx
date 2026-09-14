@@ -13,7 +13,10 @@ import {
 	formatWithNameAndVersion,
 	useStoryFormatsContext
 } from '../../store/story-formats';
-import {useUndoableStoriesContext} from '../../store/undoable-stories';
+import {
+	useCreateLinkedPassage,
+	useUndoableStoriesContext
+} from '../../store/undoable-stories';
 import {addPassageEditors, useDialogsContext} from '../context';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
@@ -142,30 +145,16 @@ export const PassageEditContents: React.FC<
 	);
 
 	/**
-	 * The fix offered on a link whose target does not exist. A scene's `links:` block is
-	 * never auto-created the way `[[…]]` is — a YAML target is a complete link on every
-	 * keystroke, so creation has to be something the author asks for (see
-	 * `createNewlyLinkedPassages`). Placement is shared with that automatic path so both
-	 * put the new card in the same place.
+	 * The fix offered on a link whose target does not exist. Shared with the ghost card on
+	 * the story map — see `useCreateLinkedPassage` for why creation is explicit here.
+	 * Placement is `newPassagePositions`, the same function the automatic `[[…]]` path
+	 * uses, so both put the new card in the same place.
 	 */
+	const createLinkedPassage = useCreateLinkedPassage(story);
 	const handleCreatePassage = React.useCallback(
-		(name: string) => {
-			if (story.passages.some(existing => existing.name === name)) {
-				return;
-			}
-
-			const [position] = newPassagePositions(story, passage, 1);
-
-			dispatch(
-				{
-					type: 'createPassages',
-					storyId: story.id,
-					props: [{...position, name}]
-				},
-				'undoChange.newPassage'
-			);
-		},
-		[dispatch, passage, story]
+		(name: string) =>
+			createLinkedPassage(name, newPassagePositions(story, passage, 1)[0]),
+		[createLinkedPassage, passage, story]
 	);
 
 	// The scene preview is a dialog of its own now, not a strip inside this one. All this

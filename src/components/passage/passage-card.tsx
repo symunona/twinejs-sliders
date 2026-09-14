@@ -14,8 +14,17 @@ import {TagBadges} from '../tag/tag-badges';
 export interface PassageCardProps {
 	/** How many scene errors this passage has, if any. */
 	errorCount?: number;
+	/**
+	 * This card stands for a link target the story has no passage for yet--see
+	 * `brokenLinkGhosts`. A flag rather than something read off the passage, because the
+	 * synthetic behind it is a `Passage` in every other respect: nothing about it says
+	 * "do not touch the store", and this card must.
+	 */
+	ghost?: boolean;
 	/** Another editor has this passage open. Their name, for a one-letter badge. */
 	lockedBy?: string;
+	/** Makes a ghost real. Never called on an ordinary card. */
+	onCreate?: (passage: Passage) => void;
 	onEdit: (passage: Passage) => void;
 	onDeselect: (passage: Passage) => void;
 	onDragStart?: DraggableCoreProps['onStart'];
@@ -33,7 +42,9 @@ const excerptLength = 400;
 export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 	const {
 		errorCount,
+		ghost,
 		lockedBy,
+		onCreate,
 		onDeselect,
 		onDrag,
 		onDragStart,
@@ -49,15 +60,24 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 		() =>
 			classNames('passage-card', {
 				empty: passageIsEmpty(passage),
+				ghost,
 				'has-errors': !!errorCount,
 				'is-locked': !!lockedBy,
 				selected: passage.selected,
 				[`tag-display-${tagDisplay}`]: true
 			}),
-		[errorCount, lockedBy, passage, tagDisplay]
+		[errorCount, ghost, lockedBy, passage, tagDisplay]
 	);
 	const container = React.useRef<HTMLDivElement>(null);
 	const excerpt = React.useMemo(() => {
+		if (ghost) {
+			return (
+				<span className="placeholder">
+					{t('components.passageCard.placeholderGhost')}
+				</span>
+			);
+		}
+
 		if (passage.text.length > 0) {
 			return passage.text.substring(0, excerptLength);
 		}
@@ -71,7 +91,7 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 				)}
 			</span>
 		);
-	}, [passage.text, t]);
+	}, [ghost, passage.text, t]);
 	const style = React.useMemo(
 		() => ({
 			height: passage.height,
@@ -110,6 +130,70 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 		},
 		[onSelect, passage]
 	);
+	const handleCreate = React.useCallback(
+		() => onCreate?.(passage),
+		[onCreate, passage]
+	);
+
+	const card = (
+		<div
+			className={className}
+			ref={container}
+			style={style}
+			data-passage-tags={passage.tags.join(' ')}
+			data-testid={ghost ? `ghost-passage-${passage.name}` : undefined}
+		>
+			<SelectableCard
+				highlighted={passage.highlighted}
+				label={passage.name}
+				// A ghost has one gesture, and both of these are it: there is nothing to
+				// edit until the passage exists.
+				onDoubleClick={ghost ? handleCreate : handleEdit}
+				onSelect={ghost ? handleCreate : handleSelect}
+				selected={passage.selected}
+			>
+				{tagDisplay === 'color' && (
+					<TagStripe tagColors={tagColors} tags={passage.tags} />
+				)}
+				{!!errorCount && (
+					<span
+						className="passage-card-error-badge"
+						data-testid="passage-card-error-badge"
+						role="img"
+						title={t('components.passageCard.errors', {count: errorCount})}
+					>
+						{'\u26a0\ufe0f'}
+					</span>
+				)}
+				{lockedBy && (
+					<span
+						className="passage-card-lock"
+						data-locked-by={lockedBy}
+						data-testid="passage-card-lock"
+						title={t('routes.storyEdit.presence.editingPassage', {
+							name: lockedBy
+						})}
+					>
+						{(lockedBy.trim()[0] ?? '?').toUpperCase()}
+					</span>
+				)}
+				<h2>{passage.name}</h2>
+				<CardContent>{excerpt}</CardContent>
+				{tagDisplay === 'name' && (
+					<TagBadges tagColors={tagColors} tags={passage.tags} />
+				)}
+			</SelectableCard>
+		</div>
+	);
+
+	// Same card, with the half that touches the store left unwired. A ghost has no
+	// passage behind it: `onSelect`/`onDeselect` reach `selectPassage`, which throws on a
+	// passage its story does not have, and a drag would commit a move of nothing--it can
+	// never be `.selected`, so it would not even appear to move.
+
+	if (ghost) {
+		return card;
+	}
 
 	return (
 		<DraggableCore
@@ -119,51 +203,7 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 			onDrag={onDrag}
 			onStop={onDragStop}
 		>
-			<div
-				className={className}
-				ref={container}
-				style={style}
-				data-passage-tags={passage.tags.join(' ')}
-			>
-				<SelectableCard
-					highlighted={passage.highlighted}
-					label={passage.name}
-					onDoubleClick={handleEdit}
-					onSelect={handleSelect}
-					selected={passage.selected}
-				>
-					{tagDisplay === 'color' && (
-						<TagStripe tagColors={tagColors} tags={passage.tags} />
-					)}
-					{!!errorCount && (
-						<span
-							className="passage-card-error-badge"
-							data-testid="passage-card-error-badge"
-							role="img"
-							title={t('components.passageCard.errors', {count: errorCount})}
-						>
-							{'\u26a0\ufe0f'}
-						</span>
-					)}
-					{lockedBy && (
-						<span
-							className="passage-card-lock"
-							data-locked-by={lockedBy}
-							data-testid="passage-card-lock"
-							title={t('routes.storyEdit.presence.editingPassage', {
-								name: lockedBy
-							})}
-						>
-							{(lockedBy.trim()[0] ?? '?').toUpperCase()}
-						</span>
-					)}
-					<h2>{passage.name}</h2>
-					<CardContent>{excerpt}</CardContent>
-					{tagDisplay === 'name' && (
-						<TagBadges tagColors={tagColors} tags={passage.tags} />
-					)}
-				</SelectableCard>
-			</div>
+			{card}
 		</DraggableCore>
 	);
 });

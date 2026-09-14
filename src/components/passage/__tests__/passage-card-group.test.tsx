@@ -55,6 +55,21 @@ describe('<PassageCardGroup>', () => {
 		);
 	});
 	
+	// Ghosts are in `passages` like anything else--they sort in with the real cards, so
+	// tabbing follows the map rather than the order the two arrays were joined in--and
+	// `ghostIds` is the only thing saying which they are.
+	it('marks the cards named by ghostIds as ghosts', () => {
+		const passages = [fakePassage(), fakePassage()];
+
+		renderComponent({ghostIds: new Set([passages[1].id]), passages});
+		expect(
+			screen.getByTestId(`mock-passage-card-${passages[0].name}`)
+		).toHaveAttribute('data-ghost', 'false');
+		expect(
+			screen.getByTestId(`mock-passage-card-${passages[1].name}`)
+		).toHaveAttribute('data-ghost', 'true');
+	});
+
 	it.todo('passes through drag-related props');
 
 	it('is accessible', async () => {

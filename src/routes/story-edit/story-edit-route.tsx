@@ -7,13 +7,11 @@ import {AssetScopeProvider} from '../../dialogs/sliders-assets/asset-store-conte
 import {lockedPassages} from '../../store/persistence/server/presence';
 import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {usePrefsContext} from '../../store/prefs';
-import {storyWithId} from '../../store/stories';
-import {
-	brokenLinkGhosts,
-	GhostPassage
-} from '../../util/broken-link-ghosts';
+import {Passage, storyWithId} from '../../store/stories';
+import {brokenLinkGhosts} from '../../util/broken-link-ghosts';
 import {
 	UndoableStoriesContextProvider,
+	useCreateLinkedPassage,
 	useUndoableStoriesContext
 } from '../../store/undoable-stories';
 import {MarqueeablePassageMap} from './marqueeable-passage-map';
@@ -32,7 +30,7 @@ import './story-edit-route.css';
 export const InnerStoryEditRoute: React.FC = () => {
 	const {storyId} = useParams<{storyId: string}>();
 	const {prefs} = usePrefsContext();
-	const {dispatch, stories} = useUndoableStoriesContext();
+	const {stories} = useUndoableStoriesContext();
 	const story = storyWithId(stories, storyId);
 	const [fuzzyFinderOpen, setFuzzyFinderOpen] = React.useState(false);
 	const mainContent = React.useRef<HTMLDivElement>(null);
@@ -50,23 +48,12 @@ export const InnerStoryEditRoute: React.FC = () => {
 	// cannot auto-create the way `[[…]]` does, so this is how an author gets from a link
 	// to the passage it names.
 	const ghosts = React.useMemo(() => brokenLinkGhosts(story), [story]);
+	const createLinkedPassage = useCreateLinkedPassage(story);
 	const handleCreateGhost = React.useCallback(
-		(ghost: GhostPassage) => {
-			if (story.passages.some(passage => passage.name === ghost.name)) {
-				return;
-			}
-
-			// Created at the rect it was drawn at, so the card does not jump on click.
-			dispatch(
-				{
-					type: 'createPassages',
-					storyId: story.id,
-					props: [{left: ghost.left, name: ghost.name, top: ghost.top}]
-				},
-				'undoChange.newPassage'
-			);
-		},
-		[dispatch, story.id, story.passages]
+		// Created at the rect it was drawn at, so the card does not jump on click.
+		(ghost: Passage) =>
+			createLinkedPassage(ghost.name, {left: ghost.left, top: ghost.top}),
+		[createLinkedPassage]
 	);
 	const {blurPassage, focusPassage, presence} = useServerSyncContext();
 	// Passage id -> the other editor holding it. Empty with no socket, and the map draws

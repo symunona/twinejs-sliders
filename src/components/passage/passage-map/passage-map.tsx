@@ -4,8 +4,6 @@ import {Passage, Story} from '../../../store/stories';
 import {boundingRect, Point} from '../../../util/geometry';
 import {PassageConnections} from '../passage-connections';
 import {PassageCardGroup} from '../passage-card-group';
-import {GhostPassageCard} from '../ghost-passage-card';
-import {GhostPassage} from '../../../util/broken-link-ghosts';
 import './passage-map.css';
 import classnames from 'classnames';
 
@@ -14,9 +12,15 @@ export interface PassageMapProps {
 	errorCounts?: Record<string, number>;
 	formatName: string;
 	formatVersion: string;
-	/** Link targets with no passage behind them yet, drawn dashed and clickable. */
-	ghosts?: GhostPassage[];
-	onCreateGhost?: (ghost: GhostPassage) => void;
+	/**
+	 * Link targets with no passage behind them yet, drawn dashed and clickable--synthetic
+	 * passages from `brokenLinkGhosts`. They are drawn with the same card and wired into
+	 * the same connector pass as a real one, so the two cannot drift apart; keeping them
+	 * in their own prop is what tells the card which is which, and keeps them out of
+	 * `story.passages`, where they must never go.
+	 */
+	ghosts?: Passage[];
+	onCreateGhost?: (ghost: Passage) => void;
 	onDeselect: (passage: Passage) => void;
 	onDrag: (change: Point) => void;
 	onEdit: (passage: Passage) => void;
@@ -102,18 +106,29 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 		visibleZoom <= compactCardZoom
 	);
 	const container = React.useRef<HTMLDivElement>(null);
+
+	// Everything below here works on ghosts and real passages alike: the cards, the
+	// canvas size, and the connectors--a link into a ghost resolves in
+	// `passageConnections` because the ghost is in the array it searches, so it draws
+	// solid instead of as a broken stub.
+
+	const mapPassages = React.useMemo(
+		() => (ghosts?.length ? [...passages, ...ghosts] : passages),
+		[ghosts, passages]
+	);
+	const ghostIds = React.useMemo(
+		() => new Set((ghosts ?? []).map(ghost => ghost.id)),
+		[ghosts]
+	);
 	const passageBounds = React.useMemo(() => {
 		// Need to inject a fake rect at the very top-left corner to anchor the
 		// bounds there.
 
-		// Ghosts count: one sitting past the last real passage still needs canvas to be
-		// drawn on, and to be scrolled to.
 		return boundingRect([
-			...passages,
-			...(ghosts ?? []),
+			...mapPassages,
 			{top: 0, left: 0, width: 0, height: 0}
 		]);
-	}, [ghosts, passages]);
+	}, [mapPassages]);
 
 	// This is a separate memo so that there's less work when visibleZoom changes
 	// during a zoom transition. The max() expression ensures that dialogs will
@@ -226,16 +241,17 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 			<PassageConnections
 				formatName={formatName}
 				formatVersion={formatVersion}
-				ghosts={ghosts}
 				offset={{
 					left: (state.dragX - state.startX) / zoom,
 					top: (state.dragY - state.startY) / zoom
 				}}
-				passages={passages}
+				passages={mapPassages}
 				startPassageId={startPassageId}
 			/>
 			<PassageCardGroup
 				errorCounts={errorCounts}
+				ghostIds={ghostIds}
+				onCreate={onCreateGhost}
 				onDeselect={onDeselect}
 				onDragStart={handleDragStart}
 				onDrag={handleDrag}
@@ -243,18 +259,10 @@ export const PassageMap: React.FC<PassageMapProps> = props => {
 				onEdit={onEdit}
 				onSelect={handleSelect}
 				passageLocks={passageLocks}
-				passages={passages}
+				passages={mapPassages}
 				tagColors={tagColors}
 				tagDisplay={tagDisplay}
 			/>
-			{onCreateGhost &&
-				ghosts?.map(ghost => (
-					<GhostPassageCard
-						ghost={ghost}
-						key={ghost.name}
-						onCreate={onCreateGhost}
-					/>
-				))}
 		</div>
 	);
 };
