@@ -4,6 +4,7 @@ import * as React from 'react';
 import {DraggableCore, DraggableCoreProps} from 'react-draggable';
 import {useTranslation} from 'react-i18next';
 import {CardContent} from '../container/card';
+import {EditableTitle} from '../control/editable-title';
 import {SelectableCard} from '../container/card/selectable-card';
 import {Passage, TagColors} from '../../store/stories';
 import {TagStripe} from '../tag/tag-stripe';
@@ -145,90 +146,12 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 	);
 
 	// Renaming from the title, the way a file manager does it: one click selects the
-	// card, a click on the title of an already-selected card starts the rename. The
-	// prompt the toolbar uses can't be reused here--it opens a popper, and the map is
-	// inside a `transform: scale()`, which makes it the containing block for the
-	// popper's fixed positioning and puts the card in the wrong place at any zoom.
+	// card, a click on the title of an already-selected card starts the rename.
 
-	const [renaming, setRenaming] = React.useState(false);
-	const [draftName, setDraftName] = React.useState(passage.name);
-	// Set by Escape and by a submit, both of which have already decided what happens to
-	// the draft--without it, the blur that follows either one would decide again.
-	const renameHandled = React.useRef(false);
-	const renameable = !ghost && !!onRename;
-	const draftValid =
-		draftName.trim() !== '' &&
-		(draftName === passage.name || !nameTaken?.(draftName));
-
-	const handleTitleClick = React.useCallback(
-		(event: React.MouseEvent) => {
-			// A modified click is still a selection gesture, and an unselected card has
-			// to be selected first--so both fall through to the card underneath.
-
-			if (
-				!renameable ||
-				renaming ||
-				!passage.selected ||
-				event.ctrlKey ||
-				event.shiftKey
-			) {
-				return;
-			}
-
-			event.stopPropagation();
-			renameHandled.current = false;
-			setDraftName(passage.name);
-			setRenaming(true);
-		},
-		[passage.name, passage.selected, renameable, renaming]
+	const handleRename = React.useCallback(
+		(name: string) => onRename?.(passage, name),
+		[onRename, passage]
 	);
-
-	const handleRenameKeyDown = React.useCallback(
-		(event: React.KeyboardEvent) => {
-			// The card is a `role="button"` that treats space and enter as selection, and
-			// the map's own shortcuts sit above that, so none of this may bubble.
-
-			event.stopPropagation();
-
-			if (event.key === 'Escape') {
-				renameHandled.current = true;
-				setRenaming(false);
-			}
-		},
-		[]
-	);
-
-	const handleRenameSubmit = React.useCallback(
-		(event: React.FormEvent) => {
-			event.preventDefault();
-
-			if (!draftValid) {
-				return;
-			}
-
-			renameHandled.current = true;
-			setRenaming(false);
-
-			if (draftName !== passage.name) {
-				onRename?.(passage, draftName);
-			}
-		},
-		[draftName, draftValid, onRename, passage]
-	);
-
-	// Clicking away keeps the name if it can be had, and abandons it otherwise--a name
-	// that's already taken has no way out except giving up on it.
-	const handleRenameBlur = React.useCallback(() => {
-		setRenaming(false);
-
-		if (renameHandled.current) {
-			return;
-		}
-
-		if (draftValid && draftName !== passage.name) {
-			onRename?.(passage, draftName);
-		}
-	}, [draftName, draftValid, onRename, passage]);
 
 	const card = (
 		<div
@@ -273,41 +196,14 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 					</span>
 				)}
 				<h2>
-					{renaming ? (
-						<form
-							className="passage-card-rename"
-							onClick={event => event.stopPropagation()}
-							onDoubleClick={event => event.stopPropagation()}
-							onMouseDown={event => event.stopPropagation()}
-							onSubmit={handleRenameSubmit}
-						>
-							<input
-								aria-invalid={!draftValid}
-								aria-label={t('common.rename')}
-								autoFocus
-								data-testid="passage-card-rename"
-								onBlur={handleRenameBlur}
-								onChange={event => setDraftName(event.target.value)}
-								onKeyDown={handleRenameKeyDown}
-								size={1}
-								value={draftName}
-							/>
-						</form>
-					) : (
-						<span
-							className={classNames('passage-card-title', {
-								renameable: renameable && passage.selected
-							})}
-							onClick={handleTitleClick}
-							title={
-								renameable && passage.selected
-									? t('components.passageCard.renameTitle')
-									: undefined
-							}
-						>
-							{passage.name}
-						</span>
-					)}
+					<EditableTitle
+						editable={!ghost && !!onRename && !!passage.selected}
+						nameTaken={nameTaken}
+						onRename={handleRename}
+						title={t('components.passageCard.renameTitle')}
+						value={passage.name}
+						waitForDoubleClick
+					/>
 				</h2>
 				<CardContent>{excerpt}</CardContent>
 				{tagDisplay === 'name' && (
@@ -330,7 +226,7 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 		<DraggableCore
 			// Dragging the title field would move the card instead of putting the cursor
 			// where it was clicked.
-			cancel=".passage-card-rename"
+			cancel=".editable-title-form"
 			nodeRef={container}
 			onMouseDown={handleMouseDown}
 			onStart={onDragStart}

@@ -1,0 +1,37 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+/*
+The field has to sit exactly where the text was and inherit everything about it--
+anything else makes the title jump as it opens.
+*/
+
+.editable-title.editable {
+	cursor: text;
+}
+
+.editable-title-form {
+	display: block;
+	flex-grow: 1;
+	min-width: 0;
+}
+
+.editable-title-form input {
+	background: var(--white);
+	border: 1px solid var(--blue);
+	border-radius: var(--corner-round);
+	color: var(--black);
+	display: block;
+	font: inherit;
+	margin: 0;
+	padding: 0;
+	width: 100%;
+}
+
+.editable-title-form input[aria-invalid='true'] {
+	border-color: var(--red);
+}
+
+.editable-title-form input:focus-visible {
+	outline: none;
+}

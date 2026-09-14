@@ -7,6 +7,7 @@ import {
 	DialogCard
 } from '../../components/container/dialog-card';
 import {DialogStack} from '../../components/container/dialog-card/dialog-stack';
+import {EditableTitle} from '../../components/control/editable-title';
 import {IconButton} from '../../components/control/icon-button';
 import {TagGrid} from '../../components/tag';
 import {VisibleWhitespace} from '../../components/visible-whitespace';
@@ -14,8 +15,10 @@ import {setPref, usePrefsContext} from '../../store/prefs';
 import {
 	passageWithId,
 	storyWithId,
+	updatePassage,
 	useStoriesContext
 } from '../../store/stories';
+import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {
 	addPassageEditors,
 	removePassageEditors,
@@ -37,6 +40,7 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 	const {dispatch} = useDialogsContext();
 	const {dispatch: prefsDispatch, prefs} = usePrefsContext();
 	const {stories} = useStoriesContext();
+	const {dispatch: storiesDispatch} = useUndoableStoriesContext();
 	const {t} = useTranslation();
 	const storyTagColors = storyWithId(stories, storyId).tagColors;
 	const passageInfo = passageIds.map(passageId => {
@@ -53,6 +57,27 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 			style.bottom = 0;
 			style.position = 'absolute';
 		}
+	}
+
+	function handleRename(passageId: string, name: string) {
+		const passage = passageWithId(stories, storyId, passageId);
+
+		// Don't create newly linked passages here, for the reason the toolbar's rename
+		// button gives: the update would see the new links before it saw the new name.
+		storiesDispatch(
+			updatePassage(
+				storyWithId(stories, storyId),
+				passage,
+				{name},
+				{dontUpdateOthers: true}
+			)
+		);
+	}
+
+	function nameTaken(name: string) {
+		return storyWithId(stories, storyId).passages.some(
+			passage => passage.name === name
+		);
 	}
 
 	function handleClose(
@@ -135,13 +160,24 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 						<DialogCard
 							{...managementProps}
 							headerControls={toolbarToggle}
+							// The title of the editor in front renames the passage when
+							// clicked. Background cards keep a plain title--a click there
+							// raises that editor, which is the only thing it can mean.
 							headerDisplayLabel={
 								<>
 									<TagGrid
 										tags={passageInfo[index].tags}
 										tagColors={storyTagColors}
 									/>
-									<VisibleWhitespace value={passageInfo[index].name} />
+									<EditableTitle
+										editable
+										nameTaken={nameTaken}
+										onRename={name => handleRename(passageId, name)}
+										title={t('components.passageCard.renameTitle')}
+										value={passageInfo[index].name}
+									>
+										<VisibleWhitespace value={passageInfo[index].name} />
+									</EditableTitle>
 								</>
 							}
 							headerLabel={passageInfo[index].name}

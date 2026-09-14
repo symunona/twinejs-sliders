@@ -82,6 +82,9 @@
 			"presets": "Anchor presets",
 			"readout": "Anchor at {{x}}, {{y}}"
 		},
+		"editableTitle": {
+			"hint": "Click to rename"
+		},
 		"dialogCard": {
 			"contentsCrashed": "Something went wrong with this dialog. Try closing it and opening it again."
 		},
