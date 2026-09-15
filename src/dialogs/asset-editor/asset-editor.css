@@ -73,22 +73,115 @@
 	overflow-y: auto;
 }
 
-.asset-editor-controls section {
+.asset-editor-section {
 	border-top: 1px solid var(--light-gray);
 	display: flex;
 	flex-direction: column;
 	gap: var(--control-inner-padding);
-	padding-top: var(--control-inner-padding);
+	padding-top: var(--grid-size);
 }
 
-.asset-editor-controls section:first-child {
+.asset-editor-section:first-child {
 	border-top: none;
 	padding-top: 0;
 }
 
-.asset-editor-controls h3 {
-	font-size: 100%;
+/*
+A section header is the only thing dividing one group of controls from the next,
+so it does the work of a label and a summary at once: the section's icon, its
+name, the one number that says where it currently stands, and the button that
+unfolds its explanation.
+*/
+
+.asset-editor-section h3 {
+	align-items: center;
+	display: flex;
+	font-size: 85%;
+	font-weight: 700;
+	gap: calc(var(--control-inner-padding) / 2);
+	letter-spacing: 0.08em;
 	margin: 0;
+	text-transform: uppercase;
+}
+
+.asset-editor-section-icon {
+	align-items: center;
+	color: var(--gray);
+	display: flex;
+}
+
+.asset-editor-section-icon svg {
+	height: 16px;
+	width: 16px;
+}
+
+/* Pushes the detail and the note button to the far edge of the header. */
+
+.asset-editor-section-title {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.asset-editor-section-detail {
+	color: var(--gray);
+	font-family: var(--font-monospaced, monospace);
+	font-weight: 400;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+/*
+The note icons. Not `IconButton`s: they mark where an explanation is rather than
+offering another thing to do, and a control-height button would read as one.
+*/
+
+.asset-editor-note-button {
+	align-items: center;
+	background: none;
+	border: none;
+	border-radius: var(--corner-round);
+	color: var(--gray);
+	cursor: pointer;
+	display: flex;
+	flex: none;
+	padding: 2px;
+}
+
+.asset-editor-note-button svg {
+	height: 17px;
+	width: 17px;
+}
+
+.asset-editor-note-button.warning {
+	color: var(--dark-yellow);
+}
+
+.asset-editor-note-button:hover {
+	background: var(--light-gray);
+	color: var(--black);
+}
+
+.asset-editor-note-button.open {
+	background: var(--light-gray);
+	color: var(--black);
+}
+
+.asset-editor-note-button.warning.open,
+.asset-editor-note-button.warning:hover {
+	background: var(--light-yellow);
+	color: var(--dark-yellow);
+}
+
+/* No box: the icon that opened it already said which kind of note this is. */
+
+.asset-editor-note-body {
+	color: var(--gray);
+	font-size: 85%;
+	margin: 0;
+}
+
+.asset-editor-note-body.warning {
+	color: var(--dark-yellow);
 }
 
 .asset-editor-progress {
@@ -164,37 +257,6 @@
 
 .asset-editor-number input {
 	width: 100%;
-}
-
-/* A name clash is worth noticing but isn't an error--nothing has gone wrong
-   yet, and saving anyway is a legitimate choice. */
-
-.asset-editor-warning {
-	background: var(--faint-yellow);
-	border-left: 4px solid var(--yellow);
-	border-radius: var(--corner-round);
-	font-size: 85%;
-	margin: 0;
-	padding: var(--control-inner-padding);
-}
-
-/*
-The CPU fallback warning. Louder than the plain warning box it builds on: this
-one has to be read *before* someone starts a cutout that will take a minute,
-not noticed afterwards.
-*/
-
-.asset-editor-cpu-warning {
-	align-items: start;
-	display: flex;
-	font-size: 90%;
-	gap: var(--control-inner-padding);
-	margin-bottom: var(--control-inner-padding);
-}
-
-.asset-editor-cpu-warning svg {
-	color: var(--yellow);
-	flex: none;
 }
 
 /* Placing an anchor, rather than cropping. The cursor is the only thing that says which

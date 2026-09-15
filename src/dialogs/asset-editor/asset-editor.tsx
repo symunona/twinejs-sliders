@@ -1,12 +1,14 @@
 import {AssetId, AssetMeta, Frac2} from '@sliders/scene-types';
 import classNames from 'classnames';
 import {
-	IconAlertTriangle,
-	IconArrowsExchange,
+	IconAdjustments,
 	IconCrop,
 	IconDeviceFloppy,
 	IconEraser,
+	IconFilePlus,
 	IconLink,
+	IconResize,
+	IconTarget,
 	IconWand,
 	IconX
 } from '@tabler/icons';
@@ -24,7 +26,10 @@ import {DialogCard} from '../../components/container/dialog-card';
 import {CheckboxButton} from '../../components/control/checkbox-button';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
-import {TextInput} from '../../components/control/text-input';
+import {
+	PromptButton,
+	PromptValidationResponse
+} from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
 import {DialogComponentProps} from '../dialogs.types';
 import {
@@ -48,6 +53,8 @@ import {
 	keepStorage,
 	webGpuDescription
 } from './engine-types';
+import {NoteBody, NoteButton, useNote} from './editor-note';
+import {EditorSection} from './editor-section';
 import {
 	anchorAfterCrop,
 	canvasBlob,
@@ -159,11 +166,22 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
 	const [replaceOpen, setReplaceOpen] = React.useState(false);
+	const [saveAsOpen, setSaveAsOpen] = React.useState(false);
 	const [saving, setSaving] = React.useState(false);
 	/** Every asset's id and name, to spot a name clash before saving. */
 	const [library, setLibrary] = React.useState<{id: string; name: string}[]>([]);
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	const {t} = useTranslation();
+
+	// Every section's prose hides behind an icon until asked for. Each one keeps
+	// its own state so that opening the background note doesn't unfold the rest.
+
+	const adjustNote = useNote();
+	const anchorNote = useNote();
+	const cpuNote = useNote();
+	const engineNote = useNote();
+	const saveNote = useNote();
+	const sizeNote = useNote();
 
 	// A cutout can take a while--first run compiles shaders, and the model runs
 	// twice. A ticking clock is the difference between "working" and "hung".
@@ -602,7 +620,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 	}
 
-	async function handleSave() {
+	async function handleSave(asName: string) {
 		if (!source || !edits || !meta) {
 			return;
 		}
@@ -611,7 +629,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setSaving(true);
 
 		try {
-			const saveName = name.trim() || `${meta.name}-edit`;
+			const saveName = asName.trim() || `${meta.name}-edit`;
 
 			// `ownerCharacter` rides along, or a character frame edited here would land
 			// in the library as a loose asset while the character kept the old one.
@@ -635,10 +653,35 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	}
 
 	// Names are how scenes refer to assets--`bg: tavern-night`--so two assets
-	// sharing one is ambiguous in a way two ids never are.
-	const trimmedName = name.trim().toLowerCase();
-	const clash = library.find(
-		asset => asset.name.toLowerCase() === trimmedName && trimmedName !== ''
+	// sharing one is ambiguous in a way two ids never are. Saying so is still
+	// advice rather than a rule: the clash is reported, the save is allowed.
+	// Memoised because `PromptButton` re-validates whenever this identity
+	// changes, and validating sets state.
+	const validateSaveName = React.useCallback(
+		(value: string): PromptValidationResponse => {
+			const trimmed = value.trim().toLowerCase();
+
+			if (trimmed === '') {
+				return {message: t('dialogs.assetEditor.nameEmpty'), valid: false};
+			}
+
+			const clash = library.find(asset => asset.name.toLowerCase() === trimmed);
+
+			if (!clash) {
+				return {valid: true};
+			}
+
+			return {
+				message: t(
+					clash.id === meta?.id
+						? 'dialogs.assetEditor.clashesWithSelf'
+						: 'dialogs.assetEditor.clashesWithOther',
+					{name: clash.name}
+				),
+				valid: true
+			};
+		},
+		[library, meta?.id, t]
 	);
 
 	const cropped =
@@ -696,8 +739,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		id: 'assetEditor.saveAsNew',
 		label: t('hotkeys.commands.assetEditor.saveAsNew'),
 		// Detached editing has one destination rather than two, so the same key
-		// commits the edit there instead.
-		run: detached ? handleApply : handleSave,
+		// commits the edit there instead. Saving as new opens the name prompt--the
+		// name is no longer sitting in a field waiting to be used.
+		run: detached ? handleApply : () => setSaveAsOpen(true),
 		scope: 'asset-editor'
 	});
 
@@ -758,8 +802,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 						</p>
 					</div>
 					<div className="asset-editor-controls">
-						<section>
-							<h3>{t('dialogs.assetEditor.adjust')}</h3>
+						<EditorSection
+							icon={<IconAdjustments />}
+							note={adjustNote}
+							title={t('dialogs.assetEditor.adjust')}
+						>
+							<NoteBody kind="info" note={adjustNote}>
+								{t('dialogs.assetEditor.adjustNote')}
+							</NoteBody>
 							<AdjustSlider
 								label={t('dialogs.assetEditor.brightness')}
 								max={LEVEL_RANGE.max}
@@ -790,45 +840,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								step={GAMMA_RANGE.step}
 								value={edits.gamma}
 							/>
-						</section>
-						<section>
-							<h3>{t('dialogs.assetEditor.crop')}</h3>
-							<p className="asset-editor-detail">
-								{t('dialogs.assetEditor.cropDetail', {
-									height: edits.crop.h,
-									width: edits.crop.w,
-									x: edits.crop.x,
-									y: edits.crop.y
-								})}
-							</p>
-							<ButtonBar>
-								<IconButton
-									commandId="assetEditor.resetCrop"
-									disabled={!cropped}
-									icon={<IconCrop />}
-									label={t('dialogs.assetEditor.resetCrop')}
-									onClick={resetCrop}
-								/>
-							</ButtonBar>
-						</section>
-						{!detached && (
-							<section>
-								<h3>{t('dialogs.assetEditor.anchor')}</h3>
-								<AnchorSelect
-									disabled={busy}
-									onChange={setOrigin}
-									onChangePicking={setPicking}
-									origin={origin}
-									pickHint={t('dialogs.assetEditor.anchorHint')}
-									picking={picking}
-								/>
-								<p className="asset-editor-detail">
-									{t('dialogs.assetEditor.anchorNote')}
-								</p>
-							</section>
-						)}
-						<section>
-							<h3>{t('dialogs.assetEditor.size')}</h3>
+						</EditorSection>
+						<EditorSection
+							detail={`${edits.width}×${edits.height}`}
+							icon={<IconResize />}
+							note={sizeNote}
+							title={t('dialogs.assetEditor.size')}
+						>
+							<NoteBody kind="info" note={sizeNote}>
+								{t('dialogs.assetEditor.sizeNote')}
+							</NoteBody>
 							<div className="asset-editor-size">
 								<label className="asset-editor-number">
 									<span>{t('dialogs.assetEditor.width')}</span>
@@ -860,34 +881,57 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									disabled={
 										edits.width === edits.crop.w && edits.height === edits.crop.h
 									}
-									icon={<IconCrop />}
+									icon={<IconResize />}
 									label={t('dialogs.assetEditor.resetSize')}
 									onClick={() =>
 										changeEdits({height: edits.crop.h, width: edits.crop.w})
 									}
 								/>
 							</ButtonBar>
-						</section>
-						<section>
-							<h3>{t('dialogs.assetEditor.background')}</h3>
-							{onCpu && (
-								<p
-									className="asset-editor-warning asset-editor-cpu-warning"
-									data-testid="asset-editor-cpu-warning"
-									role="status"
-								>
-									<IconAlertTriangle />
-									<span>
-										{t('dialogs.assetEditor.cpuWarning', {
-											reason: t(
-												background?.gpuReasonKey ??
-													'dialogs.assetEditor.needsWebGpu'
-											),
-											size: megabytes(background?.engine?.bytes ?? 0)
-										})}
-									</span>
-								</p>
-							)}
+						</EditorSection>
+						<EditorSection
+							detail={t('dialogs.assetEditor.cropDetail', {
+								height: edits.crop.h,
+								width: edits.crop.w,
+								x: edits.crop.x,
+								y: edits.crop.y
+							})}
+							icon={<IconCrop />}
+							title={t('dialogs.assetEditor.crop')}
+						>
+							<ButtonBar>
+								<IconButton
+									commandId="assetEditor.resetCrop"
+									disabled={!cropped}
+									icon={<IconCrop />}
+									label={t('dialogs.assetEditor.resetCrop')}
+									onClick={resetCrop}
+								/>
+							</ButtonBar>
+						</EditorSection>
+						{!detached && (
+							<EditorSection
+								icon={<IconTarget />}
+								note={anchorNote}
+								title={t('dialogs.assetEditor.anchor')}
+							>
+								<NoteBody kind="info" note={anchorNote}>
+									{t('dialogs.assetEditor.anchorNote')}
+								</NoteBody>
+								<AnchorSelect
+									disabled={busy}
+									onChange={setOrigin}
+									onChangePicking={setPicking}
+									origin={origin}
+									pickHint={t('dialogs.assetEditor.anchorHint')}
+									picking={picking}
+								/>
+							</EditorSection>
+						)}
+						<EditorSection
+							icon={<IconWand />}
+							title={t('dialogs.assetEditor.background')}
+						>
 							<ButtonBar>
 								<IconButton
 									commandId="assetEditor.removeBackground"
@@ -895,6 +939,20 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									icon={<IconWand />}
 									label={t('dialogs.assetEditor.removeBackground')}
 									onClick={handleRemoveBackground}
+								/>
+								{onCpu && (
+									<span data-testid="asset-editor-cpu-warning">
+										<NoteButton
+											kind="warning"
+											label={t('dialogs.assetEditor.background')}
+											note={cpuNote}
+										/>
+									</span>
+								)}
+								<NoteButton
+									kind="info"
+									label={t('dialogs.assetEditor.background')}
+									note={engineNote}
 								/>
 								{progress && (
 									<IconButton
@@ -916,6 +974,39 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									/>
 								)}
 							</ButtonBar>
+							{onCpu && (
+								<NoteBody kind="warning" note={cpuNote}>
+									{t('dialogs.assetEditor.cpuWarning', {
+										reason: t(
+											background?.gpuReasonKey ??
+												'dialogs.assetEditor.needsWebGpu'
+										),
+										size: megabytes(background?.engine?.bytes ?? 0)
+									})}
+								</NoteBody>
+							)}
+							<NoteBody kind="info" note={engineNote}>
+								{background?.engine
+									? t(
+											onCpu
+												? 'dialogs.assetEditor.cpuEngineNote'
+												: 'dialogs.assetEditor.engineNote',
+											{
+												gpu:
+													webGpuDescription() ??
+													t('dialogs.assetEditor.unknownGpu'),
+												license: background.engine.license,
+												name: background.engine.label,
+												resolution: background.engine.resolution,
+												size: megabytes(background.engine.bytes)
+											}
+									  )
+									: background &&
+									  t(
+											background.support.reasonKey ??
+												'dialogs.assetEditor.needsWebGpu'
+									  )}
+							</NoteBody>
 							{alpha && !progress && (
 								<>
 									<AdjustSlider
@@ -943,7 +1034,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									</p>
 								</>
 							)}
-							{progress ? (
+							{progress && (
 								<div className="asset-editor-progress" aria-busy>
 									<div
 										className={classNames('asset-editor-progress-track', {
@@ -983,42 +1074,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										</p>
 									)}
 								</div>
-							) : (
-								<p className="asset-editor-detail">
-									{background?.engine
-										? t(
-												onCpu
-													? 'dialogs.assetEditor.cpuEngineNote'
-													: 'dialogs.assetEditor.engineNote',
-												{
-													gpu:
-														webGpuDescription() ??
-														t('dialogs.assetEditor.unknownGpu'),
-													license: background.engine.license,
-													name: background.engine.label,
-													resolution: background.engine.resolution,
-													size: megabytes(background.engine.bytes)
-												}
-										  )
-										: background &&
-										  t(
-												background.support.reasonKey ??
-													'dialogs.assetEditor.needsWebGpu'
-										  )}
-								</p>
 							)}
-						</section>
-						<section>
-							<h3>{t('dialogs.assetEditor.save')}</h3>
-							{!detached && (
-								<TextInput
-									onChange={event => setName(event.target.value)}
-									value={name}
-								>
-									{t('dialogs.assetEditor.name')}
-								</TextInput>
-							)}
-							<p className="asset-editor-detail">
+						</EditorSection>
+						<EditorSection
+							icon={<IconDeviceFloppy />}
+							note={saveNote}
+							title={t('dialogs.assetEditor.save')}
+						>
+							<NoteBody kind="info" note={saveNote}>
 								{detached
 									? t('dialogs.assetEditor.applyNote', {
 											height: edits.height,
@@ -1028,47 +1091,53 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 											height: edits.height,
 											width: edits.width
 									  })}
-							</p>
-							{!detached && clash && (
-								<p className="asset-editor-warning" role="status">
-									{t(
-										clash.id === meta?.id
-											? 'dialogs.assetEditor.clashesWithSelf'
-											: 'dialogs.assetEditor.clashesWithOther',
-										{name: clash.name}
-									)}
-								</p>
-							)}
+							</NoteBody>
 							<ButtonBar>
-								<IconButton
-									commandId="assetEditor.saveAsNew"
-									disabled={saveDisabled}
-									icon={<IconDeviceFloppy />}
-									label={t(
-										detached
-											? 'dialogs.assetEditor.apply'
-											: 'dialogs.assetEditor.saveAsNew'
-									)}
-									onClick={detached ? handleApply : handleSave}
-									variant="create"
-								/>
-								{!detached && (
-									<ConfirmButton
-										commandId="assetEditor.replace"
-										confirmVariant="danger"
+								{detached ? (
+									<IconButton
+										commandId="assetEditor.saveAsNew"
 										disabled={saveDisabled}
-										icon={<IconArrowsExchange />}
-										label={t('dialogs.assetEditor.replace')}
-										onChangeOpen={setReplaceOpen}
-										onConfirm={handleReplace}
-										open={replaceOpen}
-										prompt={t('dialogs.assetEditor.replacePrompt', {
-											name: meta?.name ?? ''
-										})}
+										icon={<IconDeviceFloppy />}
+										label={t('dialogs.assetEditor.apply')}
+										onClick={handleApply}
+										variant="create"
 									/>
+								) : (
+									<>
+										<ConfirmButton
+											commandId="assetEditor.replace"
+											confirmVariant="danger"
+											disabled={saveDisabled}
+											icon={<IconDeviceFloppy />}
+											label={t('dialogs.assetEditor.replace')}
+											onChangeOpen={setReplaceOpen}
+											onConfirm={handleReplace}
+											open={replaceOpen}
+											prompt={t('dialogs.assetEditor.replacePrompt', {
+												name: meta?.name ?? ''
+											})}
+											variant="create"
+										/>
+										<PromptButton
+											commandId="assetEditor.saveAsNew"
+											disabled={saveDisabled}
+											icon={<IconFilePlus />}
+											label={t('dialogs.assetEditor.saveAsNew')}
+											onChange={event => setName(event.target.value)}
+											onChangeOpen={setSaveAsOpen}
+											onSubmit={handleSave}
+											open={saveAsOpen}
+											prompt={t('dialogs.assetEditor.saveAsPrompt')}
+											submitIcon={<IconFilePlus />}
+											submitLabel={t('dialogs.assetEditor.saveAsSubmit')}
+											submitVariant="create"
+											validate={validateSaveName}
+											value={name}
+										/>
+									</>
 								)}
 							</ButtonBar>
-						</section>
+						</EditorSection>
 					</div>
 				</div>
 			) : (
