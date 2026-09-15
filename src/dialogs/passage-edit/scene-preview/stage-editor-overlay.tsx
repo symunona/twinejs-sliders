@@ -173,6 +173,14 @@ export interface StageEditorOverlayProps {
 	 * pointer and turning it on cannot change what a click does.
 	 */
 	grid?: boolean;
+	/**
+	 * The background is pinned: no pan, no wheel zoom, and a dropped backdrop does not
+	 * replace the one in the scene. Entities stay fully editable — this is the narrow lock,
+	 * for staging a cast against a shot that is already framed.
+	 */
+	bgLocked?: boolean;
+	/** Double click landed on this entity: show it in the asset manager. */
+	onOpenEntity?: (id: EntityId) => void;
 }
 
 /**
@@ -256,6 +264,7 @@ export function snapDropPoint(
 
 export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const {
+		bgLocked,
 		children,
 		editable,
 		grid,
@@ -265,6 +274,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onCommit,
 		onDropAsset,
 		onDropFiles,
+		onOpenEntity,
 		onPatch,
 		onSelect,
 		parentOffsets,
@@ -312,6 +322,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 	// What the window-level pointer handlers need, without re-binding them mid-gesture.
 	const latest = React.useRef({
+		bgLocked,
 		box,
 		editable,
 		onAdvance,
@@ -323,6 +334,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	});
 
 	latest.current = {
+		bgLocked,
 		box,
 		editable,
 		onAdvance,
@@ -446,6 +458,16 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			}
 
 			if (gesture.kind === 'pan') {
+				// The gesture is still begun under the background lock, because a tap on empty
+				// stage is how the full screen player turns the page. It just moves nothing.
+				if (current.bgLocked) {
+					if (commit) {
+						endGesture();
+					}
+
+					return;
+				}
+
 				const next = panCamera(box, gesture.startCamera, gesture.start, pointer);
 
 				cameraRef.current = next;
@@ -640,7 +662,9 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			if (
 				!(event.ctrlKey || event.metaKey) ||
 				!current.box ||
-				!current.editable
+				!current.editable ||
+				// The background lock pins the shot: zoom is a camera write like any other.
+				current.bgLocked
 			) {
 				return;
 			}
@@ -750,7 +774,9 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		// Middle drag pans from anywhere, including from on top of a sprite — the escape
 		// hatch for a stage so full that there is no empty ground left to grab.
 		if (event.button === 1) {
-			beginGesture(event, 'pan', []);
+			if (!bgLocked) {
+				beginGesture(event, 'pan', []);
+			}
 
 			return;
 		}
@@ -875,6 +901,12 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			: {x: 0, y: 0};
 
 		if (payload) {
+			// A locked background stays: this is exactly the accident the lock is for, and
+			// the tile is still droppable as a prop by dragging it from the Objects tab.
+			if (bgLocked && payload.target === 'bg') {
+				return;
+			}
+
 			onDropAsset?.(payload, at);
 		} else {
 			onDropFiles?.(files, at);
@@ -894,6 +926,20 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		// full screen under the reader mid-sentence is not what they asked for. Escape and
 		// the toolbar button are the way out; double click is only the way IN.
 		if (player) {
+			return;
+		}
+
+		// On a sprite, double click means "show me this thing": the same rect hit test the
+		// press used, so what opens is what is drawn on top, not what the DOM says.
+		const frame = frameOffset();
+		const hit = hitTest(targetsRef.current, {
+			x: event.clientX - frame.left,
+			y: event.clientY - frame.top
+		});
+
+		if (hit !== undefined && onOpenEntity) {
+			onOpenEntity(hit);
+
 			return;
 		}
 
@@ -928,6 +974,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	return (
 		<div
 			className={classNames('stage-editor', {
+				'bg-locked': bgLocked,
 				dragging,
 				'drop-active': dropActive,
 				'over-entity': !!hover

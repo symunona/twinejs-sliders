@@ -112,7 +112,7 @@ test.describe('Sliders asset editor', () => {
 		const saved = page.locator('.sliders-tile', {hasText: 'street-dusk-cropped'});
 
 		await expect(saved).toBeVisible({timeout: 15000});
-		await expect(saved.locator('.sliders-tile-detail')).toContainText('320×');
+		await expect(saved.locator('.sliders-tile-size')).toContainText('320×');
 		await expect(page.locator('.sliders-tile', {hasText: 'street-dusk'})).toHaveCount(
 			2
 		);
@@ -203,7 +203,7 @@ test.describe('Sliders asset editor', () => {
 		const tile = page.locator('.sliders-tile', {hasText: 'street-dusk'});
 		const before = await tile.getAttribute('data-asset-id');
 
-		await expect(tile.locator('.sliders-tile-detail')).toContainText('1280×720');
+		await expect(tile.locator('.sliders-tile-size')).toContainText('1280×720');
 
 		// Halve it, so the change is visible in the tile's own numbers.
 		const width = editor.getByRole('spinbutton', {name: 'Width'});
@@ -220,7 +220,7 @@ test.describe('Sliders asset editor', () => {
 			1
 		);
 		await expect(tile).toHaveAttribute('data-asset-id', before!);
-		await expect(tile.locator('.sliders-tile-detail')).toContainText('640×360');
+		await expect(tile.locator('.sliders-tile-size')).toContainText('640×360');
 		await shot(page, '24-asset-editor-overwritten');
 	});
 

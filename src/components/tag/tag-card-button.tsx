@@ -19,6 +19,12 @@ export interface TagCardButtonProps {
 	commandId?: string;
 	disabled?: boolean;
 	allTags: string[];
+	/**
+	 * Drop the label and show the tag icon alone--for a tile whose action row has to fit
+	 * on one line. `CardButton` spreads into `IconButton`, but this component picks its
+	 * props apart instead of spreading, so it has to be forwarded by hand.
+	 */
+	iconOnly?: boolean;
 	id: string;
 	onAdd: (value: string) => void;
 	/**
@@ -47,6 +53,7 @@ export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 		allTags,
 		commandId,
 		disabled,
+		iconOnly,
 		id,
 		onAdd,
 		onChangeColor,
@@ -134,6 +141,7 @@ export const TagCardButton: React.FC<TagCardButtonProps> = props => {
 				onChangeOpen={handleChangeOpen}
 				open={open}
 				icon={<IconTag />}
+				iconOnly={iconOnly}
 				label={label}
 			>
 				<CardContent>

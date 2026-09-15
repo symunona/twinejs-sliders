@@ -77,11 +77,7 @@ async function uploadInto(
 }
 
 test.describe('Sliders asset manager', () => {
-	test.beforeEach(async ({context, page}) => {
-		// The copy button uses the async Clipboard API.
-		await context
-			.grantPermissions(['clipboard-read', 'clipboard-write'])
-			.catch(() => undefined);
+	test.beforeEach(async ({page}) => {
 		await clearAssetLibrary(page);
 	});
 
@@ -96,9 +92,13 @@ test.describe('Sliders asset manager', () => {
 
 		await expect(tile).toBeVisible({timeout: 15000});
 
-		// Still images are re-encoded to WebP on upload (spec 03).
-		await expect(tile.locator('.sliders-tile-detail')).toContainText('webp');
-		await expect(tile.locator('.sliders-tile-detail')).toContainText('1280×720');
+		// Still images are re-encoded to WebP on upload (spec 03). The tile shows the
+		// dimensions in its corner chip and keeps bytes and format in the chip's tooltip.
+		await expect(tile.locator('.sliders-tile-size')).toContainText('1280×720');
+		await expect(tile.locator('.sliders-tile-size')).toHaveAttribute(
+			'title',
+			/webp/
+		);
 		await expect(tile.locator('img')).toBeVisible();
 		await shot(page, '02-assets-background-uploaded');
 	});
@@ -118,7 +118,7 @@ test.describe('Sliders asset manager', () => {
 		await expect(tile.getByText('Animated', {exact: true})).toBeVisible();
 
 		// Stored as-is: still a GIF, never re-encoded.
-		await expect(tile.locator('.sliders-tile-detail')).toContainText('gif');
+		await expect(tile.locator('.sliders-tile-size')).toHaveAttribute('title', /gif/);
 		await shot(page, '03-assets-animated-gif');
 	});
 
@@ -138,30 +138,6 @@ test.describe('Sliders asset manager', () => {
 			1
 		);
 		await shot(page, '04-assets-duplicate-warning');
-	});
-
-	test('copies the YAML fragment, not the asset id', async ({page}) => {
-		await createStory(page, 'Copy fragment test');
-		await openAssetManager(page);
-		await uploadInto(page, 'Assets', [fixture('tavern-night.png')]);
-
-		const tile = page.locator('.sliders-tile', {hasText: 'tavern-night'});
-
-		await expect(tile).toBeVisible({timeout: 15000});
-		await expect(tile.locator('.copy-fragment-button')).toHaveAttribute(
-			'data-fragment',
-			'bg: tavern-night'
-		);
-
-		await tile.getByRole('button', {name: 'bg: tavern-night'}).click();
-		await expect(tile.getByText('Copied')).toBeVisible();
-
-		const clipboard = await page.evaluate(() =>
-			navigator.clipboard.readText().catch(() => '')
-		);
-
-		expect(clipboard).toBe('bg: tavern-night');
-		await shot(page, '05-assets-copied-fragment');
 	});
 
 	test('uploads files dropped onto a tab', async ({page}) => {
@@ -190,14 +166,10 @@ test.describe('Sliders asset manager', () => {
 		const tile = page.locator('.sliders-tile', {hasText: 'rain-streaks'});
 
 		await expect(tile).toBeVisible({timeout: 15000});
-		await expect(tile.locator('.copy-fragment-button')).toHaveAttribute(
-			'data-fragment',
-			'fx: [{id: rain-streaks, amount: 1}]'
-		);
 		await shot(page, '12-assets-dropped');
 	});
 
-	test('shows objects with an object fragment', async ({page}) => {
+	test('shows an uploaded object on the Objects tab', async ({page}) => {
 		await createStory(page, 'Object fragment test');
 		await openAssetManager(page);
 		await page.getByRole('tab', {name: 'Objects'}).click();
@@ -206,10 +178,7 @@ test.describe('Sliders asset manager', () => {
 		const tile = page.locator('.sliders-tile', {hasText: 'table'});
 
 		await expect(tile).toBeVisible({timeout: 15000});
-		await expect(tile.locator('.copy-fragment-button')).toHaveAttribute(
-			'data-fragment',
-			'table: {at: 0}'
-		);
+		await expect(tile.locator('.sliders-tile-name')).toHaveText('table');
 	});
 });
 
@@ -325,10 +294,6 @@ test.describe('Sliders character editor', () => {
 
 		await expect(tile).toBeVisible({timeout: 15000});
 		await expect(tile).toContainText('1 frame');
-		await expect(tile.locator('.copy-fragment-button')).toHaveAttribute(
-			'data-fragment',
-			'joren: {at: 0, frame: joren-idle}'
-		);
 
 		// Character frames never appear in the flat background list.
 		await assets.getByRole('tab', {name: 'Backgrounds'}).click();

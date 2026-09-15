@@ -10,14 +10,18 @@ import {IconButton} from '../../components/control/icon-button';
 import {TagCardButton} from '../../components/tag/tag-card-button';
 import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import {AssetPreview} from './asset-preview';
-import {CopyFragmentButton} from './copy-fragment-button';
+import {TileUses} from './tile-uses';
 
 export interface CharacterTileProps {
 	allTags: string[];
 	character: Character;
+	/** Highlighted and scrolled to--something asked for this tile by id. */
+	focused?: boolean;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
+	/** Passage names whose scenes cast this character. */
+	usedIn?: string[];
 	/**
 	 * No scene casts this character, so a push leaves it and its frames behind. Undefined
 	 * while the scan is still running — see `useSyncedRefs`.
@@ -30,14 +34,29 @@ export interface CharacterTileProps {
  * character editor.
  */
 export const CharacterTile: React.FC<CharacterTileProps> = props => {
-	const {allTags, character, onChangeTags, onDelete, onEdit, unreferenced} =
-		props;
+	const {
+		allTags,
+		character,
+		focused,
+		onChangeTags,
+		onDelete,
+		onEdit,
+		unreferenced,
+		usedIn
+	} = props;
 	const frameNames = Object.keys(character.frames);
 	const {t} = useTranslation();
+	const tileRef = React.useRef<HTMLDivElement>(null);
+
+	React.useEffect(() => {
+		if (focused) {
+			tileRef.current?.scrollIntoView({block: 'nearest'});
+		}
+	}, [focused]);
 
 	return (
 		<div
-			className="sliders-tile"
+			className={`sliders-tile${focused ? ' focused' : ''}`}
 			data-character-id={character.id}
 			draggable
 			// A cast entry is addressed by the character's ID, which is what `ref` resolves
@@ -49,6 +68,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 					characterFragment(character)
 				)
 			}
+			ref={tileRef}
 			title={t('dialogs.slidersAssets.dragToStage')}
 		>
 			<button
@@ -56,16 +76,19 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 				onClick={onEdit}
 				title={t('dialogs.slidersAssets.openCharacter', {name: character.name})}
 			>
-				<AssetPreview
-					alt={character.name}
-					assetId={character.frames[frameNames[0]]?.asset}
-					origin={character.origin}
-				/>
-				<span className="sliders-tile-name">{character.name}</span>
-				<span className="sliders-tile-detail">
-					{t('dialogs.slidersAssets.frameCount', {count: frameNames.length})}
+				<span className="sliders-tile-art">
+					<AssetPreview
+						alt={character.name}
+						assetId={character.frames[frameNames[0]]?.asset}
+						origin={character.origin}
+					/>
+					<span className="sliders-tile-size">
+						{t('dialogs.slidersAssets.frameCount', {count: frameNames.length})}
+					</span>
 				</span>
+				<span className="sliders-tile-name">{character.name}</span>
 			</button>
+			<TileUses passages={usedIn ?? []} />
 			<div className="sliders-tile-badges">
 				{unreferenced && (
 					<Badge
@@ -78,15 +101,16 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 					<Badge key={tag} label={tag} />
 				))}
 			</div>
-			<CopyFragmentButton fragment={characterFragment(character)} />
 			<ButtonBar>
 				<IconButton
 					icon={<IconEdit />}
+					iconOnly
 					label={t('dialogs.slidersAssets.editCharacter')}
 					onClick={onEdit}
 				/>
 				<TagCardButton
 					allTags={allTags}
+					iconOnly
 					id={`character-tag-input-${character.id}`}
 					onAdd={tag => onChangeTags([...character.tags, tag])}
 					onRemove={tag =>
@@ -97,6 +121,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 				<ConfirmButton
 					confirmVariant="danger"
 					icon={<IconTrash />}
+					iconOnly
 					label={t('common.delete')}
 					onConfirm={onDelete}
 					prompt={t('dialogs.slidersAssets.deleteCharacterPrompt', {

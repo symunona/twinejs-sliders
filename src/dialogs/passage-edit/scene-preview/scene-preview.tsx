@@ -5,6 +5,8 @@ import {
 	IconGridDots,
 	IconLock,
 	IconLockOpen,
+	IconPhoto,
+	IconPhotoShield,
 	IconPlayerPause,
 	IconPlayerPlay
 } from '@tabler/icons';
@@ -38,6 +40,9 @@ import {
 	refreshAssetLibrary,
 	useAssetStore
 } from '../../sliders-assets/asset-store-context';
+import {requestAssetFocus} from '../../sliders-assets/focus-request';
+import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
+import {useDialogsContext} from '../../context';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import {StageSelectionControls} from './stage-selection-controls';
@@ -119,6 +124,16 @@ export interface ScenePreviewProps {
 const LOCKED_KEY = 'sliders.preview.locked';
 
 /**
+ * The background lock: the camera holds still and a dropped backdrop will not replace the
+ * one already there. A narrower lock than the stage's, for the common case of staging
+ * characters against a shot that is already framed — a pan started by grabbing empty ground
+ * is easy to do by accident, and `camera:` is not somewhere an author looks afterwards.
+ *
+ * Survives the session the same way the other two do, and for the same reason.
+ */
+const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
+
+/**
  * The grid survives the dialog too, for the same reason the lock does: an author who turned
  * it on is staging, and staging outlasts one passage.
  */
@@ -178,8 +193,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 }) => {
 	const {t} = useTranslation();
 	const store = useAssetStore();
+	const {dispatch} = useDialogsContext();
 	const [locked, setLocked] = React.useState(
 		() => window.localStorage.getItem(LOCKED_KEY) === 'true'
+	);
+	const [bgLocked, setBgLocked] = React.useState(
+		() => window.localStorage.getItem(BG_LOCKED_KEY) === 'true'
 	);
 	const [grid, setGrid] = React.useState(
 		() => window.localStorage.getItem(GRID_KEY) === 'true'
@@ -682,6 +701,34 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		});
 	}
 
+	/**
+	 * Double click on a sprite: show me this thing in the asset manager.
+	 *
+	 * Only the scene's `ref` is known here — a character id or an asset name out of one
+	 * namespace — so the manager resolves it, the same way `resolveEntity` does when it
+	 * draws the sprite. The dialog is opened with no props so that an already-open manager
+	 * is raised rather than duplicated (the reducer dedupes on `props`), and the target
+	 * rides alongside on the focus channel.
+	 */
+	function handleOpenEntity(id: EntityId) {
+		const ref = stage.entities?.[id]?.ref?.trim();
+
+		if (!ref) {
+			return;
+		}
+
+		dispatch({component: SlidersAssetsDialog, type: 'addDialog'});
+		requestAssetFocus(ref);
+	}
+
+	function toggleBgLock() {
+		setBgLocked(value => {
+			window.localStorage.setItem(BG_LOCKED_KEY, String(!value));
+
+			return !value;
+		});
+	}
+
 	function goToPreviousBeat() {
 		setPlaying(false);
 		setBeat(b => Math.max(0, b - 1));
@@ -955,6 +1002,20 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={grid}
 			/>
+			{/* Beside the stage lock, because it is the same idea one notch
+			    narrower: this one pins the shot and leaves the cast free. */}
+			<IconButton
+				icon={bgLocked ? <IconPhotoShield /> : <IconPhoto />}
+				iconOnly
+				label={t(
+					bgLocked
+						? 'dialogs.passageEdit.scenePreview.unlockBg'
+						: 'dialogs.passageEdit.scenePreview.lockBg'
+				)}
+				onClick={toggleBgLock}
+				selectable
+				selected={bgLocked}
+			/>
 			{/* Always here, selection or not: the lock is how the author stops
 			    the stage editing the file, so it cannot be a control that only
 			    appears once something has been grabbed. */}
@@ -991,6 +1052,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// The stage itself--everything below the bar.
 	const stageBody = (
 		<StageEditorOverlay
+			bgLocked={bgLocked}
 			editable={editable}
 			grid={grid}
 			onAdvance={canAdvance ? goToNextBeat : undefined}
@@ -999,6 +1061,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			onCommit={handleCommit}
 			onDropAsset={handleDropAsset}
 			onDropFiles={handleDropFiles}
+			onOpenEntity={handleOpenEntity}
 			onPatch={setPatch}
 			parentOffsets={offsets}
 			onSelect={select}

@@ -21,11 +21,14 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {SlidersCharactersDialog} from '../sliders-characters';
 import {useAssetLibrary} from './asset-store-context';
+import {onAssetFocus, takePendingAssetFocus} from './focus-request';
+import type {AssetFocusRequest} from './focus-request';
 import {ImportTab} from './import-tab';
 import {AssetTile} from './asset-tile';
 import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
+import {useAssetUsage} from './use-asset-usage';
 import {useSyncedRefs} from './use-synced-refs';
 import './sliders-assets.css';
 
@@ -50,6 +53,8 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const library = useAssetLibrary();
 	// Art no scene names never leaves this machine on a push. Badge it, don't change it.
 	const synced = useSyncedRefs();
+	const usage = useAssetUsage();
+	const [focus, setFocus] = React.useState<AssetFocusRequest>();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
 	const [newCharacterOpen, setNewCharacterOpen] = React.useState(false);
 	const [search, setSearch] = React.useState('');
@@ -76,6 +81,46 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			(tagFilter.length === 0 ||
 				character.tags.some(tag => tagFilter.includes(tag)))
 	);
+
+	/**
+	 * A double click on the scene stage asks for the entity it hit. All the caller has is
+	 * the scene's `ref`, which is a character id or an asset name out of one namespace —
+	 * the same ambiguity `resolveEntity` faces, resolved in the same order.
+	 */
+	const focusedCharacter = focus
+		? library.characters.find(character => character.id === focus.ref)
+		: undefined;
+	const focusedAsset =
+		focus && !focusedCharacter
+			? library.visible.find(asset => asset.name === focus.ref)
+			: undefined;
+
+	React.useEffect(() => {
+		// The dialog may be opening because of this request, in which case it was published
+		// before anything was here to hear it.
+		setFocus(takePendingAssetFocus());
+
+		return onAssetFocus(setFocus);
+	}, []);
+
+	React.useEffect(() => {
+		if (!focus) {
+			return;
+		}
+
+		// A tile that is filtered out cannot be scrolled to, and the author did not ask for
+		// the filter this time — they asked for this asset.
+		setSearch('');
+		setTagFilter([]);
+
+		if (focusedCharacter) {
+			setTabIndex(TABS.findIndex(tab => !tab.kind));
+		} else if (focusedAsset) {
+			setTabIndex(TABS.findIndex(tab => tab.kind === focusedAsset.kind));
+		}
+		// Keyed on the request, not on what it resolved to: the library can arrive after
+		// the request does, and re-running then is exactly right.
+	}, [focus, focusedAsset, focusedCharacter]);
 
 	function openAssetEditor(assetId: string) {
 		dispatch({
@@ -293,12 +338,14 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						matchingAssets.map(asset => (
 							<AssetTile
 								allTags={library.tags}
+								focused={focusedAsset?.id === asset.id}
 								key={asset.id}
 								meta={asset}
 								onChangeTags={tags => handleChangeTags(asset.id, tags)}
 								onDelete={() => handleDeleteAsset(asset.id)}
 								onEdit={() => openAssetEditor(asset.id)}
 								unreferenced={synced.ready && !synced.assetIds.has(asset.id)}
+								usedIn={usage.get(asset.name)}
 							/>
 						))
 					) : (
@@ -306,6 +353,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 							<CharacterTile
 								allTags={library.tags}
 								character={character}
+								focused={focusedCharacter?.id === character.id}
 								key={character.id}
 								onChangeTags={tags =>
 									handleChangeCharacterTags(character.id, tags)
@@ -315,6 +363,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 								unreferenced={
 									synced.ready && !synced.characterIds.has(character.id)
 								}
+								usedIn={usage.get(character.id)}
 							/>
 						))
 					);

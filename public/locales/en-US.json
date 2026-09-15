@@ -379,7 +379,10 @@
 				"zFront": "Bring forward",
 				"frame": "Frame",
 				"frameAuto": "Automatic",
-				"moveBubble": "Move this bubble"
+				"moveBubble": "Move this bubble",
+				"lockBg": "Lock the background: no camera pan or zoom, and a dropped background will not replace it",
+				"unlockBg": "Unlock the background",
+				"openAsset": "Open in the asset manager"
 			},
 			"lock": {
 				"lockedBy": "{{name}} is editing this passage",
@@ -399,7 +402,6 @@
 			"backend": "Storing assets with: {{backend}}",
 			"backgrounds": "Backgrounds",
 			"characters": "Characters",
-			"copied": "Copied",
 			"deleteCharacterPrompt": "Are you sure you want to delete “{{name}}” and all of its frames? This cannot be undone.",
 			"deletePrompt": "Are you sure you want to delete “{{name}}”? This cannot be undone.",
 			"dropHint": "Drop image files here to add them to {{kind}}.",
@@ -436,7 +438,9 @@
 			"importNoStories": "There is no other story to import assets from.",
 			"imported": "Imported “{{name}}”.",
 			"importedNothing": "“{{name}}” was not copied.",
-			"importError": "Could not import “{{name}}”: {{message}}"
+			"importError": "Could not import “{{name}}”: {{message}}",
+			"usedInTitle": "Used in {{count}} scene: {{names}}",
+			"usedInTitle_plural": "Used in {{count}} scenes: {{names}}"
 		},
 		"slidersCharacters": {
 			"addAnchor": "Add Anchor",

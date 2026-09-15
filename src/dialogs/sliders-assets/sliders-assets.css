@@ -102,8 +102,17 @@
 	padding: var(--control-inner-padding);
 }
 
+/* The action row is one line of icons, however narrow the tile gets: wrapping it would
+   push the grid row taller for every tile in it. */
 .sliders-tile .button-bar {
+	flex-wrap: nowrap;
 	margin-top: auto;
+}
+
+/* Something asked for this tile by name--a double click on the scene stage, say. */
+.sliders-tile.focused {
+	border-color: var(--blue);
+	box-shadow: 0 0 0 2px var(--blue);
 }
 
 /* A draggable tile can be dropped onto the scene preview to place it. The cursor is the
@@ -166,28 +175,53 @@
 	overflow-wrap: anywhere;
 }
 
+/* Holds the size chip against the picture's corner. */
+.sliders-tile-art {
+	display: block;
+	position: relative;
+}
+
+/* The one number that sums the picture up, over the picture rather than beside it: a tile
+   is 160px wide and a line of its own costs the same height as three more tiles' worth of
+   thumbnail. White on a translucent slab so it reads over art of any colour. */
+.sliders-tile-size {
+	background: rgba(0, 0, 0, 0.6);
+	border-radius: var(--corner-round);
+	bottom: 2px;
+	color: #fff;
+	font-size: 80%;
+	line-height: 1.2;
+	padding: 1px 4px;
+	pointer-events: none;
+	position: absolute;
+	right: 2px;
+}
+
 .sliders-tile-detail {
 	color: var(--gray);
 	font-size: 85%;
+}
+
+/* Every scene this art appears in, on ONE line--the rest is in the tooltip. */
+.sliders-tile-uses {
+	color: var(--gray);
+	font-size: 85%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sliders-tile-uses-count {
+	background: var(--light-gray);
+	border-radius: var(--corner-round);
+	color: var(--black);
+	padding: 0 4px;
 }
 
 .sliders-tile-badges {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--control-inner-padding);
-}
-
-.copy-fragment-button .icon-button {
-	height: auto;
-	max-width: 100%;
-	min-height: var(--control-height);
-	text-align: left;
-	white-space: normal;
-}
-
-.sliders-fragment {
-	font-family: var(--font-monospaced, monospace);
-	overflow-wrap: anywhere;
 }
 
 .sliders-empty {

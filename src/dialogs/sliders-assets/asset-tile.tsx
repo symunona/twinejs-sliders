@@ -11,14 +11,18 @@ import {TagCardButton} from '../../components/tag/tag-card-button';
 import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
 import {AssetPreview} from './asset-preview';
-import {CopyFragmentButton} from './copy-fragment-button';
+import {TileUses} from './tile-uses';
 
 export interface AssetTileProps {
 	allTags: string[];
+	/** Highlighted and scrolled to--something asked for this tile by name. */
+	focused?: boolean;
 	meta: AssetMeta;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
+	/** Passage names whose scenes write this asset's name. */
+	usedIn?: string[];
 	/**
 	 * No scene names this asset, so a push leaves it behind. Undefined while the scan is
 	 * still running, which is not the same as "used" — see `useSyncedRefs`.
@@ -39,8 +43,18 @@ function formatBytes(bytes: number): string {
 }
 
 export const AssetTile: React.FC<AssetTileProps> = props => {
-	const {allTags, meta, onChangeTags, onDelete, onEdit, unreferenced} = props;
+	const {
+		allTags,
+		focused,
+		meta,
+		onChangeTags,
+		onDelete,
+		onEdit,
+		unreferenced,
+		usedIn
+	} = props;
 	const {t} = useTranslation();
+	const tileRef = React.useRef<HTMLDivElement>(null);
 
 	// Backgrounds replace `bg:`, objects become an entry under `props:`. Only the NAME
 	// travels — scene YAML addresses assets by name, and `a_8f21` is unwritable. An `fx`
@@ -51,29 +65,44 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			? {label: meta.name, ref: meta.name, target: meta.kind === 'bg' ? 'bg' : 'prop'}
 			: undefined;
 
+	React.useEffect(() => {
+		if (focused) {
+			tileRef.current?.scrollIntoView({block: 'nearest'});
+		}
+	}, [focused]);
+
 	return (
 		<div
-			className="sliders-tile"
+			className={`sliders-tile${focused ? ' focused' : ''}`}
 			data-asset-id={meta.id}
 			draggable={!!dragPayload}
 			onDragStart={event =>
 				dragPayload &&
 				setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta))
 			}
+			ref={tileRef}
 			title={dragPayload ? t('dialogs.slidersAssets.dragToStage') : undefined}
 		>
-			{/* Only when the asset carries one: a cross on every default-anchored tile is
-			    nine crosses saying nothing. */}
-			<AssetPreview alt={meta.name} assetId={meta.id} origin={meta.origin} />
-			<div className="sliders-tile-name">{meta.name}</div>
-			<div className="sliders-tile-detail">
-				{t('dialogs.slidersAssets.assetDetail', {
-					width: meta.w,
-					height: meta.h,
-					size: formatBytes(meta.bytes),
-					format: meta.mime.replace(/^image\//, '')
-				})}
+			<div className="sliders-tile-art">
+				{/* Only when the asset carries one: a cross on every default-anchored tile is
+				    nine crosses saying nothing. */}
+				<AssetPreview alt={meta.name} assetId={meta.id} origin={meta.origin} />
+				{/* Dimensions only. Bytes and format are in the tooltip: the pixel size is
+				    what an author checks against the stage, the rest is housekeeping. */}
+				<span
+					className="sliders-tile-size"
+					title={t('dialogs.slidersAssets.assetDetail', {
+						width: meta.w,
+						height: meta.h,
+						size: formatBytes(meta.bytes),
+						format: meta.mime.replace(/^image\//, '')
+					})}
+				>
+					{meta.w}×{meta.h}
+				</span>
 			</div>
+			<div className="sliders-tile-name">{meta.name}</div>
+			<TileUses passages={usedIn ?? []} />
 			<div className="sliders-tile-badges">
 				{unreferenced && (
 					<Badge
@@ -87,12 +116,12 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					<Badge key={tag} label={tag} />
 				))}
 			</div>
-			<CopyFragmentButton fragment={assetFragment(meta)} />
 			<ButtonBar>
 				<IconButton
 					// Editing an animation would flatten it to one frame.
 					disabled={meta.animated}
 					icon={<IconPhotoEdit />}
+					iconOnly
 					label={
 						meta.animated
 							? t('dialogs.slidersAssets.editImageAnimated')
@@ -102,6 +131,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 				/>
 				<TagCardButton
 					allTags={allTags}
+					iconOnly
 					id={`asset-tag-input-${meta.id}`}
 					onAdd={tag => onChangeTags([...meta.tags, tag])}
 					onRemove={tag => onChangeTags(meta.tags.filter(t => t !== tag))}
@@ -110,6 +140,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 				<ConfirmButton
 					confirmVariant="danger"
 					icon={<IconTrash />}
+					iconOnly
 					label={t('common.delete')}
 					onConfirm={onDelete}
 					prompt={t('dialogs.slidersAssets.deletePrompt', {name: meta.name})}

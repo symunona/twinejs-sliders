@@ -288,7 +288,7 @@ test.describe('Sliders bundle export and import', () => {
 		await expect(
 			page
 				.locator('.sliders-tile', {hasText: 'tavern-night'})
-				.locator('.sliders-tile-detail')
+				.locator('.sliders-tile-size')
 		).toContainText('640×300');
 		await closeDialogs(page);
 
@@ -324,7 +324,7 @@ test.describe('Sliders bundle export and import', () => {
 		const tile = page.locator('.sliders-tile', {hasText: 'tavern-night'});
 
 		await expect(tile).toHaveCount(1, {timeout: 25000});
-		await expect(tile.locator('.sliders-tile-detail')).toContainText('640×300');
+		await expect(tile.locator('.sliders-tile-size')).toContainText('640×300');
 		await closeDialogs(page);
 
 		// The imported story now renders the local artwork under the name it asked for --

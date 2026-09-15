@@ -28,7 +28,14 @@
 	cursor: grab;
 }
 
-.stage-editor.over-entity {
+/* Under the background lock the ground is not a pan handle, so it must stop saying it is.
+   Sprites are still draggable, which is why this is not a blanket rule. */
+.stage-editor.bg-locked {
+	cursor: default;
+}
+
+.stage-editor.over-entity,
+.stage-editor.bg-locked.over-entity {
 	cursor: move;
 }
 
