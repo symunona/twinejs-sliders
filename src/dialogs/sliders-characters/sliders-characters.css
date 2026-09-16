@@ -1,23 +1,44 @@
 @import '../../styles/colors.css';
 @import '../../styles/metrics.css';
 
-.sliders-characters-dialog .react-tabs {
+/* Scoped to this tab set by name, not by descent: the controls under the stage are a
+   second, nested set of tabs, and the panel rules below would make each of those panels a
+   full-height scroller of its own. */
+.sliders-characters-tabs {
 	display: flex;
 	flex: 1 1 0;
 	flex-direction: column;
 	min-height: 0;
 }
 
-.sliders-characters-dialog .react-tabs__tab-panel {
+.sliders-characters-tabs > .react-tabs__tab-panel {
 	display: none;
 }
 
-.sliders-characters-dialog .react-tabs__tab-panel--selected {
+.sliders-characters-tabs > .react-tabs__tab-panel--selected {
 	display: flex;
 	flex: 1 1 0;
 	flex-direction: column;
 	min-height: 0;
 	overflow-y: auto;
+}
+
+/* Create sits at the head of the character tabs--picking a character and making one are
+   the same choice. */
+.sliders-characters-tabrow {
+	align-items: center;
+	border-bottom: 1px solid var(--light-gray);
+	display: flex;
+	gap: var(--control-inner-padding);
+	padding-left: var(--control-inner-padding);
+}
+
+.sliders-characters-tabrow .sliders-tablist {
+	border-bottom: none;
+	flex: 1 1 0;
+	min-width: 0;
+	overflow-x: auto;
+	padding-left: 0;
 }
 
 .character-editor {
@@ -34,15 +55,29 @@
 
 /* Frame list */
 
+/* The zone wraps the list AND the stage, so it must not become a scroller of its own or
+   add a second ring of padding round the body it contains. */
+.character-editor > .upload-drop-zone {
+	flex: 0 0 auto;
+	min-height: 0;
+	overflow: visible;
+	padding: 0;
+}
+
 .frame-list {
 	display: flex;
 	flex-direction: column;
-	flex: 0 0 180px;
+	flex: 0 0 calc(var(--grid-size) * 18);
+	gap: var(--control-inner-padding);
+	/* The stage's own height. Without a cap the list sets the height of the whole editor,
+	   and a character with eight poses pushes the controls under the stage off the
+	   screen. */
+	max-height: calc(var(--grid-size) * 40);
 	min-width: 0;
 }
 
 .frame-list h3 {
-	margin: 0 0 var(--control-inner-padding) 0;
+	margin: 0;
 }
 
 .frame-list ul {
@@ -51,13 +86,18 @@
 	gap: var(--control-inner-padding);
 	list-style: none;
 	margin: 0;
+	min-height: 0;
+	overflow-y: auto;
 	padding: 0;
 }
 
 .frame-list-item {
 	border: 1px solid var(--light-gray);
 	border-radius: var(--corner-round);
-	padding: var(--control-inner-padding);
+	/* The list is a column flex box with a capped height, so without this the tiles shrink
+	   to fit it and the name and buttons are squeezed out of their own picture. */
+	flex: 0 0 auto;
+	overflow: hidden;
 }
 
 .frame-list-item.selected {
@@ -71,31 +111,69 @@
 	border-style: dashed;
 }
 
+/* The whole tile is the picture; the name rides on top of it. */
 .frame-list-select {
-	align-items: center;
 	background: none;
 	border: none;
 	cursor: pointer;
-	display: flex;
+	display: block;
 	font: inherit;
-	gap: var(--control-inner-padding);
+	height: calc(var(--grid-size) * 9);
 	padding: 0;
+	position: relative;
 	text-align: left;
 	width: 100%;
 }
 
 .frame-list-select .asset-preview {
-	flex: 0 0 40px;
-	height: 40px;
+	border-radius: 0;
+	display: block;
+	height: 100%;
+	width: 100%;
+}
+
+/* Cover, not contain: a column of letterboxed thumbnails is mostly checkerboard. */
+.frame-list-select .asset-preview img {
+	height: 100%;
+	max-height: none;
+	max-width: none;
+	object-fit: cover;
+	width: 100%;
 }
 
 .frame-list-name {
+	background: var(--white-translucent);
+	bottom: 0;
 	color: var(--black);
-	overflow-wrap: anywhere;
+	left: 0;
+	overflow: hidden;
+	padding: 2px var(--control-inner-padding);
+	position: absolute;
+	right: 0;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .frame-list-animated {
-	margin-left: auto;
+	background: var(--white-translucent);
+	border-radius: var(--corner-round);
+	line-height: 1;
+	padding: 2px;
+	position: absolute;
+	right: 2px;
+	top: 2px;
+}
+
+/* One row, whatever the column width: five icon buttons at full chrome are wider than the
+   list, and wrapping them made each tile three rows tall. */
+.frame-list-item .button-bar {
+	flex-wrap: nowrap;
+	justify-content: space-around;
+}
+
+.frame-list-item .icon-button {
+	height: calc(var(--grid-size) * 3);
+	padding: 0 var(--control-inner-padding);
 }
 
 /* Sprite preview */
@@ -166,20 +244,6 @@
 	height: 100%;
 	object-fit: contain;
 	width: 100%;
-}
-
-/* Fit controls */
-
-/* Stacked, not side by side: the two button labels are long enough to squeeze a
-   same-row slider down to nothing. */
-.character-editor-fit {
-	display: flex;
-	flex-direction: column;
-	gap: var(--control-inner-padding);
-}
-
-.character-editor-fit .adjust-slider {
-	min-width: 0;
 }
 
 /* Three layers inside the box, because everything in here is positioned and would
@@ -298,35 +362,53 @@
 	white-space: nowrap;
 }
 
-/* Fields */
+/* Groups under the stage */
 
-.character-editor-anchor {
+.character-editor-groups {
+	border-top: 1px solid var(--light-gray);
+}
+
+.character-editor-group {
 	display: flex;
 	flex-direction: column;
-	gap: var(--control-inner-padding);
+	gap: var(--grid-size);
+	padding: var(--grid-size);
 }
 
 .character-editor-note {
 	color: var(--gray);
 	font-size: 85%;
 	margin: 0;
+	max-width: 60ch;
 }
 
-.character-editor-fields {
+/* Anchors: where things are pinned on the art, and the list of what is pinned. */
+.character-editor-anchors {
+	align-items: start;
+	display: grid;
+	gap: var(--grid-size) calc(var(--grid-size) * 3);
+	grid-template-columns: repeat(auto-fit, minmax(calc(var(--grid-size) * 26), 1fr));
+}
+
+.character-editor-anchor,
+.character-editor-rig {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--grid-size);
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	min-width: 0;
 }
 
 .character-editor-readout {
 	display: grid;
 	gap: 0 var(--grid-size);
 	grid-template-columns: max-content 1fr;
-	margin: var(--grid-size) 0 0 0;
+	margin: 0;
 }
 
 .character-editor-readout dt {
+	align-items: center;
 	color: var(--gray);
+	display: flex;
 }
 
 .character-editor-readout dd {
@@ -335,6 +417,20 @@
 	font-family: var(--font-monospaced, monospace);
 	gap: var(--control-inner-padding);
 	margin: 0;
+}
+
+/* The character's own rectangle, and the art's placement inside it. Both are sliders, so
+   both want the same comfortable column rather than the full dialog width. */
+.character-editor-box .adjust-slider,
+.character-editor-fit .adjust-slider {
+	max-width: calc(var(--grid-size) * 45);
+	min-width: 0;
+}
+
+.character-editor-fields {
+	display: grid;
+	gap: var(--grid-size);
+	grid-template-columns: repeat(auto-fit, minmax(calc(var(--grid-size) * 18), 1fr));
 }
 
 /* Same shape as the asset editor's banner: this dialog only ever has one thing to say. */

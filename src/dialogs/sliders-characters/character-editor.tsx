@@ -20,17 +20,21 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {Tab, TabList, TabPanel, Tabs} from 'react-tabs';
 import {AnchorSelect} from '../../components/anchor';
 import {ButtonBar} from '../../components/container/button-bar';
-import {CardContent} from '../../components/container/card';
 import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
 import {TextSelect} from '../../components/control/text-select';
 import {useCommand} from '../../hotkeys';
 import {AdjustSlider} from '../asset-editor/adjust-slider';
+import {UploadDropZone} from '../sliders-assets/upload-drop-zone';
 import {FrameList} from './frame-list';
 import {SpritePreview} from './sprite-preview';
+
+/** What the box reset buttons go back to--the size a new character starts at. */
+const DEFAULT_SIZE = {h: 1024, w: 512};
 
 export interface CharacterEditorProps {
 	assets: Record<AssetId, AssetMeta>;
@@ -41,12 +45,6 @@ export interface CharacterEditorProps {
 	/** Open the asset editor on a frame's image — cropping, levels, background removal. */
 	onEditFrame: (name: string) => void;
 	onUploadFrames: (files: File[]) => void;
-}
-
-function parseSize(value: string, fallback: number): number {
-	const parsed = Number.parseInt(value, 10);
-
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 /**
@@ -280,219 +278,284 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 
 	return (
 		<div className="character-editor">
-			<div className="character-editor-body">
-				<FrameList
-					assets={assets}
-					frames={character.frames}
-					onAddFiles={onUploadFrames}
-					onChangeLoop={handleChangeLoop}
-					onDelete={handleDeleteFrame}
-					onEdit={onEditFrame}
-					onRename={handleRenameFrame}
-					onSelect={setSelectedFrame}
-					onToggleGhost={handleToggleGhost}
-					selected={selectedFrame}
-					visible={ghosts}
-				/>
-				<div className="character-editor-stage">
-					<SpritePreview
-						anchors={activeAnchors}
-						assetId={activeFrame?.asset}
-						fit={activeFrame?.fit}
-						onChangeAnchor={handleChangeAnchor}
-						onChangeFit={handleChangeFit}
-						onChangeOrigin={origin => onChange({...character, origin})}
-						onCommit={onCommit}
-						ghosts={ghostFrames}
-						onPickEnd={() => setPicking(false)}
-						origin={character.origin}
-						picking={picking}
-						size={character.size}
+			{/* One drop target over the whole editor, frame list and stage alike. The stage
+			    is the obvious thing to aim a sprite at, and whatever the app does not take
+			    as a drop the BROWSER takes instead--it navigates to the file and the app is
+			    gone. */}
+			<UploadDropZone
+				floatingHint
+				label={t('dialogs.slidersCharacters.dropFrames')}
+				onDrop={onUploadFrames}
+			>
+				<div className="character-editor-body">
+					<FrameList
+						assets={assets}
+						frames={character.frames}
+						onAddFiles={onUploadFrames}
+						onChangeLoop={handleChangeLoop}
+						onDelete={handleDeleteFrame}
+						onEdit={onEditFrame}
+						onRename={handleRenameFrame}
+						onSelect={setSelectedFrame}
+						onToggleGhost={handleToggleGhost}
+						selected={selectedFrame}
+						visible={ghosts}
 					/>
-					<div className="character-editor-anchor">
-						<AnchorSelect
-							onChange={origin => {
-								onChange({...character, origin});
-								onCommit();
-							}}
-							onChangePicking={setPicking}
+					<div className="character-editor-stage">
+						<SpritePreview
+							anchors={activeAnchors}
+							assetId={activeFrame?.asset}
+							fit={activeFrame?.fit}
+							onChangeAnchor={handleChangeAnchor}
+							onChangeFit={handleChangeFit}
+							onChangeOrigin={origin => onChange({...character, origin})}
+							onCommit={onCommit}
+							ghosts={ghostFrames}
+							onPickEnd={() => setPicking(false)}
 							origin={character.origin}
-							pickHint={t('dialogs.slidersCharacters.originHint')}
 							picking={picking}
+							size={character.size}
 						/>
-						<p className="character-editor-note">
-							{t('dialogs.slidersCharacters.originNote')}
-						</p>
 					</div>
-					{activeFrame && (
-						<div className="character-editor-fit">
-							<AdjustSlider
-								editable
-								label={t('dialogs.slidersCharacters.frameScale')}
-								max={3}
-								min={0.2}
-								onChange={scale =>
-									handleChangeFit({...(activeFrame.fit ?? DEFAULT_FIT), scale})
-								}
-								resetLabel={t('dialogs.slidersCharacters.resetFrameScale')}
-								resetTo={DEFAULT_FIT.scale}
-								step={0.01}
-								value={activeFrame.fit?.scale ?? DEFAULT_FIT.scale}
+				</div>
+			</UploadDropZone>
+			{/* Everything under the stage, in groups that say what they act on. Anchors and
+			    the frame fit both move things around on the same picture, and side by side
+			    in one row nothing said which was which. */}
+			<Tabs
+				className="react-tabs character-editor-groups"
+				selectedTabClassName="selected"
+			>
+				<TabList className="sliders-tablist">
+					<Tab className="sliders-tab">
+						{t('dialogs.slidersCharacters.groupAnchors')}
+					</Tab>
+					<Tab className="sliders-tab">
+						{t('dialogs.slidersCharacters.groupFit')}
+					</Tab>
+					<Tab className="sliders-tab">
+						{t('dialogs.slidersCharacters.groupBox')}
+					</Tab>
+					<Tab className="sliders-tab">
+						{t('dialogs.slidersCharacters.groupDetails')}
+					</Tab>
+				</TabList>
+				<TabPanel>
+					<div className="character-editor-group character-editor-anchors">
+						<div className="character-editor-anchor">
+							<AnchorSelect
+								onChange={origin => {
+									onChange({...character, origin});
+									onCommit();
+								}}
+								onChangePicking={setPicking}
+								origin={character.origin}
+								pickHint={t('dialogs.slidersCharacters.originHint')}
+								picking={picking}
 							/>
+							<p className="character-editor-note">
+								{t('dialogs.slidersCharacters.originNote')}
+							</p>
+						</div>
+						<div className="character-editor-rig">
 							<ButtonBar>
-								<IconButton
-									disabled={!activeFrame.fit}
-									icon={<IconArrowBackUp />}
-									label={t('dialogs.slidersCharacters.resetFit')}
-									onClick={() => handleChangeFit(DEFAULT_FIT)}
+								<PromptButton
+									commandId="slidersCharacters.addAnchor"
+									disabled={!activeFrame}
+									icon={<IconCrosshair />}
+									label={t('dialogs.slidersCharacters.addAnchor')}
+									onChange={event => setNewAnchor(event.target.value)}
+									onChangeOpen={setNewAnchorOpen}
+									onSubmit={handleAddAnchor}
+									open={newAnchorOpen}
+									prompt={t('dialogs.slidersCharacters.addAnchorPrompt')}
+									value={newAnchor}
 								/>
 								<IconButton
-									disabled={frameNames.length < 2}
+									disabled={!activeFrame || frameNames.length < 2}
 									icon={<IconCopy />}
-									label={t('dialogs.slidersCharacters.fitToAllFrames')}
-									onClick={handleApplyFitToAll}
+									label={t('dialogs.slidersCharacters.anchorsToAllFrames')}
+									onClick={handleApplyAnchorsToAll}
 								/>
 							</ButtonBar>
-						</div>
-					)}
-					<ButtonBar>
-						<PromptButton
-							commandId="slidersCharacters.addAnchor"
-							disabled={!activeFrame}
-							icon={<IconCrosshair />}
-							label={t('dialogs.slidersCharacters.addAnchor')}
-							onChange={event => setNewAnchor(event.target.value)}
-							onChangeOpen={setNewAnchorOpen}
-							onSubmit={handleAddAnchor}
-							open={newAnchorOpen}
-							prompt={t('dialogs.slidersCharacters.addAnchorPrompt')}
-							value={newAnchor}
-						/>
-						<IconButton
-							disabled={!activeFrame || frameNames.length < 2}
-							icon={<IconCopy />}
-							label={t('dialogs.slidersCharacters.anchorsToAllFrames')}
-							onClick={handleApplyAnchorsToAll}
-						/>
-					</ButtonBar>
-				</div>
-			</div>
-			<CardContent>
-				<div className="character-editor-fields">
-					<TextInput
-						onChange={event => onChange({...character, name: event.target.value})}
-						orientation="vertical"
-						value={character.name}
-					>
-						{t('dialogs.slidersCharacters.name')}
-					</TextInput>
-					{/* Where this character's lines are painted and parked, unless a beat says
-					    otherwise. A narrator is written once here rather than on every line
-					    they speak. */}
-					<TextSelect
-						onChange={event =>
-							onChange(withBubble(character, {as: event.target.value || undefined}))
-						}
-						options={[
-							{label: t('dialogs.slidersCharacters.bubbleStyleDefault'), value: ''},
-							...BUBBLE_PRESETS.map(preset => ({label: preset, value: preset}))
-						]}
-						orientation="vertical"
-						value={character.bubble?.as ?? ''}
-					>
-						{t('dialogs.slidersCharacters.bubbleStyle')}
-					</TextSelect>
-					<TextSelect
-						onChange={event =>
-							onChange(
-								withBubble(character, {
-									place: (event.target.value || undefined) as
-										| BubblePlace
-										| undefined
-								})
-							)
-						}
-						options={BUBBLE_PLACES.map(place => ({label: place, value: place}))}
-						orientation="vertical"
-						value={character.bubble?.place ?? 'auto'}
-					>
-						{t('dialogs.slidersCharacters.bubblePlace')}
-					</TextSelect>
-					<TextInput
-						onChange={event =>
-							onChange({
-								...character,
-								size: {
-									...character.size,
-									w: parseSize(event.target.value, character.size.w)
-								}
-							})
-						}
-						orientation="vertical"
-						value={String(character.size.w)}
-					>
-						{t('dialogs.slidersCharacters.width')}
-					</TextInput>
-					<TextInput
-						onChange={event =>
-							onChange({
-								...character,
-								size: {
-									...character.size,
-									h: parseSize(event.target.value, character.size.h)
-								}
-							})
-						}
-						orientation="vertical"
-						value={String(character.size.h)}
-					>
-						{t('dialogs.slidersCharacters.height')}
-					</TextInput>
-					<TextInput
-						onChange={event =>
-							onChange({
-								...character,
-								tags: event.target.value
-									.split(',')
-									.map(tag => tag.trim())
-									.filter(Boolean)
-							})
-						}
-						orientation="vertical"
-						value={character.tags.join(', ')}
-					>
-						{t('common.tags')}
-					</TextInput>
-				</div>
-				<dl className="character-editor-readout">
-					<dt>{t('dialogs.slidersCharacters.origin')}</dt>
-					<dd data-readout="origin">
-						{character.origin.x.toFixed(3)}, {character.origin.y.toFixed(3)}
-					</dd>
-					{/* This frame's rig. Another frame's `mouth` is somewhere else, which is
-					    the whole point of anchors living on frames. */}
-					{anchorNames(character).map(name => {
-						const value = activeAnchors[name];
-
-						return (
-							<React.Fragment key={name}>
-								<dt>{name}</dt>
-								<dd data-readout={`anchor:${name}`}>
-									{value
-										? `${value.x.toFixed(3)}, ${value.y.toFixed(3)}`
-										: t('dialogs.slidersCharacters.anchorUnplaced')}
-									<IconButton
-										icon={<IconTrash />}
-										iconOnly
-										label={t('dialogs.slidersCharacters.removeAnchor', {name})}
-										onClick={() => handleRemoveAnchor(name)}
-									/>
+							<dl className="character-editor-readout">
+								<dt>{t('dialogs.slidersCharacters.origin')}</dt>
+								<dd data-readout="origin">
+									{character.origin.x.toFixed(3)},{' '}
+									{character.origin.y.toFixed(3)}
 								</dd>
-							</React.Fragment>
-						);
-					})}
-				</dl>
-			</CardContent>
+								{/* This frame's rig. Another frame's `mouth` is somewhere else,
+								    which is the whole point of anchors living on frames. */}
+								{anchorNames(character).map(name => {
+									const value = activeAnchors[name];
+
+									return (
+										<React.Fragment key={name}>
+											<dt>{name}</dt>
+											<dd data-readout={`anchor:${name}`}>
+												{value
+													? `${value.x.toFixed(3)}, ${value.y.toFixed(3)}`
+													: t('dialogs.slidersCharacters.anchorUnplaced')}
+												<IconButton
+													icon={<IconTrash />}
+													iconOnly
+													label={t('dialogs.slidersCharacters.removeAnchor', {
+														name
+													})}
+													onClick={() => handleRemoveAnchor(name)}
+												/>
+											</dd>
+										</React.Fragment>
+									);
+								})}
+							</dl>
+						</div>
+					</div>
+				</TabPanel>
+				<TabPanel>
+					<div className="character-editor-group character-editor-fit">
+						{activeFrame ? (
+							<>
+								<AdjustSlider
+									editable
+									label={t('dialogs.slidersCharacters.frameScale')}
+									max={3}
+									min={0.2}
+									onChange={scale =>
+										handleChangeFit({...(activeFrame.fit ?? DEFAULT_FIT), scale})
+									}
+									resetLabel={t('dialogs.slidersCharacters.resetFrameScale')}
+									resetTo={DEFAULT_FIT.scale}
+									step={0.01}
+									value={activeFrame.fit?.scale ?? DEFAULT_FIT.scale}
+								/>
+								<ButtonBar>
+									<IconButton
+										disabled={!activeFrame.fit}
+										icon={<IconArrowBackUp />}
+										label={t('dialogs.slidersCharacters.resetFit')}
+										onClick={() => handleChangeFit(DEFAULT_FIT)}
+									/>
+									<IconButton
+										disabled={frameNames.length < 2}
+										icon={<IconCopy />}
+										label={t('dialogs.slidersCharacters.fitToAllFrames')}
+										onClick={handleApplyFitToAll}
+									/>
+								</ButtonBar>
+								<p className="character-editor-note">
+									{t('dialogs.slidersCharacters.fitNote')}
+								</p>
+							</>
+						) : (
+							<p className="character-editor-note">
+								{t('dialogs.slidersCharacters.noFrame')}
+							</p>
+						)}
+					</div>
+				</TabPanel>
+				<TabPanel>
+					<div className="character-editor-group character-editor-box">
+						{/* Sliders, not boxes: these are the character's own rectangle in scene
+						    units, shared by every frame, and a typed number gave no sense of
+						    how big that is next to the art. */}
+						<AdjustSlider
+							editable
+							label={t('dialogs.slidersCharacters.width')}
+							max={2048}
+							min={32}
+							onChange={w =>
+								onChange({...character, size: {...character.size, w}})
+							}
+							resetLabel={t('dialogs.slidersCharacters.resetWidth')}
+							resetTo={DEFAULT_SIZE.w}
+							step={8}
+							value={character.size.w}
+						/>
+						<AdjustSlider
+							editable
+							label={t('dialogs.slidersCharacters.height')}
+							max={2048}
+							min={32}
+							onChange={h =>
+								onChange({...character, size: {...character.size, h}})
+							}
+							resetLabel={t('dialogs.slidersCharacters.resetHeight')}
+							resetTo={DEFAULT_SIZE.h}
+							step={8}
+							value={character.size.h}
+						/>
+						<p className="character-editor-note">
+							{t('dialogs.slidersCharacters.boxNote')}
+						</p>
+					</div>
+				</TabPanel>
+				<TabPanel>
+					<div className="character-editor-group character-editor-fields">
+						<TextInput
+							onChange={event =>
+								onChange({...character, name: event.target.value})
+							}
+							orientation="vertical"
+							value={character.name}
+						>
+							{t('dialogs.slidersCharacters.name')}
+						</TextInput>
+						{/* Where this character's lines are painted and parked, unless a beat
+						    says otherwise. A narrator is written once here rather than on
+						    every line they speak. */}
+						<TextSelect
+							onChange={event =>
+								onChange(
+									withBubble(character, {as: event.target.value || undefined})
+								)
+							}
+							options={[
+								{
+									label: t('dialogs.slidersCharacters.bubbleStyleDefault'),
+									value: ''
+								},
+								...BUBBLE_PRESETS.map(preset => ({label: preset, value: preset}))
+							]}
+							orientation="vertical"
+							value={character.bubble?.as ?? ''}
+						>
+							{t('dialogs.slidersCharacters.bubbleStyle')}
+						</TextSelect>
+						<TextSelect
+							onChange={event =>
+								onChange(
+									withBubble(character, {
+										place: (event.target.value || undefined) as
+											| BubblePlace
+											| undefined
+									})
+								)
+							}
+							options={BUBBLE_PLACES.map(place => ({label: place, value: place}))}
+							orientation="vertical"
+							value={character.bubble?.place ?? 'auto'}
+						>
+							{t('dialogs.slidersCharacters.bubblePlace')}
+						</TextSelect>
+						<TextInput
+							onChange={event =>
+								onChange({
+									...character,
+									tags: event.target.value
+										.split(',')
+										.map(tag => tag.trim())
+										.filter(Boolean)
+								})
+							}
+							orientation="vertical"
+							value={character.tags.join(', ')}
+						>
+							{t('common.tags')}
+						</TextInput>
+					</div>
+				</TabPanel>
+			</Tabs>
 		</div>
 	);
 };

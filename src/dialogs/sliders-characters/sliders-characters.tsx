@@ -248,6 +248,24 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		scope: 'sliders-characters'
 	});
 
+	// Rides in the tab row rather than in the button bar above it: creating a character and
+	// choosing one are the same decision, and the bar is for what to do WITH the character
+	// already chosen.
+	const newCharacterButton = (
+		<PromptButton
+			commandId="slidersCharacters.create"
+			icon={<IconUserPlus />}
+			label={t('dialogs.slidersCharacters.newCharacter')}
+			onChange={event => setNewCharacterName(event.target.value)}
+			onChangeOpen={setCreateOpen}
+			onSubmit={handleCreate}
+			open={createOpen}
+			prompt={t('dialogs.slidersCharacters.newCharacterPrompt')}
+			value={newCharacterName}
+			variant="create"
+		/>
+	);
+
 	return (
 		<DialogCard
 			{...other}
@@ -257,44 +275,30 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			hotkeyScope="sliders-characters"
 			maximizable
 		>
-			<ButtonBar>
-				<PromptButton
-					commandId="slidersCharacters.create"
-					icon={<IconUserPlus />}
-					label={t('dialogs.slidersCharacters.newCharacter')}
-					onChange={event => setNewCharacterName(event.target.value)}
-					onChangeOpen={setCreateOpen}
-					onSubmit={handleCreate}
-					open={createOpen}
-					prompt={t('dialogs.slidersCharacters.newCharacterPrompt')}
-					value={newCharacterName}
-					variant="create"
-				/>
-				{draft && (
-					<>
-						<PromptButton
-							icon={<IconTag />}
-							label={t('dialogs.slidersCharacters.changeId', {id: draft.id})}
-							onChange={event => setNewId(event.target.value)}
-							onSubmit={handleChangeId}
-							prompt={t('dialogs.slidersCharacters.changeIdPrompt')}
-							value={newId}
-						/>
-						<ConfirmButton
-							commandId="slidersCharacters.delete"
-							confirmVariant="danger"
-							icon={<IconTrash />}
-							label={t('common.delete')}
-							onChangeOpen={setDeleteOpen}
-							onConfirm={handleDelete}
-							open={deleteOpen}
-							prompt={t('dialogs.slidersCharacters.deletePrompt', {
-								name: draft.name
-							})}
-						/>
-					</>
-				)}
-			</ButtonBar>
+			{draft && (
+				<ButtonBar>
+					<PromptButton
+						icon={<IconTag />}
+						label={t('dialogs.slidersCharacters.changeId', {id: draft.id})}
+						onChange={event => setNewId(event.target.value)}
+						onSubmit={handleChangeId}
+						prompt={t('dialogs.slidersCharacters.changeIdPrompt')}
+						value={newId}
+					/>
+					<ConfirmButton
+						commandId="slidersCharacters.delete"
+						confirmVariant="danger"
+						icon={<IconTrash />}
+						label={t('common.delete')}
+						onChangeOpen={setDeleteOpen}
+						onConfirm={handleDelete}
+						open={deleteOpen}
+						prompt={t('dialogs.slidersCharacters.deletePrompt', {
+							name: draft.name
+						})}
+					/>
+				</ButtonBar>
+			)}
 			{idError && (
 				<CardContent>
 					<p className="sliders-characters-error" role="alert">
@@ -303,22 +307,32 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 				</CardContent>
 			)}
 			{characters.length === 0 ? (
-				<CardContent>
-					<p>{t('dialogs.slidersCharacters.none')}</p>
-				</CardContent>
+				<>
+					<div className="sliders-characters-tabrow">{newCharacterButton}</div>
+					<CardContent>
+						<p>{t('dialogs.slidersCharacters.none')}</p>
+					</CardContent>
+				</>
 			) : (
 				<Tabs
+					className="react-tabs sliders-characters-tabs"
 					onSelect={index => setSelectedId(characters[index]?.id)}
 					selectedIndex={tabIndex}
 					selectedTabClassName="selected"
 				>
-					<TabList className="sliders-tablist">
-						{characters.map(character => (
-							<Tab className="sliders-tab" key={character.id}>
-								{character.name}
-							</Tab>
-						))}
-					</TabList>
+					{/* react-tabs walks its children for Tab/TabList/TabPanel nodes rather
+					    than expecting them at the top, so the row can hold the create button
+					    beside the list without confusing the tab indexes. */}
+					<div className="sliders-characters-tabrow">
+						{newCharacterButton}
+						<TabList className="sliders-tablist">
+							{characters.map(character => (
+								<Tab className="sliders-tab" key={character.id}>
+									{character.name}
+								</Tab>
+							))}
+						</TabList>
+					</div>
 					{characters.map(character => (
 						<TabPanel key={character.id}>
 							{draft && draft.id === character.id && (

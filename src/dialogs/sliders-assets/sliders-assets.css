@@ -86,6 +86,33 @@
 	text-align: center;
 }
 
+/* A tall zone puts its hint over the contents, and only while something is being
+   dragged--after a long list it would sit below the fold. */
+.upload-drop-zone.floating-hint {
+	position: relative;
+}
+
+.upload-drop-zone.floating-hint .upload-drop-zone-hint {
+	display: none;
+}
+
+.upload-drop-zone.floating-hint.drag-over .upload-drop-zone-hint {
+	align-items: center;
+	background: var(--white-translucent);
+	bottom: 0;
+	color: var(--black);
+	display: flex;
+	font-size: 100%;
+	justify-content: center;
+	left: 0;
+	padding: 0;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	top: 0;
+	z-index: 3;
+}
+
 .sliders-tiles {
 	display: grid;
 	gap: var(--grid-size);

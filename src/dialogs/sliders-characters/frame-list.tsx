@@ -17,7 +17,6 @@ import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {AssetPreview} from '../sliders-assets/asset-preview';
 import {UploadButton} from '../sliders-assets/upload-button';
-import {UploadDropZone} from '../sliders-assets/upload-drop-zone';
 
 export interface FrameListProps {
 	assets: Record<string, AssetMeta>;
@@ -61,109 +60,108 @@ export const FrameList: React.FC<FrameListProps> = props => {
 				label={t('dialogs.slidersCharacters.addFrames')}
 				onUpload={onAddFiles}
 			/>
-			<UploadDropZone
-				label={t('dialogs.slidersCharacters.dropFrames')}
-				onDrop={onAddFiles}
-			>
-				<ul>
-					{Object.entries(frames).map(([name, frame]) => {
-						const meta = assets[frame.asset];
-						const looping = frame.loop !== false;
-						const ghosted = visible.includes(name);
+			<ul>
+				{Object.entries(frames).map(([name, frame]) => {
+					const meta = assets[frame.asset];
+					const looping = frame.loop !== false;
+					const ghosted = visible.includes(name);
 
-						return (
-							<li
-								className={classNames('frame-list-item', {
-									ghosted: ghosted && name !== selected,
-									selected: name === selected
-								})}
-								data-frame={name}
-								key={name}
+					return (
+						<li
+							className={classNames('frame-list-item', {
+								ghosted: ghosted && name !== selected,
+								selected: name === selected
+							})}
+							data-frame={name}
+							key={name}
+						>
+							{/* The picture fills the tile and wears its own name: at this size the
+							    art tells two poses apart faster than the words do. */}
+							<button
+								className="frame-list-select"
+								onClick={() => onSelect(name)}
+								type="button"
 							>
-								<button
-									className="frame-list-select"
-									onClick={() => onSelect(name)}
-									type="button"
-								>
-									<AssetPreview alt={name} assetId={frame.asset} />
-									<span className="frame-list-name">{name}</span>
-									{meta?.animated && (
-										<span
-											className="frame-list-animated"
-											title={t('dialogs.slidersAssets.animated')}
-										>
-											⟳
-										</span>
-									)}
-								</button>
-								<ButtonBar>
-									{/* The selected frame is already on screen in full, so it has
-									    nothing to show or hide. */}
-									{name !== selected && (
-										<IconButton
-											ariaChecked={ghosted}
-											icon={ghosted ? <IconEye /> : <IconEyeOff />}
-											iconOnly
-											label={
-												ghosted
-													? t('dialogs.slidersCharacters.hideFrame', {name})
-													: t('dialogs.slidersCharacters.showFrame', {name})
-											}
-											onClick={() => onToggleGhost(name)}
-											role="checkbox"
-										/>
-									)}
+								<AssetPreview alt={name} assetId={frame.asset} />
+								<span className="frame-list-name">{name}</span>
+								{meta?.animated && (
+									<span
+										className="frame-list-animated"
+										title={t('dialogs.slidersAssets.animated')}
+									>
+										⟳
+									</span>
+								)}
+							</button>
+							{/* One row, never two: the buttons are shrunk in CSS so the widest
+							    set--ghost, edit, rename, loop, delete--still fits the column. */}
+							<ButtonBar>
+								{/* The selected frame is already on screen in full, so it has
+								    nothing to show or hide. */}
+								{name !== selected && (
 									<IconButton
-										// Editing an animation would flatten it to one frame.
-										disabled={meta?.animated}
-										icon={<IconPhotoEdit />}
+										ariaChecked={ghosted}
+										icon={ghosted ? <IconEye /> : <IconEyeOff />}
 										iconOnly
 										label={
-											meta?.animated
-												? t('dialogs.slidersAssets.editImageAnimated')
-												: t('dialogs.slidersAssets.editImage')
+											ghosted
+												? t('dialogs.slidersCharacters.hideFrame', {name})
+												: t('dialogs.slidersCharacters.showFrame', {name})
 										}
-										onClick={() => onEdit(name)}
+										onClick={() => onToggleGhost(name)}
+										role="checkbox"
 									/>
-									<PromptButton
-										icon={<IconPencil />}
+								)}
+								<IconButton
+									// Editing an animation would flatten it to one frame.
+									disabled={meta?.animated}
+									icon={<IconPhotoEdit />}
+									iconOnly
+									label={
+										meta?.animated
+											? t('dialogs.slidersAssets.editImageAnimated')
+											: t('dialogs.slidersAssets.editImage')
+									}
+									onClick={() => onEdit(name)}
+								/>
+								<PromptButton
+									icon={<IconPencil />}
+									iconOnly
+									label={t('dialogs.slidersCharacters.renameFrame')}
+									onChange={event => setRenaming(event.target.value)}
+									onSubmit={value => onRename(name, value)}
+									prompt={t('dialogs.slidersCharacters.renameFramePrompt')}
+									value={renaming}
+								/>
+								{meta?.animated && (
+									<IconButton
+										ariaChecked={looping}
+										icon={looping ? <IconRepeat /> : <IconRepeatOff />}
 										iconOnly
-										label={t('dialogs.slidersCharacters.renameFrame')}
-										onChange={event => setRenaming(event.target.value)}
-										onSubmit={value => onRename(name, value)}
-										prompt={t('dialogs.slidersCharacters.renameFramePrompt')}
-										value={renaming}
+										label={
+											looping
+												? t('dialogs.slidersCharacters.loops')
+												: t('dialogs.slidersCharacters.playsOnce')
+										}
+										onClick={() => onChangeLoop(name, !looping)}
+										role="checkbox"
 									/>
-									{meta?.animated && (
-										<IconButton
-											ariaChecked={looping}
-											icon={looping ? <IconRepeat /> : <IconRepeatOff />}
-											iconOnly
-											label={
-												looping
-													? t('dialogs.slidersCharacters.loops')
-													: t('dialogs.slidersCharacters.playsOnce')
-											}
-											onClick={() => onChangeLoop(name, !looping)}
-											role="checkbox"
-										/>
-									)}
-									<ConfirmButton
-										confirmVariant="danger"
-										icon={<IconTrash />}
-										iconOnly
-										label={t('dialogs.slidersCharacters.deleteFrame')}
-										onConfirm={() => onDelete(name)}
-										prompt={t('dialogs.slidersCharacters.deleteFramePrompt', {
-											name
-										})}
-									/>
-								</ButtonBar>
-							</li>
-						);
-					})}
-				</ul>
-			</UploadDropZone>
+								)}
+								<ConfirmButton
+									confirmVariant="danger"
+									icon={<IconTrash />}
+									iconOnly
+									label={t('dialogs.slidersCharacters.deleteFrame')}
+									onConfirm={() => onDelete(name)}
+									prompt={t('dialogs.slidersCharacters.deleteFramePrompt', {
+										name
+									})}
+								/>
+							</ButtonBar>
+						</li>
+					);
+				})}
+			</ul>
 		</div>
 	);
 };

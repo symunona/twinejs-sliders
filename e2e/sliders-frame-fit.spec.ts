@@ -1,4 +1,4 @@
-import {expect, Page, test} from '@playwright/test';
+import {expect, Locator, Page, test} from '@playwright/test';
 import * as path from 'node:path';
 import {BASE_URL, createStory, shot} from './sliders-helpers';
 
@@ -84,6 +84,13 @@ async function openCharacterWithFrames(page: Page, name: string) {
 	return editor;
 }
 
+/**
+ * The controls under the stage are grouped into tabs; only one group is on screen at a
+ * time, and Anchors is the one that opens.
+ */
+const openGroup = (editor: Locator, name: string) =>
+	editor.locator('.character-editor-groups').getByRole('tab', {name}).click();
+
 /** The transform the fit writes onto the frame image. */
 const spriteTransform = (page: Page) =>
 	characterDialog(page)
@@ -136,8 +143,10 @@ test.describe('Per-frame fit', () => {
 		);
 
 
-		// Zoom is uniform and lands on the same image.
-		await editor.getByRole('slider', {name: /frame zoom/i}).fill('1.4');
+		// Zoom is uniform and lands on the same image. Typed, not dragged: the readout is
+		// the labelled control now--the range slider beside it has no name of its own.
+		await openGroup(editor, 'Frame Fit');
+		await editor.getByRole('spinbutton', {name: 'Frame scale'}).fill('1.4');
 		await expect
 			.poll(() => spriteTransform(page))
 			.toContain('scale(1.4)');
@@ -170,6 +179,7 @@ test.describe('Per-frame fit', () => {
 		// a fresh test would open on an empty library.
 		const reopened = characterDialog(page);
 
+		await openGroup(reopened, 'Frame Fit');
 		await reopened
 			.getByRole('button', {name: 'Apply This Fit To All Frames'})
 			.click();
