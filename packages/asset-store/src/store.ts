@@ -22,11 +22,16 @@ import {prepareUpload} from './transcode';
  *
  * No rig either, because there is nothing to rig — anchors belong to frames, and the first
  * frame added brings its own (`newFrameAnchors`).
+ *
+ * `name` is always the id. It is kept in the type for the wire format and for stories
+ * written before the two were separate, but nothing writes a name of its own any more:
+ * the id is the handle scene YAML addresses, so a second display name only ever drifted
+ * from it.
  */
-export function defaultCharacter(id: string, name?: string): Character {
+export function defaultCharacter(id: string): Character {
 	return {
 		id,
-		name: name ?? id,
+		name: id,
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
 		frames: {},

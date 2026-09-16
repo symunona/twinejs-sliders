@@ -96,7 +96,7 @@ async function seed(): Promise<Seeded> {
 		file(webpBytes(640, 360), 'lighthouse.webp', 'image/webp'),
 		{kind: 'bg', name: 'lighthouse-night', tags: ['night']}
 	);
-	const character: Character = defaultCharacter('nell', 'Nell');
+	const character: Character = defaultCharacter('nell');
 
 	character.frames.idle = {
 		anchors: {},

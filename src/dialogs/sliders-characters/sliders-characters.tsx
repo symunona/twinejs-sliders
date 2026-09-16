@@ -1,6 +1,12 @@
 import {defaultCharacter, slugify, uniqueName} from '@sliders/asset-store';
 import {AssetMeta, Character} from '@sliders/scene-types';
-import {IconTag, IconTrash, IconUserPlus} from '@tabler/icons';
+import {
+	IconPencil,
+	IconTag,
+	IconTrash,
+	IconUserPlus,
+	IconX
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Tab, TabList, TabPanel, Tabs} from 'react-tabs';
@@ -8,18 +14,33 @@ import {ButtonBar} from '../../components/container/button-bar';
 import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
 import {ConfirmButton} from '../../components/control/confirm-button';
+import {EditableTitle} from '../../components/control/editable-title';
+import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
+import {useStoriesContext} from '../../store/stories';
+import {useUndoableStoriesContext} from '../../store/undoable-stories';
+import {renameSceneCharacter} from '../../util/rename-scene-character';
 import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
-import {useAssetLibrary} from '../sliders-assets/asset-store-context';
+import {
+	useAssetLibrary,
+	useAssetScope
+} from '../sliders-assets/asset-store-context';
 import {framesFromFiles} from '../sliders-assets/character-frames';
 import {CharacterEditor} from './character-editor';
 import './sliders-characters.css';
 
 /** How long a change sits before it's written to the asset store. */
 const SAVE_DELAY = 400;
+
+/** A rename the author has asked for but not yet decided the scenes' fate on. */
+interface PendingRename {
+	/** How many passages a ref rewrite would touch. Always more than zero. */
+	count: number;
+	id: string;
+}
 
 export interface SlidersCharactersDialogProps extends DialogComponentProps {
 	/** Character to open on. Set when the asset manager launches this dialog. */
@@ -29,19 +50,23 @@ export interface SlidersCharactersDialogProps extends DialogComponentProps {
 export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = props => {
 	const {characterId, ...other} = props;
 	const library = useAssetLibrary();
+	const storyId = useAssetScope();
+	const {stories} = useStoriesContext();
+	const {dispatch: undoableDispatch} = useUndoableStoriesContext();
 	const {dispatch} = useDialogsContext();
 	const [createOpen, setCreateOpen] = React.useState(false);
 	const [deleteOpen, setDeleteOpen] = React.useState(false);
 	const [draft, setDraft] = React.useState<Character>();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
-	const [newId, setNewId] = React.useState('');
 	/** Set when the store refused an id. Shown above the tabs, cleared on the next try. */
 	const [idError, setIdError] = React.useState<string>();
+	const [pendingRename, setPendingRename] = React.useState<PendingRename>();
 	const [selectedId, setSelectedId] = React.useState(characterId);
 	const {t} = useTranslation();
 
 	const {characters, refresh, store} = library;
 	const activeId = selectedId ?? characters[0]?.id;
+	const story = stories.find(candidate => candidate.id === storyId);
 
 	// Load the selected character into a local draft. Everything the editor does happens
 	// on the draft; the store gets it back on a debounce.
@@ -117,7 +142,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 
 		setNewCharacterName('');
 		setIdError(undefined);
-		await store.putCharacter(defaultCharacter(id, name.trim() || id));
+		await store.putCharacter(defaultCharacter(id));
 		setSelectedId(id);
 		refresh();
 	}
@@ -133,25 +158,38 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		refresh();
 	}
 
+	/** The passages whose scene YAML would change, with the text they would end up with. */
+	function sceneRewrites(oldId: string, id: string) {
+		if (!story) {
+			return [];
+		}
+
+		return story.passages
+			.map(passage => ({
+				passage,
+				text: renameSceneCharacter(passage.text, oldId, id)
+			}))
+			.filter(rewrite => rewrite.text !== rewrite.passage.text);
+	}
+
 	/**
-	 * Renaming an ID does NOT rewrite passage references — that needs the scene index,
-	 * which doesn't exist yet (spec 04). The prompt says so.
+	 * Move the character onto a new id, and optionally carry every scene that writes the
+	 * old one along with it.
 	 */
-	async function handleChangeId(value: string) {
+	async function applyRename(id: string, updateScenes: boolean) {
 		if (!draft) {
 			return;
 		}
 
-		const id = slugify(value);
+		const oldId = draft.id;
+		const renamed = {...draft, id, name: id};
 
-		setNewId('');
+		setPendingRename(undefined);
 		setIdError(undefined);
 
-		if (!id || id === draft.id || characters.some(other => other.id === id)) {
-			return;
-		}
-
-		const renamed = {...draft, id};
+		// Ahead of the awaits: the debounced save reads this ref, and a timer that fires
+		// between the write and the removal would put the old character straight back.
+		latest.current = renamed;
 
 		// A rename is deliberate, so a clash is loud: the store throws rather than handing
 		// back `mira-2`, and an author who typed `mira` would go on writing `mira` in their
@@ -159,6 +197,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		try {
 			await store.putCharacter(renamed);
 		} catch (error) {
+			latest.current = draft;
 			setIdError(
 				t('dialogs.slidersCharacters.idTaken', {
 					id,
@@ -168,10 +207,68 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			return;
 		}
 
-		await store.removeCharacter(draft.id);
+		await store.removeCharacter(oldId);
+
+		if (updateScenes && story) {
+			const rewrites = sceneRewrites(oldId, id);
+
+			if (rewrites.length > 0) {
+				// One action for the lot, so the whole rename is a single undo rather than
+				// one per passage.
+				undoableDispatch(
+					{
+						type: 'updatePassages',
+						passageUpdates: rewrites.reduce<Record<string, {text: string}>>(
+							(updates, rewrite) => {
+								updates[rewrite.passage.id] = {text: rewrite.text};
+								return updates;
+							},
+							{}
+						),
+						storyId: story.id
+					},
+					t('dialogs.slidersCharacters.renameChange', {id: oldId})
+				);
+			}
+		}
+
 		setDraft(renamed);
 		setSelectedId(id);
 		refresh();
+	}
+
+	/**
+	 * Committing the title bar. Scenes address a character by id, so a rename that leaves
+	 * them alone breaks them — the author is told how many passages are at stake and picks.
+	 */
+	function handleRenameId(value: string) {
+		if (!draft) {
+			return;
+		}
+
+		const id = slugify(value);
+
+		setIdError(undefined);
+
+		if (!id || id === draft.id || characters.some(other => other.id === id)) {
+			return;
+		}
+
+		const rewrites = sceneRewrites(draft.id, id);
+
+		if (rewrites.length === 0) {
+			void applyRename(id, false);
+			return;
+		}
+
+		setPendingRename({count: rewrites.length, id});
+	}
+
+	/** Is something else in this library already called this? Checked as the author types. */
+	function idTaken(value: string) {
+		const id = slugify(value);
+
+		return id !== draft?.id && characters.some(other => other.id === id);
 	}
 
 	async function handleUploadFrames(files: File[]) {
@@ -271,20 +368,29 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			{...other}
 			className="sliders-characters-dialog"
 			focusOnOpen
+			// The ID is the only name a character has, and it is what scene YAML writes,
+			// so the title bar renames it in place — the same gesture the passage editor
+			// and the story map already use for a passage name.
+			headerDisplayLabel={
+				draft ? (
+					<>
+						{t('dialogs.slidersCharacters.title')}:{' '}
+						<EditableTitle
+							editable
+							nameTaken={idTaken}
+							onRename={handleRenameId}
+							title={t('dialogs.slidersCharacters.renameIdTitle')}
+							value={draft.id}
+						/>
+					</>
+				) : undefined
+			}
 			headerLabel={t('dialogs.slidersCharacters.title')}
 			hotkeyScope="sliders-characters"
 			maximizable
 		>
 			{draft && (
 				<ButtonBar>
-					<PromptButton
-						icon={<IconTag />}
-						label={t('dialogs.slidersCharacters.changeId', {id: draft.id})}
-						onChange={event => setNewId(event.target.value)}
-						onSubmit={handleChangeId}
-						prompt={t('dialogs.slidersCharacters.changeIdPrompt')}
-						value={newId}
-					/>
 					<ConfirmButton
 						commandId="slidersCharacters.delete"
 						confirmVariant="danger"
@@ -294,10 +400,44 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 						onConfirm={handleDelete}
 						open={deleteOpen}
 						prompt={t('dialogs.slidersCharacters.deletePrompt', {
-							name: draft.name
+							name: draft.id
 						})}
 					/>
 				</ButtonBar>
+			)}
+			{pendingRename && draft && (
+				<CardContent>
+					<p className="sliders-characters-rename" role="alert">
+						{t('dialogs.slidersCharacters.renamePrompt', {
+							count: pendingRename.count,
+							id: pendingRename.id,
+							oldId: draft.id
+						})}
+					</p>
+					{/* Updating the scenes is what the author almost always means, so it is
+					    the create-coloured default. Renaming the ID alone stays on offer for
+					    a character nobody has written into a scene on purpose yet. */}
+					<ButtonBar>
+						<IconButton
+							icon={<IconTag />}
+							label={t('dialogs.slidersCharacters.renameUpdateScenes', {
+								count: pendingRename.count
+							})}
+							onClick={() => void applyRename(pendingRename.id, true)}
+							variant="create"
+						/>
+						<IconButton
+							icon={<IconPencil />}
+							label={t('dialogs.slidersCharacters.renameIdOnly')}
+							onClick={() => void applyRename(pendingRename.id, false)}
+						/>
+						<IconButton
+							icon={<IconX />}
+							label={t('common.cancel')}
+							onClick={() => setPendingRename(undefined)}
+						/>
+					</ButtonBar>
+				</CardContent>
 			)}
 			{idError && (
 				<CardContent>

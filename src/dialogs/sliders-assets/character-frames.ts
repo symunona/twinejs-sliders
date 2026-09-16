@@ -79,13 +79,6 @@ export async function framesFromFiles(
 	return frames;
 }
 
-/** `mira-smiling.png` -> `Mira Smiling`, for a character minted out of a filename. */
-export function characterNameFromFilename(filename: string): string {
-	const base = nameFromFilename(filename).replace(/[-/]+/g, ' ').trim();
-
-	return base.replace(/\S+/g, word => word[0].toUpperCase() + word.slice(1));
-}
-
 /**
  * Saves one file as a brand new character whose only frame is that image, and returns the
  * id — which is the token a scene writes, so a caller that is placing the character on the
@@ -108,7 +101,7 @@ export async function characterFromFile(
 	const frames = await framesFromFiles(store, {frames: {}, id}, [file]);
 
 	await store.putCharacter({
-		...defaultCharacter(id, characterNameFromFilename(file.name)),
+		...defaultCharacter(id),
 		frames
 	});
 

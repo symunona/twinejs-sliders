@@ -172,7 +172,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	async function handleCreateCharacter(name: string) {
 		const id = uniqueName(slugify(name), await library.store.takenNames());
 
-		await library.store.putCharacter(defaultCharacter(id, name.trim() || id));
+		await library.store.putCharacter(defaultCharacter(id));
 		setNewCharacterName('');
 		library.refresh();
 		openCharacterEditor(id);

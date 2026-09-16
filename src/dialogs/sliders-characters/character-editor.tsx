@@ -492,15 +492,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 				</TabPanel>
 				<TabPanel>
 					<div className="character-editor-group character-editor-fields">
-						<TextInput
-							onChange={event =>
-								onChange({...character, name: event.target.value})
-							}
-							orientation="vertical"
-							value={character.name}
-						>
-							{t('dialogs.slidersCharacters.name')}
-						</TextInput>
+						{/* No Name field: the ID in the dialog's title bar is the only name a
+						    character has. It is what scene YAML writes, so a second display
+						    name only ever drifted from it. */}
 						{/* Where this character's lines are painted and parked, unless a beat
 						    says otherwise. A narrator is written once here rather than on
 						    every line they speak. */}

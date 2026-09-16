@@ -85,7 +85,7 @@ export async function saveGeneration(
 		ownerCharacter: id
 	});
 	const character: Character = {
-		...defaultCharacter(id, name),
+		...defaultCharacter(id),
 		// Anchors are per frame, and this is the character's only one, so it carries the
 		// starting rig the character editor would have given it.
 		frames: {idle: {anchors: newFrameAnchors(undefined), asset: frame.id}},

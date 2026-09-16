@@ -441,3 +441,13 @@
 	margin: 0;
 	padding: var(--control-inner-padding) var(--grid-size);
 }
+
+/* The rename decision bar. Not an error--the author asked for this--so it reads as a
+   question, in the same shape as the error above it. */
+.sliders-characters-rename {
+	background: var(--faint-yellow);
+	border-left: 4px solid var(--yellow);
+	border-radius: var(--corner-round);
+	margin: 0 0 var(--grid-size) 0;
+	padding: var(--control-inner-padding) var(--grid-size);
+}

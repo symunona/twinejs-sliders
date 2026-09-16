@@ -177,7 +177,10 @@ describe('BackedAssetStore', () => {
 			{kind: 'bg'}
 		);
 		const character = {
-			...defaultCharacter('mira', 'Mira'),
+			...defaultCharacter('mira'),
+			// A name of its own: new characters take the id, but the wire format still
+			// carries a name and a story written before the two merged has one.
+			name: 'Mira',
 			frames: {idle: {asset: frameId}}
 		};
 
@@ -248,7 +251,7 @@ describe('YAML fragments', () => {
 	it('copies a character as an entity line naming its first frame', () => {
 		expect(
 			characterFragment({
-				...defaultCharacter('mira', 'Mira'),
+				...defaultCharacter('mira'),
 				frames: {idle: {asset: 'a_0001'}, wave: {asset: 'a_0002'}}
 			})
 		).toBe('mira: {at: 0, frame: idle}');

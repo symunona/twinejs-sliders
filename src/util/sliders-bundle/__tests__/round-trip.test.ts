@@ -179,7 +179,8 @@ async function seedSource(): Promise<Seeded> {
 		}
 	);
 	const character: Character = {
-		...defaultCharacter('mira', 'Mira'),
+		...defaultCharacter('mira'),
+		name: 'Mira',
 		origin: {x: 0.42, y: 0.98},
 		size: {w: 400, h: 900},
 		tags: ['cast', 'chapter-one']
