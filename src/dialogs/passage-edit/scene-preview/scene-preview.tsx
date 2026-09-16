@@ -943,6 +943,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		scope: 'scene-preview'
 	});
 
+	// Undo while focus is on the stage means the drag that was just made, and that lives in
+	// the passage's CodeMirror history -- every gesture here writes through that document
+	// (spec 07), so the store's own undo stack never saw it. The lock is deliberately not
+	// checked: locking the stage stops new edits, it does not disown the old ones, and an
+	// author who locks after a mistaken drag would otherwise have no way back.
+
+	useCommand({
+		allowRepeat: true,
+		enabled: !!editor,
+		id: 'scene.undo',
+		label: t('hotkeys.commands.scene.undo'),
+		run: () => editor?.undo(),
+		scope: 'scene-preview'
+	});
+
+	useCommand({
+		allowRepeat: true,
+		enabled: !!editor,
+		id: 'scene.redo',
+		label: t('hotkeys.commands.scene.redo'),
+		run: () => editor?.redo(),
+		scope: 'scene-preview'
+	});
+
 	if (!parse.hasScene) {
 		return null;
 	}

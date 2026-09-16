@@ -148,6 +148,12 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'scene.zBack', scope: 'scene-preview'},
 	{id: 'scene.zFront', scope: 'scene-preview'},
 
+	// Undo belongs to the passage's CodeMirror, not to the story store: every visual edit
+	// is a text edit through that document, so its history is the one holding them.
+
+	{id: 'scene.undo', scope: 'scene-preview'},
+	{id: 'scene.redo', scope: 'scene-preview'},
+
 	{id: 'slidersAssets.upload', scope: 'sliders-assets'},
 	{id: 'slidersAssets.newCharacter', scope: 'sliders-assets'},
 	{id: 'slidersAssets.search', scope: 'sliders-assets'},

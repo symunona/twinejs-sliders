@@ -122,6 +122,14 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'scene.zBack': {bindings: ['[', 'mod+down']},
 	'scene.zFront': {bindings: [']', 'mod+up']},
 
+	// Undo, while focus is on the stage. The keys are the ones the story map uses, but the
+	// history they run against is the passage's CodeMirror: a drag is a text edit, and the
+	// store's undo stack does not hold it. Web only, for the same reason `story.undo` is --
+	// the Electron menu accelerator fires before the renderer sees the keydown.
+
+	'scene.undo': {bindings: ['mod+z'], env: 'web'},
+	'scene.redo': {bindings: ['mod+shift+z', 'ctrl+y'], env: 'web'},
+
 	// Asset manager.
 
 	'slidersAssets.upload': {bindings: ['u']},

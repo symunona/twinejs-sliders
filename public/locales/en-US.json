@@ -1014,7 +1014,9 @@
 				"flip": "Flip Entity",
 				"delete": "Remove Entity From Scene",
 				"zBack": "Send Entity Backward",
-				"zFront": "Bring Entity Forward"
+				"zFront": "Bring Entity Forward",
+				"undo": "Undo Scene Edit",
+				"redo": "Redo Scene Edit"
 			},
 			"slidersAssets": {
 				"upload": "Add Files",
