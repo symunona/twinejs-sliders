@@ -1,8 +1,10 @@
 import {
 	AssetStore,
+	defaultCharacter,
 	nameFromFilename,
 	newFrameAnchors,
-	slugify
+	slugify,
+	uniqueName
 } from '@sliders/asset-store';
 import {Character} from '@sliders/scene-types';
 
@@ -75,4 +77,40 @@ export async function framesFromFiles(
 	}
 
 	return frames;
+}
+
+/** `mira-smiling.png` -> `Mira Smiling`, for a character minted out of a filename. */
+export function characterNameFromFilename(filename: string): string {
+	const base = nameFromFilename(filename).replace(/[-/]+/g, ' ').trim();
+
+	return base.replace(/\S+/g, word => word[0].toUpperCase() + word.slice(1));
+}
+
+/**
+ * Saves one file as a brand new character whose only frame is that image, and returns the
+ * id — which is the token a scene writes, so a caller that is placing the character on the
+ * stage has what it needs.
+ *
+ * `taken` is MUTATED with the id that was used, so a caller looping over a batch of files
+ * mints a free id for each without asking the store again. Asset names count, not just
+ * other character ids: a scene addresses assets by name and characters by id out of one
+ * namespace, and `putCharacter` throws on a clash rather than quietly renaming.
+ */
+export async function characterFromFile(
+	store: AssetStore,
+	file: File,
+	taken: Set<string>
+): Promise<string> {
+	const id = uniqueName(slugify(nameFromFilename(file.name)), taken);
+
+	taken.add(id);
+
+	const frames = await framesFromFiles(store, {frames: {}, id}, [file]);
+
+	await store.putCharacter({
+		...defaultCharacter(id, characterNameFromFilename(file.name)),
+		frames
+	});
+
+	return id;
 }

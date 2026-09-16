@@ -1,9 +1,4 @@
-import {
-	defaultCharacter,
-	nameFromFilename,
-	slugify,
-	uniqueName
-} from '@sliders/asset-store';
+import {defaultCharacter, slugify, uniqueName} from '@sliders/asset-store';
 import {AssetKind, Character} from '@sliders/scene-types';
 import {IconUserPlus} from '@tabler/icons';
 import * as React from 'react';
@@ -24,7 +19,7 @@ import {onAssetFocus, takePendingAssetFocus} from './focus-request';
 import type {AssetFocusRequest} from './focus-request';
 import {ImportTab} from './import-tab';
 import {AssetTile} from './asset-tile';
-import {framesFromFiles} from './character-frames';
+import {characterFromFile, framesFromFiles} from './character-frames';
 import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
@@ -144,12 +139,6 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		await library.upload(files, {kind: kind ?? 'bg'});
 	}
 
-	function characterNameFromFilename(filename: string): string {
-		const base = nameFromFilename(filename).replace(/[-/]+/g, ' ').trim();
-
-		return base.replace(/\S+/g, word => word[0].toUpperCase() + word.slice(1));
-	}
-
 	/**
 	 * Characters aren't an `AssetKind`, so a dropped file can't just "upload into that
 	 * kind" the way spec 03 has every other tab do it. Dropped on the tab itself, each file
@@ -157,26 +146,13 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	 * files become new frames of that character instead (`handleDropOnCharacter`).
 	 */
 	async function handleCharacterDrop(files: File[]) {
-		// Asset names count, not just other character ids: a scene addresses assets by name
-		// and characters by id out of one namespace, and `store.putCharacter` throws on a
-		// clash rather than quietly renaming. Minting a free id here is what keeps a drop of
-		// forty sprites from stopping on the first one that matches a backdrop.
+		// One free id minted per file without asking the store again, so a drop of forty
+		// sprites cannot stop on the first one whose name a backdrop already holds.
 		const takenIds = await library.store.takenNames();
 
 		for (const file of files) {
-			const id = uniqueName(slugify(nameFromFilename(file.name)), takenIds);
-
-			takenIds.add(id);
-
 			try {
-				const frames = await framesFromFiles(
-					library.store,
-					{frames: {}, id},
-					[file]
-				);
-				const character = defaultCharacter(id, characterNameFromFilename(file.name));
-
-				await library.store.putCharacter({...character, frames});
+				await characterFromFile(library.store, file, takenIds);
 			} catch (error) {
 				console.error(`Could not add ${file.name} as a character`, error);
 			}

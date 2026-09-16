@@ -21,6 +21,7 @@ import {
 	AssetResolver,
 	BubbleStyle,
 	Camera,
+	Character,
 	EntityId,
 	Vec2
 } from '@sliders/scene-types';
@@ -29,6 +30,7 @@ import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
 import {BubbleEditor} from './bubble-editor';
+import {SceneDropMenu, type DropChoice} from './drop-menu';
 import {
 	assetDropWrites,
 	deleteWrites,
@@ -40,6 +42,10 @@ import {
 	refreshAssetLibrary,
 	useAssetStore
 } from '../../sliders-assets/asset-store-context';
+import {
+	characterFromFile,
+	framesFromFiles
+} from '../../sliders-assets/character-frames';
 import {requestAssetFocus} from '../../sliders-assets/focus-request';
 import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
 import {useDialogsContext} from '../../context';
@@ -149,6 +155,17 @@ const NUDGE_SHIFT_MULTIPLIER = 10;
 /** How far apart a multi-file drop stacks its props, in scene x. */
 const DROP_STACK_STEP = 0.08;
 
+/** A file drop waiting on the menu that asks what the images are. */
+interface DropRequest {
+	/** Scene position, for whatever ends up on the stage. */
+	at: Vec2;
+	/** The cast as it was when the drop happened, for the "frames of…" branch. */
+	characters: Character[];
+	files: File[];
+	/** Where to open the menu, in client coordinates. */
+	point: Vec2;
+}
+
 /** How long a queued drop waits for its entry to reach the document before giving up. */
 const TEXT_SETTLE_TIMEOUT_MS = 1000;
 const TEXT_SETTLE_POLL_MS = 25;
@@ -204,6 +221,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => window.localStorage.getItem(GRID_KEY) === 'true'
 	);
 	const [beat, setBeat] = React.useState(0);
+	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
 	const root = React.useRef<HTMLDivElement>(null);
@@ -509,41 +527,109 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	/**
 	 * Image files dragged onto the stage from outside the app.
 	 *
-	 * They go through the library rather than into the scene directly, because scene YAML
-	 * addresses assets by NAME and a name only exists once the store has one: dropping a PNG
-	 * here and adding it in the asset manager have to produce the same entry. Uploading is
-	 * the whole reason this is asynchronous, and the reason a drop is not a gesture — there
-	 * is nothing optimistic to paint while the bytes are being read.
-	 *
-	 * Files are placed one at a time, each waiting for the previous entry to reach the
-	 * document: a gesture is one edit built against one snapshot of the block, so two entries
-	 * spliced from the same snapshot would both claim the same offset. The first lands where
-	 * it was dropped and the rest stack to its right, so a five-file drop is five props the
-	 * author can pull apart rather than one pile to dig through.
+	 * A file says nothing about its role, so the drop only collects it and opens the menu
+	 * (`drop-menu.tsx`); `runDropChoice` below does the work once the author has said what
+	 * the image is. The cast is read here rather than subscribed to, because the "frames
+	 * of…" branch is the only thing that needs it and a preview that is always mounted
+	 * should not hold the whole library open to answer a question nobody asked.
 	 */
 	const handleDropFiles = React.useCallback(
-		async (files: File[], at: Vec2) => {
-			let placed = 0;
+		async (files: File[], at: Vec2, point: Vec2) => {
+			let characters: Character[] = [];
 
-			for (const file of files) {
-				try {
-					const {meta} = await store.putAsset(file, {kind: 'object'});
-					const before = textRef.current;
+			try {
+				characters = await store.listCharacters();
+			} catch (error) {
+				console.error('Could not read the cast for the drop menu', error);
+			}
 
-					// Dropped straight onto the stage, so the entry is a prop: the author
-					// pointed at a spot, and a background has no spot to point at.
-					dropAssetRef.current(
-						{label: meta.name, ref: meta.name, target: 'prop'},
-						{x: roundCoord(at.x + placed * DROP_STACK_STEP), y: at.y}
+			setDropRequest({at, characters, files, point});
+		},
+		[store]
+	);
+
+	/**
+	 * Uploads the dropped files as the thing the author picked, and writes what belongs in
+	 * the scene.
+	 *
+	 * Everything goes through the library rather than into the scene directly, because scene
+	 * YAML addresses assets by NAME and a name only exists once the store has one: dropping a
+	 * PNG here and adding it in the asset manager have to produce the same entry. Uploading
+	 * is the whole reason this is asynchronous, and the reason a drop is not a gesture —
+	 * there is nothing optimistic to paint while the bytes are being read.
+	 *
+	 * Stage entries are placed one at a time, each waiting for the previous one to reach the
+	 * document: a gesture is one edit built against one snapshot of the block, so two entries
+	 * spliced from the same snapshot would both claim the same offset. The first lands where
+	 * it was dropped and the rest stack to its right, so a five-file drop is five sprites the
+	 * author can pull apart rather than one pile to dig through.
+	 */
+	const runDropChoice = React.useCallback(
+		async (request: DropRequest, choice: DropChoice) => {
+			const {at, files} = request;
+
+			setDropRequest(undefined);
+
+			try {
+				if (choice.kind === 'frame') {
+					// Frames are not stage entries: the character they belong to may not even
+					// be in this scene, and a pose is chosen with `frame:` on an entity that
+					// already exists. Nothing is written to the text.
+					const frames = await framesFromFiles(store, choice.character, files);
+
+					await store.putCharacter({...choice.character, frames});
+				} else if (choice.kind === 'bg') {
+					// One scene has one backdrop, so every file is uploaded — the author
+					// dropped them, they belong in the library — but only the first is
+					// pointed at. `bg:` takes no position, so the drop point is unused.
+					const uploaded = await Promise.all(
+						files.map(file => store.putAsset(file, {kind: 'bg'}))
 					);
-					placed++;
 
-					if (placed < files.length) {
-						await textChanged(textRef, before);
+					if (uploaded[0]) {
+						dropAssetRef.current(
+							{
+								label: uploaded[0].meta.name,
+								ref: uploaded[0].meta.name,
+								target: 'bg'
+							},
+							at
+						);
 					}
-				} catch (error) {
-					console.error('Could not add a dropped image to the library', error);
+				} else {
+					// Asked once for the batch, then mutated per file by `characterFromFile`.
+					const taken =
+						choice.kind === 'character' ? await store.takenNames() : new Set<string>();
+					let placed = 0;
+
+					for (const file of files) {
+						try {
+							const ref =
+								choice.kind === 'character'
+									? await characterFromFile(store, file, taken)
+									: (await store.putAsset(file, {kind: 'object'})).meta.name;
+							const before = textRef.current;
+
+							dropAssetRef.current(
+								{
+									label: ref,
+									ref,
+									target: choice.kind === 'character' ? 'cast' : 'prop'
+								},
+								{x: roundCoord(at.x + placed * DROP_STACK_STEP), y: at.y}
+							);
+							placed++;
+
+							if (placed < files.length) {
+								await textChanged(textRef, before);
+							}
+						} catch (error) {
+							console.error(`Could not add ${file.name} to the scene`, error);
+						}
+					}
 				}
+			} catch (error) {
+				console.error('Could not add a dropped image to the library', error);
 			}
 
 			// The resolver caches assets by name, and the asset dialogs cache the list. Both
@@ -1126,6 +1212,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onFrame={setFrame}
 				onStepZ={stepZ}
 			/>
+			{/* A dropped file is not a background, an object, a cast member or a pose until
+			    the author says which, so the drop stops here and asks. */}
+			{dropRequest && (
+				<SceneDropMenu
+					characters={dropRequest.characters}
+					count={dropRequest.files.length}
+					onCancel={() => setDropRequest(undefined)}
+					onChoose={choice => runDropChoice(dropRequest, choice)}
+					point={dropRequest.point}
+				/>
+			)}
 			{/* The player's own controls, in the corner the stage needs least.
 			    Faint until asked for: full screen exists so the scene can fill
 			    the screen, and a bar of chrome across it would undo that. Inside

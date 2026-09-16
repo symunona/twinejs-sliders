@@ -164,8 +164,13 @@ export interface StageEditorOverlayProps {
 	 * Image FILES landed on the stage — dragged in from the desktop rather than from the
 	 * asset panel. They have to be uploaded before anything can be written, which is why
 	 * this is a separate door from `onDropAsset` rather than a payload variant.
+	 *
+	 * `point` is the same place in CLIENT coordinates. It is passed as well as the scene
+	 * position because the drop opens a menu asking what the image is, and the menu is a DOM
+	 * box that has to be placed where the pointer let go — scene units cannot say that
+	 * without the camera, which the handler does not have.
 	 */
-	onDropFiles?: (files: File[], at: Vec2) => void;
+	onDropFiles?: (files: File[], at: Vec2, point: Vec2) => void;
 	/**
 	 * Draw the measuring grid — the centre point and the lines a drag snaps to.
 	 *
@@ -909,7 +914,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 			onDropAsset?.(payload, at);
 		} else {
-			onDropFiles?.(files, at);
+			onDropFiles?.(files, at, {x: event.clientX, y: event.clientY});
 		}
 	}
 

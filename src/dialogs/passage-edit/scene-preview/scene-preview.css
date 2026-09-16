@@ -219,3 +219,79 @@
 .scene-preview-errors .hint {
 	opacity: 0.7;
 }
+
+/* The menu a dropped file opens. Portalled to the body and fixed to the viewport — see
+   `drop-menu.tsx` for why it cannot live inside the stage. Hidden until the layout effect
+   has clamped it: rendering at the raw drop point for one frame makes a drop near an edge
+   flash off screen. */
+.scene-drop-menu {
+	background: var(--white);
+	border-radius: 4px;
+	box-shadow: var(--shadow-large);
+	color: var(--black);
+	display: flex;
+	flex-direction: column;
+	max-width: 240px;
+	min-width: 180px;
+	padding: 4px;
+	position: fixed;
+	/* Over the dialog stack it was opened from. */
+	z-index: 1000;
+}
+
+.scene-drop-menu:not(.measured) {
+	visibility: hidden;
+}
+
+.scene-drop-menu-title {
+	font-size: var(--font-size-small, 80%);
+	opacity: 0.7;
+	padding: 4px 8px;
+}
+
+.scene-drop-menu button {
+	align-items: center;
+	background: none;
+	border: none;
+	border-radius: 3px;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	font: inherit;
+	gap: 8px;
+	padding: 6px 8px;
+	text-align: left;
+	width: 100%;
+}
+
+.scene-drop-menu button:hover:not(:disabled),
+.scene-drop-menu button:focus-visible {
+	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+}
+
+.scene-drop-menu button:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+
+.scene-drop-menu button svg {
+	flex-shrink: 0;
+	height: 1em;
+	width: 1em;
+}
+
+/* Scrolls rather than grows: a story with forty characters would otherwise open a menu
+   taller than the stage, and the clamp can only move a box that fits. */
+.scene-drop-menu-characters {
+	display: flex;
+	flex-direction: column;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+
+.scene-drop-menu-back,
+.scene-drop-menu-cancel {
+	border-top: 1px solid var(--light-gray);
+	margin-top: 2px;
+	opacity: 0.8;
+}

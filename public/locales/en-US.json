@@ -382,7 +382,16 @@
 				"moveBubble": "Move this bubble",
 				"lockBg": "Lock the background: no camera pan or zoom, and a dropped background will not replace it",
 				"unlockBg": "Unlock the background",
-				"openAsset": "Open in the asset manager"
+				"openAsset": "Open in the asset manager",
+				"dropMenu": {
+					"title": "Add {{count}} image as…",
+					"title_plural": "Add {{count}} images as…",
+					"bg": "Background",
+					"object": "Object",
+					"character": "New character",
+					"frame": "Frames of a character…",
+					"frameEmpty": "Frames of a character (none yet)"
+				}
 			},
 			"lock": {
 				"lockedBy": "{{name}} is editing this passage",
