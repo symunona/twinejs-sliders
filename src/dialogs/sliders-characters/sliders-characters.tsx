@@ -1,10 +1,4 @@
-import {
-	defaultCharacter,
-	nameFromFilename,
-	newFrameAnchors,
-	slugify,
-	uniqueName
-} from '@sliders/asset-store';
+import {defaultCharacter, slugify, uniqueName} from '@sliders/asset-store';
 import {AssetMeta, Character} from '@sliders/scene-types';
 import {IconTag, IconTrash, IconUserPlus} from '@tabler/icons';
 import * as React from 'react';
@@ -20,28 +14,12 @@ import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {useAssetLibrary} from '../sliders-assets/asset-store-context';
+import {framesFromFiles} from '../sliders-assets/character-frames';
 import {CharacterEditor} from './character-editor';
 import './sliders-characters.css';
 
 /** How long a change sits before it's written to the asset store. */
 const SAVE_DELAY = 400;
-
-function uniqueFrameName(
-	preferred: string,
-	frames: Character['frames']
-): string {
-	if (!frames[preferred]) {
-		return preferred;
-	}
-
-	let suffix = 2;
-
-	while (frames[`${preferred}-${suffix}`]) {
-		suffix++;
-	}
-
-	return `${preferred}-${suffix}`;
-}
 
 export interface SlidersCharactersDialogProps extends DialogComponentProps {
 	/** Character to open on. Set when the asset manager launches this dialog. */
@@ -201,28 +179,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			return;
 		}
 
-		const frames = {...draft.frames};
-
-		for (const file of files) {
-			try {
-				const result = await store.putAsset(file, {
-					kind: 'frame',
-					ownerCharacter: draft.id
-				});
-
-				// A new frame comes in rigged, copying whatever the character's other frames
-				// already use — the poses of one sprite sheet are variations on one drawing,
-				// so that is far closer to right than the bare defaults, and the author
-				// nudges the anchors that actually moved.
-				frames[uniqueFrameName(slugify(nameFromFilename(file.name)), frames)] = {
-					anchors: newFrameAnchors({frames}),
-					asset: result.id
-				};
-			} catch (error) {
-				console.error(`Could not add ${file.name} as a frame`, error);
-			}
-		}
-
+		const frames = await framesFromFiles(store, draft, files);
 		const updated = {...draft, frames};
 
 		setDraft(updated);

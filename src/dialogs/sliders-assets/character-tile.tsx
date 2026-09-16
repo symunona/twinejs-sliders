@@ -19,6 +19,8 @@ export interface CharacterTileProps {
 	focused?: boolean;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
+	/** Image files dropped onto this tile, to become new frames of this character. */
+	onDropFiles: (files: File[]) => void;
 	onEdit: () => void;
 	/** Passage names whose scenes cast this character. */
 	usedIn?: string[];
@@ -40,11 +42,13 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		focused,
 		onChangeTags,
 		onDelete,
+		onDropFiles,
 		onEdit,
 		unreferenced,
 		usedIn
 	} = props;
 	const frameNames = Object.keys(character.frames);
+	const [over, setOver] = React.useState(false);
 	const {t} = useTranslation();
 	const tileRef = React.useRef<HTMLDivElement>(null);
 
@@ -54,11 +58,66 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		}
 	}, [focused]);
 
+	/**
+	 * Files only. A tile is itself draggable, so dragging one character across another must
+	 * not look like it can be dropped there — the stage is the only place that takes those.
+	 */
+	function draggingFiles(event: React.DragEvent) {
+		return Array.from(event.dataTransfer.types).includes('Files');
+	}
+
+	function handleDragOver(event: React.DragEvent) {
+		if (!draggingFiles(event)) {
+			return;
+		}
+
+		// Stopped so the tab's own drop zone doesn't also light up--the two mean different
+		// things here (new character vs. new frame of this one).
+		event.preventDefault();
+		event.stopPropagation();
+		event.dataTransfer.dropEffect = 'copy';
+		setOver(true);
+	}
+
+	function handleDragLeave(event: React.DragEvent) {
+		// Moving onto a child of the tile fires a leave that bubbles up from the element
+		// being left, which would flicker the hint off over the tile's own contents.
+		if (
+			event.relatedTarget instanceof Node &&
+			event.currentTarget.contains(event.relatedTarget)
+		) {
+			return;
+		}
+
+		setOver(false);
+	}
+
+	function handleDrop(event: React.DragEvent) {
+		if (!draggingFiles(event)) {
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+		setOver(false);
+
+		const files = Array.from(event.dataTransfer.files);
+
+		if (files.length > 0) {
+			onDropFiles(files);
+		}
+	}
+
 	return (
 		<div
-			className={`sliders-tile${focused ? ' focused' : ''}`}
+			className={`sliders-tile${focused ? ' focused' : ''}${
+				over ? ' drag-over' : ''
+			}`}
 			data-character-id={character.id}
 			draggable
+			onDragLeave={handleDragLeave}
+			onDragOver={handleDragOver}
+			onDrop={handleDrop}
 			// A cast entry is addressed by the character's ID, which is what `ref` resolves
 			// through — unlike a prop, whose ref is an asset name.
 			onDragStart={event =>
@@ -71,6 +130,11 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 			ref={tileRef}
 			title={t('dialogs.slidersAssets.dragToStage')}
 		>
+			{over && (
+				<div className="sliders-tile-drop-hint">
+					{t('dialogs.slidersAssets.dropHintFrames', {name: character.name})}
+				</div>
+			)}
 			<button
 				className="sliders-tile-open"
 				onClick={onEdit}

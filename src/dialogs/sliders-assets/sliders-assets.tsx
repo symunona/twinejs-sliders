@@ -1,11 +1,10 @@
 import {
 	defaultCharacter,
 	nameFromFilename,
-	newFrameAnchors,
 	slugify,
 	uniqueName
 } from '@sliders/asset-store';
-import {AssetKind} from '@sliders/scene-types';
+import {AssetKind, Character} from '@sliders/scene-types';
 import {IconUserPlus} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -25,6 +24,7 @@ import {onAssetFocus, takePendingAssetFocus} from './focus-request';
 import type {AssetFocusRequest} from './focus-request';
 import {ImportTab} from './import-tab';
 import {AssetTile} from './asset-tile';
+import {framesFromFiles} from './character-frames';
 import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
@@ -152,9 +152,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 
 	/**
 	 * Characters aren't an `AssetKind`, so a dropped file can't just "upload into that
-	 * kind" the way spec 03 has every other tab do it. Each file becomes a new character
-	 * instead, with the image as its first (`idle`) frame — the same shape the character
-	 * editor's own frame upload writes (`kind: 'frame'`, `ownerCharacter`).
+	 * kind" the way spec 03 has every other tab do it. Dropped on the tab itself, each file
+	 * becomes a new character, with the image as its first frame; dropped on a tile, the
+	 * files become new frames of that character instead (`handleDropOnCharacter`).
 	 */
 	async function handleCharacterDrop(files: File[]) {
 		// Asset names count, not just other character ids: a scene addresses assets by name
@@ -169,19 +169,27 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			takenIds.add(id);
 
 			try {
-				const asset = await library.store.putAsset(file, {
-					kind: 'frame',
-					ownerCharacter: id
-				});
+				const frames = await framesFromFiles(
+					library.store,
+					{frames: {}, id},
+					[file]
+				);
 				const character = defaultCharacter(id, characterNameFromFilename(file.name));
 
-				character.frames.idle = {asset: asset.id, anchors: newFrameAnchors(undefined)};
-				await library.store.putCharacter(character);
+				await library.store.putCharacter({...character, frames});
 			} catch (error) {
 				console.error(`Could not add ${file.name} as a character`, error);
 			}
 		}
 
+		library.refresh();
+	}
+
+	/** Files dropped onto a character's own tile join that character as frames. */
+	async function handleDropOnCharacter(character: Character, files: File[]) {
+		const frames = await framesFromFiles(library.store, character, files);
+
+		await library.store.putCharacter({...character, frames});
 		library.refresh();
 	}
 
@@ -359,6 +367,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 									handleChangeCharacterTags(character.id, tags)
 								}
 								onDelete={() => handleDeleteCharacter(character.id)}
+								onDropFiles={files => handleDropOnCharacter(character, files)}
 								onEdit={() => openCharacterEditor(character.id)}
 								unreferenced={
 									synced.ready && !synced.characterIds.has(character.id)

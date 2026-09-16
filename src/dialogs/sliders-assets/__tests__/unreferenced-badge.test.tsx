@@ -65,6 +65,7 @@ function renderCharacter(unreferenced?: boolean) {
 				character={character()}
 				onChangeTags={jest.fn()}
 				onDelete={jest.fn()}
+				onDropFiles={jest.fn()}
 				onEdit={jest.fn()}
 				unreferenced={unreferenced}
 			/>

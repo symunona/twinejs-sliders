@@ -131,6 +131,7 @@ describe('dragging a tile onto the stage', () => {
 					character={character()}
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
+				onDropFiles={jest.fn()}
 					onEdit={jest.fn()}
 				/>
 			</FakeStateProvider>

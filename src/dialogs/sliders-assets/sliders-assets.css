@@ -100,6 +100,33 @@
 	flex-direction: column;
 	gap: var(--control-inner-padding);
 	padding: var(--control-inner-padding);
+	position: relative;
+}
+
+/* Files dragged over a character tile become frames of it, not a new character--so the
+   tile has to claim the drag visibly, or the tab's own drop zone is the only feedback and
+   it promises the wrong thing. */
+.sliders-tile.drag-over {
+	background: var(--faint-blue);
+	border-color: var(--blue);
+	box-shadow: 0 0 0 2px var(--blue);
+}
+
+.sliders-tile-drop-hint {
+	align-items: center;
+	background: var(--faint-blue);
+	border-radius: var(--corner-round);
+	color: var(--blue);
+	display: flex;
+	font-size: 85%;
+	inset: 0;
+	justify-content: center;
+	padding: var(--control-inner-padding);
+	/* The hint must not eat the dragleave that turns it off. */
+	pointer-events: none;
+	position: absolute;
+	text-align: center;
+	z-index: 1;
 }
 
 /* The action row is one line of icons, however narrow the tile gets: wrapping it would
