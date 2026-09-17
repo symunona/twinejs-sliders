@@ -64,10 +64,58 @@
 }
 
 /* Every entity's box while the grid is on. Fainter than the selection box on purpose —
-   this is the ruler talking, and the selection still has to be findable inside it. */
+   this is the ruler talking, and the selection still has to be findable inside it.
+
+   "Fainter" is a narrow window, though, and the first version missed it. A box at 28% cyan
+   is WEAKER than the grid's own centre line (40% of the same cyan) and no brighter than a
+   third line, so on a stage already carrying 27 rules the four sides read as four more
+   rules and the boxes are invisible as boxes. Two things fix that without promoting them
+   over the selection: more of the hue, and the dark halo the selection box already wears —
+   a 1px line needs it to survive light artwork, and none of the grid lines have one, so the
+   halo alone separates a box from a rule.
+
+   Corner ticks carry the rest. A grid line runs the whole stage; a box has ends, and the
+   ticks say where they are even where a side happens to land along a rule. */
 .stage-editor-outline {
-	border: 1px solid rgba(74, 212, 255, 0.28);
+	border: 1px solid rgba(74, 212, 255, 0.6);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
 	position: absolute;
+}
+
+/* Four corner ticks out of the two pseudo elements an outline has. Each pseudo covers the
+   whole box and paints two corners' worth of solid colour with `background-image`, one flat
+   gradient per tick: `background-position` puts it in a corner and `background-size` is its
+   length. Borders cannot do this — a border runs the whole side — and a mask or
+   `border-image` would cost a second layer to say the same thing. */
+.stage-editor-outline::before,
+.stage-editor-outline::after {
+	background-repeat: no-repeat;
+	content: '';
+	inset: -1px;
+	pointer-events: none;
+	position: absolute;
+}
+
+/* Top-left and top-right. */
+.stage-editor-outline::before {
+	background-image:
+		linear-gradient(to right, #4ad4ff, #4ad4ff),
+		linear-gradient(to bottom, #4ad4ff, #4ad4ff),
+		linear-gradient(to right, #4ad4ff, #4ad4ff),
+		linear-gradient(to bottom, #4ad4ff, #4ad4ff);
+	background-position: left top, left top, right top, right top;
+	background-size: 9px 1px, 1px 9px, 9px 1px, 1px 9px;
+}
+
+/* Bottom-left and bottom-right. */
+.stage-editor-outline::after {
+	background-image:
+		linear-gradient(to right, #4ad4ff, #4ad4ff),
+		linear-gradient(to bottom, #4ad4ff, #4ad4ff),
+		linear-gradient(to right, #4ad4ff, #4ad4ff),
+		linear-gradient(to bottom, #4ad4ff, #4ad4ff);
+	background-position: left bottom, left bottom, right bottom, right bottom;
+	background-size: 9px 1px, 1px 9px, 9px 1px, 1px 9px;
 }
 
 /* One panel per selected entity that has moved, rather than a label beside each ghost: two
