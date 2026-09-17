@@ -1,11 +1,15 @@
+import {VARS_SEPARATOR_SPLIT_RE} from '@sliders/scene-schema';
 import {createLoggers} from '../logger';
 import {ParseResult, VarDeclaration} from './types';
 
 const {log, warn} = createLoggers('parse');
 
 const defaultOpts = {
-	// The regexp matching the end of a vars section of source code.
-	varsSep: /^--$/m,
+	// The regexp matching the end of a vars section of source code. Sliders owns this rule
+	// (`@sliders/scene-schema/vars-section`) so the editor's lint, the CodeMirror mode and
+	// this parser cannot drift apart -- they did, and `---` was accepted by the first two
+	// and silently ignored here. Only change it there.
+	varsSep: VARS_SEPARATOR_SPLIT_RE,
 
 	// The regexp matching a modifier block.
 	modifierPattern: /^\[([^[].+[^\]])\]$/gm

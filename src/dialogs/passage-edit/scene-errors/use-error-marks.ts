@@ -18,6 +18,7 @@ const TOOLTIP_GAP = 6;
 
 const MESSAGE_ATTR = 'data-sliders-error';
 const HINT_ATTR = 'data-sliders-hint';
+const FIX_ATTR = 'data-sliders-fix';
 
 /**
  * The span to underline, clamped to the error's first line.
@@ -70,6 +71,19 @@ function tooltipFor(target: HTMLElement): HTMLElement | undefined {
 		tooltip.appendChild(hintEl);
 	}
 
+	// Named, not offered. This tooltip follows the pointer across the text and vanishes the
+	// moment it leaves, so there is no way to travel into it and press anything; the button
+	// lives in the error list under the editor, where it can be clicked.
+	const fix = target.getAttribute(FIX_ATTR);
+
+	if (fix) {
+		const fixEl = document.createElement('span');
+
+		fixEl.className = 'fix';
+		fixEl.textContent = `Fix: ${fix}`;
+		tooltip.appendChild(fixEl);
+	}
+
 	return tooltip;
 }
 
@@ -99,6 +113,7 @@ export function useSceneErrorMarks(
 			marks.push(
 				editor.markText(range.from, range.to, {
 					attributes: {
+						[FIX_ATTR]: error.fix?.label ?? '',
 						[HINT_ATTR]: error.hint ?? '',
 						[MESSAGE_ATTR]: error.message
 					},

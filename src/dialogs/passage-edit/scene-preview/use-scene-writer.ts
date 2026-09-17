@@ -73,6 +73,12 @@ export const DROP_ORIGIN = 'sliders-drop';
 export const Z_ORIGIN = '+sliders-z';
 export const CAMERA_ORIGIN = '+sliders-camera';
 
+/**
+ * A Fix button on a scene error. One click, one undo entry — each fix is a separate guess
+ * the author accepted, and merging two of them would make the first unreviewable.
+ */
+export const FIX_ORIGIN = 'sliders-fix';
+
 /** Did this document change come from us? Anything else seals an in-flight drag. */
 export function isOwnOrigin(origin: string | undefined): boolean {
 	// The prefix is stripped first because react-codemirror2 replays our change onto the

@@ -30,6 +30,13 @@ export interface IconButtonProps {
 	selectable?: boolean;
 	selected?: boolean;
 	tooltipPosition?: TooltipProps['position'];
+	/**
+	 * Explains a button whose onscreen label is too short to say everything, e.g. a "Fix"
+	 * button that has to name what it will change. Without it a labelled button has no
+	 * tooltip at all -- repeating a label two pixels away is noise, but adding to one is
+	 * not.
+	 */
+	tooltipLabel?: string;
 	variant?: 'create' | 'danger' | 'primary' | 'secondary';
 }
 
@@ -47,6 +54,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 			role,
 			selectable = false,
 			selected = false,
+			tooltipLabel,
 			tooltipPosition,
 			variant = 'secondary'
 		} = props;
@@ -75,7 +83,10 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 			<>
 				<button
 					aria-checked={ariaChecked}
-					aria-label={iconOnly ? props.label : undefined}
+					// The tooltip is `aria-hidden`, so anything it says has to reach a screen
+					// reader from here instead. Without this every Fix button in an error list
+					// announces itself as "Fix" and none of them says what it will change.
+					aria-label={iconOnly ? props.label : tooltipLabel}
 					aria-pressed={selectable ? selected : undefined}
 					disabled={disabled}
 					className={className}
@@ -86,16 +97,18 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 					<span className="icon">{icon}</span>
 					{!iconOnly && (props.displayLabel ?? props.label)}
 				</button>
-				{(iconOnly || keyString) && (
+				{(iconOnly || keyString || tooltipLabel) && (
 					<Tooltip
 						anchor={button}
 						keys={<CommandKeyChip commandId={commandId} />}
-						label={iconOnly ? props.label : undefined}
+						label={tooltipLabel ?? (iconOnly ? props.label : undefined)}
 						// A chip-only tooltip goes below by default. Above is where
 						// the rest of the toolbar is--the second row's tooltips landed
 						// on the tabs--while below is the content, which the author can
 						// still read around a chip.
-						position={tooltipPosition ?? (iconOnly ? 'top' : 'bottom')}
+						position={
+							tooltipPosition ?? (iconOnly || tooltipLabel ? 'top' : 'bottom')
+						}
 					/>
 				)}
 			</>

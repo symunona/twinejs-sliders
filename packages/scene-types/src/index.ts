@@ -382,6 +382,7 @@ export type SceneErrorCode =
 	| 'dupe-scene-id'
 	| 'unknown-from'
 	| 'from-cycle'
+	| 'vars-separator'
 	| 'missing-id';
 
 export interface SceneError {
@@ -394,6 +395,32 @@ export interface SceneError {
 	endLine?: number;
 	endCol?: number;
 	severity: 'error' | 'warning';
+	/** Present only when the repair is mechanical. See `SceneFix`. */
+	fix?: SceneFix;
+}
+
+/**
+ * A mechanical repair for an error: replace one span with one string.
+ *
+ * Deliberately one splice and not a list of them. The passage editor's CodeMirror is
+ * controlled, and react-codemirror2 keeps exactly one deferred change per tick, so a
+ * two-splice fix could not be applied in a single click anyway (see `use-scene-writer.ts`).
+ * It is also the honest limit on what an author should accept without looking: every
+ * suggestion here is a guess from an edit distance, and a fix that fits on one line is one
+ * they can check at a glance.
+ */
+export interface SceneFix extends SceneSpan {
+	/** What the fix does, in the author's words: `Change 'bgg' to 'bg'`. */
+	label: string;
+	/**
+	 * What the span must still contain for the fix to apply.
+	 *
+	 * Errors come from a debounced parse, so the document may have moved on since. Without
+	 * this the fix would splice its replacement over whatever happens to be there now.
+	 */
+	replaces: string;
+	/** Replaces the span. */
+	text: string;
 }
 
 /**

@@ -1,16 +1,27 @@
 import {
 	IconAlertTriangle,
 	IconChevronDown,
-	IconChevronRight
+	IconChevronRight,
+	IconWand
 } from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import type {SceneFix} from '@sliders/scene-types';
+import {IconButton} from '../../../components/control/icon-button';
 import {LinkTargetError} from '../scene-preview/validate-links';
 import './scene-errors.css';
 
 export interface SceneErrorsProps {
 	errors: LinkTargetError[];
+	/**
+	 * Applies an error's own mechanical repair. Absent when the passage is read-only.
+	 *
+	 * Offered on any error carrying a `fix`, which is every place the editor already knew
+	 * the answer and used to spend it on a sentence: a misspelled key, a link or variable a
+	 * letter away from a real one, a vars separator written as a Markdown rule.
+	 */
+	onApplyFix?: (fix: SceneFix) => void;
 	/**
 	 * Offered on an error that names a passage the story does not have. Absent when the
 	 * caller cannot write to the story.
@@ -30,6 +41,7 @@ export interface SceneErrorsProps {
  */
 export const SceneErrors: React.FC<SceneErrorsProps> = ({
 	errors,
+	onApplyFix,
 	onCreatePassage,
 	onGoToLine
 }) => {
@@ -78,6 +90,26 @@ export const SceneErrors: React.FC<SceneErrorsProps> = ({
 							<span className="line">{error.line}</span>
 							<span className="message">{error.message}</span>
 							{error.hint && <span className="hint">{error.hint}</span>}
+							{onApplyFix && error.fix && (
+								// The button says "Fix" and the tooltip says what it will do:
+								// the label has to be short enough to sit in a wrapped error
+								// row, and "Change 'bgg' to 'bg'" is not something to guess at
+								// before clicking.
+								<span
+									className="scene-errors-fix"
+									data-testid="scene-errors-fix"
+									onClick={event => event.stopPropagation()}
+								>
+									<IconButton
+										icon={<IconWand />}
+										label={error.fix.label}
+										onClick={() => onApplyFix(error.fix!)}
+										tooltipLabel={error.fix.label}
+										variant="create"
+										displayLabel={t('dialogs.passageEdit.sceneErrors.fix')}
+									/>
+								</span>
+							)}
 							{onCreatePassage && error.missingPassage && (
 								// Offered next to the hint, never instead of it: "did you mean
 								// 'Tavern'?" and "create 'Tavren'" are both plausible fixes for a

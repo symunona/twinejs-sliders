@@ -97,6 +97,21 @@ preview rather than pushing the text the author is typing in.
 }
 
 /*
+The Fix button. `margin-left: auto` pushes the first of the row's buttons to the right edge,
+and Create Passage already claims it -- so this takes it too, and whichever comes first
+wins. Both on one error (a link a letter away from a real passage) then sit together.
+*/
+.scene-errors .scene-preview-errors .scene-errors-fix {
+	flex-shrink: 0;
+	margin-left: auto;
+}
+
+.scene-errors .scene-preview-errors .scene-errors-fix .icon-button {
+	line-height: 1.2;
+	padding: 0 6px;
+}
+
+/*
 Marks in the passage editor itself. The line tint says where, the underline says exactly
 which text, and the tooltip below says what.
 */
@@ -142,4 +157,11 @@ which text, and the tooltip below says what.
 .sliders-error-tooltip .hint {
 	display: block;
 	opacity: 0.75;
+}
+
+/* Brighter than the hint: it is the one line naming something the author can act on. */
+.sliders-error-tooltip .fix {
+	display: block;
+	margin-top: 2px;
+	opacity: 0.9;
 }

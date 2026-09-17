@@ -18,20 +18,32 @@ function error(overrides: Partial<LinkTargetError> = {}): LinkTargetError {
 function renderErrors(
 	errors: LinkTargetError[],
 	onGoToLine = jest.fn(),
-	onCreatePassage?: jest.Mock
+	onCreatePassage?: jest.Mock,
+	onApplyFix?: jest.Mock
 ) {
 	render(
 		<FakeStateProvider>
 			<SceneErrors
 				errors={errors}
+				onApplyFix={onApplyFix}
 				onCreatePassage={onCreatePassage}
 				onGoToLine={onGoToLine}
 			/>
 		</FakeStateProvider>
 	);
 
-	return {onCreatePassage, onGoToLine};
+	return {onApplyFix, onCreatePassage, onGoToLine};
 }
+
+const FIX = {
+	col: 1,
+	endCol: 4,
+	endLine: 4,
+	label: "Change 'bgg' to 'bg'",
+	line: 4,
+	replaces: 'bgg',
+	text: 'bg'
+};
 
 // The test i18n stub returns the key, so the header is checked by which key it asks
 // for; the count itself is interpolation, which i18next owns.
@@ -126,6 +138,47 @@ describe('<SceneErrors>', () => {
 			expect(
 				screen.queryByTestId('scene-errors-create-passage')
 			).not.toBeInTheDocument();
+		});
+	});
+
+	describe('the Fix button', () => {
+		it('is offered on an error that carries a fix', async () => {
+			const onApplyFix = jest.fn();
+
+			renderErrors([error({fix: FIX})], jest.fn(), undefined, onApplyFix);
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			fireEvent.click(screen.getByTestId('scene-errors-fix').querySelector('button')!);
+			expect(onApplyFix).toHaveBeenCalledWith(FIX);
+		});
+
+		it('names the repair, so a click is never a guess', () => {
+			renderErrors([error({fix: FIX})], jest.fn(), undefined, jest.fn());
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			expect(
+				screen.getByTestId('scene-errors-fix').querySelector('button')
+			).toHaveAttribute('aria-label', FIX.label);
+		});
+
+		it('is absent on an error with no mechanical repair', () => {
+			renderErrors([error()], jest.fn(), undefined, jest.fn());
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			expect(screen.queryByTestId('scene-errors-fix')).not.toBeInTheDocument();
+		});
+
+		it('is absent when the passage is read-only', () => {
+			// `onApplyFix` is what the editor withholds; the fix itself is still on the error.
+			renderErrors([error({fix: FIX})]);
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			expect(screen.queryByTestId('scene-errors-fix')).not.toBeInTheDocument();
+		});
+
+		it('does not also jump the editor to the line', () => {
+			const onGoToLine = jest.fn();
+
+			renderErrors([error({fix: FIX})], onGoToLine, undefined, jest.fn());
+			fireEvent.click(screen.getByTestId('scene-errors-header'));
+			fireEvent.click(screen.getByTestId('scene-errors-fix').querySelector('button')!);
+			expect(onGoToLine).not.toHaveBeenCalled();
 		});
 	});
 });

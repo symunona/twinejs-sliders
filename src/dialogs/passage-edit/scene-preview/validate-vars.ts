@@ -11,8 +11,14 @@
  * condition can name is a Chapbook built-in namespace, listed below.
  */
 
-import {ParseResult, SceneError} from '@sliders/scene-types';
-import {nearestKey} from '@sliders/scene-schema';
+import {ParseResult, SceneError, SceneFix} from '@sliders/scene-types';
+import {
+	VARS_LINE_RE,
+	VARS_SEPARATOR,
+	VARS_SEPARATOR_RE,
+	nearMissSeparator,
+	nearestKey
+} from '@sliders/scene-schema';
 
 export interface VarValidationInput {
 	/** The whole passage text, so the vars section being typed right now counts. */
@@ -26,16 +32,16 @@ export interface VarValidationInput {
 }
 
 /**
- * Ends a vars section. Chapbook's own separator is a line of exactly two dashes; more are
- * accepted because a longer rule is what an author who has seen Markdown writes.
+ * Ends a vars section.
+ *
+ * This used to accept `--+`, on the reasoning that a longer rule is what an author who has
+ * seen Markdown writes. It is what they write, and the player does not accept it: the
+ * variables above a `---` are never set, and in a scene passage the lines are dropped
+ * without a trace. Being forgiving here only hid that. The rule now comes from
+ * `@sliders/scene-schema`, which the player's own parser reads, and a near miss is reported
+ * by `varsSeparatorErrors` instead of quietly honoured.
  */
-const VARS_END_RE = /^\s*--+\s*$/;
-
-/**
- * A vars line: `has_weapon: true`, `sliders.fullScreen: false`, and Chapbook's conditional
- * form `has_weapon (visited): true`. Only the name matters here.
- */
-const VARS_LINE_RE = /^\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*(?:\([^)]*\))?\s*:/;
+const VARS_END_RE = VARS_SEPARATOR_RE;
 
 /**
  * Namespaces Chapbook hands the story for free, plus ours. A condition may reach into any
@@ -230,9 +236,23 @@ export function unknownVariableErrors(input: VarValidationInput): SceneError[] {
 				col: at.col,
 				endCol: at.endCol,
 				endLine: at.line,
+				// Only when the name was actually found on its line: `nameSpan` falls back to
+				// the whole value, and a fix aimed at that would splice over the condition.
+				fix:
+					nearest === undefined || at.endCol === undefined
+						? undefined
+						: {
+								col: at.col,
+								endCol: at.endCol,
+								endLine: at.line,
+								label: `Change '${name}' to '${nearest}'`,
+								line: at.line,
+								replaces: name,
+								text: nearest
+						  },
 				hint:
 					nearest === undefined
-						? `Set it in a vars section: '${name}: false' above a '--' line at the top of a passage.`
+						? `Set it in a vars section: '${name}: false' above a '${VARS_SEPARATOR}' line at the top of a passage.`
 						: `Did you mean '${nearest}'?`,
 				line: at.line,
 				message: `Link '${link.name}' tests a variable nothing sets: '${name}'.`,
@@ -242,4 +262,47 @@ export function unknownVariableErrors(input: VarValidationInput): SceneError[] {
 	}
 
 	return errors;
+}
+
+/**
+ * A line that was meant to close a vars section but does not.
+ *
+ * The player's rule is a line of exactly two dashes (trailing whitespace aside). `---` is a
+ * Markdown horizontal rule and always has been, so it cannot simply be accepted — in a
+ * passage with no scene it draws a rule, and in one with a scene the lines above it are
+ * dropped by `sliders.sceneOnly` with nothing left on screen to explain the missing
+ * variables. Hence a warning rather than a silent difference of opinion.
+ *
+ * Absolute lines: this reads the whole passage, so it needs no block offset.
+ */
+export function varsSeparatorErrors(text: string): SceneError[] {
+	const nearMiss = nearMissSeparator(text);
+
+	if (!nearMiss) {
+		return [];
+	}
+
+	const fix: SceneFix = {
+		col: 1,
+		endCol: nearMiss.text.length + 1,
+		endLine: nearMiss.line,
+		label: `Change this line to '${VARS_SEPARATOR}'`,
+		line: nearMiss.line,
+		replaces: nearMiss.text,
+		text: VARS_SEPARATOR
+	};
+
+	return [
+		{
+			code: 'vars-separator',
+			col: 1,
+			endCol: fix.endCol,
+			endLine: nearMiss.line,
+			fix,
+			hint: `Write exactly '${VARS_SEPARATOR}'. Anything else is a horizontal rule, and the variables above it are never set.`,
+			line: nearMiss.line,
+			message: `'${nearMiss.text.trim()}' does not end a vars section.`,
+			severity: 'warning'
+		}
+	];
 }

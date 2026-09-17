@@ -127,3 +127,56 @@ describe('unknownVariableErrors()', () => {
 		expect(unknown('[scene]\nlinks:\n  stay: {to: Street}\n')).toEqual([]);
 	});
 });
+
+describe('varsSeparatorErrors()', () => {
+	/** Every vars-separator warning the parse of `text` produces. */
+	function separator(text: string) {
+		return parseSceneText(text, passages).errors.filter(
+			one => one.code === 'vars-separator'
+		);
+	}
+
+	const scene = '[scene]\nid: tavern\n';
+
+	it('warns about three dashes and offers to rewrite the line', () => {
+		const errors = separator(`sliders.autoAdvance: 0\n---\n${scene}`);
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].severity).toBe('warning');
+		expect(errors[0].line).toBe(2);
+		expect(errors[0].fix).toMatchObject({
+			line: 2,
+			col: 1,
+			endCol: 4,
+			replaces: '---',
+			text: '--'
+		});
+	});
+
+	it('says nothing when the separator is right', () => {
+		expect(separator(`sliders.autoAdvance: 0\n--\n${scene}`)).toEqual([]);
+	});
+
+	it('says nothing about trailing whitespace, which the player accepts', () => {
+		expect(separator(`sliders.autoAdvance: 0\n-- \n${scene}`)).toEqual([]);
+	});
+
+	it('leaves a horizontal rule in prose alone', () => {
+		expect(separator(`Chapter one.\n\n---\n\n${scene}`)).toEqual([]);
+	});
+
+	it('warns even when there is no scene block to parse', () => {
+		// The lines are the passage's own, and a broken vars section is often why the
+		// scene below it never parsed.
+		expect(separator('a: 1\n---\nJust prose.')).toHaveLength(1);
+	});
+
+	it('stops counting variables the player would not set', () => {
+		// The knock-on, and the point: with `---` the player sets nothing, so an `if:` on
+		// one of those names is genuinely unknown. The separator warning sits beside it.
+		const text = `armed: true\n---\n[scene]\nid: a\nlinks:\n  go: {to: Street, if: armed}\n`;
+
+		expect(unknown(text)).toHaveLength(1);
+		expect(separator(text)).toHaveLength(1);
+	});
+});

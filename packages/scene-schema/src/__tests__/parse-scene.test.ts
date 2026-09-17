@@ -777,3 +777,45 @@ describe('dur:', () => {
 		expect(scene.beats[0]).toMatchObject({dur: 2, kind: 'say'});
 	});
 });
+
+describe('mechanical fixes', () => {
+	it('carries the suggestion an unknown key hint names, ready to apply', () => {
+		const {errors} = parseScene('id: a\nchar:\n  mira: {}');
+		const error = find(errors, 'unknown-key');
+
+		expect(error?.hint).toBe("Did you mean 'cast'?");
+		expect(error?.fix).toMatchObject({
+			label: "Change 'char' to 'cast'",
+			replaces: 'char',
+			text: 'cast'
+		});
+	});
+
+	it('points the fix at the key itself, not the whole entry', () => {
+		const {errors} = parseScene('id: a\nchar:\n  mira: {}');
+		const error = find(errors, 'unknown-key');
+
+		// Same span as the error, which `addError` already aimed at the key node.
+		expect(error?.fix).toMatchObject({
+			col: error!.col,
+			endCol: error!.endCol,
+			line: error!.line
+		});
+	});
+
+	it('offers nothing when no candidate is close enough to be a typo', () => {
+		const {errors} = parseScene('id: a\nqqqqqqqq: 1');
+		const error = find(errors, 'unknown-key');
+
+		expect(error).toBeDefined();
+		expect(error?.fix).toBeUndefined();
+	});
+
+	it('fixes an unknown layer while still naming the whole set', () => {
+		const {errors} = parseScene('id: a\ncast:\n  mira: {layer: bak}');
+		const error = find(errors, 'bad-layer');
+
+		expect(error?.hint).toContain('Must be one of');
+		expect(error?.fix).toMatchObject({replaces: 'bak', text: 'back'});
+	});
+});

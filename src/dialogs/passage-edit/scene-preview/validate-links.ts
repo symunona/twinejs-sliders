@@ -19,7 +19,7 @@
  * `to: Tavren` the author never meant to create.
  */
 
-import {ParseResult, SceneError} from '@sliders/scene-types';
+import {ParseResult, SceneError, SceneFix, SceneSpan} from '@sliders/scene-types';
 import {nearestKey} from '@sliders/scene-schema';
 
 export interface LinkValidationInput {
@@ -89,12 +89,48 @@ function missingMessage(name: string, to: string): string {
 	return `Link '${name}' points at a passage that doesn't exist: '${to}'.`;
 }
 
-function missingHint(to: string, passageNames: string[]): string {
+/**
+ * The hint, and the repair when the name is close enough to be a typo.
+ *
+ * Both come out of one `nearestKey` call, so the button and the sentence can never suggest
+ * different names. The fix carries no span: only the caller knows whether it has a real one
+ * to attach (see `spanFix`).
+ */
+function missingSuggestion(
+	to: string,
+	passageNames: string[]
+): {hint: string; fix?: Omit<SceneFix, keyof SceneSpan>} {
 	const nearest = nearestKey(to, passageNames);
 
-	return nearest === undefined
-		? 'Create that passage, or point the link somewhere that exists.'
-		: `Did you mean '${nearest}'?`;
+	if (nearest === undefined) {
+		return {
+			hint: 'Create that passage, or point the link somewhere that exists.'
+		};
+	}
+
+	return {
+		fix: {label: `Change '${to}' to '${nearest}'`, replaces: to, text: nearest},
+		hint: `Did you mean '${nearest}'?`
+	};
+}
+
+/**
+ * Attaches a span to a fix, or drops the fix when there is no real span to attach.
+ *
+ * A link declared in `links:` has a target span only when the parser recorded one; without
+ * it the error falls back to column 1 of the block, and a fix aimed there would splice the
+ * suggestion over whatever happens to sit on that line. A missing button is a small loss,
+ * a wrong edit is not.
+ */
+function spanFix(
+	fix: Omit<SceneFix, keyof SceneSpan> | undefined,
+	span: SceneSpan | undefined
+): SceneFix | undefined {
+	if (!fix || !span || span.endCol === undefined) {
+		return undefined;
+	}
+
+	return {...fix, ...span};
 }
 
 /**
@@ -123,14 +159,22 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 		}
 
 		const span = spans[link.name];
+		const suggestion = missingSuggestion(link.to, passageNames);
+		const line = (span?.line ?? 1) + blockOffset;
+		const endLine =
+			span?.endLine === undefined ? undefined : span.endLine + blockOffset;
 
 		errors.push({
 			code: 'unknown-passage',
 			col: span?.col ?? 1,
-			hint: missingHint(link.to, passageNames),
-			line: (span?.line ?? 1) + blockOffset,
+			fix: spanFix(
+				suggestion.fix,
+				span && {col: span.col, endCol: span.endCol, endLine, line}
+			),
+			hint: suggestion.hint,
+			line,
 			endCol: span?.endCol,
-			endLine: span?.endLine === undefined ? undefined : span.endLine + blockOffset,
+			endLine,
 			message: missingMessage(link.name, link.to),
 			missingPassage: link.to,
 			severity: 'warning'
@@ -166,14 +210,14 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 			}
 
 			const col = match.index + 2 + start + 1;
+			const suggestion = missingSuggestion(name, passageNames);
+			const span = {col, endCol: col + to.length, endLine: i + 1, line: i + 1};
 
 			errors.push({
 				code: 'unknown-passage',
-				col,
-				hint: missingHint(name, passageNames),
-				endCol: col + to.length,
-				endLine: i + 1,
-				line: i + 1,
+				...span,
+				fix: spanFix(suggestion.fix, span),
+				hint: suggestion.hint,
 				message: `[[${name}]] points at a passage that doesn't exist.`,
 				missingPassage: name,
 				severity: 'warning'

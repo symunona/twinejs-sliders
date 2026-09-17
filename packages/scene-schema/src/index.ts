@@ -24,4 +24,17 @@ export {
 } from './references';
 export {scanWikiLinks} from './links';
 export type {WikiLink} from './links';
-export {keyHint, levenshtein, nearestKey} from './levenshtein';
+export {keyFix, keyHint, levenshtein, nearestKey} from './levenshtein';
+export {
+	VARS_LINE_RE,
+	VARS_NEAR_MISS_RE,
+	VARS_SEPARATOR,
+	VARS_SEPARATOR_RE,
+	VARS_SEPARATOR_SPLIT_RE,
+	isVarsSeparator,
+	looksLikeVarsLine,
+	looksLikeVarsSection,
+	nearMissSeparator,
+	varsLineName
+} from './vars-section';
+export type {NearMissSeparator} from './vars-section';

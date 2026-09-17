@@ -6,10 +6,59 @@
  * under the stage. Turn the flag off and everything renders in source order.
  */
 
+import {
+	VARS_SEPARATOR,
+	looksLikeVarsSection,
+	nearMissSeparator
+} from '@sliders/scene-schema';
 import type {ContentBlock} from '../template/types';
 import {SCENE_ONLY, flagOn} from './config';
 
 export const SCENE_MODIFIER = /^scene$/i;
+
+/**
+ * Says so when the thing being dropped was meant to be a vars section.
+ *
+ * A vars section is split off before blocks exist, so a correct one never reaches here. One
+ * whose separator is wrong — `---`, the Markdown rule an author reaches for — is not a vars
+ * section at all, just a text block, and dropping it silently is how
+ * `sliders.autoAdvance: 0` came to do nothing with no way to find out: no error, nothing on
+ * screen, an empty warning list.
+ *
+ * `console.warn` on purpose, not the module logger: `unmuted` carries only `inserts` in a
+ * production build, so a logger warning reaches nobody. `<warning-list>` spies on
+ * `console.warn` and shows it while `config.testing` is on.
+ */
+function warnIfVarsSection(group: ContentBlock[]): void {
+	const text = group
+		.filter(block => block.type === 'text')
+		.map(block => block.content)
+		.join('\n');
+
+	if (text.trim() === '') {
+		return;
+	}
+
+	const nearMiss = nearMissSeparator(text);
+
+	if (nearMiss) {
+		console.warn(
+			`This looks like a vars section closed with '${nearMiss.text.trim()}', which is ` +
+				`not a separator — the line must be exactly '${VARS_SEPARATOR}'. The variables ` +
+				'above it were not set, and the lines were dropped because the passage has a ' +
+				'[scene] block.'
+		);
+		return;
+	}
+
+	if (looksLikeVarsSection(text)) {
+		console.warn(
+			`This looks like a vars section with no '${VARS_SEPARATOR}' line under it. The ` +
+				'variables were not set, and the lines were dropped because the passage has a ' +
+				'[scene] block.'
+		);
+	}
+}
 
 /**
  * Blocks arrive flat — modifier, modifier, text, modifier, text — so they are grouped back
@@ -39,5 +88,15 @@ export function sceneOnlyBlocks(blocks: ContentBlock[]): ContentBlock[] {
 		)
 	);
 
-	return scenes.length > 0 && flagOn(SCENE_ONLY) ? scenes.flat() : blocks;
+	if (scenes.length === 0 || !flagOn(SCENE_ONLY)) {
+		return blocks;
+	}
+
+	for (const group of groups) {
+		if (!scenes.includes(group)) {
+			warnIfVarsSection(group);
+		}
+	}
+
+	return scenes.flat();
 }

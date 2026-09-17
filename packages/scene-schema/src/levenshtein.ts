@@ -97,3 +97,31 @@ export function keyHint(
 
 	return nearest === undefined ? undefined : `Did you mean '${nearest}'?`;
 }
+
+/**
+ * The same suggestion as `keyHint`, kept in a shape the editor can apply.
+ *
+ * `keyHint` spends the answer on an English sentence and throws the word itself away, which
+ * is why every "Did you mean 'bg'?" in the editor used to be something the author had to
+ * retype by hand. This returns the hint AND the replacement, span-free — `addError` owns the
+ * span, since the node it is already given is the token to replace.
+ */
+export function keyFix(
+	input: string,
+	candidates: readonly string[]
+): {hint?: string; fix?: {label: string; replaces: string; text: string}} {
+	const nearest = nearestKey(input, candidates);
+
+	if (nearest === undefined) {
+		return {};
+	}
+
+	return {
+		fix: {
+			label: `Change '${input}' to '${nearest}'`,
+			replaces: input,
+			text: nearest
+		},
+		hint: `Did you mean '${nearest}'?`
+	};
+}

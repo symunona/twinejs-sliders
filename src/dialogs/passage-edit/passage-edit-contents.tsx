@@ -17,6 +17,7 @@ import {
 	useCreateLinkedPassage,
 	useUndoableStoriesContext
 } from '../../store/undoable-stories';
+import type {SceneFix} from '@sliders/scene-types';
 import {addPassageEditors, useDialogsContext} from '../context';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
@@ -27,6 +28,7 @@ import {
 	sceneLinkSeeds
 } from './scene-preview/prefill-links';
 import {useSceneParse} from './scene-preview/use-scene-parse';
+import {FIX_ORIGIN} from './scene-preview/use-scene-writer';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-source-context';
 import {PassageLockBanner} from './passage-lock-banner';
@@ -157,6 +159,37 @@ export const PassageEditContents: React.FC<
 		[createLinkedPassage, passage, story]
 	);
 
+	/**
+	 * Applies the mechanical repair an error carries.
+	 *
+	 * One `replaceRange`, so the fix is one undo entry, and guarded on the text still being
+	 * what the parse saw: `parse` is debounced, so between the error being computed and this
+	 * button being clicked the author may have typed over the very span it points at.
+	 * Refusing is the whole point of `fix.replaces` — a fix that splices its suggestion over
+	 * something else is worse than no button.
+	 */
+	const handleApplyFix = React.useCallback(
+		(fix: SceneFix) => {
+			if (!cmEditor) {
+				return;
+			}
+
+			const from = {ch: fix.col - 1, line: fix.line - 1};
+			const to = {
+				ch: fix.endCol === undefined ? fix.col - 1 : fix.endCol - 1,
+				line: (fix.endLine ?? fix.line) - 1
+			};
+
+			if (cmEditor.getRange(from, to) !== fix.replaces) {
+				return;
+			}
+
+			cmEditor.replaceRange(fix.text, from, to, FIX_ORIGIN);
+			cmEditor.focus();
+		},
+		[cmEditor]
+	);
+
 	// The scene preview is a dialog of its own now, not a strip inside this one. All this
 	// editor does is offer what it is holding; the preview decides whose scene is on
 	// screen.
@@ -263,6 +296,7 @@ export const PassageEditContents: React.FC<
 			{parse.hasScene && (
 				<SceneErrors
 					errors={parse.errors}
+					onApplyFix={readOnly ? undefined : handleApplyFix}
 					onCreatePassage={readOnly ? undefined : handleCreatePassage}
 					onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
 				/>

@@ -30,12 +30,13 @@ import {
 	type Scene,
 	type SceneError,
 	type SceneErrorCode,
+	type SceneFix,
 	type SceneLink,
 	type SceneSpan,
 	type StageFx,
 	type Vec2
 } from '@sliders/scene-types';
-import {keyHint} from './levenshtein';
+import {keyFix} from './levenshtein';
 import {scanWikiLinks} from './links';
 
 export const TOP_LEVEL_KEYS = [
@@ -167,14 +168,25 @@ function addError(
 	code: SceneErrorCode,
 	message: string,
 	node: unknown,
-	options: {hint?: string; severity?: 'error' | 'warning'} = {}
+	options: {
+		hint?: string;
+		severity?: 'error' | 'warning';
+		/**
+		 * A mechanical repair, without its span. The span is the node's own — every caller
+		 * that can offer a fix already points the error at the exact token to replace.
+		 */
+		fix?: Omit<SceneFix, keyof SceneSpan>;
+	} = {}
 ): void {
+	const span = spanOf(ctx, node);
+
 	ctx.errors.push({
 		code,
+		fix: options.fix && {...options.fix, ...span},
 		hint: options.hint,
 		message,
 		severity: options.severity ?? 'error',
-		...spanOf(ctx, node)
+		...span
 	});
 }
 
@@ -604,7 +616,7 @@ function parseBubbleStyle(
 
 			default:
 				addError(ctx, 'unknown-key', `Unknown bubble key '${key}'.`, pair.key, {
-					hint: keyHint(key, BUBBLE_KEYS)
+					...keyFix(key, BUBBLE_KEYS)
 				});
 		}
 	}
@@ -837,7 +849,13 @@ function parseEntityBody(
 							'bad-layer',
 							`Unknown layer '${layer}'.`,
 							pair.value,
-							{hint: `Must be one of ${LAYERS.join(', ')}.`}
+							{
+								// The fix comes from the edit distance, the hint from the closed
+								// set: naming all three is more use than guessing at one, and the
+								// button is there for when the guess is right.
+								...keyFix(layer, LAYERS),
+								hint: `Must be one of ${LAYERS.join(', ')}.`
+							}
 						);
 					}
 				}
@@ -937,7 +955,7 @@ function parseEntityBody(
 
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-					hint: keyHint(key, valid)
+					...keyFix(key, valid)
 				});
 		}
 	}
@@ -1032,7 +1050,7 @@ function parseFxNode(ctx: Ctx, node: unknown): StageFx | undefined {
 				amount = asNumber(ctx, pair.value, 'fx amount') ?? 1;
 			} else if (key !== undefined) {
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-					hint: keyHint(key, ['id', 'amount'])
+					...keyFix(key, ['id', 'amount'])
 				});
 			}
 		}
@@ -1212,7 +1230,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 
 			default:
 				addError(ctx, 'unknown-key', `Unknown box key '${key}'.`, pair.key, {
-					hint: keyHint(key, BOX_KEYS)
+					...keyFix(key, BOX_KEYS)
 				});
 		}
 	}
@@ -1433,7 +1451,7 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 				}
 			} else {
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, prop.key, {
-					hint: keyHint(key, LINK_KEYS)
+					...keyFix(key, LINK_KEYS)
 				});
 			}
 		}
@@ -1465,7 +1483,7 @@ function parseCamera(ctx: Ctx, map: YAMLMap): Partial<Camera> {
 			}
 		} else if (key !== undefined) {
 			addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-				hint: keyHint(key, CAMERA_KEYS)
+				...keyFix(key, CAMERA_KEYS)
 			});
 		}
 	}
@@ -1504,7 +1522,7 @@ function checkOfEdges(ctx: Ctx, scene: Scene): void {
 					`'${edge.id}' is positioned relative to '${edge.parent}', which is not on stage.`,
 					edge.node,
 					{
-						hint: keyHint(
+						...keyFix(
 							edge.parent,
 							Object.keys(scene.entities).filter(id => id !== edge.id)
 						)
@@ -1754,7 +1772,7 @@ export function parseScene(text: string): ParseResult {
 
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-					hint: keyHint(key, TOP_LEVEL_KEYS)
+					...keyFix(key, TOP_LEVEL_KEYS)
 				});
 		}
 	}

@@ -23,6 +23,7 @@ The edits into Chapbook's own files, runtime half:
 | `runtime/index.css` | imports `sliders/sliders.css` |
 | `runtime/template/modifiers/index.ts` | adds `sceneModifier` to the builtins |
 | `runtime/template/render-parsed.ts` | filters blocks through `sceneOnlyBlocks()` |
+| `runtime/template/parse.ts` | `varsSep` comes from `@sliders/scene-schema`, not a local regexp |
 
 And the editor half — these are the ones 0.2.0 shipped without:
 
