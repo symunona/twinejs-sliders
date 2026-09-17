@@ -356,6 +356,7 @@
 			"sizeWide": "Wide",
 			"beatProps": {
 				"as": "Style",
+				"auto": "Advance automatically, at the reader's own pace",
 				"dur": "Hold",
 				"durAuto": "auto",
 				"inherit": "—",

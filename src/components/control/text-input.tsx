@@ -4,6 +4,8 @@ import './text-input.css';
 
 export interface TextInputProps {
 	children: React.ReactNode;
+	/** Greyed and unfocusable, for a field whose value is being decided elsewhere. */
+	disabled?: boolean;
 	id?: string;
 	list?: string;
 	onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
@@ -29,6 +31,7 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
 				<label>
 					<span className="text-input-label">{props.children}</span>
 					<input
+						disabled={props.disabled}
 						id={props.id}
 						list={props.list}
 						onBlur={props.onBlur}

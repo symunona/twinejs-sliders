@@ -37,3 +37,10 @@
 .text-input.type-search > label > input {
 	border-radius: calc(var(--control-height) / 2);
 }
+
+/* A field whose value is being decided by something else on the toolbar -- still readable,
+   clearly not yours to type in. */
+.text-input input:disabled {
+	color: var(--gray);
+	cursor: not-allowed;
+}

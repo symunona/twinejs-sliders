@@ -17,6 +17,8 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {BUBBLE_PLACES, BUBBLE_PRESETS} from '@sliders/scene-types';
 import type {Beat, BubbleStyle} from '@sliders/scene-types';
+import {CheckboxButton} from '../../../components/control/checkbox-button';
+import {AUTO_ADVANCE_MS} from './beat-hold';
 import {TextInput} from '../../../components/control/text-input';
 import {TextSelect} from '../../../components/control/text-select';
 import './beat-props.css';
@@ -34,6 +36,9 @@ export interface BeatPropsProps {
 
 /** The empty option: "whatever the character or the renderer already says". */
 const INHERIT = '';
+
+/** What unchecking Auto puts in the box, in seconds: the pace the reader would have had. */
+const DEFAULT_HOLD = AUTO_ADVANCE_MS / 1000;
 
 /** Beats with a body map, so somewhere to write a key. `box:` has a long form too. */
 function hasBody(beat: Beat | undefined): boolean {
@@ -74,6 +79,19 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 
 	const style = styleOf(beat);
 	const dur = draft ?? (beat?.dur === undefined ? '' : String(beat.dur));
+	/**
+	 * Auto-advance is exactly "this beat names no `dur`".
+	 *
+	 * No new YAML behind it: an absent `dur` is what already sends the player to the
+	 * reader's own `sliders.autoAdvance`, and any `dur` at all overrides that. The checkbox
+	 * only makes that state legible -- before it, "rides the reader's pace" and "I have not
+	 * filled this in yet" were the same empty box.
+	 *
+	 * NOT a third state, and in particular NOT "wait for a click": `dur: 0` schedules a 0ms
+	 * timer in the player (`waitForReader` in stage-element.ts), so it advances at once. The
+	 * only wait-for-a-click there is the READER's setting, which an author does not own.
+	 */
+	const auto = beat?.dur === undefined;
 
 	function commitDur() {
 		setDraft(undefined);
@@ -101,8 +119,23 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 
 	return (
 		<div className="scene-preview-beat-props" data-testid="scene-preview-beat-props">
+			{speaks(beat) && (
+				// Only where there is a line to hold on. A stage-only `set` beat's `dur` is
+				// how long its movement TAKES, not how long the reader looks at it, so
+				// "advance automatically" is not a question that beat can answer.
+				<CheckboxButton
+					label={t('dialogs.passageEdit.beatProps.auto')}
+					onChange={next =>
+						// Unchecking has to leave a number behind, or the box the author just
+						// enabled would be empty and mean the thing they turned off.
+						onSetKey('dur', next ? null : Number(dur.trim()) || DEFAULT_HOLD)
+					}
+					value={auto}
+				/>
+			)}
 			<span className="scene-preview-beat-props-dur">
 				<TextInput
+					disabled={speaks(beat) && auto}
 					onChange={event => setDraft(event.target.value)}
 					onBlur={commitDur}
 					onKeyDown={event => {

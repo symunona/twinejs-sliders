@@ -247,8 +247,10 @@ export class SlidersStage extends CustomElement {
 			return;
 		}
 
-		// autoAdvanceMs() returns 0 for "wait for a click". An explicit `dur: 0` means what
-		// it says, so it is the one zero that still schedules.
+		// The two zeros mean opposite things. `autoAdvanceMs()` returns 0 for "the reader
+		// wants to click", so it schedules nothing. A `dur: 0` is the author saying "do not
+		// dwell here", so it still schedules -- at 0ms, i.e. straight on to the next beat.
+		// Waiting for a click is the READER's setting, and an author cannot ask for it.
 		const delay = dur === undefined ? autoAdvanceMs() : Math.max(0, dur) * 1000;
 
 		if (delay > 0 || dur !== undefined) {
