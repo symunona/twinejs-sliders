@@ -67,8 +67,12 @@ export interface StageTraceLayerProps {
 	bounds?: Rect;
 	/** Absent = the numbers are not clickable. See `StageEditorOverlayProps.onJumpTo`. */
 	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
-	/** Why the numbers are not clickable, when they are not. Shown as the row's tooltip. */
-	blockedNote?: string;
+	/**
+	 * What clicking a row will do beyond moving the entity — today: splice a new beat in,
+	 * because the scrubber is parked on a beat this entity has no line in. Replaces the
+	 * row's own tooltip, since it is the more surprising half of the answer.
+	 */
+	beatNote?: string;
 	/** A gesture is running: the gesture's own readout owns the numbers for its duration. */
 	quiet?: boolean;
 }
@@ -79,12 +83,12 @@ function sceneText(at: Vec2): string {
 }
 
 const TraceRow: React.FC<{
-	blockedNote?: string;
+	beatNote?: string;
 	id: EntityId;
 	label: string;
 	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
 	point: TracePoint;
-}> = ({blockedNote, id, label, onJumpTo, point}) => {
+}> = ({beatNote, id, label, onJumpTo, point}) => {
 	const {t} = useTranslation();
 	const numbers = (
 		<>
@@ -110,7 +114,7 @@ const TraceRow: React.FC<{
 			<span
 				className={className}
 				data-kind={point.kind}
-				title={point.kind === 'now' ? undefined : blockedNote}
+				title={point.kind === 'now' ? undefined : beatNote}
 			>
 				{numbers}
 			</span>
@@ -123,7 +127,10 @@ const TraceRow: React.FC<{
 			data-kind={point.kind}
 			data-testid={`stage-editor-trace-${point.kind}`}
 			onClick={() => onJumpTo(id, point.at, point.scale)}
-			title={t('dialogs.passageEdit.scenePreview.traceRestore', {when: label})}
+			title={
+				beatNote ??
+				t('dialogs.passageEdit.scenePreview.traceRestore', {when: label})
+			}
 			type="button"
 		>
 			{numbers}
@@ -132,7 +139,7 @@ const TraceRow: React.FC<{
 };
 
 export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
-	blockedNote,
+	beatNote,
 	bounds,
 	onJumpTo,
 	quiet,
@@ -203,7 +210,7 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 							>
 								{trace.orig && (
 									<TraceRow
-										blockedNote={blockedNote}
+										beatNote={beatNote}
 										id={trace.id}
 										label={t('dialogs.passageEdit.scenePreview.traceOrig')}
 										onJumpTo={onJumpTo}
@@ -212,7 +219,7 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 								)}
 								{trace.prev && (
 									<TraceRow
-										blockedNote={blockedNote}
+										beatNote={beatNote}
 										id={trace.id}
 										label={t('dialogs.passageEdit.scenePreview.tracePrev')}
 										onJumpTo={onJumpTo}

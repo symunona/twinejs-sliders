@@ -198,11 +198,12 @@ export interface StageEditorOverlayProps {
 	 */
 	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
 	/**
-	 * Why `onJumpTo` is absent, in the author's words. The selection controls show the same
-	 * sentence; here it is the disabled rows' tooltip, so a click that does nothing says
-	 * why on the spot.
+	 * What a write here will do to the file, when it is more than editing the line on
+	 * screen — today: it splices a new beat in. The selection controls show the same
+	 * sentence; here it is the trace rows' tooltip, so a click that grows the beat list
+	 * says so on the spot.
 	 */
-	blockedNote?: string;
+	beatNote?: string;
 	/**
 	 * The background is pinned: no pan, no wheel zoom, and a dropped backdrop does not
 	 * replace the one in the scene. Entities stay fully editable — this is the narrow lock,
@@ -295,7 +296,7 @@ export function snapDropPoint(
 export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const {
 		bgLocked,
-		blockedNote,
+		beatNote,
 		children,
 		editable,
 		grid,
@@ -1085,7 +1086,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				    what the grid lines are for, and the selection box still has to win. */}
 				{grid && (
 					<StageTraceLayer
-						blockedNote={blockedNote}
+						beatNote={beatNote}
 						bounds={box}
 						onJumpTo={onJumpTo}
 						quiet={dragging}

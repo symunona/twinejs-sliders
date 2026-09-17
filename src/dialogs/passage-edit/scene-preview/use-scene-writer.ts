@@ -15,6 +15,8 @@ import * as React from 'react';
 import {
 	addEntity,
 	applyEdit,
+	entityHasParent,
+	insertBeatEntity,
 	mergeEdits,
 	removeEntities,
 	removeEntityKey,
@@ -105,14 +107,24 @@ export interface WritePlan {
 	 */
 	addEntity: boolean;
 	/**
-	 * Why there is nowhere to write, when there is nowhere to write.
+	 * There is no line of this entity's to write on, so the gesture gets one: a new set beat
+	 * spliced in at this seq position.
 	 *
 	 * The scrubber is parked on a beat belonging to somebody else, and a beat item has
 	 * exactly one key, so this entity cannot join it. The `cast:` entry is NOT a fallback
-	 * here: it would move the character from the top of the scene, which is the whole bug
-	 * this rule exists to stop.
+	 * here — it would move the character from the TOP of the scene, restaging every beat
+	 * before this one from a position the author never saw. The moment on screen is the one
+	 * after the beat shown, so a beat of its own, immediately after it, is the only place
+	 * that means what the gesture meant.
 	 */
-	blocked?: {beat: number; owner?: EntityId};
+	insertBeat?: {
+		/** Seq position the new item lands at. */
+		index: number;
+		/** The beat it follows, 0-based — what the author is told about. */
+		after: number;
+		/** Who owns that beat, when anybody does. */
+		owner?: EntityId;
+	};
 }
 
 /**
@@ -140,10 +152,9 @@ export function beatOwnsEntity(beat: Beat | undefined, id: EntityId): boolean {
  * - Scrubber at 0 — the stage before any beat ran — writes the `cast:` / `props:` entry.
  * - Scrubber on a beat that belongs to this entity writes THAT BEAT, promoting a bare line
  *   of dialogue to a map if that is what it takes.
- * - Scrubber on somebody else's beat writes nothing at all, and the gesture rolls back. A
- *   beat item has exactly one key, so this entity cannot join it, and falling through to
- *   the entry would move them from the top of the scene instead of from here. An author who
- *   wants the move at this moment rearranges the beat lines themselves.
+ * - Scrubber on somebody else's beat gets a new set beat of its own, right after it. A beat
+ *   item has exactly one key, so this entity cannot join theirs, and falling through to the
+ *   entry would move them from the top of the scene instead of from here.
  *
  * `beat` is the SCRUBBER index — state N is produced by `beats[N - 1]`.
  */
@@ -166,8 +177,9 @@ export function planEntityWrite(
 	if (!beatOwnsEntity(shown, id)) {
 		return {
 			addEntity,
-			blocked: {
-				beat: index,
+			insertBeat: {
+				after: index,
+				index: index + 1,
 				owner:
 					shown && (shown.kind === 'say' || shown.kind === 'set')
 						? shown.who
@@ -304,6 +316,43 @@ export interface SceneWriteContext {
 	beat: number;
 }
 
+/**
+ * The keys a group of writes puts on ONE new beat.
+ *
+ * Pooled rather than written one at a time because a drag that changed both `at` and `scale`
+ * is one move: asked separately, each would splice a beat of its own and the author would
+ * get two lines for one gesture.
+ */
+function insertBeatEdit(
+	context: SceneWriteContext,
+	index: number,
+	writes: EntityKeyWrite[]
+): TextEdit | undefined {
+	const {blockText} = context;
+	const first = writes[0];
+
+	if (!first) {
+		return undefined;
+	}
+
+	const keys: Record<string, unknown> = {};
+
+	for (const write of writes) {
+		// A new beat inherits whatever the beat before it left, so "unset" cannot be said
+		// there by leaving a key out — the explicit opposite is the only honest form, and a
+		// write with neither a value nor a reset has nothing to say at all.
+		const value = write.value === undefined ? write.reset : write.value;
+
+		if (value !== undefined) {
+			keys[write.key] = value;
+		}
+	}
+
+	return insertBeatEntity(blockText, index, first.id, keys, {
+		relative: entityHasParent(blockText, {id: first.id, kind: first.kind})
+	});
+}
+
 /** One write's edit, or undefined when there is nowhere sane to put it. */
 export function buildEntityEdit(
 	context: SceneWriteContext,
@@ -311,6 +360,10 @@ export function buildEntityEdit(
 ): TextEdit | undefined {
 	const {blockText, beat, scene} = context;
 	const plan = planEntityWrite(scene, beat, write.kind, write.id);
+
+	if (plan.insertBeat) {
+		return insertBeatEdit(context, plan.insertBeat.index, [write]);
+	}
 
 	for (const target of plan.targets) {
 		// On a beat, "unset" is written as the explicit opposite rather than as a deletion:
@@ -331,8 +384,8 @@ export function buildEntityEdit(
 	}
 
 	// Removing a key that is not written anywhere is a no-op, not a reason to create an
-	// entry saying so. A blocked plan has no targets at all and must not create one either.
-	if (plan.blocked || !plan.addEntity || write.value === undefined) {
+	// entry saying so.
+	if (!plan.addEntity || write.value === undefined) {
 		return undefined;
 	}
 
@@ -410,6 +463,10 @@ export function buildWriteEdits(
 ): TextEdit[] {
 	const edits: TextEdit[] = [];
 	const removed = new Map<EntityKind, EntityId[]>();
+	// Insertion order, so a multi-select drag writes its new beats in the order the entities
+	// were picked rather than in map order — every insert lands on the same offset, and
+	// `mergeEdits` concatenates same-offset inserts in the order it is handed them.
+	const inserted = new Map<EntityId, {index: number; writes: EntityKeyWrite[]}>();
 
 	for (const write of writes) {
 		if (
@@ -422,7 +479,40 @@ export function buildWriteEdits(
 			continue;
 		}
 
+		if (
+			!isBeatKeyWrite(write) &&
+			!isBubbleWrite(write) &&
+			!isSceneKeyWrite(write) &&
+			!isStructWrite(write)
+		) {
+			const plan = planEntityWrite(
+				context.scene,
+				context.beat,
+				write.kind,
+				write.id
+			);
+
+			if (plan.insertBeat) {
+				const group = inserted.get(write.id) ?? {
+					index: plan.insertBeat.index,
+					writes: []
+				};
+
+				group.writes.push(write);
+				inserted.set(write.id, group);
+				continue;
+			}
+		}
+
 		const edit = buildWriteEdit(context, write);
+
+		if (edit) {
+			edits.push(edit);
+		}
+	}
+
+	for (const {index, writes: group} of inserted.values()) {
+		const edit = insertBeatEdit(context, index, group);
 
 		if (edit) {
 			edits.push(edit);
@@ -438,6 +528,40 @@ export function buildWriteEdits(
 	}
 
 	return edits;
+}
+
+/**
+ * How many new beats this gesture will splice in — what the scrubber has to step forward by
+ * to keep showing the moment the author is looking at.
+ *
+ * Counted from the plan rather than from the edits, so the caller can ask before writing and
+ * decide what the scrubber does once the write lands.
+ */
+export function insertedBeatCount(
+	context: SceneWriteContext,
+	writes: SceneWrite[]
+): number {
+	const ids = new Set<EntityId>();
+
+	for (const write of writes) {
+		if (
+			isBeatKeyWrite(write) ||
+			isBubbleWrite(write) ||
+			isSceneKeyWrite(write) ||
+			isStructWrite(write)
+		) {
+			continue;
+		}
+
+		if (
+			planEntityWrite(context.scene, context.beat, write.kind, write.id)
+				.insertBeat
+		) {
+			ids.add(write.id);
+		}
+	}
+
+	return ids.size;
 }
 
 /**

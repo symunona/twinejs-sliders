@@ -15,6 +15,8 @@ export {removeSceneKey, setSceneKey} from './scene-key';
 export {entityAtLine, entityLines} from './select';
 export {
 	addEntity,
+	entityHasParent,
+	insertBeatEntity,
 	mergeEdits,
 	removeEntities,
 	removeEntity,

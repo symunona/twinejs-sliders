@@ -14,6 +14,7 @@ import {
 	mergeEdits,
 	NUDGE_ORIGIN,
 	PATCH_TIMEOUT_MS,
+	insertedBeatCount,
 	planEntityWrite,
 	settlePatch,
 	useScenePatch,
@@ -93,7 +94,7 @@ describe('planEntityWrite()', () => {
 		const plan = planEntityWrite(scene, 1, 'cast', 'mira');
 
 		expect(plan.targets).toEqual([{beat: 0, id: 'mira', kind: 'cast'}]);
-		expect(plan.blocked).toBeUndefined();
+		expect(plan.insertBeat).toBeUndefined();
 	});
 
 	// The entry is NOT a fallback here. It would move her from the top of the scene, so
@@ -106,12 +107,13 @@ describe('planEntityWrite()', () => {
 	});
 
 	// A beat item has exactly one key, so candle cannot join mira's line, and the entry is
-	// the wrong answer. The gesture rolls back instead.
-	it('blocks a write aimed at somebody else\'s beat', () => {
+	// the wrong answer — it would move the candle from the top of the scene. A beat of its
+	// own, right after the one on screen, is what the gesture meant.
+	it('asks for a new beat when the write is aimed at somebody else\'s', () => {
 		const plan = planEntityWrite(scene, 1, 'prop', 'candle');
 
 		expect(plan.targets).toEqual([]);
-		expect(plan.blocked).toEqual({beat: 0, owner: 'mira'});
+		expect(plan.insertBeat).toEqual({after: 0, index: 1, owner: 'mira'});
 	});
 
 	it('reports no owner when the beat on screen is a command', () => {
@@ -121,7 +123,7 @@ describe('planEntityWrite()', () => {
 		const plan = planEntityWrite(commands, 1, 'cast', 'mira');
 
 		expect(plan.targets).toEqual([]);
-		expect(plan.blocked?.owner).toBeUndefined();
+		expect(plan.insertBeat).toEqual({after: 0, index: 1});
 	});
 
 	// Past the last beat there is no beat to own anything, so the entry is right again.
@@ -653,6 +655,19 @@ describe('writing onto the beat the scrubber is on', () => {
 			: undefined;
 	}
 
+	/** A whole gesture's worth of writes, folded the way the editor folds them. */
+	function applied2(text: string, beat: number, writes: EntityKeyWrite[]) {
+		const block = blockOf(text);
+		const edit = mergeEdits(
+			block.text,
+			buildWriteEdits(context(text, beat), writes)
+		);
+
+		return edit
+			? block.text.slice(0, edit.from) + edit.insert + block.text.slice(edit.to)
+			: undefined;
+	}
+
 	// The whole point of the change: a bare line of dialogue is still mira's line, and a
 	// drag while it is on screen belongs on it -- not in cast:, which would move her from
 	// the top of the scene.
@@ -682,29 +697,45 @@ describe('writing onto the beat the scrubber is on', () => {
 		expect(out).toContain('- mira: {at: 0.5}');
 	});
 
-	it('writes nothing when the beat on screen is somebody else\'s', () => {
-		expect(
-			applied(passage, 1, {
-				id: 'candle',
-				key: 'at',
-				kind: 'prop',
-				ref: 'candle',
-				value: 0.5
-			})
-		).toBeUndefined();
+	// Not the entry — that would move the candle from the top of the scene. A beat of its
+	// own, immediately after the one on screen.
+	it('splices a new beat when the beat on screen is somebody else\'s', () => {
+		const out = applied(passage, 1, {
+			id: 'candle',
+			key: 'at',
+			kind: 'prop',
+			ref: 'candle',
+			value: 0.5
+		});
+
+		expect(out).toContain(
+			['  - mira: {at: 0.2}', '  - candle: {at: 0.5}'].join('\n')
+		);
+		// cast: and props: untouched.
+		expect(out).toContain('  candle: {at: 0.1, scale: 0.6}');
 	});
 
-	it('rolls the whole gesture back rather than half-writing it', () => {
-		const editor = fakeEditor(passage);
-		const wrote = writeSceneEdits(
-			editor,
-			context(passage, 1),
-			[{id: 'candle', key: 'at', kind: 'prop', ref: 'candle', value: 0.5}],
-			DRAG_ORIGIN
-		);
+	it('folds one gesture\'s keys into a single new beat', () => {
+		const out = applied2(passage, 1, [
+			{id: 'candle', key: 'at', kind: 'prop', ref: 'candle', value: 0.5},
+			{id: 'candle', key: 'scale', kind: 'prop', ref: 'candle', value: 2}
+		]);
 
-		expect(wrote).toBe(false);
-		expect(editor.replaceRange).not.toHaveBeenCalled();
+		expect(out).toContain('  - candle: {at: 0.5, scale: 2}');
+	});
+
+	it('counts the beats a gesture will add, before it adds them', () => {
+		expect(
+			insertedBeatCount(context(passage, 1), [
+				{id: 'candle', key: 'at', kind: 'prop', ref: 'candle', value: 0.5},
+				{id: 'candle', key: 'scale', kind: 'prop', ref: 'candle', value: 2}
+			])
+		).toBe(1);
+		expect(
+			insertedBeatCount(context(passage, 1), [
+				{id: 'mira', key: 'at', kind: 'cast', ref: 'mira', value: 0.5}
+			])
+		).toBe(0);
 	});
 
 	// A beat inherits every key it does not mention, so "unflip" has to be said out loud
@@ -754,7 +785,9 @@ describe('writing onto the beat the scrubber is on', () => {
 		expect(out).toContain('  candle: {at: 0.1}');
 	});
 
-	it('does not invent an entry for a blocked write', () => {
+	// A patch scene has no `props:` at all, and the new beat needs none: the beat IS the
+	// whole write.
+	it('gives a patch scene a beat rather than an entry', () => {
 		const out = applied(patchPassage, 1, {
 			id: 'candle',
 			key: 'at',
@@ -763,6 +796,7 @@ describe('writing onto the beat the scrubber is on', () => {
 			value: 0.5
 		});
 
-		expect(out).toBeUndefined();
+		expect(out).toContain('  - candle: {at: 0.5}');
+		expect(out).not.toContain('props:');
 	});
 });

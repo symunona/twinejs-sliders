@@ -703,6 +703,86 @@ function locateBeat(
 }
 
 /**
+ * A brand new `- id: {…}` set beat, spliced in at seq position `index`.
+ *
+ * This is what a drag does when the scrubber is parked on a beat the entity has no line in.
+ * A beat item holds exactly ONE key, so the move cannot join somebody else's beat, and
+ * falling through to the `cast:` entry would restage the character from the top of the scene
+ * — the position the author is looking at is the one AFTER the beat on screen, so a beat of
+ * its own, right after it, is the only place that means what the gesture meant.
+ *
+ * `index` is where the new item lands, so the item it follows is `index - 1`; inserting
+ * before the first beat is refused, because state 0 is the entry block's job.
+ *
+ * Block sequences only. A flow `beats: [...]` is legal YAML nobody writes, and splicing one
+ * would need its own comma rules for no gain.
+ */
+export function insertBeatEntity(
+	text: string,
+	index: number,
+	id: EntityId,
+	keys: Record<string, unknown>,
+	options: {relative?: boolean} = {}
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+
+	if (!parsed) {
+		return undefined;
+	}
+
+	const beats = beatsSeqOf(parsed);
+	const after = index > 0 ? beats?.items[index - 1] : undefined;
+
+	if (!beats || beats.flow || after === undefined) {
+		return undefined;
+	}
+
+	const range = rangeOf(after);
+
+	if (!range) {
+		return undefined;
+	}
+
+	const parts: string[] = [];
+
+	for (const key of ENTITY_KEY_ORDER) {
+		if (key === 'ref' || keys[key] === undefined) {
+			continue;
+		}
+
+		parts.push(
+			`${key}: ${formatValue(key, keys[key], {relative: options.relative})}`
+		);
+	}
+
+	if (parts.length === 0) {
+		return undefined;
+	}
+
+	// End of the LINE the previous beat ends on, so its trailing `# note` stays with it —
+	// the same rule `insertIntoMap` follows, and `trimEnd` first for the same reason: a
+	// block map's range runs past its own newline.
+	const at = lineEndAt(text, trimEnd(text, range[1], range[0]));
+
+	return {
+		from: at,
+		insert: `\n${indentAt(text, range[0])}- ${id}: {${parts.join(', ')}}`,
+		to: at
+	};
+}
+
+/**
+ * Does this entity's own entry declare an `of:` parent? What a new beat needs to know, since
+ * the beat it is writing has no entry of its own to read it off.
+ */
+export function entityHasParent(text: string, target: EntityTarget): boolean {
+	const parsed = parseBlock(text);
+	const located = parsed && locateEntity(parsed, target);
+
+	return !!located && hasParent(located.pair);
+}
+
+/**
  * Set `bubble:` keys on one beat — how a dragged or resized bubble gets written down.
  *
  * Only the keys passed are touched, because the map is the author's: a bubble moved after

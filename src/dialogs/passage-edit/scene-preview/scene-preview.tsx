@@ -68,6 +68,7 @@ import {
 	applyCameraPatch,
 	applyStagePatch,
 	cameraAgrees,
+	insertedBeatCount,
 	isOwnOrigin,
 	planEntityWrite,
 	settlePatch,
@@ -518,26 +519,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	const commit = React.useCallback(
 		(writes: SceneWrite[], origin: string) => {
-			if (
-				!block ||
-				!writeSceneEdits(
-					editor,
-					{
-						beat,
-						blockOffset: block.offset,
-						blockText: block.text,
-						scene: parse.result?.scene
-					},
-					writes,
-					origin
-				)
-			) {
+			const context = block && {
+				beat,
+				blockOffset: block.offset,
+				blockText: block.text,
+				scene: parse.result?.scene
+			};
+			// Asked BEFORE the write, because afterwards the plan is a plan about text that
+			// no longer exists.
+			const grew = context ? insertedBeatCount(context, writes) : 0;
+
+			if (!context || !writeSceneEdits(editor, context, writes, origin)) {
 				// Nowhere to write, or the write changed nothing: the optimistic patch has
 				// no text coming to replace it and must not stay on screen.
 				clearPatch();
 				setCamera(undefined);
 
 				return;
+			}
+
+			// The gesture wrote beats that did not exist a moment ago, and the moment the
+			// author is looking at is now the last of them — staying put would show the
+			// stage BEFORE the move they just made.
+			if (grew > 0) {
+				setBeat(current => current + grew);
 			}
 
 			holdPatch();
@@ -906,13 +911,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const editable = !!editor && !locked;
 
 	/**
-	 * Why a gesture on the selection would go nowhere, if it would.
+	 * What a gesture on the selection will do to the file, when that is not simply "edit the
+	 * line you are looking at".
 	 *
-	 * Computed up front rather than discovered at commit, because a drag that is refused
-	 * after the fact just snaps the sprite back and reads as a broken editor. The author is
-	 * told BEFORE they reach for it, and the commit still refuses as the backstop.
+	 * Computed up front rather than discovered at commit: a move that quietly grows the
+	 * `beats:` list is a structural edit, and an author is owed the warning BEFORE they
+	 * reach for the sprite rather than a surprise line afterwards.
 	 */
-	const blockedNote = React.useMemo(() => {
+	const beatNote = React.useMemo(() => {
 		if (!editable || selection.length === 0) {
 			return undefined;
 		}
@@ -920,16 +926,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		const scene = parse.result?.scene;
 
 		for (const id of selection) {
-			const {blocked} = planEntityWrite(scene, beat, kindOf(id), id);
+			const {insertBeat} = planEntityWrite(scene, beat, kindOf(id), id);
 
-			if (blocked) {
-				return blocked.owner
+			if (insertBeat) {
+				return insertBeat.owner
 					? t('dialogs.passageEdit.scenePreview.beatBelongsTo', {
-							beat: blocked.beat + 1,
-							name: blocked.owner
+							beat: insertBeat.after + 1,
+							name: insertBeat.owner
 					  })
 					: t('dialogs.passageEdit.scenePreview.beatStagesNothing', {
-							beat: blocked.beat + 1
+							beat: insertBeat.after + 1
 					  });
 			}
 		}
@@ -1419,7 +1425,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const stageBody = (
 		<StageEditorOverlay
 			bgLocked={bgLocked}
-			blockedNote={blockedNote}
+			beatNote={beatNote}
 			editable={editable}
 			grid={grid}
 			origStage={origStage}
@@ -1430,9 +1436,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			onCommit={handleCommit}
 			onDropAsset={handleDropAsset}
 			onDropFiles={handleDropFiles}
-			// Absent when a click could not write: locked stage, or the scrubber parked on
-			// a beat this entity has no line in. `blockedNote` then tells the author why.
-			onJumpTo={editable && !blockedNote ? jumpTo : undefined}
+			// Absent only when a click could not write at all — a locked stage. Parked on
+			// somebody else's beat the jump still lands, as a new beat of its own.
+			onJumpTo={editable ? jumpTo : undefined}
 			onOpenEntity={handleOpenEntity}
 			onPatch={setPatch}
 			parentOffsets={offsets}
@@ -1469,7 +1475,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				assets={assets}
 				editable={editable}
 				entities={selectedEntities}
-				note={blockedNote}
+				note={beatNote}
 				onDelete={remove}
 				onFlip={flip}
 				onFrame={setFrame}
