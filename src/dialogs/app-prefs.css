@@ -6,7 +6,8 @@
 	grid-template-columns: 1fr 1fr;
 }
 
-.app-prefs-dialog p.font-explanation {
+.app-prefs-dialog p.font-explanation,
+.app-prefs-dialog p.app-prefs-explanation {
 	grid-column: 1 / span 2;
 	margin: 0;
 }

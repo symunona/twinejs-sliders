@@ -227,15 +227,39 @@ export class SlidersStage extends CustomElement {
 	}
 
 	/**
+	 * How long an untimed beat holds, in ms, and `0` for "wait for a click".
+	 *
+	 * Three layers, narrowest first: a beat's own `dur:` (handled by the caller), then the
+	 * scene's `autoAdvance:`, then the reader's `sliders.autoAdvance`. The scene key exists
+	 * because the reader's is a Chapbook STATE variable — global, and persisted to the
+	 * reader's localStorage — so setting it in one passage re-paces every later scene and
+	 * every later session. Pacing belongs to the scene; the reader's setting is the
+	 * fallback for scenes that express no opinion.
+	 *
+	 * NOT inherited through `from:`: that key inherits the STAGE, and a patch scene is
+	 * usually a different moment at a different pace. Insert Scene seeds the key into every
+	 * skeleton it writes, so a story that wants one pace says so per scene.
+	 */
+	private autoAdvanceDelay(): number {
+		const own = this.scene?.autoAdvance;
+
+		if (typeof own === 'number' && Number.isFinite(own)) {
+			return Math.max(0, own) * 1000;
+		}
+
+		return autoAdvanceMs();
+	}
+
+	/**
 	 * Auto advance is a convenience, never the only way forward: the last beat always waits
 	 * for the reader, or the links under the stage would appear while the final line was
 	 * still being read.
 	 *
-	 * A beat's own `dur:` beats the READER's `sliders.autoAdvance` — the author timed this
-	 * line, and a reader preference must not stretch or shorten it. It does NOT beat the
-	 * last-beat rule: that one is about the links, not about pacing, and honouring `dur`
-	 * there would mean "end the scene on a timer", which is a different feature with no way
-	 * back from it.
+	 * A beat's own `dur:` beats the scene's `autoAdvance:` and the READER's
+	 * `sliders.autoAdvance` alike — the author timed this line, and neither a scene default
+	 * nor a preference may stretch or shorten it. It does NOT beat the last-beat rule: that
+	 * one is about the links, not about pacing, and honouring `dur` there would mean "end
+	 * the scene on a timer", which is a different feature with no way back from it.
 	 *
 	 * `data-waiting` stays `'beat'` either way, so the marker still says "there is more to
 	 * read" and a click still skips ahead.
@@ -247,13 +271,23 @@ export class SlidersStage extends CustomElement {
 			return;
 		}
 
-		// The two zeros mean opposite things. `autoAdvanceMs()` returns 0 for "the reader
-		// wants to click", so it schedules nothing. A `dur: 0` is the author saying "do not
-		// dwell here", so it still schedules -- at 0ms, i.e. straight on to the next beat.
-		// Waiting for a click is the READER's setting, and an author cannot ask for it.
-		const delay = dur === undefined ? autoAdvanceMs() : Math.max(0, dur) * 1000;
+		// The two zeros mean opposite things, and which one you get depends on WHERE it was
+		// written. A `dur: 0` is the author saying "do not dwell on this beat", so it still
+		// schedules -- at 0ms, i.e. straight on to the next one. A zero from the scene's
+		// `autoAdvance:` or from the reader's setting means "let them click", so it
+		// schedules nothing. Same number, opposite answers, because one times a single beat
+		// and the other is a standing default for the beats that did not time themselves.
+		if (dur !== undefined) {
+			this.timer = window.setTimeout(
+				() => void this.play(),
+				Math.max(0, dur) * 1000
+			);
+			return;
+		}
 
-		if (delay > 0 || dur !== undefined) {
+		const delay = this.autoAdvanceDelay();
+
+		if (delay > 0) {
 			this.timer = window.setTimeout(() => void this.play(), delay);
 		}
 	}

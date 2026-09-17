@@ -40,6 +40,8 @@ import './scene-help.css';
 type KeyHelp<T extends readonly string[]> = Record<T[number], string>;
 
 const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
+	autoAdvance:
+		'Seconds a beat holds the screen when it has no dur: of its own. 0 waits for a click. Overrides the reader\u2019s own setting, and is overridden by a beat\u2019s dur:. Not inherited through from:.',
 	beats: 'The timeline. A list, played in order.',
 	bg:
 		'Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none.',
@@ -364,6 +366,25 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 							animation, the same number is how long its moves take.
 						</p>
 						<KeyTable keys={BEAT_BODY_KEYS} help={BEAT_BODY_HELP} />
+						<p>
+							Three layers, narrowest first. A beat&apos;s <code>dur:</code> wins.
+							Failing that the scene&apos;s own <code>autoAdvance:</code> sets the
+							pace. Failing that it is the reader&apos;s
+							<code> sliders.autoAdvance</code>, which they keep across the whole
+							story — which is why pacing belongs in the scene.
+						</p>
+						<Sample>{`autoAdvance: 1.2   # every untimed beat holds 1.2s. 0 waits for a click.
+
+beats:
+  - mira: "Held for 1.2 seconds."
+  - mira: {say: "Snapped through.", dur: 0.2}`}</Sample>
+						<p>
+							The two zeros are opposites, because one times a single beat and the
+							other is a standing default. <code>dur: 0</code> on a beat means
+							&quot;do not dwell here&quot; and plays straight on;{' '}
+							<code>autoAdvance: 0</code> on the scene means &quot;let them
+							click&quot;.
+						</p>
 						<h3>Speaking</h3>
 						<KeyTable keys={SAY_KEYS} help={SAY_HELP} />
 						<h3>Narration, the long way</h3>

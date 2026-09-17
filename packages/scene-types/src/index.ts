@@ -343,6 +343,15 @@ export interface Scene {
 	from?: string;
 	bg?: AssetId | null;
 	camera?: Partial<Camera>;
+	/**
+	 * Seconds a beat that did not time itself holds the screen, for this scene only.
+	 *
+	 * Sits between the reader's `sliders.autoAdvance` (which it overrides) and a beat's own
+	 * `dur:` (which overrides it). `0` means "wait for a click", exactly as it does in the
+	 * reader's setting — a scene key is scene PACING, so it reads the same way the thing it
+	 * replaces did. A `dur: 0` is a different statement and still means "snap and go on".
+	 */
+	autoAdvance?: number;
 	/** Entity patches keyed by id. `null` means "remove this entity" (only valid with from). */
 	entities: Record<EntityId, EntityPatch | null>;
 	fx?: StageFx[];

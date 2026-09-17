@@ -1,6 +1,8 @@
+import {SCENE_SKELETON} from '../../../../../format/src/twine-extensions/sliders/skeletons';
 import {
 	forwardLinks,
 	linkOfBody,
+	prefillSceneAutoAdvance,
 	prefillSceneLinks,
 	sceneLinkSeeds
 } from '../prefill-links';
@@ -135,6 +137,55 @@ describe('prefillSceneLinks()', () => {
 
 	it('does nothing to text with no links: block', () => {
 		expect(prefillSceneLinks('[scene]\nbg: tavern\n', {back: 'Cellar', forward: []})).toBe(
+			'[scene]\nbg: tavern\n'
+		);
+	});
+});
+
+describe('prefillSceneAutoAdvance()', () => {
+	function line(text: string): string | undefined {
+		return text.split('\n').find(each => each.startsWith('autoAdvance:'));
+	}
+
+	// The real skeleton, not a fixture: the whole point is that the line the format writes
+	// and the line this rewrites are the same line.
+	it('fills in the skeleton line', () => {
+		expect(line(prefillSceneAutoAdvance(SCENE_SKELETON, 1.5))).toMatch(
+			/^autoAdvance: 1\.5 +#/
+		);
+	});
+
+	it('writes a zero, which is the wait-for-a-click setting', () => {
+		expect(line(prefillSceneAutoAdvance(SCENE_SKELETON, 0))).toMatch(
+			/^autoAdvance: 0 +#/
+		);
+	});
+
+	// The skeleton's comments sit on one column and a seeded value must not shove them off
+	// it -- the line is a teaching document before it is a setting.
+	it('keeps the comment column', () => {
+		const before = SCENE_SKELETON.split('\n').find(each =>
+			each.startsWith('autoAdvance:')
+		)!;
+		const after = line(prefillSceneAutoAdvance(SCENE_SKELETON, 2))!;
+
+		expect(after.indexOf('#')).toBe(before.indexOf('#'));
+	});
+
+	// An unset preference must leave no trace: a scene with no key of its own is the
+	// reader's to pace, which is exactly today's behaviour.
+	it('leaves the skeleton alone when nothing is set', () => {
+		expect(prefillSceneAutoAdvance(SCENE_SKELETON, undefined)).toBe(SCENE_SKELETON);
+	});
+
+	it('leaves a value the author already wrote alone', () => {
+		const written = '[scene]\nautoAdvance: 4\nbeats:\n  - mira: "Out."\n';
+
+		expect(prefillSceneAutoAdvance(written, 1)).toBe(written);
+	});
+
+	it('does nothing to text with no autoAdvance line', () => {
+		expect(prefillSceneAutoAdvance('[scene]\nbg: tavern\n', 1)).toBe(
 			'[scene]\nbg: tavern\n'
 		);
 	});

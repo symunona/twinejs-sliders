@@ -778,6 +778,75 @@ describe('dur:', () => {
 	});
 });
 
+describe('autoAdvance:', () => {
+	it('sets the scene default in seconds', () => {
+		const {errors, scene} = parseScene('autoAdvance: 1.5\nbeats:\n  - mira: "Out."\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.autoAdvance).toBe(1.5);
+	});
+
+	// Zero here is the reader's kind of zero: no timer, wait for a click. The parser only
+	// has to keep it, since `dur: 0` and this one are read in different places.
+	it('keeps a zero rather than treating it as absent', () => {
+		const {errors, scene} = parseScene('autoAdvance: 0\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.autoAdvance).toBe(0);
+	});
+
+	it('is absent when the author did not write one', () => {
+		const {scene} = parseScene('beats:\n  - mira: "Out."\n');
+
+		expect(scene.autoAdvance).toBeUndefined();
+	});
+
+	it('treats ~ as no opinion', () => {
+		const {errors, scene} = parseScene('autoAdvance: ~\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.autoAdvance).toBeUndefined();
+	});
+
+	it('refuses a negative length', () => {
+		const {errors, scene} = parseScene('autoAdvance: -1\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+		expect(scene.autoAdvance).toBeUndefined();
+	});
+
+	it('refuses something that is not a number', () => {
+		const {errors, scene} = parseScene('autoAdvance: slow\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+		expect(scene.autoAdvance).toBeUndefined();
+	});
+
+	it('warns about a length that looks like milliseconds', () => {
+		const {errors, scene} = parseScene('autoAdvance: 3000\n');
+
+		expect(find(errors, 'bad-value')?.severity).toBe('warning');
+		expect(scene.autoAdvance).toBe(3000);
+	});
+
+	// The message has to name the key the author actually wrote, or the hint sends them
+	// off to `dur:` -- where zero means the opposite thing.
+	it('names itself in its own messages', () => {
+		const {errors} = parseScene('autoAdvance: -2\n');
+
+		expect(find(errors, 'bad-value')?.message).toContain('autoAdvance');
+		expect(find(errors, 'bad-value')?.hint).toContain('waits for a click');
+	});
+
+	it('is an unknown key inside a beat', () => {
+		const {errors} = parseScene(
+			'beats:\n  - mira: {say: "Out.", autoAdvance: 1}\n'
+		);
+
+		expect(codes(errors)).toContain('unknown-key');
+	});
+});
+
 describe('mechanical fixes', () => {
 	it('carries the suggestion an unknown key hint names, ready to apply', () => {
 		const {errors} = parseScene('id: a\nchar:\n  mira: {}');

@@ -48,6 +48,7 @@ export const TOP_LEVEL_KEYS = [
 	'props',
 	'entities',
 	'fx',
+	'autoAdvance',
 	'beats',
 	'links'
 ] as const;
@@ -667,6 +668,45 @@ interface EntityBody {
 }
 
 /**
+ * A non-negative number of seconds, for the keys that name a length of time.
+ *
+ * `key` and `zeroHint` are the only things that differ between them: `dur: 0` snaps and
+ * plays on, `autoAdvance: 0` waits for a click, and a message that named the wrong one
+ * would send the author to the wrong key.
+ */
+function parseSeconds(
+	ctx: Ctx,
+	node: unknown,
+	key: string,
+	zeroHint: string
+): number | undefined {
+	const seconds = asNumber(ctx, node, key);
+
+	if (seconds === undefined) {
+		return undefined;
+	}
+
+	if (seconds < 0) {
+		addError(ctx, 'bad-value', `${key} of ${seconds} is not a length of time.`, node, {
+			hint: `${key}: is seconds. ${zeroHint}`
+		});
+		return undefined;
+	}
+
+	if (seconds > MAX_DUR) {
+		addError(
+			ctx,
+			'bad-value',
+			`${key} of ${seconds} holds the scene still for over ${MAX_DUR} seconds.`,
+			node,
+			{hint: `${key}: is seconds, not milliseconds.`, severity: 'warning'}
+		);
+	}
+
+	return seconds;
+}
+
+/**
  * `dur:` — how long a beat holds the screen, in seconds.
  *
  * Shared by the beat body and by the `box:` map, which are the only two places that can
@@ -675,30 +715,7 @@ interface EntityBody {
  * is being read.
  */
 function parseDur(ctx: Ctx, node: unknown): number | undefined {
-	const dur = asNumber(ctx, node, 'dur');
-
-	if (dur === undefined) {
-		return undefined;
-	}
-
-	if (dur < 0) {
-		addError(ctx, 'bad-value', `dur of ${dur} is not a length of time.`, node, {
-			hint: 'dur: is seconds. dur: 0 snaps and moves straight on.'
-		});
-		return undefined;
-	}
-
-	if (dur > MAX_DUR) {
-		addError(
-			ctx,
-			'bad-value',
-			`dur of ${dur} holds the scene still for over ${MAX_DUR} seconds.`,
-			node,
-			{hint: 'dur: is seconds, not milliseconds.', severity: 'warning'}
-		);
-	}
-
-	return dur;
+	return parseSeconds(ctx, node, 'dur', 'dur: 0 snaps and moves straight on.');
 }
 
 /**
@@ -1739,6 +1756,25 @@ export function parseScene(text: string): ParseResult {
 				}
 
 				scene.fx = fx;
+				break;
+			}
+
+			case 'autoAdvance': {
+				if (isNullNode(pair.value)) {
+					break; // `autoAdvance: ~` is "no opinion", i.e. leave it to the reader.
+				}
+
+				const seconds = parseSeconds(
+					ctx,
+					pair.value,
+					'autoAdvance',
+					'autoAdvance: 0 waits for a click.'
+				);
+
+				if (seconds !== undefined) {
+					scene.autoAdvance = seconds;
+				}
+
 				break;
 			}
 

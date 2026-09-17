@@ -229,6 +229,13 @@
 				"color": "Color",
 				"name": "Name"
 			},
+			"sceneAutoAdvance": "New Scene Auto-Advance",
+			"sceneAutoAdvanceExplanation": "A template only. Insert Scene fills in the skeleton's autoAdvance: line with this, so a story with one pace does not retype it. It never changes how a scene already written plays, and the published story only ever reads the autoAdvance: in a scene's own text.",
+			"sceneAutoAdvances": {
+				"click": "0s \u2014 wait for a click",
+				"reader": "Leave it to the reader",
+				"seconds": "{{value}}s"
+			},
 			"themeLight": "Light",
 			"themeDark": "Dark",
 			"themeSystem": "System",
@@ -357,7 +364,7 @@
 			"beatProps": {
 				"as": "Style",
 				"auto": "Auto",
-				"autoDetail": "Advance automatically, at the reader's own pace. Off holds this beat for the time in Hold.",
+				"autoDetail": "Advance automatically, at the scene's own pace \u2014 or the reader's, if the scene sets none. Off holds this beat for the time in Hold.",
 				"dur": "Hold",
 				"inherit": "—",
 				"place": "Place"

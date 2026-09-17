@@ -21,6 +21,7 @@ id: scene-id                    # globally unique; needed only if something poin
 from: ~                         # inherit: other-scene, other-scene@enter, other-scene@mark-name
 bg: backdrop-id                 # asset id, never a path
 camera: {at: [0, 0], zoom: 1}   # origin is screen centre, +y is UP
+autoAdvance: ~                  # seconds an untimed beat holds; 0 waits for a click
 
 cast:
   mira:  {at: -0.4, frame: idle}

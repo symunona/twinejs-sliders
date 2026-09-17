@@ -27,6 +27,7 @@ import {
 	interceptScenePrefill,
 	sceneLinkSeeds
 } from './scene-preview/prefill-links';
+import {insertSceneAutoAdvance} from './scene-preview/insert-scene-pref';
 import {useSceneParse} from './scene-preview/use-scene-parse';
 import {FIX_ORIGIN} from './scene-preview/use-scene-writer';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
@@ -227,7 +228,10 @@ export const PassageEditContents: React.FC<
 		// document to catch up, so it rides the same deferral the selection does.
 		const prefill = interceptScenePrefill(
 			cmEditor,
-			sceneLinkSeeds(passage.name, sceneText, story.passages)
+			sceneLinkSeeds(passage.name, sceneText, story.passages),
+			// A template seed and nothing more: it fills in the skeleton's inert
+			// `autoAdvance: ~` so a story with one pace does not retype it per scene.
+			insertSceneAutoAdvance()
 		);
 
 		cmEditor.execCommand(name);

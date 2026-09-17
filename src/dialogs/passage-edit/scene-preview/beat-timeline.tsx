@@ -31,6 +31,13 @@ export interface BeatTimelineProps {
 	/** Expanded: the strip grows downward and names every beat it has room for. */
 	labels: boolean;
 	onBeatChange: (beat: number) => void;
+	/**
+	 * The scene's `autoAdvance:` in ms, for the beats that did not time themselves.
+	 *
+	 * Optional so a caller with no scene in hand still gets the standard beat, which is
+	 * also what `holdTimes` tests expect at their own arity.
+	 */
+	autoAdvanceMs?: number;
 }
 
 /** Height of one label row, px. Must match `--sliders-timeline-row` in the CSS. */
@@ -51,18 +58,22 @@ interface Metrics {
  *
  * State 0 was produced by no beat and takes the default; state N by `beats[N - 1]`.
  */
-export function holdTimes(beats: Beat[]): number[] {
-	return [undefined, ...beats].map(beat => beatHoldMs(beat));
+export function holdTimes(beats: Beat[], defaultMs?: number): number[] {
+	return [undefined, ...beats].map(beat => beatHoldMs(beat, defaultMs));
 }
 
 export const BeatTimeline: React.FC<BeatTimelineProps> = ({
+	autoAdvanceMs,
 	beat,
 	beats,
 	labels,
 	onBeatChange
 }) => {
 	const {t} = useTranslation();
-	const holds = React.useMemo(() => holdTimes(beats), [beats]);
+	const holds = React.useMemo(
+		() => holdTimes(beats, autoAdvanceMs),
+		[autoAdvanceMs, beats]
+	);
 	const inner = React.useRef<HTMLDivElement>(null);
 	const markRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 	const labelRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
@@ -140,7 +151,9 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = ({
 		// between the strip and a render loop is every dependency being identity-stable --
 		// and `t` out of `useTranslation` is not.
 		setMetrics(current => (sameMetrics(current, next) ? current : next));
-	}, [beat, holds.length, labels, textKey, width]);
+		// `holds` and not just its length: the gaps grow in proportion to it, so the scene's
+		// own pace moves every marker the labels are placed against.
+	}, [beat, holds, labels, textKey, width]);
 
 	const nearest = React.useCallback(
 		(clientX: number) => {

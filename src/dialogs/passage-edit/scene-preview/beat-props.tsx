@@ -32,13 +32,24 @@ export interface BeatPropsProps {
 	onSetKey: (key: string, value: unknown) => void;
 	/** One key of the beat's `bubble:` map. `null` removes it. */
 	onSetBubble: (key: keyof BubbleStyle, value: unknown) => void;
+	/**
+	 * The pace this beat runs at when it carries no `dur:`, in ms — the scene's own
+	 * `autoAdvance:` if it has one, and the standard beat otherwise.
+	 *
+	 * Only unchecking Auto reads it. The number it writes has to be the timing the beat
+	 * ALREADY had, or a checkbox that claims to be turning automatic advance off would
+	 * quietly re-time the line as well.
+	 */
+	autoAdvanceMs?: number;
 }
 
 /** The empty option: "whatever the character or the renderer already says". */
 const INHERIT = '';
 
-/** What unchecking Auto puts in the box, in seconds: the pace the reader would have had. */
-const DEFAULT_HOLD = AUTO_ADVANCE_MS / 1000;
+/** What unchecking Auto puts in the box, in seconds: the pace the beat already ran at. */
+function defaultHold(autoAdvanceMs: number | undefined): number {
+	return (autoAdvanceMs ?? AUTO_ADVANCE_MS) / 1000;
+}
 
 /** Beats with a body map, so somewhere to write a key. `box:` has a long form too. */
 function hasBody(beat: Beat | undefined): boolean {
@@ -55,6 +66,7 @@ function styleOf(beat: Beat | undefined): BubbleStyle | undefined {
 }
 
 export const BeatProps: React.FC<BeatPropsProps> = ({
+	autoAdvanceMs,
 	beat,
 	editable,
 	onSetKey,
@@ -131,7 +143,10 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 					onChange={next =>
 						// Unchecking has to leave a number behind, or the box the author just
 						// enabled would be empty and mean the thing they turned off.
-						onSetKey('dur', next ? null : Number(dur.trim()) || DEFAULT_HOLD)
+						onSetKey(
+							'dur',
+							next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
+						)
 					}
 					value={auto}
 				/>

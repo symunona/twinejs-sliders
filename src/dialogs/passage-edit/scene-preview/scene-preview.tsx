@@ -31,7 +31,7 @@ import {parseLinkText} from '@sliders/render-dom';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
-import {beatHoldMs} from './beat-hold';
+import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatProps} from './beat-props';
 import {BeatTimeline} from './beat-timeline';
 import {BubbleEditor} from './bubble-editor';
@@ -262,6 +262,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// have to line up with the document CodeMirror is holding right now.
 	const block = React.useMemo(() => extractSceneBlock(text), [text]);
 	const lastBeat = Math.max(0, parse.states.length - 1);
+	/**
+	 * The scene's own pace, for every beat that did not time itself. Primitives, so they are
+	 * safe in an effect's dependency list where `parse.result` is a fresh object per parse.
+	 *
+	 * Two of them because the zero splits them. `autoAdvanceMs` is the scene's raw answer,
+	 * `0` included, and only the play timer reads it — it is the one thing here that can
+	 * decline to schedule. `holdMs` is the same answer as a LENGTH, for drawing the strip
+	 * and for the number unchecking Auto writes.
+	 */
+	const autoAdvanceMs = sceneAutoAdvanceMs(parse.result?.scene);
+	const holdMs = sceneHoldMs(parse.result?.scene);
 	const parsedStage = parse.states[Math.min(beat, lastBeat)];
 	/**
 	 * The stage in AUTHORED space: `at` is the number in the YAML, `of` intact. The drag
@@ -919,7 +930,28 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	function goToNextBeat() {
 		setPlaying(false);
+		stepBeat();
+	}
 
+	/**
+	 * The full-screen tap, which is the reader asking for the next beat rather than the
+	 * author scrubbing — so unlike the Next button it does NOT stop playback.
+	 *
+	 * That only matters in a scene whose `autoAdvance:` is 0: playback parks on every
+	 * untimed beat waiting for this tap, and a beat the author DID time has to run on its
+	 * own afterwards, exactly as it does in the player. Stopping playback here would make
+	 * the tap the only thing that ever moves, and a `dur:` beat would sit there needing one
+	 * too.
+	 */
+	function advanceAsReader() {
+		if (autoAdvanceMs !== 0) {
+			setPlaying(false);
+		}
+
+		stepBeat();
+	}
+
+	function stepBeat() {
 		// Past the last beat the scene is over, and a scene with exactly one way out has
 		// only one place "next" could mean: the passage that link goes to. Two or more and
 		// the author has to say which, so the button stops here.
@@ -957,13 +989,32 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
+		const producedBy = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
+
+		// `autoAdvance: 0` is the author asking the READER to click, and full screen is the
+		// only place in the editor where there is a reader to ask: the stage is a tap target
+		// there (see `canAdvance`), exactly as it is in the player. So playback stops on
+		// this beat and the tap moves it on, which is what the published story does.
+		//
+		// Docked, that affordance does not exist, so honouring the wait would be a stage
+		// that freezes for no visible reason. It takes the standard beat instead, and the
+		// author sees the pacing of everything they DID time.
+		if (
+			producedBy?.dur === undefined &&
+			producedBy?.kind !== 'wait' &&
+			autoAdvanceMs === 0 &&
+			fullScreen
+		) {
+			return;
+		}
+
 		const timer = window.setTimeout(
 			() => setBeat(b => b + 1),
-			beatHoldMs(beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined)
+			beatHoldMs(producedBy, holdMs)
 		);
 
 		return () => window.clearTimeout(timer);
-	}, [beat, lastBeat, parse.result, playing]);
+	}, [autoAdvanceMs, beat, fullScreen, holdMs, lastBeat, parse.result, playing]);
 
 	// Full screen takes focus, for two reasons that happen to want the same thing: the
 	// preview's own keys resolve from where focus is, and Escape has to be the preview's
@@ -1276,7 +1327,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			bgLocked={bgLocked}
 			editable={editable}
 			grid={grid}
-			onAdvance={canAdvance ? goToNextBeat : undefined}
+			onAdvance={canAdvance ? advanceAsReader : undefined}
 			onCameraPatch={setCamera}
 			onCancel={handleCancel}
 			onCommit={handleCommit}
@@ -1315,6 +1366,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
 			<BeatProps
+				autoAdvanceMs={holdMs}
 				beat={shownBeat}
 				editable={editable}
 				onSetBubble={handleBeatBubble}
@@ -1390,6 +1442,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		>
 			{bar}
 			<BeatTimeline
+				autoAdvanceMs={holdMs}
 				beat={beat}
 				beats={parse.result?.scene.beats ?? EMPTY_BEATS}
 				labels={timelineLabels}

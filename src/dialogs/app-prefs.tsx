@@ -5,6 +5,10 @@ import {DialogCard, DialogCardProps} from '../components/container/dialog-card';
 import {CheckboxButton} from '../components/control/checkbox-button';
 import {FontSelect} from '../components/control/font-select';
 import {TextSelect} from '../components/control/text-select';
+import {
+	insertSceneAutoAdvance,
+	setInsertSceneAutoAdvance
+} from './passage-edit/scene-preview/insert-scene-pref';
 import {setPref, usePrefsContext} from '../store/prefs';
 import {closestAppLocale, locales} from '../util/locales';
 import './app-prefs.css';
@@ -14,6 +18,21 @@ export const AppPrefsDialog: React.FC<
 > = props => {
 	const {dispatch, prefs} = usePrefsContext();
 	const {t} = useTranslation();
+	/**
+	 * Not in the prefs store: this is a template seed for Insert Scene, kept in
+	 * localStorage, and it never reaches a story file or the sync wire. State here only so
+	 * the select redraws after a change — nothing else in the app reads it live.
+	 */
+	const [sceneAutoAdvance, setSceneAutoAdvance] = React.useState(
+		insertSceneAutoAdvance
+	);
+
+	function handleSceneAutoAdvanceChange(value: string) {
+		const seconds = value === '' ? undefined : Number(value);
+
+		setInsertSceneAutoAdvance(seconds);
+		setSceneAutoAdvance(seconds);
+	}
 
 	function handleUseCodeMirrorChange(value: boolean) {
 		dispatch(setPref('useCodeMirror', value));
@@ -83,6 +102,23 @@ export const AppPrefsDialog: React.FC<
 				>
 					{t('dialogs.appPrefs.passageTagDisplay')}
 				</TextSelect>
+				<TextSelect
+					onChange={e => handleSceneAutoAdvanceChange(e.target.value)}
+					options={[
+						{label: t('dialogs.appPrefs.sceneAutoAdvances.reader'), value: ''},
+						{label: t('dialogs.appPrefs.sceneAutoAdvances.click'), value: '0'},
+						...['1', '1.5', '2', '3', '5'].map(value => ({
+							label: t('dialogs.appPrefs.sceneAutoAdvances.seconds', {value}),
+							value
+						}))
+					]}
+					value={sceneAutoAdvance === undefined ? '' : String(sceneAutoAdvance)}
+				>
+					{t('dialogs.appPrefs.sceneAutoAdvance')}
+				</TextSelect>
+				<p className="app-prefs-explanation">
+					{t('dialogs.appPrefs.sceneAutoAdvanceExplanation')}
+				</p>
 				<CheckboxButton
 					disabled={!prefs.useCodeMirror}
 					label={t('dialogs.appPrefs.editorCursorBlinks')}

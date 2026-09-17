@@ -246,6 +246,33 @@ export function prefillSceneLinks(skeleton: string, seeds: SceneLinkSeeds): stri
 }
 
 /**
+ * The skeleton carries `autoAdvance: ~`, which parses as "no opinion" and changes nothing.
+ * When the author has set a default for new scenes, that inert line becomes their number.
+ *
+ * Only that exact line is touched, so a scene the author has already given a value keeps
+ * it, and a snippet with no such line is left alone. This is the ONLY thing the preference
+ * does: it types a line for you at insert time and has no say in how anything plays.
+ */
+export function prefillSceneAutoAdvance(
+	skeleton: string,
+	seconds: number | undefined
+): string {
+	if (seconds === undefined) {
+		return skeleton;
+	}
+
+	// Keeping the column the comments are aligned on: the value replaces `~` in place, and
+	// the padding after it shrinks by however much longer the number is. A number wider
+	// than the padding just pushes the comment right, which is what any other long value
+	// in the skeleton already does.
+	return skeleton.replace(
+		/^(autoAdvance:\s*)~( *)/m,
+		(_, head: string, pad: string) =>
+			`${head}${seconds}${' '.repeat(Math.max(1, pad.length - String(seconds).length + 1))}`
+	);
+}
+
+/**
  * Watch for a scene skeleton being inserted, and rewrite its links once it has landed.
  *
  * Two steps, and not by choice. `beforeChange` sees the text but cannot alter it: the
@@ -277,7 +304,8 @@ function endOfInsert(
 
 export function interceptScenePrefill(
 	editor: CodeMirror.Editor,
-	seeds: SceneLinkSeeds
+	seeds: SceneLinkSeeds,
+	autoAdvance?: number
 ): ScenePrefill {
 	let landing: {from: CodeMirror.Position; lines: string[]} | undefined;
 
@@ -314,7 +342,10 @@ export function interceptScenePrefill(
 				return;
 			}
 
-			const next = prefillSceneLinks(text, seeds);
+			const next = prefillSceneAutoAdvance(
+				prefillSceneLinks(text, seeds),
+				autoAdvance
+			);
 
 			if (next !== text) {
 				editor.replaceRange(next, from, to, '+input');
