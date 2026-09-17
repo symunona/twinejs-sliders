@@ -12,6 +12,8 @@ import {
 	removeEntities,
 	removeEntity,
 	removeEntityKey,
+	setBeatBubble,
+	setBeatKey,
 	setEntityKey,
 	type TextEdit
 } from '../index';
@@ -530,5 +532,120 @@ describe('half-typed and malformed input', () => {
 		}
 
 		expect(entry.scale).toBe(0.8);
+	});
+});
+
+describe('setBeatKey()', () => {
+	const beats = [
+		'beats:',
+		'  - mira: {at: 0.2}',
+		'  - mira: "Hello."',
+		'  - mira: {say: "Again.", dur: 2}',
+		'  - box: "The candle gutters."',
+		'  - wait: 0.5',
+		''
+	].join('\n');
+
+	function applied(text: string, index: number, key: string, value: unknown) {
+		const edit = setBeatKey(text, index, key, value);
+
+		return edit
+			? text.slice(0, edit.from) + edit.insert + text.slice(edit.to)
+			: undefined;
+	}
+
+	it('adds a key to a beat that already has a map', () => {
+		expect(applied(beats, 0, 'dur', 0.8)).toContain(
+			'- mira: {at: 0.2, dur: 0.8}'
+		);
+	});
+
+	it('changes a key that is already there, in place', () => {
+		expect(applied(beats, 2, 'dur', 0.5)).toContain(
+			'- mira: {say: "Again.", dur: 0.5}'
+		);
+	});
+
+	it('removes a key on null', () => {
+		expect(applied(beats, 2, 'dur', null)).toContain('- mira: {say: "Again."}');
+	});
+
+	// The one rewrite it allows itself, and the dialogue has to survive it byte for byte.
+	it('promotes a bare line of dialogue, quotes and all', () => {
+		expect(applied(beats, 1, 'dur', 2)).toContain(
+			'- mira: {say: "Hello.", dur: 2}'
+		);
+	});
+
+	it('promotes a bare narration box under text:, not say:', () => {
+		expect(applied(beats, 3, 'dur', 1.5)).toContain(
+			'- box: {text: "The candle gutters.", dur: 1.5}'
+		);
+	});
+
+	// `- wait:` IS a duration and has no body map to write a second one into.
+	it('refuses a command beat', () => {
+		expect(setBeatKey(beats, 4, 'dur', 1)).toBeUndefined();
+	});
+
+	it('refuses a beat index that does not exist', () => {
+		expect(setBeatKey(beats, 99, 'dur', 1)).toBeUndefined();
+	});
+
+	// Nothing to remove from a line that is still just a line.
+	it('does nothing removing a key a bare beat never had', () => {
+		expect(setBeatKey(beats, 1, 'dur', null)).toBeUndefined();
+	});
+
+	it('leaves a block-form beat in block form', () => {
+		const block = [
+			'beats:',
+			'  - mira:',
+			'      say: "Hello."',
+			''
+		].join('\n');
+
+		expect(applied(block, 0, 'dur', 0.8)).toBe(
+			['beats:', '  - mira:', '      say: "Hello."', '      dur: 0.8', ''].join(
+				'\n'
+			)
+		);
+	});
+});
+
+describe('setBeatBubble() style keys', () => {
+	const beats = [
+		'beats:',
+		'  - mira: "Hello."',
+		'  - mira: {say: "Again.", bubble: {as: yell}}',
+		''
+	].join('\n');
+
+	function applied(index: number, geometry: Parameters<typeof setBeatBubble>[2]) {
+		const edit = setBeatBubble(beats, index, geometry);
+
+		return edit
+			? beats.slice(0, edit.from) + edit.insert + beats.slice(edit.to)
+			: undefined;
+	}
+
+	it('writes a style token onto a bare line', () => {
+		expect(applied(0, {as: 'whisper'})).toContain(
+			'- mira: {say: "Hello.", bubble: {as: whisper}}'
+		);
+	});
+
+	it('changes a token that is already there', () => {
+		expect(applied(1, {as: 'whisper'})).toContain('bubble: {as: whisper}');
+	});
+
+	it('removes a token on null', () => {
+		expect(applied(1, {as: null})).toContain('- mira: {say: "Again.", bubble: {}}');
+	});
+
+	it('adds place beside an existing token', () => {
+		expect(applied(1, {place: 'top'})).toContain(
+			'bubble: {as: yell, place: top}'
+		);
 	});
 });

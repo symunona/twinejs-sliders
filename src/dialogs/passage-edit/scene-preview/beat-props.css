@@ -1,0 +1,28 @@
+/* Mirrors `.scene-preview-selection` at the other end of the stage: an overlay, so it can
+   appear and disappear as the scrubber moves without ever shifting the scene under it. */
+.scene-preview-beat-props {
+	align-items: center;
+	background: var(--white-translucent);
+	bottom: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	left: 0;
+	padding: 2px 4px;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	/* Above the marker layer and the selection box, below the resize handles -- the handles
+	   are what an author reaches for on a sprite near the floor. */
+	z-index: 4;
+}
+
+.scene-preview-beat-props > * {
+	pointer-events: auto;
+}
+
+/* Seconds are two or three characters; a full-width text input here would crowd out the
+   two selects beside it on a docked stage. */
+.scene-preview-beat-props-dur input {
+	width: 5em;
+}

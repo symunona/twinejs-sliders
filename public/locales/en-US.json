@@ -354,6 +354,13 @@
 			"sizeSmall": "Small",
 			"sizeTall": "Tall",
 			"sizeWide": "Wide",
+			"beatProps": {
+				"as": "Style",
+				"dur": "Hold",
+				"durAuto": "auto",
+				"inherit": "—",
+				"place": "Place"
+			},
 			"scenePreview": {
 				"title": "Scene Editor",
 				"errorCount": "{{count}} error",

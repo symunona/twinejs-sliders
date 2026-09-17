@@ -20,6 +20,7 @@ export {
 	removeEntity,
 	removeEntityKey,
 	setBeatBubble,
+	setBeatKey,
 	setEntityKey
 } from './write';
 export type {BubbleGeometry} from './write';

@@ -6,12 +6,13 @@ export interface TextInputProps {
 	children: React.ReactNode;
 	id?: string;
 	list?: string;
+	onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
 	onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 	onInput?: (event: React.FormEvent<HTMLInputElement>) => void;
 	onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
 	orientation?: 'horizontal' | 'vertical';
 	placeholder?: string;
-	type?: 'password' | 'search' | 'text';
+	type?: 'number' | 'password' | 'search' | 'text';
 	value: string;
 }
 
@@ -30,6 +31,7 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
 					<input
 						id={props.id}
 						list={props.list}
+						onBlur={props.onBlur}
 						onChange={props.onChange}
 						onInput={props.onInput}
 						onKeyDown={props.onKeyDown}

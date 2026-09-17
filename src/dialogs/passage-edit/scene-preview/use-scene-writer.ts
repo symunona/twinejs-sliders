@@ -20,6 +20,7 @@ import {
 	removeEntityKey,
 	removeSceneKey,
 	setBeatBubble,
+	setBeatKey,
 	setEntityKey,
 	setSceneKey
 } from '@sliders/scene-edit';
@@ -252,7 +253,26 @@ export interface BubbleWrite {
 	beat: number;
 }
 
+/**
+ * A key on the beat itself — `dur:` today.
+ *
+ * Addressed by beat index like `BubbleWrite`, and for the same reason: timing belongs to the
+ * moment, not to whoever happens to be speaking in it. A beat with no speaker at all
+ * (`- box: {…}`) still has a duration.
+ *
+ * Deliberately NOT an `EntityKeyWrite` with a `beat` target: that route goes through
+ * `planEntityWrite`, which refuses a beat the entity does not own — right for a sprite's
+ * position, wrong for a property of the beat.
+ */
+export interface BeatKeyWrite {
+	beat: number;
+	beatKey: string;
+	/** `null` REMOVES the key. `undefined` is not a value — filter it out before writing. */
+	value: unknown;
+}
+
 export type SceneWrite =
+	| BeatKeyWrite
 	| BubbleWrite
 	| EntityKeyWrite
 	| EntityStructWrite
@@ -264,6 +284,10 @@ export function isSceneKeyWrite(write: SceneWrite): write is SceneKeyWrite {
 
 export function isBubbleWrite(write: SceneWrite): write is BubbleWrite {
 	return 'bubble' in write;
+}
+
+export function isBeatKeyWrite(write: SceneWrite): write is BeatKeyWrite {
+	return 'beatKey' in write;
 }
 
 export function isStructWrite(write: SceneWrite): write is EntityStructWrite {
@@ -341,6 +365,15 @@ export function buildWriteEdit(
 	context: SceneWriteContext,
 	write: SceneWrite
 ): TextEdit | undefined {
+	if (isBeatKeyWrite(write)) {
+		return setBeatKey(
+			context.blockText,
+			write.beat,
+			write.beatKey,
+			write.value
+		);
+	}
+
 	if (isBubbleWrite(write)) {
 		return setBeatBubble(context.blockText, write.beat, write.bubble);
 	}
@@ -379,7 +412,12 @@ export function buildWriteEdits(
 	const removed = new Map<EntityKind, EntityId[]>();
 
 	for (const write of writes) {
-		if (!isBubbleWrite(write) && isStructWrite(write) && write.struct === 'remove') {
+		if (
+			!isBeatKeyWrite(write) &&
+			!isBubbleWrite(write) &&
+			isStructWrite(write) &&
+			write.struct === 'remove'
+		) {
 			removed.set(write.kind, [...(removed.get(write.kind) ?? []), write.id]);
 			continue;
 		}

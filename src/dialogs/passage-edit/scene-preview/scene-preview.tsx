@@ -32,6 +32,7 @@ import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
 import {beatHoldMs} from './beat-hold';
+import {BeatProps} from './beat-props';
 import {BeatTimeline} from './beat-timeline';
 import {BubbleEditor} from './bubble-editor';
 import {SceneDropMenu, type DropChoice} from './drop-menu';
@@ -513,6 +514,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		(beatIndex: number, geometry: BubbleGeometry) =>
 			commit([{beat: beatIndex, bubble: geometry}], DRAG_ORIGIN),
 		[commit]
+	);
+
+	/**
+	 * The beat toolbar's writes. Addressed by beat index, like the bubble drag.
+	 *
+	 * `EDIT_ORIGIN` rather than `DRAG_ORIGIN`: there is no optimistic stage patch to hold
+	 * open, and these are deliberate one-shot edits an author expects their own undo step
+	 * for -- not the tail of a gesture.
+	 */
+	const handleBeatKey = React.useCallback(
+		(key: string, value: unknown) => {
+			if (beat > 0) {
+				commit([{beat: beat - 1, beatKey: key, value}], EDIT_ORIGIN);
+			}
+		},
+		[beat, commit]
+	);
+	const handleBeatBubble = React.useCallback(
+		(key: keyof BubbleStyle, value: unknown) => {
+			if (beat > 0) {
+				commit([{beat: beat - 1, bubble: {[key]: value}}], EDIT_ORIGIN);
+			}
+		},
+		[beat, commit]
 	);
 
 	/** A gesture was abandoned: neither optimistic value has text coming to replace it. */
@@ -1288,6 +1313,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onCommit={handleBubbleCommit}
 				onDraft={setBubbleDraft}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
+			/>
+			<BeatProps
+				beat={shownBeat}
+				editable={editable}
+				onSetBubble={handleBeatBubble}
+				onSetKey={handleBeatKey}
 			/>
 			<StageSelectionControls
 				assets={assets}

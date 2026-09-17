@@ -646,9 +646,17 @@ const BUBBLE_KEY_ORDER = [
 ] as const;
 
 /** The geometry a drag or a resize produces. `null` removes the key. */
+/**
+ * The bubble keys the editor writes: geometry from a drag, style from the beat toolbar.
+ *
+ * `null` removes the key. Anything absent is left exactly as the author wrote it — the
+ * `bubble:` map is theirs, and a bubble moved after `as: yell` was typed keeps the yell.
+ */
 export interface BubbleGeometry {
 	at?: {x: number; y: number} | null;
 	w?: number | null;
+	as?: string | null;
+	place?: string | null;
 }
 
 /** `[0.7, 0.25]` — fractions of the stage box, so never the bare-number `at:` form. */
@@ -779,6 +787,71 @@ export function setBeatBubble(
 	return {
 		from: range[0],
 		insert: `{${textKey}: ${said}, bubble: ${formatBubbleMap(entries)}}`,
+		to: range[1]
+	};
+}
+
+/**
+ * Set one key on a beat's own body — `dur:`, and whatever the beat toolbar grows next.
+ *
+ * The sibling of `setBeatBubble`, addressed the same way: by beat INDEX, not by entity.
+ * `dur:` belongs to the moment rather than to whoever is speaking in it, and a beat with no
+ * speaker at all (`- box: {…}`) still has one.
+ *
+ * `null` removes the key. A bare scalar beat is promoted to map form, carrying its text
+ * across verbatim — the same one rewrite `setBeatBubble` allows itself, for the same reason:
+ * there is nowhere else to put a key.
+ */
+export function setBeatKey(
+	text: string,
+	index: number,
+	key: string,
+	value: unknown
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+
+	if (!parsed) {
+		return undefined;
+	}
+
+	const beat = locateBeat(parsed, index);
+
+	if (!beat) {
+		return undefined;
+	}
+
+	const body = beat.pair.value;
+
+	if (isMap(body)) {
+		const map = body as YAMLMap;
+		const existing = findPair(map, key);
+
+		if (value === null) {
+			return existing ? removePairEdit(parsed, map, existing) : undefined;
+		}
+
+		return existing
+			? spliceValue(parsed, existing, formatValue(key, value))
+			: insertIntoMap(parsed, map, key, formatValue(key, value));
+	}
+
+	// Nothing to remove from a beat that is still one line of dialogue.
+	if (value === null) {
+		return undefined;
+	}
+
+	const range = rangeOf(body);
+
+	if (!range) {
+		return undefined;
+	}
+
+	const said = text.slice(range[0], range[1]);
+	const textKey = beat.key === 'box' ? 'text' : 'say';
+
+	return {
+		from: range[0],
+		insert: `{${textKey}: ${said}, ${key}: ${formatValue(key, value)}}`,
 		to: range[1]
 	};
 }
