@@ -150,7 +150,6 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							setDraft(undefined);
 						}
 					}}
-					placeholder={t('dialogs.passageEdit.beatProps.durAuto')}
 					type="number"
 					value={dur}
 				>
