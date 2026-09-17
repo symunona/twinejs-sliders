@@ -6,7 +6,7 @@ import {
 	mergeBubbleStyle
 } from '@sliders/render-dom';
 import {AssetResolver, Beat, Stage, Transition} from '@sliders/scene-types';
-import {diffStages} from '@sliders/scene-core';
+import {diffStages, timeTransitions} from '@sliders/scene-core';
 
 export interface SceneStageProps {
 	assets: AssetResolver;
@@ -58,6 +58,13 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	const onLinkRef = React.useRef(onLink);
 	const onRendererRef = React.useRef(onRenderer);
 	const [ready, setReady] = React.useState(false);
+	/**
+	 * Pulled out as a primitive so the apply effect can depend on it.
+	 *
+	 * `beat` itself is a fresh object on every parse, so depending on it would re-apply the
+	 * stage on every keystroke; the number only changes when the author retimes the beat.
+	 */
+	const beatDur = beat?.dur;
 
 	assetsRef.current = assets;
 	onLinkRef.current = onLink;
@@ -116,7 +123,9 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		let transitions: Transition[] = [];
 
 		if (prev) {
-			transitions = diffStages(prev, stage);
+			// The beat's own `dur:` first, then the snap -- a scene being typed into must
+			// not animate whatever the author timed the beat at.
+			transitions = timeTransitions(diffStages(prev, stage), beatDur);
 
 			// Snap while typing: derive the same set but with zero duration, so entities
 			// still enter and exit correctly without animating on every keystroke.
@@ -127,7 +136,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 		prevStageRef.current = stage;
 		void renderer.apply(stage, transitions);
-	}, [animate, ready, stage]);
+	}, [animate, beatDur, ready, stage]);
 
 	/**
 	 * The story's CSS, as one style element inside the stage.

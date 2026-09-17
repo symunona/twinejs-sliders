@@ -12,6 +12,7 @@
  */
 
 import {
+	BEAT_BODY_KEYS,
 	BEAT_COMMAND_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
@@ -54,8 +55,12 @@ const NESTED_KEYS: string[] = [
 
 const TOP_KEYS: string[] = [...TOP_LEVEL_KEYS];
 
-/** Beat commands plus the one key that turns a beat into speech. */
-const BEAT_KEYS: string[] = [...BEAT_COMMAND_KEYS, ...SAY_KEYS];
+/** Beat commands, the keys that turn a beat into speech, and the ones that time it. */
+const BEAT_KEYS: string[] = [
+	...BEAT_COMMAND_KEYS,
+	...SAY_KEYS,
+	...BEAT_BODY_KEYS
+];
 
 /**
  * A value that is exactly one scalar — a number, a boolean/null, or an `@mark` — and so

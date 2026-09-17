@@ -1,6 +1,10 @@
 import {emptyStage} from '@sliders/scene-types';
 import type {Stage, StageEntity, Transition} from '@sliders/scene-types';
-import {DEFAULT_DURATIONS, diffStages} from '../diff-stages';
+import {
+	DEFAULT_DURATIONS,
+	diffStages,
+	timeTransitions
+} from '../diff-stages';
 
 function entity(id: string, partial: Partial<StageEntity> = {}): StageEntity {
 	return {
@@ -351,5 +355,56 @@ describe('diffStages', () => {
 
 		diffStages(prev, next);
 		expect([JSON.stringify(prev), JSON.stringify(next)]).toEqual(snapshot);
+	});
+});
+
+describe('timeTransitions()', () => {
+	const moved = diffStages(
+		stageWith(entity('mira')),
+		stageWith(entity('mira', {at: {x: 0.5, y: 0}}))
+	);
+
+	it('leaves the defaults alone when the beat did not time itself', () => {
+		expect(timeTransitions(moved, undefined)).toBe(moved);
+	});
+
+	it('retimes every transition to the beat', () => {
+		expect(timeTransitions(moved, 0.8).map(t => t.duration)).toEqual(
+			moved.map(() => 0.8)
+		);
+	});
+
+	// `dur:` means "this beat IS the animation", so a beat that moves somebody AND swaps the
+	// backdrop crossfades over one span rather than running two clocks.
+	it('retimes kinds that keep their own clock by default', () => {
+		const both = diffStages(
+			stage({bg: 'night', entities: {mira: entity('mira')}}),
+			stage({
+				bg: 'dawn',
+				entities: {mira: entity('mira', {at: {x: 0.5, y: 0}})}
+			})
+		);
+
+		expect(both.map(t => t.kind).sort()).toEqual(['bg', 'move']);
+		expect(new Set(timeTransitions(both, 0.4).map(t => t.duration))).toEqual(
+			new Set([0.4])
+		);
+		// The default table really did disagree, so the assertion above is load-bearing.
+		expect(DEFAULT_DURATIONS.bg).not.toBe(DEFAULT_DURATIONS.move);
+	});
+
+	it('snaps on zero', () => {
+		expect(timeTransitions(moved, 0).every(t => t.duration === 0)).toBe(true);
+	});
+
+	it('does not mutate what it was given', () => {
+		const before = moved.map(t => t.duration);
+
+		timeTransitions(moved, 5);
+		expect(moved.map(t => t.duration)).toEqual(before);
+	});
+
+	it('clamps a negative length rather than animating backwards', () => {
+		expect(timeTransitions(moved, -2).every(t => t.duration === 0)).toBe(true);
 	});
 });

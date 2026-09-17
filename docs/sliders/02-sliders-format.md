@@ -235,6 +235,29 @@ bg is the backdrop, outside the layer stack.
 | `- fx: thunder` | fire an effect |
 | `- mark: tense` | name this state so `from:` can target it. Renders nothing. |
 
+### Timing — `dur:`
+
+A beat with no `dur:` waits for the reader if it says something, and plays straight on if
+it only stages something. `dur:` times it instead, and because **a beat is the animation**,
+the same number is how long its stage changes take.
+
+```yaml
+beats:
+  - mira: {at: 0.3, dur: 0.8}       # slides over 0.8s, then straight on
+  - mira: {say: "Over here!"}       # waits for a click
+  - mira: {say: "…", dur: 2}        # bubble up, 2s, next beat
+  - box: {text: "Silence.", dur: 2} # long form only
+  - wait: 1.5                       # still the explicit hold
+```
+
+| Rule | |
+|---|---|
+| Where | inside a beat body, beside `say:`. An `unknown-key` in `cast:`/`props:` — timing belongs to a moment, not to a sprite. |
+| Beats the reader | `dur:` overrides `sliders.autoAdvance`. The author timed the line; a preference must not stretch it. |
+| `dur: 0` | snap and move straight on. A warning on a line of dialogue — nobody can read it. |
+| Last beat | still waits for the reader whatever its `dur:` — otherwise the links under the stage appear mid-sentence. |
+| No `dur:` on | `wait` (it *is* a duration), `fx`, `mark` — all scalars with no body map, and none of them are read. |
+
 ## Speech styles
 
 Two keys on a say beat, and the same two inside a `box:` map:

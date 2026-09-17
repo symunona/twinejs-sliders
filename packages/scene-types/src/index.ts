@@ -153,6 +153,21 @@ export interface BeatBase {
 	kind: BeatKind;
 	/** Index in the scene's beat list. */
 	index: number;
+	/**
+	 * How long this beat holds the screen, in seconds — and, because a beat IS the
+	 * animation, how long its stage changes take to play.
+	 *
+	 * Absent is today's behaviour: a `say` or `box` waits for the reader (or for the
+	 * reader's own `sliders.autoAdvance`), and a stage-only beat falls straight through in
+	 * the same tick. Present, it beats the reader's setting — the author timed this line,
+	 * and a preference must not stretch or shorten it.
+	 *
+	 * On `BeatBase` rather than on the three interfaces that can actually carry it, so
+	 * nothing has to remember to copy it. The PARSER is the gate: `wait`, `fx` and `mark`
+	 * are written as scalars with no body map to put a `dur:` in, so they never get one.
+	 * (`wait` *is* a duration; a second spelling of it would be two ways to say one thing.)
+	 */
+	dur?: number;
 }
 
 /**

@@ -1,5 +1,6 @@
 import {extractSceneBlock} from '@sliders/scene-index';
 import {
+	BEAT_BODY_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
@@ -230,7 +231,11 @@ describe('sceneHintContext()', () => {
 
 		it('lets a beat say as well as move', () => {
 			expect(contextAt('[scene]\nbeats:\n  - mira: {|}')).toMatchObject({
-				slot: {id: 'beat', kind: 'keys', names: [...ENTITY_KEYS, ...SAY_KEYS]}
+				slot: {
+					id: 'beat',
+					kind: 'keys',
+					names: [...ENTITY_KEYS, ...SAY_KEYS, ...BEAT_BODY_KEYS]
+				}
 			});
 		});
 

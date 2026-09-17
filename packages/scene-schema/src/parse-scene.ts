@@ -68,10 +68,22 @@ export const ENTITY_KEYS = [
 export const BEAT_COMMAND_KEYS = ['box', 'wait', 'fx', 'mark'] as const;
 
 /** Keys accepted inside a `box:` map. The scalar form `box: "text"` stays the short way. */
-export const BOX_KEYS = ['text', 'as', 'bubble'] as const;
+export const BOX_KEYS = ['text', 'as', 'bubble', 'dur'] as const;
 
 /** Keys a beat may add to its speaker's entry beyond the entity keys. */
 export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
+
+/**
+ * Keys a beat body accepts that belong neither to the entity nor to its speech.
+ *
+ * Kept apart from `SAY_KEYS` because a beat that only stages something (`- mira: {at: 0.3,
+ * dur: 0.8}`) takes these and says nothing, and apart from `ENTITY_KEYS` because they must
+ * stay an unknown key inside `cast:` / `props:` / `entities:` — timing belongs to a moment,
+ * not to a sprite.
+ *
+ * Not `BEAT_KEYS`: that name is already a local in the format's `scene-mode.ts`.
+ */
+export const BEAT_BODY_KEYS = ['dur'] as const;
 
 export const CAMERA_KEYS = ['at', 'zoom'] as const;
 
@@ -85,6 +97,12 @@ const ONLY_TAG = '!only';
  * fraction. A warning, not an error — a deliberately huge prop is a legitimate effect.
  */
 const MAX_SCALE = 10;
+
+/**
+ * Past this a beat sits still for a minute, which is almost always seconds-vs-milliseconds.
+ * A warning, not an error — a deliberately long hold is a legitimate effect.
+ */
+const MAX_DUR = 60;
 
 interface Ctx {
 	errors: SceneError[];
@@ -624,8 +642,51 @@ interface EntityBody {
 	sayNode?: unknown;
 	/** From `as:` and `bubble:`. Only a beat can carry these. */
 	style?: BubbleStyle;
+	/**
+	 * From `dur:`. Only a beat can carry it.
+	 *
+	 * Deliberately NOT inside `patch`: `patch` is `Omit<StageEntity, …>`, so a `dur` there
+	 * would be merged onto a live entity by `mergePatch`, and would make `hasPatch` true —
+	 * turning `- mira: {dur: 1}` into a set beat that stages nothing.
+	 */
+	dur?: number;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
 	ofNode?: unknown;
+}
+
+/**
+ * `dur:` — how long a beat holds the screen, in seconds.
+ *
+ * Shared by the beat body and by the `box:` map, which are the only two places that can
+ * carry one. Zero is legal and means "snap, then move straight on"; the warning about a
+ * `dur: 0` on a line of dialogue is the caller's job, since only it knows whether anything
+ * is being read.
+ */
+function parseDur(ctx: Ctx, node: unknown): number | undefined {
+	const dur = asNumber(ctx, node, 'dur');
+
+	if (dur === undefined) {
+		return undefined;
+	}
+
+	if (dur < 0) {
+		addError(ctx, 'bad-value', `dur of ${dur} is not a length of time.`, node, {
+			hint: 'dur: is seconds. dur: 0 snaps and moves straight on.'
+		});
+		return undefined;
+	}
+
+	if (dur > MAX_DUR) {
+		addError(
+			ctx,
+			'bad-value',
+			`dur of ${dur} holds the scene still for over ${MAX_DUR} seconds.`,
+			node,
+			{hint: 'dur: is seconds, not milliseconds.', severity: 'warning'}
+		);
+	}
+
+	return dur;
 }
 
 /**
@@ -639,7 +700,9 @@ function parseEntityBody(
 	selfId?: string
 ): EntityBody {
 	const body: EntityBody = {patch: {}};
-	const valid = allowSay ? [...ENTITY_KEYS, ...SAY_KEYS] : ENTITY_KEYS;
+	const valid = allowSay
+		? [...ENTITY_KEYS, ...SAY_KEYS, ...BEAT_BODY_KEYS]
+		: ENTITY_KEYS;
 	/**
 	 * Scanned up front because YAML map order is the author's, not ours: `{at: 0.4, of: table}`
 	 * has to read the same as `{of: table, at: 0.4}`, and `at` is otherwise parsed before the
@@ -860,6 +923,18 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'dur': {
+				if (!allowSay) {
+					addError(ctx, 'unknown-key', `Unknown key 'dur'.`, pair.key, {
+						hint: 'dur: times one moment, so it only belongs to a beat.'
+					});
+					break;
+				}
+
+				body.dur = parseDur(ctx, pair.value);
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					hint: keyHint(key, valid)
@@ -1011,7 +1086,11 @@ function isExplodedBeat(key: string, extras: Pair<unknown, unknown>[]): boolean 
 		return false;
 	}
 
-	const bodyKeys: readonly string[] = [...ENTITY_KEYS, ...SAY_KEYS];
+	const bodyKeys: readonly string[] = [
+		...ENTITY_KEYS,
+		...SAY_KEYS,
+		...BEAT_BODY_KEYS
+	];
 
 	return extras.every(extra => {
 		const name = keyName(extra);
@@ -1103,6 +1182,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	let text: string | undefined;
 	let style: BubbleStyle | undefined;
 	let textNode: unknown;
+	let dur: number | undefined;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
 		const key = keyName(pair);
@@ -1125,6 +1205,11 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 				break;
 			}
 
+			case 'dur': {
+				dur = parseDur(ctx, pair.value);
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown box key '${key}'.`, pair.key, {
 					hint: keyHint(key, BOX_KEYS)
@@ -1140,7 +1225,13 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	}
 
 	collectLinks(ctx, text, textNode ?? map);
-	return {index, kind: 'box', text, ...(style ? {style} : {})};
+	return {
+		index,
+		kind: 'box',
+		text,
+		...(style ? {style} : {}),
+		...(dur !== undefined ? {dur} : {})
+	};
 }
 
 function parseBeat(
@@ -1215,6 +1306,22 @@ function parseBeat(
 				const hasPatch = Object.keys(body.patch).length > 0;
 
 				if (body.say !== undefined) {
+					// A line held for no time is read by nobody. Zero is meaningful on a beat
+					// that only stages something -- snap, then straight on -- so the warning
+					// belongs here rather than in parseDur.
+					if (body.dur === 0) {
+						addError(
+							ctx,
+							'bad-value',
+							'dur: 0 shows this line for no time at all.',
+							pair.value,
+							{
+								hint: 'Leave dur: off to wait for the reader.',
+								severity: 'warning'
+							}
+						);
+					}
+
 					collectLinks(ctx, body.say, body.sayNode ?? pair.value);
 					return {
 						index,
@@ -1222,7 +1329,8 @@ function parseBeat(
 						text: body.say,
 						who,
 						...(hasPatch ? {patch: body.patch} : {}),
-						...(body.style ? {style: body.style} : {})
+						...(body.style ? {style: body.style} : {}),
+						...(body.dur !== undefined ? {dur: body.dur} : {})
 					};
 				}
 
@@ -1234,12 +1342,20 @@ function parseBeat(
 						pair.value,
 						body.style
 							? {hint: 'A style needs a line to paint: add say: to this beat.'}
+							: body.dur !== undefined
+							? {hint: 'dur: times a beat, it cannot be the whole of one.'}
 							: undefined
 					);
 					return undefined;
 				}
 
-				return {index, kind: 'set', patch: body.patch, who};
+				return {
+					index,
+					kind: 'set',
+					patch: body.patch,
+					who,
+					...(body.dur !== undefined ? {dur: body.dur} : {})
+				};
 			}
 
 			addError(

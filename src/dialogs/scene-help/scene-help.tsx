@@ -15,6 +15,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Tab, TabList, TabPanel, Tabs} from 'react-tabs';
 import {
+	BEAT_BODY_KEYS,
 	BEAT_COMMAND_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,
@@ -71,6 +72,13 @@ const CAMERA_HELP: KeyHelp<typeof CAMERA_KEYS> = {
 	zoom: '1 is the whole stage. Above 1 moves in.'
 };
 
+/**
+ * One sentence, two tables: a beat body and a `box:` map both take `dur:` and mean the
+ * same thing by it.
+ */
+const DUR_HELP =
+	'Seconds this beat holds the screen, and how long its stage changes take. Without it, a line waits for the reader and a stage-only beat plays straight on.';
+
 const BEAT_HELP: KeyHelp<typeof BEAT_COMMAND_KEYS> = {
 	box: 'Narration, with nobody speaking.',
 	fx: 'Fire an effect for this beat.',
@@ -87,7 +95,12 @@ const SAY_HELP: KeyHelp<typeof SAY_KEYS> = {
 const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 	as: 'The style, by name. Same tokens a bubble uses.',
 	bubble: 'Style and placement, as a map.',
+	dur: DUR_HELP,
 	text: 'The narration itself. box: "…" is the short way of writing this.'
+};
+
+const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
+	dur: DUR_HELP
 };
 
 const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
@@ -343,6 +356,14 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 								))}
 							</tbody>
 						</table>
+						<h3>Timing</h3>
+						<p>
+							A beat with no <code>dur:</code> waits for the reader if it says
+							something, and plays straight on if it only stages something.{' '}
+							<code>dur:</code> times it instead — and because a beat is the
+							animation, the same number is how long its moves take.
+						</p>
+						<KeyTable keys={BEAT_BODY_KEYS} help={BEAT_BODY_HELP} />
 						<h3>Speaking</h3>
 						<KeyTable keys={SAY_KEYS} help={SAY_HELP} />
 						<h3>Narration, the long way</h3>

@@ -16,6 +16,7 @@ import CodeMirror, {Editor} from 'codemirror';
 import * as React from 'react';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {
+	BEAT_BODY_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
@@ -346,9 +347,9 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'entities':
 			return keys('entity', ENTITY_KEYS);
 
-		// A beat is an entity patch that may also speak.
+		// A beat is an entity patch that may also speak, and may time itself.
 		case 'beats':
-			return keys('beat', [...ENTITY_KEYS, ...SAY_KEYS]);
+			return keys('beat', [...ENTITY_KEYS, ...SAY_KEYS, ...BEAT_BODY_KEYS]);
 
 		default:
 			return undefined;

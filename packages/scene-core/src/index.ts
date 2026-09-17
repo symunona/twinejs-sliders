@@ -6,7 +6,7 @@
  */
 
 export {applyScene, sceneBg} from './apply-scene';
-export {DEFAULT_DURATIONS, diffStages} from './diff-stages';
+export {DEFAULT_DURATIONS, diffStages, timeTransitions} from './diff-stages';
 export type {Placement} from './diff-stages';
 export {collectMarks, runBeats} from './run-beats';
 export {parentOffsets, resolveStage, worldPositions} from './resolve-stage';

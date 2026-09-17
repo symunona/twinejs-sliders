@@ -676,3 +676,104 @@ describe('parseScene', () => {
 		});
 	});
 });
+
+describe('dur:', () => {
+	function beatsOf(text: string) {
+		return parseScene(`beats:\n${text}`);
+	}
+
+	it('times a beat that speaks', () => {
+		const {errors, scene} = beatsOf('  - mira: {say: "Out.", dur: 2}\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({dur: 2, kind: 'say', text: 'Out.'});
+	});
+
+	it('times a beat that only stages something', () => {
+		const {errors, scene} = beatsOf('  - mira: {at: 0.3, dur: 0.8}\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({dur: 0.8, kind: 'set'});
+	});
+
+	it('times a box: map', () => {
+		const {errors, scene} = beatsOf('  - box: {text: "Silence.", dur: 1.5}\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({dur: 1.5, kind: 'box'});
+	});
+
+	it('is absent when the author did not write one', () => {
+		const {scene} = beatsOf('  - mira: "Out."\n');
+
+		expect(scene.beats[0].dur).toBeUndefined();
+	});
+
+	// dur times a moment, not a sprite. Accepting it here would let an author believe they
+	// had slowed a character down for the whole scene.
+	it('is an unknown key inside cast:', () => {
+		const {errors} = parseScene('cast:\n  mira: {at: 0, dur: 1}\n');
+
+		expect(codes(errors)).toEqual(['unknown-key']);
+	});
+
+	it('is an unknown key inside props:', () => {
+		const {errors} = parseScene('props:\n  candle: {at: 0, dur: 1}\n');
+
+		expect(codes(errors)).toEqual(['unknown-key']);
+	});
+
+	it('refuses a negative length', () => {
+		const {errors, scene} = beatsOf('  - mira: {say: "Out.", dur: -1}\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+		expect(scene.beats[0].dur).toBeUndefined();
+	});
+
+	it('warns about a length that looks like milliseconds', () => {
+		const {errors, scene} = beatsOf('  - mira: {say: "Out.", dur: 500}\n');
+
+		expect(find(errors, 'bad-value')?.severity).toBe('warning');
+		// A warning, not a rejection: a minute-long hold is a legitimate effect.
+		expect(scene.beats[0].dur).toBe(500);
+	});
+
+	// Zero is meaningful on a stage-only beat -- snap, then straight on -- so the warning
+	// is only for a line nobody would have time to read.
+	it('warns about dur: 0 on a line of dialogue', () => {
+		const {errors, scene} = beatsOf('  - mira: {say: "Out.", dur: 0}\n');
+
+		expect(find(errors, 'bad-value')?.severity).toBe('warning');
+		expect(scene.beats[0].dur).toBe(0);
+	});
+
+	it('says nothing about dur: 0 on a stage-only beat', () => {
+		const {errors, scene} = beatsOf('  - mira: {at: 0.3, dur: 0}\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.beats[0].dur).toBe(0);
+	});
+
+	// dur times a beat; it cannot BE one. Without this the beat stages nothing and says
+	// nothing, and the existing error is the right one to get.
+	it('is not a beat on its own', () => {
+		const {errors, scene} = beatsOf('  - mira: {dur: 1}\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+		expect(scene.beats).toHaveLength(0);
+	});
+
+	// `- wait: 0.5` IS a duration, so it has no body map to write a second one in.
+	it('has no place on a wait beat', () => {
+		const {errors} = beatsOf('  - wait: {seconds: 1, dur: 1}\n');
+
+		expect(errors.length).toBeGreaterThan(0);
+	});
+
+	it('survives the indented block form', () => {
+		const {errors, scene} = beatsOf('  - mira:\n      say: "Out."\n      dur: 2\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({dur: 2, kind: 'say'});
+	});
+});

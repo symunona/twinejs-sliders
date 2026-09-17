@@ -209,3 +209,29 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 
 	return out;
 }
+
+/**
+ * Re-time a beat's transitions to its `dur:`.
+ *
+ * Deliberately NOT a third argument to `diffStages`. WHAT changed is a function of two
+ * stages and nothing else — that is the promise at the top of this file and the reason the
+ * differ is testable at all. HOW LONG it takes is the caller's question, because only the
+ * caller knows which beat produced the change, and the scene-entry diff is produced by no
+ * beat at all.
+ *
+ * Every kind is re-timed, `bg` and `camera` included: `dur:` means "this beat IS the
+ * animation", so a beat that also swaps the backdrop crossfades over the same span rather
+ * than running to its own clock.
+ */
+export function timeTransitions(
+	transitions: Transition[],
+	seconds: number | undefined
+): Transition[] {
+	if (seconds === undefined) {
+		return transitions;
+	}
+
+	const duration = Math.max(0, seconds);
+
+	return transitions.map(transition => ({...transition, duration}));
+}

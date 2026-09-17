@@ -19,6 +19,7 @@ import {useCommand} from '../../../hotkeys';
 import {extractSceneBlock, IndexedPassage} from '@sliders/scene-index';
 import {
 	AssetResolver,
+	Beat,
 	BubbleStyle,
 	Camera,
 	Character,
@@ -145,8 +146,34 @@ const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
  */
 const GRID_KEY = 'sliders.preview.grid';
 
-/** How long each beat holds the screen while playing. */
+/**
+ * How long a beat that did not time itself holds the screen while playing.
+ *
+ * Matches the player's own `sliders.autoAdvance` default. A beat with a `dur:`, and a
+ * `- wait:` beat, use their own number instead — see `beatHoldMs`.
+ */
 const AUTO_ADVANCE_MS = 3000;
+
+/**
+ * How long the scrubber rests on a state before playing on.
+ *
+ * `beat` is a scrubber position, so the beat that PRODUCED the state on screen is
+ * `beats[beat - 1]`; state 0 was produced by nothing and takes the default.
+ *
+ * This used to be a flat 3s for everything, which meant editor playback and the player
+ * disagreed the moment a scene used `- wait:` — the one timing primitive the language had.
+ */
+export function beatHoldMs(beat: Beat | undefined): number {
+	if (beat?.dur !== undefined) {
+		return beat.dur * 1000;
+	}
+
+	if (beat?.kind === 'wait') {
+		return beat.seconds * 1000;
+	}
+
+	return AUTO_ADVANCE_MS;
+}
 
 /** Arrow-key nudge, in scene units. Shift multiplies it. */
 const NUDGE_STEP = 0.01;
@@ -860,10 +887,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
-		const timer = window.setTimeout(() => setBeat(b => b + 1), AUTO_ADVANCE_MS);
+		const timer = window.setTimeout(
+			() => setBeat(b => b + 1),
+			beatHoldMs(beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined)
+		);
 
 		return () => window.clearTimeout(timer);
-	}, [beat, lastBeat, playing]);
+	}, [beat, lastBeat, parse.result, playing]);
 
 	// Full screen takes focus, for two reasons that happen to want the same thing: the
 	// preview's own keys resolve from where focus is, and Escape has to be the preview's

@@ -6,6 +6,7 @@
  */
 
 export {
+	BEAT_BODY_KEYS,
 	BEAT_COMMAND_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,

@@ -8,7 +8,13 @@
  * beats is a single transition rather than a stutter.
  */
 
-import {applyScene, diffStages, resolveStage, runBeats} from '@sliders/scene-core';
+import {
+	applyScene,
+	diffStages,
+	resolveStage,
+	runBeats,
+	timeTransitions
+} from '@sliders/scene-core';
 import {DialogueLayer, DomRenderer, mergeBubbleStyle} from '@sliders/render-dom';
 import type {Beat, Scene, SceneError, Stage} from '@sliders/scene-types';
 import {go} from '../actions';
@@ -156,7 +162,10 @@ export class SlidersStage extends CustomElement {
 				const from = resolveStage(before);
 				const to = resolveStage(after);
 
-				await this.renderer?.apply(to, diffStages(from, to));
+				await this.renderer?.apply(
+					to,
+					timeTransitions(diffStages(from, to), beat.dur)
+				);
 				publishStage(after);
 			}
 
@@ -168,13 +177,13 @@ export class SlidersStage extends CustomElement {
 						// `as:`/`bubble:` overrides it key by key.
 						style: mergeBubbleStyle(await this.bubbleDefaults(beat.who), beat.style)
 					});
-					this.waitForReader();
+					this.waitForReader(beat.dur);
 					return;
 
 				case 'box':
 					this.dialogue?.clear();
 					this.dialogue?.setBox(beat.text, beat.style);
-					this.waitForReader();
+					this.waitForReader(beat.dur);
 					return;
 
 				case 'wait':
@@ -184,6 +193,16 @@ export class SlidersStage extends CustomElement {
 						beat.seconds * 1000
 					);
 					return;
+			}
+
+			// `set` and `fx` change the stage and fall through in the SAME tick, so the next
+			// line lands on top of the move -- unless the author gave the beat a `dur:`,
+			// which is how "hold this, then go on" is written without a `- wait:` line
+			// underneath it. A `dur: 0` still falls through: zero is a snap, not a pause.
+			if (beat.dur !== undefined && beat.dur > 0) {
+				this.setAttribute('data-waiting', 'timer');
+				this.timer = window.setTimeout(() => void this.play(), beat.dur * 1000);
+				return;
 			}
 		}
 
@@ -211,13 +230,28 @@ export class SlidersStage extends CustomElement {
 	 * Auto advance is a convenience, never the only way forward: the last beat always waits
 	 * for the reader, or the links under the stage would appear while the final line was
 	 * still being read.
+	 *
+	 * A beat's own `dur:` beats the READER's `sliders.autoAdvance` — the author timed this
+	 * line, and a reader preference must not stretch or shorten it. It does NOT beat the
+	 * last-beat rule: that one is about the links, not about pacing, and honouring `dur`
+	 * there would mean "end the scene on a timer", which is a different feature with no way
+	 * back from it.
+	 *
+	 * `data-waiting` stays `'beat'` either way, so the marker still says "there is more to
+	 * read" and a click still skips ahead.
 	 */
-	private waitForReader() {
+	private waitForReader(dur?: number) {
 		this.setAttribute('data-waiting', 'beat');
 
-		const delay = autoAdvanceMs();
+		if (this.beatIndex >= (this.scene?.beats?.length ?? 0)) {
+			return;
+		}
 
-		if (delay > 0 && this.beatIndex < (this.scene?.beats?.length ?? 0)) {
+		// autoAdvanceMs() returns 0 for "wait for a click". An explicit `dur: 0` means what
+		// it says, so it is the one zero that still schedules.
+		const delay = dur === undefined ? autoAdvanceMs() : Math.max(0, dur) * 1000;
+
+		if (delay > 0 || dur !== undefined) {
 			this.timer = window.setTimeout(() => void this.play(), delay);
 		}
 	}
