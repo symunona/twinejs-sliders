@@ -1,0 +1,42 @@
+/* A strip of time under the bar, not a second row of controls: it keeps the bar's height
+   out of it, because in full screen the stage takes whatever the chrome leaves. */
+.scene-preview-timeline {
+	align-items: center;
+	background: var(--white);
+	display: flex;
+	flex-shrink: 0;
+	padding: 0 8px 4px;
+}
+
+/* Grows in proportion to how long the beat before it holds. The floor is what keeps a run
+   of instant beats -- `dur: 0`, or several stage-only beats in a row -- from stacking into
+   one unclickable dot. */
+.scene-preview-timeline-gap {
+	background: var(--light-gray);
+	flex-basis: 0;
+	height: 2px;
+	min-width: 10px;
+}
+
+.scene-preview-timeline-mark {
+	background: var(--light-gray);
+	border: none;
+	border-radius: 50%;
+	cursor: pointer;
+	flex-shrink: 0;
+	height: 8px;
+	padding: 0;
+	width: 8px;
+}
+
+.scene-preview-timeline-mark:hover {
+	background: var(--dark-gray);
+}
+
+.scene-preview-timeline-mark[data-current] {
+	background: var(--dark-blue);
+	/* Bigger rather than only recoloured: the strip is read at a glance and at this size
+	   colour alone is easy to miss, especially against the hover state. */
+	height: 12px;
+	width: 12px;
+}

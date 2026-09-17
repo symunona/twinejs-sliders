@@ -30,6 +30,8 @@ import {parseLinkText} from '@sliders/render-dom';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
+import {beatHoldMs} from './beat-hold';
+import {BeatTimeline} from './beat-timeline';
 import {BubbleEditor} from './bubble-editor';
 import {SceneDropMenu, type DropChoice} from './drop-menu';
 import {
@@ -147,34 +149,8 @@ const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
  */
 const GRID_KEY = 'sliders.preview.grid';
 
-/**
- * How long a beat that did not time itself holds the screen while playing.
- *
- * Matches the player's own `sliders.autoAdvance` default. A beat with a `dur:`, and a
- * `- wait:` beat, use their own number instead — see `beatHoldMs`.
- */
-const AUTO_ADVANCE_MS = 3000;
-
-/**
- * How long the scrubber rests on a state before playing on.
- *
- * `beat` is a scrubber position, so the beat that PRODUCED the state on screen is
- * `beats[beat - 1]`; state 0 was produced by nothing and takes the default.
- *
- * This used to be a flat 3s for everything, which meant editor playback and the player
- * disagreed the moment a scene used `- wait:` — the one timing primitive the language had.
- */
-export function beatHoldMs(beat: Beat | undefined): number {
-	if (beat?.dur !== undefined) {
-		return beat.dur * 1000;
-	}
-
-	if (beat?.kind === 'wait') {
-		return beat.seconds * 1000;
-	}
-
-	return AUTO_ADVANCE_MS;
-}
+/** Stable identity, so the timeline's memo does not rebuild on every parse. */
+const EMPTY_BEATS: Beat[] = [];
 
 /** Arrow-key nudge, in scene units. Shift multiplies it. */
 const NUDGE_STEP = 0.01;
@@ -341,7 +317,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * lights the beat the scrubber is already on. Playback stops, because the author is
 	 * clearly steering by hand now.
 	 */
-	const handleCaretBeat = React.useCallback((next: number) => {
+	const goToBeat = React.useCallback((next: number) => {
 		setPlaying(false);
 		setBeat(next);
 	}, []);
@@ -351,7 +327,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		editor,
 		enabled: true,
 		kindOf,
-		onCaretBeat: handleCaretBeat,
+		onCaretBeat: goToBeat,
 		scene: parse.result?.scene,
 		stageIds
 	});
@@ -1350,6 +1326,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			tabIndex={-1}
 		>
 			{bar}
+			<BeatTimeline
+				beat={beat}
+				beats={parse.result?.scene.beats ?? EMPTY_BEATS}
+				onBeatChange={goToBeat}
+			/>
 			{stageBody}
 		</div>
 	);
