@@ -362,11 +362,17 @@
 			"sizeTall": "Tall",
 			"sizeWide": "Wide",
 			"beatProps": {
+				"arrival": "Arrival",
 				"as": "Style",
 				"auto": "Auto",
 				"autoDetail": "Advance automatically, at the scene's own pace \u2014 or the reader's, if the scene sets none. Off holds this beat for the time in Hold.",
+				"beat": "Beat {{number}}",
 				"dur": "Hold",
+				"durDisabled": "Auto is on, so this beat rides the scene's pace. Turn Auto off to hold it for a set time.",
 				"inherit": "—",
+				"noneArrival": "The stage before the first beat \u2014 nothing to time here. Pick a beat above.",
+				"noneCommand": "This beat carries no timing or bubble of its own.",
+				"noneWait": "A wait beat is already a duration \u2014 set it in the passage text.",
 				"place": "Place"
 			},
 			"scenePreview": {

@@ -14,13 +14,21 @@ function say(dur?: number): Beat {
 	};
 }
 
-function renderProps(beat: Beat | undefined, editable = true) {
+function renderProps(
+	beat: Beat | undefined,
+	editable = true,
+	options: {beatCount?: number; beatNumber?: number} = {}
+) {
 	const onSetBubble = jest.fn();
 	const onSetKey = jest.fn();
 
 	const {container} = render(
 		<BeatProps
 			beat={beat}
+			// The scrubber is on this beat, and it is the only one, unless a test says
+			// otherwise — enough for the row to be offered at all.
+			beatCount={options.beatCount ?? 1}
+			beatNumber={options.beatNumber ?? 1}
 			editable={editable}
 			onSetBubble={onSetBubble}
 			onSetKey={onSetKey}
@@ -83,9 +91,27 @@ describe('<BeatProps> auto-advance', () => {
 		expect(hold()).toBeDisabled();
 	});
 
+	/**
+	 * The one genuinely disabled control in the row, and the reason it is disabled has to be
+	 * readable from the field itself — a disabled input is inert to the pointer, so the
+	 * explanation hangs on the wrapper around it.
+	 */
+	it('says on the field itself why the hold is disabled', () => {
+		const {container} = renderProps(say());
+		const wrapper = container.querySelector('.scene-preview-beat-props-dur');
+
+		expect(wrapper).toHaveAttribute(
+			'title',
+			'dialogs.passageEdit.beatProps.durDisabled'
+		);
+	});
+
 	it('enables the hold field once the beat is timed', () => {
 		renderProps(say(2));
 		expect(hold()).not.toBeDisabled();
+		expect(
+			document.querySelector('.scene-preview-beat-props-dur')
+		).not.toHaveAttribute('title');
 	});
 
 	/**
@@ -98,9 +124,53 @@ describe('<BeatProps> auto-advance', () => {
 		expect(screen.queryByRole('checkbox')).toBeNull();
 		expect(hold()).not.toBeDisabled();
 	});
+});
 
-	it('draws nothing at all for a beat with no body to write into', () => {
+/**
+ * The row is a persistent menu above the stage, not a strip that comes and goes over it: it
+ * may only disappear for a reason that belongs to the whole SCENE, never for where the
+ * scrubber happens to be. Otherwise the controls move out from under the pointer as the
+ * author scrubs, and the stage under them resizes on every step.
+ */
+describe('<BeatProps> persistence', () => {
+	it('keeps its place on a beat with no body, and says why it is empty', () => {
 		renderProps({index: 0, kind: 'wait', seconds: 2});
+
+		expect(screen.getByTestId('scene-preview-beat-props')).toBeInTheDocument();
+		expect(screen.queryByRole('spinbutton')).toBeNull();
+		expect(screen.getByTestId('scene-preview-beat-props-none')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.noneWait'
+		);
+	});
+
+	it('names a command beat with no timing of its own', () => {
+		renderProps({index: 0, kind: 'fx', fx: {amount: 1, id: 'shake'}});
+
+		expect(screen.getByTestId('scene-preview-beat-props-none')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.noneCommand'
+		);
+	});
+
+	it('keeps its place at the arrival state, where there is no beat at all', () => {
+		renderProps(undefined, true, {beatNumber: 0});
+
+		expect(screen.getByTestId('scene-preview-beat-props')).toBeInTheDocument();
+		expect(screen.getByTestId('scene-preview-beat-props-none')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.noneArrival'
+		);
+	});
+
+	// The row is no longer drawn on the stage it edits, so it has to name the moment itself.
+	it('names the beat it is editing', () => {
+		const {container} = renderProps(say(), true, {beatCount: 5, beatNumber: 3});
+
+		expect(
+			container.querySelector('.scene-preview-beat-props-which')
+		).toHaveTextContent('dialogs.passageEdit.beatProps.beat');
+	});
+
+	it('draws nothing in a passage whose scene has no beats', () => {
+		renderProps(undefined, true, {beatCount: 0, beatNumber: 0});
 		expect(screen.queryByTestId('scene-preview-beat-props')).toBeNull();
 	});
 

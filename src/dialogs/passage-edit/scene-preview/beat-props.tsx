@@ -1,16 +1,24 @@
 /**
  * The beat on screen, editable — timing and bubble style, without going to the YAML.
  *
- * The sibling of `StageSelectionControls`: that row is about whatever sprite is selected,
- * this one is about the MOMENT the scrubber is standing on, which has properties of its own
- * that belong to no entity. It sits at the bottom of the stage for the same reasons that row
- * sits at the top — an overlay comes and goes without moving the scene, and the two never
- * fight for the same strip of pixels.
+ * The sibling of `StageSelectionControls`, but deliberately NOT built like it. That row is
+ * about whatever sprite is selected, so it floats over the stage and comes and goes with the
+ * selection. This one is about the MOMENT the scrubber stands on, and the scrubber always
+ * stands somewhere — so it is a persistent row in the flow, directly under the timeline that
+ * chooses the beat, rather than an overlay at the far end of the stage.
  *
- * Only the keys a beat can actually carry are offered: `dur:` on anything with a body map,
- * and the bubble keys only where there is a line to paint. A `- wait:` / `- fx:` / `- mark:`
- * beat gets nothing, because the parser will not take a `dur:` there (they are scalars with
- * no body map, and `wait` already IS a duration) and there is no bubble to style.
+ * Two things that cost the author, both fixed by being here rather than there. Over the
+ * stage, the row was painted on `--white-translucent` above black art, with selects whose
+ * own fill and border are translucent too: mid-grey label text on a mid-grey band, no
+ * visible control edge, sitting next to a Hold field that genuinely IS disabled. The whole
+ * strip read as greyed out even though the dropdowns worked. And it vanished on any beat
+ * with no body map, so the controls moved out from under the pointer as the author scrubbed.
+ *
+ * So it now keeps its place for the whole scene and says why it has nothing to offer when it
+ * has nothing to offer. Only the keys a beat can actually carry are ever offered: `dur:` on
+ * anything with a body map, and the bubble keys only where there is a line to paint. A
+ * `- wait:` / `- fx:` / `- mark:` beat gets a note instead, because the parser will not take
+ * a `dur:` there (they are scalars with no body map, and `wait` already IS a duration).
  */
 
 import * as React from 'react';
@@ -26,6 +34,15 @@ import './beat-props.css';
 export interface BeatPropsProps {
 	/** The beat that PRODUCED the state on screen, i.e. `beats[scrubber - 1]`. */
 	beat?: Beat;
+	/**
+	 * How many beats the scene has. Zero renders nothing.
+	 *
+	 * The one condition that may take the row away, and it is a property of the SCENE, not
+	 * of where the scrubber happens to be — so scrubbing can never move the controls.
+	 */
+	beatCount: number;
+	/** Where the scrubber is: 0 is the arrival state, before any beat has run. */
+	beatNumber: number;
 	/** False when there is no CodeMirror to write to. Renders nothing. */
 	editable: boolean;
 	/** A key on the beat's own body. `null` removes it. */
@@ -65,9 +82,35 @@ function styleOf(beat: Beat | undefined): BubbleStyle | undefined {
 	return beat?.kind === 'say' || beat?.kind === 'box' ? beat.style : undefined;
 }
 
+/**
+ * Why this beat offers nothing, as a locale key — or `undefined` when it offers something.
+ *
+ * `wait` gets its own sentence rather than the generic one: an author parked there is
+ * looking for exactly the field this row is refusing to show them, and "already a duration"
+ * is the answer, not "no properties".
+ */
+function emptyReasonKey(
+	beat: Beat | undefined,
+	beatNumber: number
+): string | undefined {
+	if (hasBody(beat)) {
+		return undefined;
+	}
+
+	if (beatNumber === 0) {
+		return 'dialogs.passageEdit.beatProps.noneArrival';
+	}
+
+	return beat?.kind === 'wait'
+		? 'dialogs.passageEdit.beatProps.noneWait'
+		: 'dialogs.passageEdit.beatProps.noneCommand';
+}
+
 export const BeatProps: React.FC<BeatPropsProps> = ({
 	autoAdvanceMs,
 	beat,
+	beatCount,
+	beatNumber,
 	editable,
 	onSetKey,
 	onSetBubble
@@ -85,7 +128,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	// Whatever the author was typing is stale the moment the scrubber moves on.
 	React.useEffect(() => setDraft(undefined), [beat]);
 
-	if (!editable || !hasBody(beat)) {
+	if (!editable || beatCount === 0) {
 		return null;
 	}
 
@@ -104,6 +147,11 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 * only wait-for-a-click there is the READER's setting, which an author does not own.
 	 */
 	const auto = beat?.dur === undefined;
+	const emptyKey = emptyReasonKey(beat, beatNumber);
+	// The one genuinely disabled control here. Its reason lives on the field itself as well
+	// as on the checkbox that causes it: an author who notices the grey box looks at the
+	// grey box, not at the control two places to its left.
+	const holdDisabled = speaks(beat) && auto;
 
 	function commitDur() {
 		setDraft(undefined);
@@ -131,75 +179,109 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 
 	return (
 		<div className="scene-preview-beat-props" data-testid="scene-preview-beat-props">
-			{speaks(beat) && (
-				// Only where there is a line to hold on. A stage-only `set` beat's `dur` is
-				// how long its movement TAKES, not how long the reader looks at it, so
-				// "advance automatically" is not a question that beat can answer.
-				<CheckboxButton
-					label={t('dialogs.passageEdit.beatProps.auto')}
-					// The short word is all the toolbar has room for -- the sentence pushed
-					// Style and Place onto a second row on a docked stage.
-					tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
-					onChange={next =>
-						// Unchecking has to leave a number behind, or the box the author just
-						// enabled would be empty and mean the thing they turned off.
-						onSetKey(
-							'dur',
-							next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
-						)
-					}
-					value={auto}
-				/>
-			)}
-			<span className="scene-preview-beat-props-dur">
-				<TextInput
-					disabled={speaks(beat) && auto}
-					onChange={event => setDraft(event.target.value)}
-					onBlur={commitDur}
-					onKeyDown={event => {
-						if (event.key === 'Enter') {
-							commitDur();
-						}
-
-						if (event.key === 'Escape') {
-							setDraft(undefined);
-						}
-					}}
-					type="number"
-					value={dur}
-				>
-					{t('dialogs.passageEdit.beatProps.dur')}
-				</TextInput>
+			{/* The row no longer sits on the thing it edits, so it has to name it. */}
+			<span className="scene-preview-beat-props-which">
+				{beatNumber === 0
+					? t('dialogs.passageEdit.beatProps.arrival')
+					: t('dialogs.passageEdit.beatProps.beat', {number: beatNumber})}
 			</span>
-			{speaks(beat) && (
+			{emptyKey ? (
+				<span
+					className="scene-preview-beat-props-none"
+					data-testid="scene-preview-beat-props-none"
+				>
+					{t(emptyKey)}
+				</span>
+			) : (
 				<>
-					<TextSelect
-						onChange={event =>
-							onSetBubble('as', event.target.value || null)
+					{speaks(beat) && (
+						// Only where there is a line to hold on. A stage-only `set` beat's
+						// `dur` is how long its movement TAKES, not how long the reader
+						// looks at it, so "advance automatically" is not a question that
+						// beat can answer.
+						<CheckboxButton
+							label={t('dialogs.passageEdit.beatProps.auto')}
+							// The short word is all the row has room for -- the sentence
+							// pushed Style and Place onto a second line on a docked stage.
+							tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
+							onChange={next =>
+								// Unchecking has to leave a number behind, or the box the
+								// author just enabled would be empty and mean the thing
+								// they turned off.
+								onSetKey(
+									'dur',
+									next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
+								)
+							}
+							value={auto}
+						/>
+					)}
+					<span
+						className="scene-preview-beat-props-dur"
+						// On the wrapper, not the input: a disabled input is inert to the
+						// pointer, so a title on it never opens.
+						title={
+							holdDisabled
+								? t('dialogs.passageEdit.beatProps.durDisabled')
+								: undefined
 						}
-						options={[
-							{label: t('dialogs.passageEdit.beatProps.inherit'), value: INHERIT},
-							...BUBBLE_PRESETS.map(preset => ({
-								label: preset,
-								value: preset
-							}))
-						]}
-						value={style?.as ?? INHERIT}
 					>
-						{t('dialogs.passageEdit.beatProps.as')}
-					</TextSelect>
-					<TextSelect
-						onChange={event =>
-							onSetBubble('place', event.target.value || null)
-						}
-						options={[
-							{label: t('dialogs.passageEdit.beatProps.inherit'), value: INHERIT},
-							...BUBBLE_PLACES.map(place => ({label: place, value: place}))
-						]}
-						value={style?.place ?? INHERIT}
-					>
-						{t('dialogs.passageEdit.beatProps.place')}
-					</TextSelect>
+						<TextInput
+							disabled={holdDisabled}
+							onChange={event => setDraft(event.target.value)}
+							onBlur={commitDur}
+							onKeyDown={event => {
+								if (event.key === 'Enter') {
+									commitDur();
+								}
+
+								if (event.key === 'Escape') {
+									setDraft(undefined);
+								}
+							}}
+							type="number"
+							value={dur}
+						>
+							{t('dialogs.passageEdit.beatProps.dur')}
+						</TextInput>
+					</span>
+					{speaks(beat) && (
+						<>
+							<TextSelect
+								onChange={event =>
+									onSetBubble('as', event.target.value || null)
+								}
+								options={[
+									{
+										label: t('dialogs.passageEdit.beatProps.inherit'),
+										value: INHERIT
+									},
+									...BUBBLE_PRESETS.map(preset => ({
+										label: preset,
+										value: preset
+									}))
+								]}
+								value={style?.as ?? INHERIT}
+							>
+								{t('dialogs.passageEdit.beatProps.as')}
+							</TextSelect>
+							<TextSelect
+								onChange={event =>
+									onSetBubble('place', event.target.value || null)
+								}
+								options={[
+									{
+										label: t('dialogs.passageEdit.beatProps.inherit'),
+										value: INHERIT
+									},
+									...BUBBLE_PLACES.map(place => ({label: place, value: place}))
+								]}
+								value={style?.place ?? INHERIT}
+							>
+								{t('dialogs.passageEdit.beatProps.place')}
+							</TextSelect>
+						</>
+					)}
 				</>
 			)}
 		</div>

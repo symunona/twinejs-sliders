@@ -1,24 +1,53 @@
-/* Mirrors `.scene-preview-selection` at the other end of the stage: an overlay, so it can
-   appear and disappear as the scrubber moves without ever shifting the scene under it. */
+@import '../../../styles/colors.css';
+
+/* A row in the flow under the timeline, NOT an overlay on the stage.
+   
+   It used to be absolutely placed at the bottom of the stage, mirroring
+   `.scene-preview-selection` at the top. Two reasons that was wrong, and both of them are
+   about this row being different in kind from that one. The selection row speaks for a
+   sprite, so it is only ever wanted while a sprite is held and it has to get out of the
+   way; this row speaks for the beat the scrubber is parked on, and the scrubber is always
+   parked somewhere, so there is nothing for it to get out of the way of. And a translucent
+   white band over black art turns `--white-translucent` select fills and
+   `--light-gray-translucent` select borders into mid-grey on mid-grey: the dropdowns were
+   live the whole time and looked disabled, especially beside a Hold field that really is.
+   
+   On the toolbar's own surface they are the same controls as everywhere else in the app. */
 .scene-preview-beat-props {
 	align-items: center;
-	background: var(--white-translucent);
-	bottom: 0;
+	background: var(--white);
+	border-top: 1px solid var(--light-gray-translucent);
 	display: flex;
+	/* Wraps rather than scrolls: a docked stage is narrow and the second line costs the
+	   stage a few pixels once, not on every scrub. */
 	flex-wrap: wrap;
+	/* Whatever lands in it, it is chrome above the stage and never grows a scrollbar. */
+	flex-shrink: 0;
 	gap: 6px;
-	left: 0;
+	/* One control tall, plus this box's own 2px padding twice and its 1px rule — stated
+	   rather than left to whatever is inside, so the note state and the control state come
+	   out at exactly the same height. Left to the content it was 40px on a `- wait:` beat
+	   and 45px on a beat with a Hold field, and the stage under it jumped five pixels every
+	   time the scrubber crossed one. */
+	min-height: calc(var(--control-height) + 5px);
 	padding: 2px 4px;
-	pointer-events: none;
-	position: absolute;
-	right: 0;
-	/* Above the marker layer and the selection box, below the resize handles -- the handles
-	   are what an author reaches for on a sprite near the floor. */
-	z-index: 4;
 }
 
-.scene-preview-beat-props > * {
-	pointer-events: auto;
+/* Which moment these controls edit. The row is no longer drawn on the stage it belongs to,
+   so the connection back to the timeline marker above has to be written down. */
+.scene-preview-beat-props-which {
+	color: var(--dark-gray);
+	flex-shrink: 0;
+	font-size: 85%;
+	font-variant-numeric: tabular-nums;
+	text-transform: uppercase;
+}
+
+/* Why this beat has nothing to set. Takes the place of the controls rather than of the
+   row: the row keeping its height is the whole point of it being here. */
+.scene-preview-beat-props-none {
+	color: var(--dark-gray);
+	font-size: 85%;
 }
 
 /* Seconds are two or three characters; a full-width text input here would crowd out the

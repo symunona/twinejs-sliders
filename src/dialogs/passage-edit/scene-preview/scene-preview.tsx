@@ -333,8 +333,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => Object.keys(stage.entities ?? {}),
 		[stage]
 	);
+	// A stable empty array when there is no scene, so the strip and the props row are not
+	// handed a fresh `[]` on every render.
+	const beats = parse.result?.scene.beats ?? EMPTY_BEATS;
 	// State N is produced by beat N-1; S0 has no beat.
-	const shownBeat = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
+	const shownBeat = beat > 0 ? beats[beat - 1] : undefined;
 	/**
 	 * What a live bubble drag is painting with.
 	 *
@@ -1462,13 +1465,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDraft={setBubbleDraft}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
-			<BeatProps
-				autoAdvanceMs={holdMs}
-				beat={shownBeat}
-				editable={editable}
-				onSetBubble={handleBeatBubble}
-				onSetKey={handleBeatKey}
-			/>
 			<StageSelectionControls
 				assets={assets}
 				editable={editable}
@@ -1541,9 +1537,22 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			<BeatTimeline
 				autoAdvanceMs={holdMs}
 				beat={beat}
-				beats={parse.result?.scene.beats ?? EMPTY_BEATS}
+				beats={beats}
 				labels={timelineLabels}
 				onBeatChange={goToBeat}
+			/>
+			{/* Directly under the strip that chooses the beat, and above the stage rather
+			    than over it: these controls are wanted for as long as the scrubber is
+			    somewhere, which is always, so they hold their place for the whole scene
+			    instead of appearing and vanishing over the art as the author scrubs. */}
+			<BeatProps
+				autoAdvanceMs={holdMs}
+				beat={shownBeat}
+				beatCount={beats.length}
+				beatNumber={beat}
+				editable={editable}
+				onSetBubble={handleBeatBubble}
+				onSetKey={handleBeatKey}
 			/>
 			{stageBody}
 		</div>
