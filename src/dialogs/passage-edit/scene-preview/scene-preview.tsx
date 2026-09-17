@@ -33,6 +33,7 @@ import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
 import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatProps} from './beat-props';
+import {effectiveLocks, lockReason} from './scene-lock';
 import {BeatTimeline} from './beat-timeline';
 import {BubbleEditor} from './bubble-editor';
 import {SceneDropMenu, type DropChoice} from './drop-menu';
@@ -226,15 +227,31 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const {t} = useTranslation();
 	const store = useAssetStore();
 	const {dispatch} = useDialogsContext();
-	const [locked, setLocked] = React.useState(
+	// The author's own preference. What actually gates the gestures is `locked`/`bgLocked`
+	// below, which is this with the scene's own `locked:` laid over it.
+	const [storedLocked, setLocked] = React.useState(
 		() => window.localStorage.getItem(LOCKED_KEY) === 'true'
 	);
-	const [bgLocked, setBgLocked] = React.useState(
+	const [storedBgLocked, setBgLocked] = React.useState(
 		() => window.localStorage.getItem(BG_LOCKED_KEY) === 'true'
 	);
 	const [grid, setGrid] = React.useState(
 		() => window.localStorage.getItem(GRID_KEY) === 'true'
 	);
+	/**
+	 * What is locked right now: the scene's word over the author's preference.
+	 *
+	 * One way only -- a scene pins things and never releases them -- so the toggles below
+	 * still mean what they said, they just cannot un-pin what the file pinned. See
+	 * `scene-lock.ts` for the precedence.
+	 */
+	const {bgLocked, locked} = effectiveLocks(parse.result?.scene, {
+		bgLocked: storedBgLocked,
+		locked: storedLocked
+	});
+	/** Set when the SCENE is what locked it, so the toggle would be a dead button. */
+	const stageLockedByScene = lockReason(parse.result?.scene, 'entities');
+	const bgLockedByScene = lockReason(parse.result?.scene, 'bg');
 	const [timelineLabels, setTimelineLabels] = React.useState(
 		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) === 'true'
 	);
@@ -1164,6 +1181,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
+		// Off when the scene is what locked the stage: the key would write a preference the
+		// file overrides, so it would look like a hotkey that does nothing.
+		enabled: !stageLockedByScene,
 		id: 'scene.toggleLock',
 		label: t('hotkeys.commands.scene.toggleLock'),
 		run: toggleLock,
@@ -1342,10 +1362,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			{/* Beside the stage lock, because it is the same idea one notch
 			    narrower: this one pins the shot and leaves the cast free. */}
 			<IconButton
+				disabled={!!bgLockedByScene}
 				icon={bgLocked ? <IconPhotoShield /> : <IconPhoto />}
 				iconOnly
 				label={t(
-					bgLocked
+					bgLockedByScene
+						? 'dialogs.passageEdit.scenePreview.lockedByScene'
+						: bgLocked
 						? 'dialogs.passageEdit.scenePreview.unlockBg'
 						: 'dialogs.passageEdit.scenePreview.lockBg'
 				)}
@@ -1358,10 +1381,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			    appears once something has been grabbed. */}
 			<IconButton
 			commandId="scene.toggleLock"
+				disabled={!!stageLockedByScene}
 				icon={locked ? <IconLock /> : <IconLockOpen />}
 				iconOnly
 				label={t(
-					locked
+					stageLockedByScene
+						? 'dialogs.passageEdit.scenePreview.lockedByScene'
+						: locked
 						? 'dialogs.passageEdit.scenePreview.unlock'
 						: 'dialogs.passageEdit.scenePreview.lock'
 				)}

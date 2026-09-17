@@ -385,6 +385,7 @@
 				"tracePrev": "Prev",
 				"traceNow": "Now",
 				"traceRestore": "Move back to the {{when}} position",
+				"lockedByScene": "This scene locks the stage itself \u2014 edit its locked: line to change that",
 				"lock": "Lock the stage so gestures cannot edit the scene",
 				"unlock": "Unlock the stage",
 				"dropFiles": "Drop images here to add them to the scene",
