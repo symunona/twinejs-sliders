@@ -1,4 +1,5 @@
 import * as React from 'react';
+import {createPortal} from 'react-dom';
 import {usePopper} from 'react-popper';
 import {CSSTransition} from 'react-transition-group';
 import {ButtonBar, ButtonBarSeparator} from '../container/button-bar';
@@ -57,7 +58,13 @@ export const MenuButton: React.FC<MenuButtonProps> = props => {
 	);
 	const [menuEl, setMenuEl] = React.useState<HTMLDivElement | null>(null);
 	const [open, setOpen] = useControlledOpen(controlledOpen, onChangeOpen);
-	const {styles, attributes} = usePopper(buttonEl, menuEl, {strategy: 'fixed'});
+	const {styles, attributes} = usePopper(buttonEl, menuEl, {
+		// Right-aligned to the button, not centred under it. Popper's default is `bottom`,
+		// which hangs a wide menu off both sides of a narrow toolbar button and pushes it
+		// past whatever panel edge is nearest.
+		placement: 'bottom-end',
+		strategy: 'fixed'
+	});
 
 	React.useEffect(() => {
 		const closer = () => setOpen(false);
@@ -76,53 +83,73 @@ export const MenuButton: React.FC<MenuButtonProps> = props => {
 				onClick={() => setOpen(!open)}
 				ref={setButtonEl}
 			/>
-			<CSSTransition
-				classNames="fade-out"
-				in={open}
-				mountOnEnter
-				timeout={200}
-				unmountOnExit
-			>
-				<div
-					className="menu-button-menu"
-					ref={setMenuEl}
-					style={styles.popper}
-					{...attributes.popper}
-				>
-					<ButtonCard floating>
-						<ButtonBar orientation="vertical">
-							{items.map((item, index) => {
-								if (item.separator) {
-									return <ButtonBarSeparator key={index} />;
-								}
+			{/*
+				Portalled to the body, not rendered in place.
 
-								return 'checkable' in item ? (
-									<CheckboxButton
-										checkedIcon={<IconCheck />}
-										commandId={item.commandId}
-										disabled={item.disabled}
-										key={index}
-										label={item.label}
-										onChange={item.onClick}
-										uncheckedIcon={<IconEmpty />}
-										value={item.checked}
-									/>
-								) : (
-									<IconButton
-										commandId={item.commandId}
-										disabled={item.disabled}
-										icon={<IconEmpty />}
-										key={index}
-										label={item.label}
-										onClick={item.onClick}
-										variant={item.variant}
-									/>
-								);
-							})}
-						</ButtonBar>
-					</ButtonCard>
-				</div>
-			</CSSTransition>
+				`.menu-button-menu` is z-index 2000, but that number is only ever compared
+				against its siblings: the dialog stack sits inside `.dialog-transform-setter`,
+				whose inline `transform` makes it a stacking context, inside `.dialogs`, which
+				is `position: fixed` with no z-index of its own. From the root's point of view
+				the whole dialog subtree paints at level 0, so anything portalled to the body
+				with a z-index -- the full-screen scene editor at 1000 -- covered every menu
+				opened from a dialog toolbar, 2000 or not.
+
+				Raising `.dialogs` instead would put the dialog stack over the full-screen
+				editor, which is backwards. `strategy: 'fixed'` was already set, so the
+				popper's coordinates are viewport coordinates and survive the move unchanged.
+
+				`CardButton` and `Tooltip` are trapped in exactly the same way.
+			*/}
+			{createPortal(
+				<CSSTransition
+					classNames="fade-out"
+					in={open}
+					mountOnEnter
+					timeout={200}
+					unmountOnExit
+				>
+					<div
+						className="menu-button-menu"
+						ref={setMenuEl}
+						style={styles.popper}
+						{...attributes.popper}
+					>
+						<ButtonCard floating>
+							<ButtonBar orientation="vertical">
+								{items.map((item, index) => {
+									if (item.separator) {
+										return <ButtonBarSeparator key={index} />;
+									}
+
+									return 'checkable' in item ? (
+										<CheckboxButton
+											checkedIcon={<IconCheck />}
+											commandId={item.commandId}
+											disabled={item.disabled}
+											key={index}
+											label={item.label}
+											onChange={item.onClick}
+											uncheckedIcon={<IconEmpty />}
+											value={item.checked}
+										/>
+									) : (
+										<IconButton
+											commandId={item.commandId}
+											disabled={item.disabled}
+											icon={<IconEmpty />}
+											key={index}
+											label={item.label}
+											onClick={item.onClick}
+											variant={item.variant}
+										/>
+									);
+								})}
+							</ButtonBar>
+						</ButtonCard>
+					</div>
+				</CSSTransition>,
+				document.body
+			)}
 		</span>
 	);
 };
