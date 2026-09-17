@@ -356,7 +356,8 @@
 			"sizeWide": "Wide",
 			"beatProps": {
 				"as": "Style",
-				"auto": "Advance automatically, at the reader's own pace",
+				"auto": "Auto",
+				"autoDetail": "Advance automatically, at the reader's own pace. Off holds this beat for the time in Hold.",
 				"dur": "Hold",
 				"durAuto": "auto",
 				"inherit": "—",

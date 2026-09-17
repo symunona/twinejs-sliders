@@ -125,6 +125,9 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 				// "advance automatically" is not a question that beat can answer.
 				<CheckboxButton
 					label={t('dialogs.passageEdit.beatProps.auto')}
+					// The short word is all the toolbar has room for -- the sentence pushed
+					// Style and Place onto a second row on a docked stage.
+					tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
 					onChange={next =>
 						// Unchecking has to leave a number behind, or the box the author just
 						// enabled would be empty and mean the thing they turned off.
