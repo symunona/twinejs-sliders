@@ -70,13 +70,13 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = ({
 	const [width, setWidth] = React.useState(0);
 	const [hovered, setHovered] = React.useState<number>();
 
-	const texts = React.useMemo(
-		() => [undefined, ...beats].map((each, state) => shortLabel(t, state, each)),
+	const parts = React.useMemo(
+		() => [undefined, ...beats].map((each, state) => labelParts(t, state, each)),
 		[beats, t]
 	);
 	// A string, not the array: what the measure below cares about is whether the text
 	// changed, and the memo that produces it re-runs whenever `t` gets a new identity.
-	const textKey = texts.join('\u0000');
+	const textKey = parts.map(partsKey).join('\u0000');
 	const titles = React.useMemo(
 		() => [undefined, ...beats].map((each, state) => fullLabel(t, state, each)),
 		[beats, t]
@@ -195,6 +195,10 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = ({
 		>
 			<div className="scene-preview-timeline-inner" ref={inner}>
 				<div className="scene-preview-timeline-track">
+					{/* A lead-in before the arrival, so the first marker is a step of the
+					    scene rather than a ruler origin pinned to the edge. Fixed rather
+					    than proportional: nothing happened before it to take time. */}
+					<span className="scene-preview-timeline-lead" />
 					{holds.map((hold, state) => (
 						<React.Fragment key={state}>
 							{state > 0 && (
@@ -230,7 +234,7 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = ({
 								key={`leader-${box.state}`}
 							/>
 						))}
-						{texts.map((text, state) => {
+						{parts.map((part, state) => {
 							const box = boxes.find(each => each.state === state);
 
 							return (
@@ -250,7 +254,21 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = ({
 									}
 									title={titles[state]}
 								>
-									{text}
+									{part.who && (
+										<span className="scene-preview-timeline-label-who">
+											{part.who}
+										</span>
+									)}
+									{part.text && (
+										<span className="scene-preview-timeline-label-text">
+											{part.text}
+										</span>
+									)}
+									{part.dur && (
+										<span className="scene-preview-timeline-label-dur">
+											{part.dur}
+										</span>
+									)}
 								</span>
 							);
 						})}
@@ -322,45 +340,71 @@ function sameMetrics(a: Metrics | undefined, b: Metrics): boolean {
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /**
- * What the label says: short enough to fit a crowded strip, and never two lengths.
+ * The three pieces of a label, so each can be styled and clipped on its own.
  *
- * A label that swaps to a longer form when the scrubber reaches it would make the whole
- * strip twitch on every step, so the full sentence lives in `title` and only here.
+ * Split rather than one string because the parts have different value. The duration is the
+ * one number the strip exists to show, so it must never be the thing an ellipsis eats; the
+ * line of dialogue is the most useful and the least essential, so it is the part that gets
+ * clipped.
  */
-function shortLabel(t: Translate, state: number, beat: Beat | undefined): string {
+interface LabelParts {
+	/** Seconds, already formatted. Never clipped. */
+	dur?: string;
+	/** The beat's dialogue, or whatever stands in for it. Clipped when there is no room. */
+	text?: string;
+	/** Speaker, or the beat kind for the beats that have no speaker. */
+	who?: string;
+}
+
+/**
+ * What a label says. Never two lengths for the same beat: a label that grew when the
+ * scrubber reached it would make the whole strip twitch on every step, so the full sentence
+ * lives in `title` and the parts here are all any beat ever shows.
+ */
+function labelParts(
+	t: Translate,
+	state: number,
+	beat: Beat | undefined
+): LabelParts {
 	if (state === 0 || !beat) {
-		return t('dialogs.passageEdit.scenePreview.timelineLabelStart');
+		// Not "Start": this is a step of the scene like any other, the one the reader is
+		// looking at before a line has been spoken.
+		return {who: t('dialogs.passageEdit.scenePreview.timelineLabelArrival')};
 	}
 
-	const base = (() => {
-		switch (beat.kind) {
-			case 'say':
-			case 'set':
-				return beat.who;
-			case 'wait':
-				return t('dialogs.passageEdit.scenePreview.timelineLabelWait', {
-					seconds: beat.seconds
-				});
-			case 'fx':
-				return t('dialogs.passageEdit.scenePreview.timelineLabelFx', {
-					name: beat.fx.id
-				});
-			case 'mark':
-				return t('dialogs.passageEdit.scenePreview.timelineLabelMark', {
-					name: beat.name
-				});
-			default:
-				return t('dialogs.passageEdit.scenePreview.timelineLabelBox');
-		}
-	})();
+	const dur = beat.dur === undefined ? undefined : seconds(beat.dur);
 
-	// The one number the strip exists to show, and the only thing worth the extra width.
-	return beat.dur === undefined
-		? base
-		: t('dialogs.passageEdit.scenePreview.timelineLabelTimed', {
-				dur: beat.dur,
-				label: base
-		  });
+	switch (beat.kind) {
+		case 'say':
+			return {dur, text: beat.text, who: beat.who};
+		case 'set':
+			return {dur, who: beat.who};
+		case 'box':
+			return {dur, text: beat.text};
+		case 'wait':
+			// `wait` IS a duration, so it needs no speaker and no second number. Not
+			// translated: it is the YAML keyword the author typed, like `fx`.
+			return {dur: dur ?? seconds(beat.seconds), who: 'wait'};
+		case 'fx':
+			return {dur, text: beat.fx.id, who: 'fx'};
+		default:
+			return {dur, text: beat.name, who: '\u2316'};
+	}
+}
+
+/**
+ * A duration as the strip writes it.
+ *
+ * Not a locale string: `s` is the SI symbol, and a translator given "{{dur}}s" has nothing
+ * to do with it but break the alignment the tabular figures are there for.
+ */
+function seconds(value: number): string {
+	return `${value}s`;
+}
+
+/** Everything a label shows, as one string, for the measure pass's change detection. */
+function partsKey(parts: LabelParts): string {
+	return [parts.who, parts.text, parts.dur].join('\u0001');
 }
 
 /** "Beat 3 — mira, 0.8s". The one place the author sees a beat's timing without the YAML. */

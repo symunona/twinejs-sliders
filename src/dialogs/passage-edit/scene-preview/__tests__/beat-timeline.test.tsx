@@ -222,11 +222,60 @@ describe('<BeatTimeline> labels', () => {
 		const {container} = renderLabelled([say(0), say(1), say(2)]);
 		const placed = [
 			...container.querySelectorAll('.scene-preview-timeline-label.placed')
-		].map(label => label.textContent);
+		];
 
 		// State 0 plus one per beat, and at 100px apart nothing has to be dropped.
 		expect(placed).toHaveLength(4);
-		expect(placed.slice(1)).toEqual(['mira', 'mira', 'mira']);
+		// State 0 is the arrival, not a beat, so it has a name and nothing else.
+		// i18n is not initialised in unit tests, so a translated string is its own key.
+		expect(placed[0].textContent).toBe(
+			'dialogs.passageEdit.scenePreview.timelineLabelArrival'
+		);
+		expect(
+			placed
+				.slice(1)
+				.map(
+					label =>
+						label.querySelector('.scene-preview-timeline-label-who')
+							?.textContent
+				)
+		).toEqual(['mira', 'mira', 'mira']);
+	});
+
+	// What the author is actually looking for on the strip: which line is this.
+	it('shows the spoken line, and the duration beside it', () => {
+		const {container} = renderLabelled([say(0), say(1, 0.4)]);
+		const labels = [
+			...container.querySelectorAll('.scene-preview-timeline-label')
+		];
+
+		expect(
+			labels[1].querySelector('.scene-preview-timeline-label-text')?.textContent
+		).toBe('hi');
+		expect(labels[1].querySelector('.scene-preview-timeline-label-dur')).toBe(
+			null
+		);
+		expect(
+			labels[2].querySelector('.scene-preview-timeline-label-dur')?.textContent
+		).toBe('0.4s');
+	});
+
+	// `wait` IS a duration, so it says so once rather than twice.
+	it('labels a wait beat with its own seconds', () => {
+		const {container} = renderLabelled([
+			say(0),
+			{index: 1, kind: 'wait', seconds: 1.5}
+		]);
+		const label = [
+			...container.querySelectorAll('.scene-preview-timeline-label')
+		][2];
+
+		expect(
+			label.querySelector('.scene-preview-timeline-label-who')?.textContent
+		).toBe('wait');
+		expect(
+			label.querySelector('.scene-preview-timeline-label-dur')?.textContent
+		).toBe('1.5s');
 	});
 
 	it('draws no labels when it is collapsed', () => {

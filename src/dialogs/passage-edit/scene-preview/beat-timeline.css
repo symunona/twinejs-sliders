@@ -29,6 +29,12 @@
 	min-width: 10px;
 }
 
+/* Room in front of the arrival marker. Fixed, not flex-grow: no time passed before the
+   scene opened, so there is nothing for a proportional gap to be proportional to. */
+.scene-preview-timeline-lead {
+	flex: 0 0 12px;
+}
+
 .scene-preview-timeline-mark {
 	background: var(--light-gray);
 	border: none;
@@ -61,15 +67,39 @@
 }
 
 .scene-preview-timeline-label {
+	align-items: baseline;
 	color: var(--dark-gray);
+	display: inline-flex;
 	font-size: 10px;
+	gap: 4px;
 	line-height: 13px;
-	/* One cap for every label, so a single long character id cannot eat the strip. */
-	max-width: 96px;
-	overflow: hidden;
+	/* One cap for every label, so a single long line of dialogue cannot eat the strip.
+	   Only the dialogue inside it is allowed to shrink. */
+	max-width: 150px;
 	pointer-events: none;
-	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.scene-preview-timeline-label-who {
+	flex: 0 0 auto;
+	font-weight: bold;
+}
+
+/* The only part that gives way: a clipped line still reads, a clipped speaker or a clipped
+   duration is just wrong. `min-width: 0` because a flex item will not shrink past its
+   content without it, which is what would push the duration out of the box instead. */
+.scene-preview-timeline-label-text {
+	flex: 0 1 auto;
+	font-style: italic;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.scene-preview-timeline-label-dur {
+	color: var(--gray);
+	flex: 0 0 auto;
+	font-variant-numeric: tabular-nums;
 }
 
 /* Before the measure pass, and for anything the pass could not fit: laid out at natural
@@ -80,16 +110,22 @@
 }
 
 .scene-preview-timeline-label.placed {
+	/* Opaque, and painted after the leaders because it comes later in the DOM: a leader
+	   running down to row 2 crosses rows 0 and 1, and without this it draws a line through
+	   whatever text is sitting there. */
+	background: var(--white);
+	padding: 0 3px;
 	position: absolute;
 }
 
-.scene-preview-timeline-label[data-hovered] {
+.scene-preview-timeline-label[data-hovered],
+.scene-preview-timeline-label[data-hovered] .scene-preview-timeline-label-dur {
 	color: var(--black);
 }
 
-.scene-preview-timeline-label[data-current] {
+.scene-preview-timeline-label[data-current],
+.scene-preview-timeline-label[data-current] .scene-preview-timeline-label-dur {
 	color: var(--dark-blue);
-	font-weight: bold;
 }
 
 /* Drawn only when the label is not sitting on its own dot -- a line under every label is
