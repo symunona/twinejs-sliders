@@ -8,7 +8,8 @@ import {
 	IconPhoto,
 	IconPhotoShield,
 	IconPlayerPause,
-	IconPlayerPlay
+	IconPlayerPlay,
+	IconTimeline
 } from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
@@ -149,6 +150,15 @@ const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
  */
 const GRID_KEY = 'sliders.preview.grid';
 
+/**
+ * Whether the beat strip names its beats.
+ *
+ * Off by default: the strip's job is spacing, and the labels cost rows of height that full
+ * screen does not have to spare. An author who turned them on is reading the scene's shape
+ * rather than staging it, and that outlasts one passage like the other three.
+ */
+const TIMELINE_LABELS_KEY = 'sliders.preview.timelineLabels';
+
 /** Stable identity, so the timeline's memo does not rebuild on every parse. */
 const EMPTY_BEATS: Beat[] = [];
 
@@ -223,6 +233,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 	const [grid, setGrid] = React.useState(
 		() => window.localStorage.getItem(GRID_KEY) === 'true'
+	);
+	const [timelineLabels, setTimelineLabels] = React.useState(
+		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) === 'true'
 	);
 	const [beat, setBeat] = React.useState(0);
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
@@ -830,6 +843,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		});
 	}
 
+	function toggleTimelineLabels() {
+		setTimelineLabels(value => {
+			window.localStorage.setItem(TIMELINE_LABELS_KEY, String(!value));
+
+			return !value;
+		});
+	}
+
 	function toggleLock() {
 		setLocked(value => {
 			window.localStorage.setItem(LOCKED_KEY, String(!value));
@@ -1155,6 +1176,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				label={t('dialogs.passageEdit.scenePreview.play')}
 				onClick={togglePlaying}
 			/>
+			{/* Next to play rather than next to the locks: it is what the strip
+			    below shows, and the strip is part of reading the scene's
+			    timing, not part of staging it. */}
+			<IconButton
+				icon={<IconTimeline />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.timelineLabels')}
+				onClick={toggleTimelineLabels}
+				selectable
+				selected={timelineLabels}
+			/>
 			{/* Sits beside the lock rather than in the selection row: the grid
 			    is how the author reads the stage, and nothing has to be
 			    selected to want to read it. */}
@@ -1329,6 +1361,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			<BeatTimeline
 				beat={beat}
 				beats={parse.result?.scene.beats ?? EMPTY_BEATS}
+				labels={timelineLabels}
 				onBeatChange={goToBeat}
 			/>
 			{stageBody}

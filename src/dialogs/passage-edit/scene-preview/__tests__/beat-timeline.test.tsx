@@ -58,7 +58,12 @@ describe('<BeatTimeline>', () => {
 		const onBeatChange = jest.fn();
 
 		render(
-			<BeatTimeline beat={beat} beats={beats} onBeatChange={onBeatChange} />
+			<BeatTimeline
+				beat={beat}
+				beats={beats}
+				labels={false}
+				onBeatChange={onBeatChange}
+			/>
 		);
 
 		return onBeatChange;
@@ -101,6 +106,7 @@ describe('<BeatTimeline>', () => {
 			<BeatTimeline
 				beat={0}
 				beats={[say(0, 0.5), say(1, 4)]}
+				labels={false}
 				onBeatChange={jest.fn()}
 			/>
 		);
@@ -119,6 +125,7 @@ describe('<BeatTimeline>', () => {
 			<BeatTimeline
 				beat={0}
 				beats={[say(0, 0), say(1, 0), say(2, 0)]}
+				labels={false}
 				onBeatChange={jest.fn()}
 			/>
 		);
@@ -128,5 +135,155 @@ describe('<BeatTimeline>', () => {
 		)) {
 			expect(Number(gap.style.flexGrow)).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe('<BeatTimeline> labels', () => {
+	/**
+	 * jsdom lays nothing out, so the measure pass would see every marker at x 0 and every
+	 * label 0px wide. Faked from `data-state` instead: markers 100px apart, labels 40px.
+	 */
+	function fakeGeometry() {
+		const left = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			'offsetLeft'
+		);
+		const width = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			'offsetWidth'
+		);
+		const client = Object.getOwnPropertyDescriptor(
+			HTMLElement.prototype,
+			'clientWidth'
+		);
+
+		Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+			configurable: true,
+			get: () => 400
+		});
+
+		Object.defineProperty(HTMLElement.prototype, 'offsetLeft', {
+			configurable: true,
+			get(this: HTMLElement) {
+				return Number(this.getAttribute('data-state') ?? 0) * 100;
+			}
+		});
+		Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+			configurable: true,
+			get(this: HTMLElement) {
+				return this.classList.contains('scene-preview-timeline-mark') ? 8 : 40;
+			}
+		});
+
+		// `clientWidth` lives on Element, not HTMLElement, so the override above shadows it
+		// rather than replacing it and there is nothing to put back.
+		return () => {
+			Object.defineProperty(HTMLElement.prototype, 'offsetLeft', left!);
+			Object.defineProperty(HTMLElement.prototype, 'offsetWidth', width!);
+
+			if (client) {
+				Object.defineProperty(HTMLElement.prototype, 'clientWidth', client);
+			} else {
+				delete (HTMLElement.prototype as unknown as Record<string, unknown>)
+					.clientWidth;
+			}
+		};
+	}
+
+	let restore: () => void;
+
+	beforeEach(() => {
+		restore = fakeGeometry();
+		jest
+			.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+			.mockReturnValue({left: 0, width: 400} as DOMRect);
+	});
+
+	afterEach(() => {
+		restore();
+		jest.restoreAllMocks();
+	});
+
+	function renderLabelled(beats: Beat[], beat = 0) {
+		const onBeatChange = jest.fn();
+		const {container} = render(
+			<BeatTimeline
+				beat={beat}
+				beats={beats}
+				labels
+				onBeatChange={onBeatChange}
+			/>
+		);
+
+		return {container, onBeatChange};
+	}
+
+	it('names every beat it can place', () => {
+		const {container} = renderLabelled([say(0), say(1), say(2)]);
+		const placed = [
+			...container.querySelectorAll('.scene-preview-timeline-label.placed')
+		].map(label => label.textContent);
+
+		// State 0 plus one per beat, and at 100px apart nothing has to be dropped.
+		expect(placed).toHaveLength(4);
+		expect(placed.slice(1)).toEqual(['mira', 'mira', 'mira']);
+	});
+
+	it('draws no labels when it is collapsed', () => {
+		const {container} = render(
+			<BeatTimeline
+				beat={0}
+				beats={[say(0), say(1), say(2)]}
+				labels={false}
+				onBeatChange={jest.fn()}
+			/>
+		);
+
+		expect(
+			container.querySelector('.scene-preview-timeline-label')
+		).toBeNull();
+	});
+
+	// Nearest wins: never nothing, and never a hunt for an 8px dot.
+	it('highlights the marker nearest the pointer', () => {
+		const {container} = renderLabelled([say(0), say(1), say(2)]);
+		const strip = screen.getByTestId('scene-preview-timeline');
+
+		// Anchors sit at 4, 104, 204, 304 (offsetLeft + half an 8px dot).
+		fireEvent.pointerMove(strip, {clientX: 260});
+		expect(
+			container.querySelector('.scene-preview-timeline-mark[data-hovered]')
+		).toHaveAttribute('data-state', '3');
+
+		// Squarely between two markers still lights one of them.
+		fireEvent.pointerMove(strip, {clientX: 154});
+		expect(
+			container.querySelector('.scene-preview-timeline-mark[data-hovered]')
+		).toBeTruthy();
+
+		fireEvent.pointerLeave(strip);
+		expect(
+			container.querySelector('.scene-preview-timeline-mark[data-hovered]')
+		).toBeNull();
+	});
+
+	it('scrubs to the nearest marker when the strip is clicked off a dot', () => {
+		const {onBeatChange} = renderLabelled([say(0), say(1), say(2)]);
+
+		fireEvent.click(screen.getByTestId('scene-preview-timeline'), {
+			clientX: 190
+		});
+		expect(onBeatChange).toHaveBeenCalledWith(2);
+	});
+
+	// The scrubber's own label is placed first, so it can never be bumped down.
+	it('keeps the current beat label on the top row', () => {
+		const {container} = renderLabelled([say(0), say(1), say(2)], 2);
+		const current = container.querySelector<HTMLElement>(
+			'.scene-preview-timeline-label[data-current]'
+		);
+
+		expect(current).toHaveClass('placed');
+		expect(current!.style.top).toBe('5px');
 	});
 });

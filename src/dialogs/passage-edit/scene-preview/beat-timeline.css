@@ -1,11 +1,22 @@
 /* A strip of time under the bar, not a second row of controls: it keeps the bar's height
-   out of it, because in full screen the stage takes whatever the chrome leaves. */
+   out of it, because in full screen the stage takes whatever the chrome leaves. Collapsed
+   it is the marker row alone; expanded it grows downward by however many label rows the
+   placement pass actually needed. */
 .scene-preview-timeline {
-	align-items: center;
 	background: var(--white);
-	display: flex;
 	flex-shrink: 0;
 	padding: 0 8px 4px;
+}
+
+/* The coordinate origin everything measured is relative to: markers report `offsetLeft`
+   against it, and the label layer positions against the same box. */
+.scene-preview-timeline-inner {
+	position: relative;
+}
+
+.scene-preview-timeline-track {
+	align-items: center;
+	display: flex;
 }
 
 /* Grows in proportion to how long the beat before it holds. The floor is what keeps a run
@@ -29,7 +40,9 @@
 	width: 8px;
 }
 
-.scene-preview-timeline-mark:hover {
+/* Hover is driven from the strip, not from the dot: whichever marker is nearest the
+   pointer lights up, so there is never a gap between two beats where nothing is live. */
+.scene-preview-timeline-mark[data-hovered] {
 	background: var(--dark-gray);
 }
 
@@ -39,4 +52,62 @@
 	   colour alone is easy to miss, especially against the hover state. */
 	height: 12px;
 	width: 12px;
+}
+
+/* Labels are absolute so they cannot push the marker row around, and the layer's height is
+   set inline from the rows the placement actually used. */
+.scene-preview-timeline-labels {
+	position: relative;
+}
+
+.scene-preview-timeline-label {
+	color: var(--dark-gray);
+	font-size: 10px;
+	line-height: 13px;
+	/* One cap for every label, so a single long character id cannot eat the strip. */
+	max-width: 96px;
+	overflow: hidden;
+	pointer-events: none;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Before the measure pass, and for anything the pass could not fit: laid out at natural
+   width so `offsetWidth` is the truth, but never painted. */
+.scene-preview-timeline-label:not(.placed) {
+	position: absolute;
+	visibility: hidden;
+}
+
+.scene-preview-timeline-label.placed {
+	position: absolute;
+}
+
+.scene-preview-timeline-label[data-hovered] {
+	color: var(--black);
+}
+
+.scene-preview-timeline-label[data-current] {
+	color: var(--dark-blue);
+	font-weight: bold;
+}
+
+/* Drawn only when the label is not sitting on its own dot -- a line under every label is
+   noise, not guidance. */
+.scene-preview-timeline-leader,
+.scene-preview-timeline-leader-elbow {
+	/* One step darker than the track: a leader has to be followable across a row gap, and
+	   the track's own grey disappears against the white the labels sit on. */
+	background: var(--gray);
+	pointer-events: none;
+	position: absolute;
+}
+
+.scene-preview-timeline-leader {
+	top: 0;
+	width: 1px;
+}
+
+.scene-preview-timeline-leader-elbow {
+	height: 1px;
 }
