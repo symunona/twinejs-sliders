@@ -313,3 +313,92 @@ describe('beat completions', () => {
 		).toEqual({kind: 'place'});
 	});
 });
+
+describe('keys offered to a line with no map in it yet', () => {
+	/** The line as it stands after picking `name` from the dropdown. */
+	function pick(passage: string, name: string) {
+		const context = contextAt(passage);
+
+		if (!context?.promote) {
+			throw new Error('That cursor position offered no promotion.');
+		}
+
+		const {after, before, from, to} = context.promote;
+		const line = passage
+			.split('\n')
+			.find(one => one.includes('|'))!
+			.replace('|', '');
+
+		return line.slice(0, from) + before + name + ': ' + after + line.slice(to);
+	}
+
+	it('offers a bare beat the keys it could take', () => {
+		expect(contextAt('[scene]\nbeats:\n  - mira: "Hello."|')).toMatchObject({
+			slot: {
+				id: 'beat',
+				kind: 'keys',
+				names: [...ENTITY_KEYS, ...SAY_KEYS, ...BEAT_BODY_KEYS]
+			},
+			typed: ''
+		});
+	});
+
+	it('rewrites a spoken beat into a map, keeping the line as the speech', () => {
+		expect(pick('[scene]\nbeats:\n  - mira: "Hello."|', 'dur')).toBe(
+			'  - mira: {say: "Hello.", dur: }'
+		);
+	});
+
+	it('writes a map onto a beat that has no value yet', () => {
+		expect(pick('[scene]\nbeats:\n  - mira:|', 'at')).toBe('  - mira: {at: }');
+	});
+
+	it('adds to a map the beat already has', () => {
+		expect(pick('[scene]\nbeats:\n  - mira: {at: 0.3}|', 'dur')).toBe(
+			'  - mira: {at: 0.3, dur: }'
+		);
+	});
+
+	it('leaves an empty map alone rather than writing a stray comma', () => {
+		expect(pick('[scene]\nbeats:\n  - mira: {}|', 'dur')).toBe(
+			'  - mira: {dur: }'
+		);
+	});
+
+	it('knows a box beat says its line under text:', () => {
+		expect(contextAt('[scene]\nbeats:\n  - box: "The candle."|')).toMatchObject({
+			slot: {id: 'box', kind: 'keys', names: BOX_KEYS}
+		});
+		expect(pick('[scene]\nbeats:\n  - box: "The candle."|', 'as')).toBe(
+			'  - box: {text: "The candle.", as: }'
+		);
+	});
+
+	it('says nothing on a command beat, which has no body to key', () => {
+		expect(contextAt('[scene]\nbeats:\n  - wait: 1|')).toBeUndefined();
+		expect(contextAt('[scene]\nbeats:\n  - mark: here|')).toBeUndefined();
+	});
+
+	it('extends an entity a cast entry already declares', () => {
+		expect(contextAt('[scene]\ncast:\n  mira: {at: 0}|')).toMatchObject({
+			slot: {id: 'entity', kind: 'keys', names: ENTITY_KEYS}
+		});
+	});
+
+	it('says nothing with the cursor inside the value', () => {
+		expect(
+			contextAt('[scene]\nbeats:\n  - mira: "He|llo."')?.promote
+		).toBeUndefined();
+	});
+
+	it('declines a value carrying a comment, which braces would swallow', () => {
+		expect(contextAt('[scene]\nbeats:\n  - mira: "Hi" # later|')).toBeUndefined();
+	});
+
+	it('still completes a value that has names to offer', () => {
+		expect(contextAt('[scene]\nbg: tav|')).toMatchObject({slot: {kind: 'bg'}});
+		expect(contextAt('[scene]\nbeats:\n  - fx: rai|')).toMatchObject({
+			slot: {kind: 'fx'}
+		});
+	});
+});

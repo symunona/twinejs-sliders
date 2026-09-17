@@ -17,6 +17,7 @@ import * as React from 'react';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {
 	BEAT_BODY_KEYS,
+	BEAT_COMMAND_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
@@ -44,7 +45,14 @@ import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
 export const FX_IDS = ['cold', 'dark', 'flash', 'rain', 'warm'];
 
 /** Beat keys that are commands rather than a speaker, offered after the cast. */
-const BEAT_COMMAND_NAMES = ['box', 'wait', 'fx', 'mark'];
+const BEAT_COMMAND_NAMES = [...BEAT_COMMAND_KEYS];
+
+/**
+ * Command beats whose value is a scalar and nothing else: `- wait: 1`, `- fx: rain`,
+ * `- mark: here`. They have no body map, so there are no keys to offer inside one --
+ * `box:` is the only command that takes a map.
+ */
+const SCALAR_BEAT_COMMANDS: readonly string[] = ['wait', 'fx', 'mark'];
 
 /** What the cursor is sitting in, and therefore what to offer. */
 export type HintSlot =
@@ -98,6 +106,17 @@ export interface SceneHintContext {
 	scaffold: boolean;
 	/** Written after the picked name, to close a `[[link` the author left open. */
 	suffix?: string;
+	/**
+	 * Set when the line has no map to put a key in yet, and picking one has to
+	 * rewrite the value into a flow map: `- mira: "Hello."` becomes
+	 * `- mira: {say: "Hello.", dur: }`.
+	 *
+	 * The range `from`..`to` is the whole value, and the pick writes
+	 * `before + name + ': ' + after` over it, leaving the cursor between the two.
+	 * Kept as plain text rather than a rewritten YAML document because the
+	 * author's own spacing, quoting and comments have to survive a completion.
+	 */
+	promote?: {after: string; before: string; from: number; to: number};
 }
 
 /**
@@ -211,7 +230,12 @@ function valueKey(before: string, tokenStart: number): string | undefined {
  * `valueKey()` cannot answer this on its own: it strips a trailing `{` before
  * looking for the colon, so `mira: {` and `mira: tav` look identical to it.
  */
-function flowContext(head: string): {keyPosition: boolean; owners: string[]} {
+function flowContext(head: string): {
+	/** How many `{`/`[` are still open, which is zero on a plain block line. */
+	depth: number;
+	keyPosition: boolean;
+	owners: string[];
+} {
 	const stack: {inValue: boolean; opener: string; owner?: string}[] = [];
 
 	for (let i = 0; i < head.length; i++) {
@@ -240,6 +264,7 @@ function flowContext(head: string): {keyPosition: boolean; owners: string[]} {
 	const top = stack[stack.length - 1];
 
 	return {
+		depth: stack.length,
 		keyPosition: top !== undefined && top.opener === '{' && !top.inValue,
 		owners: stack
 			.map(level => level.owner)
@@ -347,13 +372,104 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'entities':
 			return keys('entity', ENTITY_KEYS);
 
-		// A beat is an entity patch that may also speak, and may time itself.
+		// A beat is an entity patch that may also speak, and may time itself --
+		// unless it is one of the commands whose whole value is a scalar, which
+		// has no body to hold a key at all.
 		case 'beats':
-			return keys('beat', [...ENTITY_KEYS, ...SAY_KEYS, ...BEAT_BODY_KEYS]);
+			return SCALAR_BEAT_COMMANDS.includes(owner)
+				? undefined
+				: keys('beat', [...ENTITY_KEYS, ...SAY_KEYS, ...BEAT_BODY_KEYS]);
 
 		default:
 			return undefined;
 	}
+}
+
+/**
+ * The keys a line could be GIVEN, for a line that has nowhere to put one yet.
+ *
+ * `- mira: "Hello."` is a whole beat with no map in it, so key position never
+ * happens on it and Ctrl-Space had nothing to say -- the author had to know that
+ * the long form is `{say: "Hello.", dur: 0.4}` and rewrite the line by hand
+ * before the completion would help. Offering the keys here and doing that
+ * rewrite on the pick is the difference between the schema being discoverable
+ * and being documentation.
+ *
+ * Three shapes, all at the end of a line and all outside any open flow
+ * container, since inside one the ordinary key-position path already works:
+ *
+ * - `- mira:`          -> `- mira: {dur: }`
+ * - `- mira: "Hello."` -> `- mira: {say: "Hello.", dur: }`
+ * - `- mira: {at: 0}`  -> `- mira: {at: 0, dur: }`
+ *
+ * Which keys those are is `keySlotFor()`'s answer, so this works for a `cast:`
+ * entry or a link as well as for a beat; only the scalar form is beat-specific,
+ * because `say` and `box`'s `text` are the only shorthands the subset has.
+ */
+function promotionContext(
+	lines: string[],
+	blockStart: number,
+	cursor: {ch: number; line: number}
+): SceneHintContext | undefined {
+	const line = lines[cursor.line] ?? '';
+
+	// A cursor inside the value is editing it, not adding beside it.
+	if (
+		line.slice(cursor.ch).trim() !== '' ||
+		flowContext(line.slice(0, cursor.ch)).depth > 0
+	) {
+		return undefined;
+	}
+
+	const match = KEY_LINE_RE.exec(line);
+
+	if (!match) {
+		return undefined;
+	}
+
+	const key = match[1].trim();
+	const chain = [key, ...enclosingKeys(lines, blockStart, cursor.line)];
+	const slot = keySlotFor(chain);
+
+	if (slot?.kind !== 'keys') {
+		return undefined;
+	}
+
+	const value = match[2].trim();
+	const valueStart = line.length - match[2].length;
+	const from = line.lastIndexOf(':', valueStart) + 1;
+	let before: string;
+
+	if (value === '') {
+		before = ' {';
+	} else if (value.startsWith('{') && value.endsWith('}')) {
+		const inner = value.slice(1, -1);
+
+		before = ` {${inner}${inner.trim() === '' ? '' : ', '}`;
+	} else {
+		// A scalar only has a key to become in a beat: `- mira: "hi"` is
+		// `say`, `- box: "hi"` is `text`. Nothing else in the subset writes one.
+		const scalarKey =
+			chain[1] === 'beats' ? (key === 'box' ? 'text' : 'say') : undefined;
+
+		// A trailing comment would end up inside the braces, commenting out the
+		// closing one. Rare enough to decline rather than reflow.
+		if (scalarKey === undefined || /(?:^|\s)#/.test(value)) {
+			return undefined;
+		}
+
+		before = ` {${scalarKey}: ${value}, `;
+	}
+
+	return {
+		end: cursor.ch,
+		needsSpace: false,
+		promote: {after: '}', before, from, to: line.length},
+		scaffold: false,
+		slot,
+		start: cursor.ch,
+		typed: ''
+	};
 }
 
 /**
@@ -477,58 +593,67 @@ export function sceneHintContext(
 		typed
 	});
 
+	// A line whose value is already written has no key position on it, so the
+	// keys it could still be given are offered instead -- but only once the
+	// value itself has nothing to complete.
+	const promote = () => promotionContext(lines, blockStart, cursor);
+
 	if (key !== undefined) {
-		switch (key) {
-			case 'bg':
-				return found({kind: 'bg'});
+		const valueHint = ((): SceneHintContext | undefined => {
+			switch (key) {
+				case 'bg':
+					return found({kind: 'bg'});
 
-			case 'layer':
-				return found({kind: 'layer'});
+				case 'layer':
+					return found({kind: 'layer'});
 
-			case 'fx':
-				return found({kind: 'fx'});
+				case 'fx':
+					return found({kind: 'fx'});
 
-			case 'frame': {
-				const entity = entityOfLine(lines, blockStart, cursor.line);
+				case 'frame': {
+					const entity = entityOfLine(lines, blockStart, cursor.line);
 
-				return entity ? found({kind: 'frame', entity}) : undefined;
+					return entity ? found({kind: 'frame', entity}) : undefined;
+				}
+
+				// `to:` is a link target, which is a passage name. Nothing else in the
+				// subset uses the key, so the enclosing links: block need not be found --
+				// flow form (`links: {stay: {to: X}}`) included.
+				case 'to':
+					return found({kind: 'passage'});
+
+				case 'as':
+					return found({kind: 'style'});
+
+				case 'place':
+					return found({kind: 'place'});
+
+				case 'ref': {
+					// `ref:` names a character under `cast:` and an asset under
+					// `props:`, so the block the entity lives in decides.
+					const section = enclosingKeys(lines, blockStart, cursor.line).find(
+						one => one === 'cast' || one === 'props' || one === 'entities'
+					);
+
+					return section === 'cast' ||
+						section === 'props' ||
+						section === 'entities'
+						? found({kind: section})
+						: undefined;
+				}
+
+				// Shorthand `back: Street`. The key is the link's own NAME, so it says
+				// nothing; the enclosing `links:` -- block form above, flow form on the
+				// same line -- is what makes the value a passage target.
+				default:
+					return enclosingKeys(lines, blockStart, cursor.line)[0] === 'links' ||
+						/(?:^|[\s[{,])links\s*:/.test(line.slice(0, start))
+						? found({kind: 'passage'})
+						: undefined;
 			}
+		})();
 
-			// `to:` is a link target, which is a passage name. Nothing else in the
-			// subset uses the key, so the enclosing links: block need not be found --
-			// flow form (`links: {stay: {to: X}}`) included.
-			case 'to':
-				return found({kind: 'passage'});
-
-			case 'as':
-				return found({kind: 'style'});
-
-			case 'place':
-				return found({kind: 'place'});
-
-			case 'ref': {
-				// `ref:` names a character under `cast:` and an asset under
-				// `props:`, so the block the entity lives in decides.
-				const section = enclosingKeys(lines, blockStart, cursor.line).find(
-					one => one === 'cast' || one === 'props' || one === 'entities'
-				);
-
-				return section === 'cast' ||
-					section === 'props' ||
-					section === 'entities'
-					? found({kind: section})
-					: undefined;
-			}
-
-			// Shorthand `back: Street`. The key is the link's own NAME, so it says
-			// nothing; the enclosing `links:` -- block form above, flow form on the
-			// same line -- is what makes the value a passage target.
-			default:
-				return enclosingKeys(lines, blockStart, cursor.line)[0] === 'links' ||
-					/(?:^|[\s[{,])links\s*:/.test(line.slice(0, start))
-					? found({kind: 'passage'})
-					: undefined;
-		}
+		return valueHint ?? promote();
 	}
 
 	// Key position: the enclosing block decides what names belong here.
@@ -544,18 +669,24 @@ export function sceneHintContext(
 	if (chain[0] === 'beats') {
 		return /^\s*(?:-\s*)?$/.test(line.slice(0, start))
 			? found({kind: 'speaker'}, true)
-			: undefined;
+			: promote();
 	}
 
 	const slot = keySlotFor(chain);
 
 	if (!slot) {
-		return undefined;
+		return promote();
 	}
 
-	return found(
-		slot,
-		slot.kind === 'cast' || slot.kind === 'props' || slot.kind === 'entities'
+	// At the end of a line that already declares an entity, a key belongs to that
+	// entity: `mira: {at: 0}` wants `scale` next, not a second id glued onto the
+	// same line, which would not even be YAML.
+	return (
+		promote() ??
+		found(
+			slot,
+			slot.kind === 'cast' || slot.kind === 'props' || slot.kind === 'entities'
+		)
 	);
 }
 
@@ -750,6 +881,34 @@ function beatText(name: string): string {
 	return `${name}${shape.prefix}${shape.value}${shape.suffix}`;
 }
 
+/**
+ * Rewrites a line's value into a flow map holding the picked key, and leaves the
+ * cursor where its value goes.
+ *
+ * The replaced range is the whole value, not the empty range the dropdown was
+ * opened on, so show-hint's own `from`/`to` are ignored here on purpose.
+ */
+function insertPromoted(
+	name: string,
+	promote: NonNullable<SceneHintContext['promote']>,
+	line: number
+) {
+	return (cm: Editor) => {
+		const text = `${promote.before}${name}: ${promote.after}`;
+
+		cm.replaceRange(
+			text,
+			{ch: promote.from, line},
+			{ch: promote.to, line},
+			'complete'
+		);
+
+		const caret = promote.from + text.length - promote.after.length;
+
+		cm.setCursor({ch: caret, line});
+	};
+}
+
 function insertEntity(name: string) {
 	return (
 		cm: Editor,
@@ -805,14 +964,15 @@ export function sceneCompletion(
 					block.lineOffset,
 					block.lineOffset + block.text.split('\n').length,
 					cursor
-			  )
+				)
 			: undefined);
 
 	if (!context) {
 		return undefined;
 	}
 
-	const {end, needsSpace, scaffold, slot, start, suffix, typed} = context;
+	const {end, needsSpace, promote, scaffold, slot, start, suffix, typed} =
+		context;
 	const candidate = typed.toLowerCase();
 	const refs = block ? entityRefs(block.text) : new Map<string, string>();
 	const all = namesForSlot(
@@ -848,21 +1008,23 @@ export function sceneCompletion(
 			// The name is what shows and what gets remembered; `text` is only
 			// what lands in the document, scaffold and spaces and all.
 			displayText: name,
-			hint: scaffold
-				? slot.kind === 'speaker'
-					? insertBeat(name)
-					: insertEntity(name)
-				: undefined,
+			hint: promote
+				? insertPromoted(name, promote, cursor.line)
+				: scaffold
+					? slot.kind === 'speaker'
+						? insertBeat(name)
+						: insertEntity(name)
+					: undefined,
 			text:
 				// A key is only ever half a line, so it writes its own colon and
 				// leaves the cursor where the value goes.
 				slot.kind === 'keys'
 					? `${name}: `
 					: scaffold
-					? slot.kind === 'speaker'
-						? beatText(name)
-						: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
-					: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
+						? slot.kind === 'speaker'
+							? beatText(name)
+							: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
+						: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
 		}))
 	};
 
@@ -920,7 +1082,7 @@ export function useSceneHints(
 			opening.to.ch > opening.from.ch
 				? editor.markText(opening.from, opening.to, {
 						className: 'sliders-hint-target'
-				  })
+					})
 				: undefined;
 
 		if (target) {
