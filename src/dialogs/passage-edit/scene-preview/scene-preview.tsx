@@ -333,11 +333,25 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		(id: EntityId) => stage.entities?.[id]?.kind ?? 'cast',
 		[stage]
 	);
+	/**
+	 * The caret drives the scrubber.
+	 *
+	 * Clicking into a beat's lines shows that beat on the stage, and clicking out of the
+	 * beats goes back to the opening state — the other half of `useActiveBeatMark`, which
+	 * lights the beat the scrubber is already on. Playback stops, because the author is
+	 * clearly steering by hand now.
+	 */
+	const handleCaretBeat = React.useCallback((next: number) => {
+		setPlaying(false);
+		setBeat(next);
+	}, []);
 	const {clear, select, selection} = useStageSelection({
+		beatSpans: parse.result?.beatSpans,
 		block,
 		editor,
 		enabled: true,
 		kindOf,
+		onCaretBeat: handleCaretBeat,
 		scene: parse.result?.scene,
 		stageIds
 	});

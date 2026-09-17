@@ -20,7 +20,8 @@ import * as React from 'react';
 import {entityAtLine, entityLines} from '@sliders/scene-edit';
 import type {EntityTarget} from '@sliders/scene-edit';
 import type {SceneBlock} from '@sliders/scene-index';
-import type {Beat, EntityId, Scene} from '@sliders/scene-types';
+import type {Beat, EntityId, Scene, SceneSpan} from '@sliders/scene-types';
+import {beatAtLine} from './use-active-beat-mark';
 
 /** CSS classes the marks carry. Styled in `scene-preview.css`. */
 export const ENTRY_MARK_CLASS = 'sliders-selected-entity';
@@ -127,6 +128,23 @@ export interface StageSelectionOptions {
 	kindOf: (id: EntityId) => EntityTarget['kind'];
 	/** False while the preview is collapsed: no marks, no caret chasing. */
 	enabled: boolean;
+	/**
+	 * Where each beat was written, index-aligned with `scene.beats`.
+	 *
+	 * Only needed for `onCaretBeat`; without it the caret still drives the selection.
+	 */
+	beatSpans?: SceneSpan[];
+	/**
+	 * The caret moved into (or out of) a beat, as a SCRUBBER position — beat index plus
+	 * one, or 0 for a caret outside every beat.
+	 *
+	 * Lives here rather than in a hook of its own because this file already owns the one
+	 * `cursorActivity` listener and the echo guard that tells the author's caret moves from
+	 * the ones `select()` makes. A second listener would have to reinvent both, and would
+	 * see the echo as a real move -- so clicking a sprite would throw the scrubber back to
+	 * the opening state.
+	 */
+	onCaretBeat?: (beat: number) => void;
 }
 
 export interface StageSelection {
@@ -139,14 +157,39 @@ export interface StageSelection {
 export function useStageSelection(
 	options: StageSelectionOptions
 ): StageSelection {
-	const {block, editor, enabled, kindOf, scene, stageIds} = options;
+	const {
+		beatSpans,
+		block,
+		editor,
+		enabled,
+		kindOf,
+		onCaretBeat,
+		scene,
+		stageIds
+	} = options;
 	const [selection, setSelection] = React.useState<EntityId[]>([]);
 
 	// Everything the two effects below need, without either of them re-running when it
 	// changes: the marks must not be torn down and rebuilt on every keystroke.
-	const latest = React.useRef({block, enabled, kindOf, scene, selection});
+	const latest = React.useRef({
+		beatSpans,
+		block,
+		enabled,
+		kindOf,
+		onCaretBeat,
+		scene,
+		selection
+	});
 
-	latest.current = {block, enabled, kindOf, scene, selection};
+	latest.current = {
+		beatSpans,
+		block,
+		enabled,
+		kindOf,
+		onCaretBeat,
+		scene,
+		selection
+	};
 
 	/**
 	 * The caret line we just moved to ourselves.
@@ -218,6 +261,21 @@ export function useStageSelection(
 
 			if (!on) {
 				return;
+			}
+
+			// Beat first, and outside the `target` guard below: a caret on `- wait: 0.5`
+			// names no entity but is still standing on a beat.
+			const {beatSpans: spans, onCaretBeat: report} = latest.current;
+
+			if (report && currentBlock) {
+				const index = beatAtLine(
+					spans,
+					line,
+					currentBlock.lineOffset,
+					editor.lineCount()
+				);
+
+				report(index === undefined ? 0 : index + 1);
 			}
 
 			const target = entityAtEditorLine(currentBlock, line);

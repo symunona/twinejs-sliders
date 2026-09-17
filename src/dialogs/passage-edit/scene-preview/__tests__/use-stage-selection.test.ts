@@ -2,6 +2,7 @@ import {act, renderHook} from '@testing-library/react-hooks';
 import {extractSceneBlock} from '@sliders/scene-index';
 import type {Scene} from '@sliders/scene-types';
 import {parseSceneText} from '../use-scene-parse';
+import {beatAtLine} from '../use-active-beat-mark';
 import {
 	blockLineToEditorLine,
 	editorLineToBlockLine,
@@ -63,6 +64,7 @@ function fakeEditor(lines: string[]) {
 		editor: {
 			getCursor: () => cursor,
 			getDoc: () => doc,
+			lineCount: () => lines.length,
 			off(event: string, fn: (...args: unknown[]) => void) {
 				handlers[event] = (handlers[event] ?? []).filter(one => one !== fn);
 			},
@@ -245,5 +247,80 @@ describe('useStageSelection()', () => {
 		rerender({stageIds: ['mira']});
 
 		expect(result.current.selection).toEqual([]);
+	});
+});
+
+describe('beatAtLine()', () => {
+	const spans = parseSceneText(passage).result!.beatSpans;
+
+	it('finds the beat the caret is standing in', () => {
+		// Passage line 10 is `  - mira: "Hello."`, the first beat.
+		expect(beatAtLine(spans, 10, block.lineOffset, 13)).toBe(0);
+		expect(beatAtLine(spans, 11, block.lineOffset, 13)).toBe(1);
+		expect(beatAtLine(spans, 12, block.lineOffset, 13)).toBe(2);
+	});
+
+	it('finds nothing outside the beats', () => {
+		// `cast:` and its entries, and the `beats:` key itself.
+		expect(beatAtLine(spans, 4, block.lineOffset, 13)).toBeUndefined();
+		expect(beatAtLine(spans, 5, block.lineOffset, 13)).toBeUndefined();
+		expect(beatAtLine(spans, 9, block.lineOffset, 13)).toBeUndefined();
+	});
+
+	it('finds nothing above the block', () => {
+		expect(beatAtLine(spans, 0, block.lineOffset, 13)).toBeUndefined();
+	});
+
+	it('finds nothing without spans', () => {
+		expect(beatAtLine(undefined, 10, block.lineOffset, 13)).toBeUndefined();
+	});
+});
+
+describe('the caret driving the scrubber', () => {
+	const spans = parseSceneText(passage).result!.beatSpans;
+
+	function render(onCaretBeat: (beat: number) => void) {
+		const fake = fakeEditor(passage.split('\n'));
+		const hook = renderHook(() =>
+			useStageSelection({
+				beatSpans: spans,
+				block,
+				editor: fake.editor,
+				enabled: true,
+				kindOf: () => 'cast',
+				onCaretBeat,
+				scene,
+				stageIds: ['mira', 'bram', 'candle']
+			})
+		);
+
+		return {fake, hook};
+	}
+
+	it('reports the scrubber position for a caret inside a beat', () => {
+		const onCaretBeat = jest.fn();
+		const {fake} = render(onCaretBeat);
+
+		act(() => fake.moveCaretTo(11));
+		// Beat index 1, so scrubber position 2 — state N is produced by beat N - 1.
+		expect(onCaretBeat).toHaveBeenLastCalledWith(2);
+	});
+
+	it('reports the opening state for a caret outside every beat', () => {
+		const onCaretBeat = jest.fn();
+		const {fake} = render(onCaretBeat);
+
+		act(() => fake.moveCaretTo(5));
+		expect(onCaretBeat).toHaveBeenLastCalledWith(0);
+	});
+
+	// The echo guard earns its keep here: `select()` moves the caret itself, and without it
+	// clicking a sprite would throw the scrubber back to the opening state.
+	it('says nothing when the caret move was its own', () => {
+		const onCaretBeat = jest.fn();
+		const {hook} = render(onCaretBeat);
+
+		act(() => hook.result.current.select(['bram']));
+		expect(onCaretBeat).not.toHaveBeenCalled();
 	});
 });

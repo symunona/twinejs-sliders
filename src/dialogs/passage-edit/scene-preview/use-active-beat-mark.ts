@@ -67,3 +67,33 @@ export function useActiveBeatMark(
 		};
 	}, [editor, lineOffset, span]);
 }
+
+/**
+ * Which beat a passage line sits inside, or undefined for a line outside every beat.
+ *
+ * The inverse of `beatLines`, over the same spans — `beatSpans` is already on the parse the
+ * preview is holding, so this costs nothing, and unlike `entityAtLine` it answers for a
+ * command beat (`- wait: 0.5`) too, which names no entity but is still a beat the scrubber
+ * can stand on.
+ *
+ * Index into `scene.beats`. The scrubber position is one more than that, because state N is
+ * produced by beat N - 1.
+ */
+export function beatAtLine(
+	spans: SceneSpan[] | undefined,
+	line: number,
+	lineOffset: number,
+	lineCount: number
+): number | undefined {
+	if (!spans) {
+		return undefined;
+	}
+
+	for (let index = 0; index < spans.length; index++) {
+		if (beatLines(spans[index], lineOffset, lineCount).includes(line)) {
+			return index;
+		}
+	}
+
+	return undefined;
+}
