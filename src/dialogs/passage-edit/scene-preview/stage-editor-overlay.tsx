@@ -525,7 +525,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						key: 'scale',
 						ref: entity.ref,
 						// A default written out explicitly is noise in a hand-edited file,
-						// so coming back to 1 deletes the key instead of writing it.
+						// so coming back to 1 deletes the key instead of writing it -- on
+						// the entry. On a beat it has to be said, because a beat inherits
+						// every key it does not mention.
+						reset: 1,
 						value: scale === 1 ? undefined : scale
 					});
 				}

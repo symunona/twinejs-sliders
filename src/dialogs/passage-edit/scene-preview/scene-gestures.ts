@@ -74,6 +74,9 @@ export function flipWrites(stage: Stage, ids: EntityId[]): EntityKeyWrite[] {
 		key: 'flip',
 		kind: entity.kind,
 		ref: entity.ref,
+		// Unflipping deletes the key on the entry, but has to SAY `flip: false` on a beat —
+		// a beat inherits whatever the one before it left.
+		reset: false,
 		value: entity.flip ? undefined : true
 	}));
 }

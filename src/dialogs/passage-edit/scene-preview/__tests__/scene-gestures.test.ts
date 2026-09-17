@@ -38,7 +38,16 @@ const BOX: StageBox = {left: 0, top: 0, width: 640, height: 360};
 describe('flipWrites()', () => {
 	it('writes flip: true for an unflipped entity', () => {
 		expect(flipWrites(stage, ['mira'])).toEqual([
-			{id: 'mira', key: 'flip', kind: 'cast', ref: 'mira', value: true}
+			// `reset` is what gets written when this lands on a BEAT: a beat inherits every
+			// key it does not mention, so unflipping there has to say `flip: false` out loud.
+			{
+				id: 'mira',
+				key: 'flip',
+				kind: 'cast',
+				ref: 'mira',
+				reset: false,
+				value: true
+			}
 		]);
 	});
 

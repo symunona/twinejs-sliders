@@ -88,6 +88,8 @@ export interface WritePlan {
 	/**
 	 * Targets to try, best first. `setEntityKey` returns undefined for an entry that is not
 	 * there, which is the signal to move on to the next one.
+	 *
+	 * Empty means the gesture has nowhere to go and must be rolled back — see `blocked`.
 	 */
 	targets: EntityTarget[];
 	/**
@@ -95,41 +97,48 @@ export interface WritePlan {
 	 * and moving it means giving this scene a local entry of its own.
 	 */
 	addEntity: boolean;
+	/**
+	 * Why there is nowhere to write, when there is nowhere to write.
+	 *
+	 * The scrubber is parked on a beat belonging to somebody else, and a beat item has
+	 * exactly one key, so this entity cannot join it. The `cast:` entry is NOT a fallback
+	 * here: it would move the character from the top of the scene, which is the whole bug
+	 * this rule exists to stop.
+	 */
+	blocked?: {beat: number; owner?: EntityId};
 }
 
-/** Does this beat already move, resize or otherwise patch that entity? */
-export function beatPatchesEntity(
-	beat: Beat | undefined,
-	id: EntityId
-): boolean {
-	if (!beat) {
-		return false;
-	}
-
-	if (beat.kind === 'set') {
-		return beat.who === id;
-	}
-
-	// A bare `- mira: "Get out."` says something but stages nothing. Writing `at:` there
-	// would promote it to `{say: …, at: …}` and pin the move to that one line of dialogue,
-	// when what the author dragged was the character, not the line.
-	return (
-		beat.kind === 'say' &&
-		beat.who === id &&
-		!!beat.patch &&
-		Object.keys(beat.patch).length > 0
-	);
+/**
+ * Is this beat the entity's OWN line — the one place a stage key for it can go?
+ *
+ * True for any `say` or `set` beat whose speaker is this id, whatever the beat currently
+ * carries. A bare `- mira: "Get out."` counts: writing `at:` there promotes it to
+ * `{say: …, at: …}`, and that is right, because that beat is what put her where the author
+ * is looking at her.
+ *
+ * This used to demand an existing patch, so a bare dialogue beat sent the write to `cast:`
+ * instead — which moved the character from the TOP of the scene, restaging every beat
+ * before this one from a position the author never saw. Pinning the move to the line is
+ * the lesser of the two.
+ */
+export function beatOwnsEntity(beat: Beat | undefined, id: EntityId): boolean {
+	return !!beat && (beat.kind === 'say' || beat.kind === 'set') && beat.who === id;
 }
 
 /**
  * Where a drag or resize on `id` should write, given where the scrubber is.
  *
- * The rule (spec 10) is "write what the eye is looking at": if the beat on screen already
- * patches this entity, that patch is what put it where it is, so that is what moves.
- * Otherwise the `cast:` / `props:` entry is.
+ * The rule is "write what the eye is looking at":
  *
- * `beat` is the SCRUBBER index — state N is produced by `beats[N - 1]`, so state 0 is the
- * stage before any beat ran and can only ever write the entry.
+ * - Scrubber at 0 — the stage before any beat ran — writes the `cast:` / `props:` entry.
+ * - Scrubber on a beat that belongs to this entity writes THAT BEAT, promoting a bare line
+ *   of dialogue to a map if that is what it takes.
+ * - Scrubber on somebody else's beat writes nothing at all, and the gesture rolls back. A
+ *   beat item has exactly one key, so this entity cannot join it, and falling through to
+ *   the entry would move them from the top of the scene instead of from here. An author who
+ *   wants the move at this moment rearranges the beat lines themselves.
+ *
+ * `beat` is the SCRUBBER index — state N is produced by `beats[N - 1]`.
  */
 export function planEntityWrite(
 	scene: Scene | undefined,
@@ -137,20 +146,35 @@ export function planEntityWrite(
 	kind: EntityKind,
 	id: EntityId
 ): WritePlan {
-	const targets: EntityTarget[] = [];
 	const index = beat - 1;
+	const onBeat = index >= 0 && index < (scene?.beats?.length ?? 0);
+	const addEntity = !scene?.entities?.[id];
 
-	if (index >= 0 && beatPatchesEntity(scene?.beats?.[index], id)) {
-		// `EntityTarget.beat` indexes the YAML `beats:` sequence, `scene.beats` skips items
-		// the parser rejected. They agree unless the block has a malformed beat, and
-		// `locateEntity` checks the speaker id before writing, so a disagreement falls
-		// through to the entry below instead of writing into the wrong beat.
-		targets.push({beat: index, id, kind});
+	if (!onBeat) {
+		return {addEntity, targets: [{id, kind}]};
 	}
 
-	targets.push({id, kind});
+	const shown = scene?.beats?.[index];
 
-	return {addEntity: !scene?.entities?.[id], targets};
+	if (!beatOwnsEntity(shown, id)) {
+		return {
+			addEntity,
+			blocked: {
+				beat: index,
+				owner:
+					shown && (shown.kind === 'say' || shown.kind === 'set')
+						? shown.who
+						: undefined
+			},
+			targets: []
+		};
+	}
+
+	// `EntityTarget.beat` indexes the YAML `beats:` sequence, `scene.beats` skips items the
+	// parser rejected. They agree unless the block has a malformed beat, and `locateEntity`
+	// checks the speaker id before writing, so a disagreement writes nothing rather than
+	// writing into the wrong beat.
+	return {addEntity, targets: [{beat: index, id, kind}]};
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +189,19 @@ export interface EntityKeyWrite {
 	key: string;
 	/** `undefined` REMOVES the key — how `scale: 1` and `flip: false` go away. */
 	value: unknown;
+	/**
+	 * What to write instead of removing, when the write lands on a BEAT.
+	 *
+	 * A beat that does not mention a key inherits whatever the beat before it left, so
+	 * "unflip" cannot be said there by deleting something — there is usually nothing on that
+	 * line to delete, and the deletion would fall through to the `cast:` entry and unflip
+	 * the character for the whole scene. On a beat the explicit opposite (`flip: false`,
+	 * `scale: 1`) is the only honest way to write it.
+	 *
+	 * At scrubber 0 the removal still wins: the entry is the top of the scene, nothing
+	 * inherits from it, and `flip: false` there is just noise.
+	 */
+	reset?: unknown;
 }
 
 /**
@@ -246,10 +283,17 @@ export function buildEntityEdit(
 	const plan = planEntityWrite(scene, beat, write.kind, write.id);
 
 	for (const target of plan.targets) {
+		// On a beat, "unset" is written as the explicit opposite rather than as a deletion:
+		// a beat inherits every key it does not mention, so there is nothing to delete and a
+		// deletion would land on the entry instead.
+		const value =
+			write.value === undefined && target.beat !== undefined
+				? write.reset
+				: write.value;
 		const edit =
-			write.value === undefined
+			value === undefined
 				? removeEntityKey(blockText, target, write.key)
-				: setEntityKey(blockText, target, write.key, write.value);
+				: setEntityKey(blockText, target, write.key, value);
 
 		if (edit) {
 			return edit;
@@ -257,8 +301,8 @@ export function buildEntityEdit(
 	}
 
 	// Removing a key that is not written anywhere is a no-op, not a reason to create an
-	// entry saying so.
-	if (!plan.addEntity || write.value === undefined) {
+	// entry saying so. A blocked plan has no targets at all and must not create one either.
+	if (plan.blocked || !plan.addEntity || write.value === undefined) {
 		return undefined;
 	}
 

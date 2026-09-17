@@ -394,7 +394,7 @@ describe('<StageEditorOverlay>', () => {
 
 		// Three times as far from the anchor as it started.
 		expect(onCommit.mock.calls[0][0]).toEqual([
-			{id: 'mira', key: 'scale', kind: 'cast', ref: 'mira', value: 3}
+			{id: 'mira', key: 'scale', kind: 'cast', ref: 'mira', reset: 1, value: 3}
 		]);
 	});
 
@@ -409,7 +409,16 @@ describe('<StageEditorOverlay>', () => {
 		fireEvent(window, pointer('pointerup', 146, 376));
 
 		expect(onCommit.mock.calls[0][0]).toEqual([
-			{id: 'mira', key: 'scale', kind: 'cast', ref: 'mira', value: undefined}
+			// `undefined` deletes the key on the entry; `reset` is what a BEAT gets instead,
+			// since a beat inherits whatever the beat before it left.
+			{
+				id: 'mira',
+				key: 'scale',
+				kind: 'cast',
+				ref: 'mira',
+				reset: 1,
+				value: undefined
+			}
 		]);
 	});
 

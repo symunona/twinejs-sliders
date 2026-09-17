@@ -5,7 +5,7 @@ import type {Scene} from '@sliders/scene-types';
 import {parseSceneText} from '../use-scene-parse';
 import {
 	applyStagePatch,
-	beatPatchesEntity,
+	beatOwnsEntity,
 	buildEntityEdit,
 	buildWriteEdit,
 	buildWriteEdits,
@@ -18,6 +18,7 @@ import {
 	settlePatch,
 	useScenePatch,
 	writeSceneEdits,
+	type EntityKeyWrite,
 	type SceneWrite,
 	type WritableEditor
 } from '../use-scene-writer';
@@ -91,14 +92,41 @@ describe('planEntityWrite()', () => {
 		// State 1 is produced by beats[0], which is `- mira: {at: 0.2}`.
 		const plan = planEntityWrite(scene, 1, 'cast', 'mira');
 
-		expect(plan.targets[0]).toEqual({beat: 0, id: 'mira', kind: 'cast'});
-		// The entry stays as the fallback for when the beat entry cannot be located.
-		expect(plan.targets[1]).toEqual({id: 'mira', kind: 'cast'});
+		expect(plan.targets).toEqual([{beat: 0, id: 'mira', kind: 'cast'}]);
+		expect(plan.blocked).toBeUndefined();
 	});
 
-	it('writes the entry when the beat on screen only speaks', () => {
-		// beats[1] is `- mira: "Hello."` — dialogue, no stage change.
+	// The entry is NOT a fallback here. It would move her from the top of the scene, so
+	// every beat before this one would stage from a position the author never saw.
+	it('writes the beat on screen even when it only speaks', () => {
+		// beats[1] is `- mira: "Hello."` — dialogue, no stage change yet.
 		const plan = planEntityWrite(scene, 2, 'cast', 'mira');
+
+		expect(plan.targets).toEqual([{beat: 1, id: 'mira', kind: 'cast'}]);
+	});
+
+	// A beat item has exactly one key, so candle cannot join mira's line, and the entry is
+	// the wrong answer. The gesture rolls back instead.
+	it('blocks a write aimed at somebody else\'s beat', () => {
+		const plan = planEntityWrite(scene, 1, 'prop', 'candle');
+
+		expect(plan.targets).toEqual([]);
+		expect(plan.blocked).toEqual({beat: 0, owner: 'mira'});
+	});
+
+	it('reports no owner when the beat on screen is a command', () => {
+		const commands = sceneOf(
+			['[scene]', 'beats:', '  - wait: 0.5'].join('\n')
+		);
+		const plan = planEntityWrite(commands, 1, 'cast', 'mira');
+
+		expect(plan.targets).toEqual([]);
+		expect(plan.blocked?.owner).toBeUndefined();
+	});
+
+	// Past the last beat there is no beat to own anything, so the entry is right again.
+	it('writes the entry when the scrubber is past the last beat', () => {
+		const plan = planEntityWrite(scene, 99, 'cast', 'mira');
 
 		expect(plan.targets).toEqual([{id: 'mira', kind: 'cast'}]);
 	});
@@ -110,19 +138,25 @@ describe('planEntityWrite()', () => {
 	});
 });
 
-describe('beatPatchesEntity()', () => {
+describe('beatOwnsEntity()', () => {
 	const scene = sceneOf(passage);
 
-	it('is false for a beat that only says something', () => {
-		expect(beatPatchesEntity(scene.beats[1], 'mira')).toBe(false);
+	// The inversion: a bare line of dialogue IS the character's own line, and writing a
+	// stage key there is what "move her at this moment" means.
+	it('is true for a beat that only says something', () => {
+		expect(beatOwnsEntity(scene.beats[1], 'mira')).toBe(true);
 	});
 
 	it('is false for another entity', () => {
-		expect(beatPatchesEntity(scene.beats[0], 'candle')).toBe(false);
+		expect(beatOwnsEntity(scene.beats[0], 'candle')).toBe(false);
 	});
 
 	it('is true for a stage change', () => {
-		expect(beatPatchesEntity(scene.beats[0], 'mira')).toBe(true);
+		expect(beatOwnsEntity(scene.beats[0], 'mira')).toBe(true);
+	});
+
+	it('is false for nothing at all', () => {
+		expect(beatOwnsEntity(undefined, 'mira')).toBe(false);
 	});
 });
 
@@ -595,5 +629,140 @@ describe('useScenePatch()', () => {
 		});
 
 		expect(result.current.patch.mira?.at?.x).toBe(-0.5);
+	});
+});
+
+describe('writing onto the beat the scrubber is on', () => {
+	function context(text: string, beat: number) {
+		const block = blockOf(text);
+
+		return {
+			beat,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: sceneOf(text)
+		};
+	}
+
+	function applied(text: string, beat: number, write: EntityKeyWrite) {
+		const block = blockOf(text);
+		const edit = buildEntityEdit(context(text, beat), write);
+
+		return edit
+			? block.text.slice(0, edit.from) + edit.insert + block.text.slice(edit.to)
+			: undefined;
+	}
+
+	// The whole point of the change: a bare line of dialogue is still mira's line, and a
+	// drag while it is on screen belongs on it -- not in cast:, which would move her from
+	// the top of the scene.
+	it('promotes a bare line of dialogue rather than writing the entry', () => {
+		const out = applied(passage, 2, {
+			id: 'mira',
+			key: 'at',
+			kind: 'cast',
+			ref: 'mira',
+			value: 0.5
+		});
+
+		expect(out).toContain('- mira: {say: "Hello.", at: 0.5}');
+		// cast: untouched.
+		expect(out).toContain('  mira: {at: -0.4, frame: idle}');
+	});
+
+	it('splices a beat that already stages something', () => {
+		const out = applied(passage, 1, {
+			id: 'mira',
+			key: 'at',
+			kind: 'cast',
+			ref: 'mira',
+			value: 0.5
+		});
+
+		expect(out).toContain('- mira: {at: 0.5}');
+	});
+
+	it('writes nothing when the beat on screen is somebody else\'s', () => {
+		expect(
+			applied(passage, 1, {
+				id: 'candle',
+				key: 'at',
+				kind: 'prop',
+				ref: 'candle',
+				value: 0.5
+			})
+		).toBeUndefined();
+	});
+
+	it('rolls the whole gesture back rather than half-writing it', () => {
+		const editor = fakeEditor(passage);
+		const wrote = writeSceneEdits(
+			editor,
+			context(passage, 1),
+			[{id: 'candle', key: 'at', kind: 'prop', ref: 'candle', value: 0.5}],
+			DRAG_ORIGIN
+		);
+
+		expect(wrote).toBe(false);
+		expect(editor.replaceRange).not.toHaveBeenCalled();
+	});
+
+	// A beat inherits every key it does not mention, so "unflip" has to be said out loud
+	// there. Deleting would find nothing on the line and fall through to the entry.
+	it('writes the explicit opposite instead of deleting a key', () => {
+		const out = applied(passage, 1, {
+			id: 'mira',
+			key: 'flip',
+			kind: 'cast',
+			ref: 'mira',
+			reset: false,
+			value: undefined
+		});
+
+		expect(out).toContain('- mira: {at: 0.2, flip: false}');
+	});
+
+	it('still deletes the key on the entry at the opening state', () => {
+		const flipped = passage.replace(
+			'  mira: {at: -0.4, frame: idle}',
+			'  mira: {at: -0.4, frame: idle, flip: true}'
+		);
+		const out = applied(flipped, 0, {
+			id: 'mira',
+			key: 'flip',
+			kind: 'cast',
+			ref: 'mira',
+			reset: false,
+			value: undefined
+		});
+
+		expect(out).toContain('  mira: {at: -0.4, frame: idle}');
+		expect(out).not.toContain('flip');
+	});
+
+	// Nothing to inherit from at the top of the scene, so `scale: 1` there is just noise.
+	it('deletes a scale that came back to 1 on the entry', () => {
+		const out = applied(passage, 0, {
+			id: 'candle',
+			key: 'scale',
+			kind: 'prop',
+			ref: 'candle',
+			reset: 1,
+			value: undefined
+		});
+
+		expect(out).toContain('  candle: {at: 0.1}');
+	});
+
+	it('does not invent an entry for a blocked write', () => {
+		const out = applied(patchPassage, 1, {
+			id: 'candle',
+			key: 'at',
+			kind: 'prop',
+			ref: 'candle',
+			value: 0.5
+		});
+
+		expect(out).toBeUndefined();
 	});
 });

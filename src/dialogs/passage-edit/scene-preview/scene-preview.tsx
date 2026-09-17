@@ -64,6 +64,7 @@ import {
 	applyStagePatch,
 	cameraAgrees,
 	isOwnOrigin,
+	planEntityWrite,
 	settlePatch,
 	useScenePatch,
 	writeSceneEdits,
@@ -340,6 +341,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		scene: parse.result?.scene,
 		stageIds
 	});
+
 
 	/**
 	 * Shift state, sampled in the CAPTURE phase.
@@ -778,6 +780,38 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * reuses that path rather than inventing a second one the gestures would have to learn.
 	 */
 	const editable = !!editor && !locked;
+
+	/**
+	 * Why a gesture on the selection would go nowhere, if it would.
+	 *
+	 * Computed up front rather than discovered at commit, because a drag that is refused
+	 * after the fact just snaps the sprite back and reads as a broken editor. The author is
+	 * told BEFORE they reach for it, and the commit still refuses as the backstop.
+	 */
+	const blockedNote = React.useMemo(() => {
+		if (!editable || selection.length === 0) {
+			return undefined;
+		}
+
+		const scene = parse.result?.scene;
+
+		for (const id of selection) {
+			const {blocked} = planEntityWrite(scene, beat, kindOf(id), id);
+
+			if (blocked) {
+				return blocked.owner
+					? t('dialogs.passageEdit.scenePreview.beatBelongsTo', {
+							beat: blocked.beat + 1,
+							name: blocked.owner
+					  })
+					: t('dialogs.passageEdit.scenePreview.beatStagesNothing', {
+							beat: blocked.beat + 1
+					  });
+			}
+		}
+
+		return undefined;
+	}, [beat, editable, kindOf, parse.result, selection, t]);
 
 	// The beat on screen, lit up in the text the author is typing in.
 	useActiveBeatMark(
@@ -1237,6 +1271,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				assets={assets}
 				editable={editable}
 				entities={selectedEntities}
+				note={blockedNote}
 				onDelete={remove}
 				onFlip={flip}
 				onFrame={setFrame}

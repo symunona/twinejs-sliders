@@ -85,6 +85,18 @@
 	pointer-events: auto;
 }
 
+/* Why a gesture here would go nowhere. Sits with the controls it explains, and is a note
+   rather than an error: nothing is wrong with the scene, the author is just parked on a
+   beat that belongs to somebody else. */
+.scene-preview-selection-note {
+	color: var(--dark-gray);
+	font-size: 85%;
+	max-width: 24em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .scene-preview-badge svg {
 	height: 1em;
 	width: 1em;

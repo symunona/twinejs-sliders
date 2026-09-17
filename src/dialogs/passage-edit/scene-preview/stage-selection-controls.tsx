@@ -31,6 +31,14 @@ export interface StageSelectionControlsProps {
 	entities: StageEntity[];
 	/** False when there is no CodeMirror to write to. */
 	editable: boolean;
+	/**
+	 * Why a gesture on this selection would go nowhere, if it would.
+	 *
+	 * Shown beside the controls rather than raised after the fact: a drag that is refused on
+	 * commit only snaps the sprite back, which reads as a broken editor rather than as a
+	 * rule. Saying it here means the author knows before they reach for the sprite.
+	 */
+	note?: string;
 	onDelete: () => void;
 	onFlip: () => void;
 	onFrame: (frame: string | undefined) => void;
@@ -87,7 +95,16 @@ function useCharacterFrames(
 export const StageSelectionControls: React.FC<
 	StageSelectionControlsProps
 > = props => {
-	const {assets, editable, entities, onDelete, onFlip, onFrame, onStepZ} = props;
+	const {
+		assets,
+		editable,
+		entities,
+		note,
+		onDelete,
+		onFlip,
+		onFrame,
+		onStepZ
+	} = props;
 	const {t} = useTranslation();
 	const single = entities.length === 1 ? entities[0] : undefined;
 	const frames = useCharacterFrames(
@@ -104,6 +121,17 @@ export const StageSelectionControls: React.FC<
 
 	return (
 		<div className="scene-preview-selection" data-testid="scene-preview-selection">
+			{note && (
+				<span
+					className="scene-preview-selection-note"
+					data-testid="scene-preview-selection-note"
+					// Ellipsised on a narrow stage, and the half that gets cut is the half
+					// that says what to do about it.
+					title={note}
+				>
+					{note}
+				</span>
+			)}
 			<IconButton
 			commandId="scene.flip"
 				icon={<IconFlipHorizontal />}

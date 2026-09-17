@@ -373,6 +373,8 @@
 				"nudgeRight": "Nudge right",
 				"nudgeUp": "Nudge up",
 				"nudgeDown": "Nudge down",
+				"beatBelongsTo": "Beat {{beat}} is {{name}}'s — edits here won't stick. Move the scrubber, or reorder the beats.",
+				"beatStagesNothing": "Beat {{beat}} stages nothing — edits here won't stick. Move the scrubber, or reorder the beats.",
 				"flip": "Flip horizontally",
 				"remove": "Remove from scene",
 				"zBack": "Send backward",
