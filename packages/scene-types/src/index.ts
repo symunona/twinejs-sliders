@@ -337,6 +337,17 @@ export interface SceneLink {
  *   no from  -> key absent means REMOVED
  *   from set -> key absent means INHERITED; explicit null means REMOVED
  */
+/**
+ * What a scene's `locked:` list can pin.
+ *
+ * A list rather than a second key per target, so the next thing worth locking costs a token
+ * here instead of a new top-level key. `bg` is the camera and the backdrop together: they
+ * are one gesture to the author, who grabbed the ground and expected nothing to move.
+ */
+export const SCENE_LOCKS = ['bg', 'entities'] as const;
+
+export type SceneLock = (typeof SCENE_LOCKS)[number];
+
 export interface Scene {
 	id?: SceneId;
 	/** `other-scene` | `other-scene@enter` | `other-scene@markName` */
@@ -352,6 +363,18 @@ export interface Scene {
 	 * replaces did. A `dur: 0` is a different statement and still means "snap and go on".
 	 */
 	autoAdvance?: number;
+	/**
+	 * What the visual editor must not let a gesture change in this scene.
+	 *
+	 * `true` is the whole stage; a list names what is pinned, so `[bg]` holds the camera and
+	 * the backdrop still while sprites stay draggable. An EDITOR hint and nothing more — the
+	 * player never reads it, the same way `Stage.bgImplicit` is invisible to it.
+	 *
+	 * In the scene rather than in a preference because a shot that is framed is framed for
+	 * everyone who opens the passage, and because the pan that ruins it is the easiest
+	 * gesture in the editor to make by accident: grabbing empty ground.
+	 */
+	locked?: true | SceneLock[];
 	/** Entity patches keyed by id. `null` means "remove this entity" (only valid with from). */
 	entities: Record<EntityId, EntityPatch | null>;
 	fx?: StageFx[];

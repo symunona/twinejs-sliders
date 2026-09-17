@@ -888,3 +888,73 @@ describe('mechanical fixes', () => {
 		expect(error?.fix).toMatchObject({replaces: 'bak', text: 'back'});
 	});
 });
+
+describe('locked:', () => {
+	it('takes true for the whole stage', () => {
+		const {errors, scene} = parseScene('locked: true\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.locked).toBe(true);
+	});
+
+	it('takes a list of what to pin', () => {
+		const {errors, scene} = parseScene('locked: [bg]\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.locked).toEqual(['bg']);
+	});
+
+	it('takes the block list form too', () => {
+		const {scene} = parseScene('locked:\n  - bg\n  - entities\n');
+
+		expect(scene.locked).toEqual(['bg', 'entities']);
+	});
+
+	it('drops a duplicate rather than storing it twice', () => {
+		const {scene} = parseScene('locked: [bg, bg]\n');
+
+		expect(scene.locked).toEqual(['bg']);
+	});
+
+	// `locked: false` and no key at all say the same thing, and a scene has no business
+	// reaching into somebody's preference to unlock what they locked.
+	it('stores nothing for false', () => {
+		const {errors, scene} = parseScene('locked: false\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.locked).toBeUndefined();
+	});
+
+	it('stores nothing for an empty list', () => {
+		const {scene} = parseScene('locked: []\n');
+
+		expect(scene.locked).toBeUndefined();
+	});
+
+	it('stores nothing for ~', () => {
+		const {errors, scene} = parseScene('locked: ~\n');
+
+		expect(codes(errors)).toEqual([]);
+		expect(scene.locked).toBeUndefined();
+	});
+
+	it('refuses a name it cannot lock, and suggests one', () => {
+		const {errors, scene} = parseScene('locked: [bgs]\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+		expect(find(errors, 'bad-value')?.hint).toContain('bg');
+		expect(scene.locked).toBeUndefined();
+	});
+
+	it('refuses a map', () => {
+		const {errors} = parseScene('locked: {bg: true}\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+	});
+
+	it('keeps the good entries when one is wrong', () => {
+		const {scene} = parseScene('locked: [bg, nonsense]\n');
+
+		expect(scene.locked).toEqual(['bg']);
+	});
+});

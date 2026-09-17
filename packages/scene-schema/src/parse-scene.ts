@@ -17,6 +17,7 @@ import {
 	LAYERS,
 	LAYER_BASELINE,
 	LAYER_Z,
+	SCENE_LOCKS,
 	type Beat,
 	type BubblePlace,
 	type BubbleStyle,
@@ -32,6 +33,7 @@ import {
 	type SceneErrorCode,
 	type SceneFix,
 	type SceneLink,
+	type SceneLock,
 	type SceneSpan,
 	type StageFx,
 	type Vec2
@@ -49,6 +51,7 @@ export const TOP_LEVEL_KEYS = [
 	'entities',
 	'fx',
 	'autoAdvance',
+	'locked',
 	'beats',
 	'links'
 ] as const;
@@ -716,6 +719,56 @@ function parseSeconds(
  */
 function parseDur(ctx: Ctx, node: unknown): number | undefined {
 	return parseSeconds(ctx, node, 'dur', 'dur: 0 snaps and moves straight on.');
+}
+
+/**
+ * `locked:` — what a gesture must not change in this scene.
+ *
+ * `true` for the whole stage, or a list naming what is pinned. A bare `false` is accepted
+ * and dropped rather than stored: it says the same thing as leaving the key out, and
+ * carrying it would make "this scene unlocks the stage" look like a thing a scene can do to
+ * somebody's preference, which it is not.
+ */
+function parseSceneLock(
+	ctx: Ctx,
+	node: unknown
+): true | SceneLock[] | undefined {
+	if (isScalar(node)) {
+		const flag = asBoolean(ctx, node, 'locked');
+
+		return flag === true ? true : undefined;
+	}
+
+	if (!isSeq(node)) {
+		addError(ctx, 'bad-value', 'locked: takes true, or a list of what to lock.', node, {
+			hint: `locked: true, or locked: [${SCENE_LOCKS.join(', ')}]`
+		});
+		return undefined;
+	}
+
+	const out: SceneLock[] = [];
+
+	for (const item of (node as YAMLSeq).items) {
+		const name = asString(ctx, item, 'locked');
+
+		if (name === undefined) {
+			continue;
+		}
+
+		if (!(SCENE_LOCKS as readonly string[]).includes(name)) {
+			addError(ctx, 'bad-value', `'${name}' is not something to lock.`, item, {
+				...keyFix(name, SCENE_LOCKS)
+			});
+			continue;
+		}
+
+		if (!out.includes(name as SceneLock)) {
+			out.push(name as SceneLock);
+		}
+	}
+
+	// `locked: []` locks nothing, which is what no key already says.
+	return out.length > 0 ? out : undefined;
 }
 
 /**
@@ -1773,6 +1826,20 @@ export function parseScene(text: string): ParseResult {
 
 				if (seconds !== undefined) {
 					scene.autoAdvance = seconds;
+				}
+
+				break;
+			}
+
+			case 'locked': {
+				if (isNullNode(pair.value)) {
+					break; // `locked: ~` is "no opinion", i.e. leave it to the preference.
+				}
+
+				const locked = parseSceneLock(ctx, pair.value);
+
+				if (locked !== undefined) {
+					scene.locked = locked;
 				}
 
 				break;

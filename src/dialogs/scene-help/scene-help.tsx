@@ -28,7 +28,8 @@ import {
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
-	LAYERS
+	LAYERS,
+	SCENE_LOCKS
 } from '@sliders/scene-types';
 import {DEFAULT_DURATIONS} from '@sliders/scene-core';
 import {DialogCard} from '../../components/container/dialog-card';
@@ -54,6 +55,9 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	id:
 		'Names this scene so from: can point at it, and names its backdrop when there is no bg:. Must be unique in the story.',
 	links: 'Ways out of the scene. In a scene passage these are the ONLY ways out.',
+	locked: `What the visual editor must not let a gesture change here: true for the whole stage, or a list — ${SCENE_LOCKS.join(
+		', '
+	)}. An editor hint only; the player ignores it. Use it on a shot that is already framed, where grabbing empty ground would pan it by accident.`,
 	props: 'Objects on stage. Same entry shape as cast:.'
 };
 
