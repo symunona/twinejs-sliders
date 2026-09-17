@@ -292,6 +292,26 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * that is where the pointer is, and subtracts this to get the offset it writes back.
 	 */
 	const offsets = React.useMemo(() => parentOffsets(localStage), [localStage]);
+	/**
+	 * The two past stages the measuring overlay draws ghosts from, resolved into the same
+	 * absolute space `stage` is in.
+	 *
+	 * Taken from the raw parse, never from `localStage`: an optimistic drag patch is the
+	 * position the author is producing right now, and folding it into "where this used to
+	 * be" would make the ghost chase the sprite. Computed only while the grid is on — the
+	 * overlay ignores them otherwise, and resolving two stages per keystroke for a marker
+	 * nobody asked for is the kind of work that shows up in a scene with a large cast.
+	 */
+	const origStage = React.useMemo(
+		() =>
+			grid && parse.states[0] ? resolveStage(parse.states[0]) : undefined,
+		[grid, parse.states]
+	);
+	const prevStage = React.useMemo(() => {
+		const previous = parse.states[Math.min(beat, lastBeat) - 1];
+
+		return grid && previous ? resolveStage(previous) : undefined;
+	}, [beat, grid, lastBeat, parse.states]);
 	const stageIds = React.useMemo(
 		() => Object.keys(stage.entities ?? {}),
 		[stage]
@@ -736,6 +756,51 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			commit(writes, NUDGE_ORIGIN);
 		},
 		[commit, mergePatch, selection, stage]
+	);
+
+	/**
+	 * Put an entity back where a ghost in the measuring overlay says it was.
+	 *
+	 * The same write a drag makes, with the coordinate read off the past instead of off the
+	 * pointer — including the `of:` subtraction, because the ghost is drawn at an ABSOLUTE
+	 * point and the YAML holds an offset. Scale rides along only when it differs: writing
+	 * `scale: 1` onto every jump would fill the scene with the default.
+	 */
+	const jumpTo = React.useCallback(
+		(id: string, at: {x: number; y: number}, scale: number) => {
+			const entity = stage.entities?.[id];
+
+			if (!entity) {
+				return;
+			}
+
+			const offset = offsets[id];
+			const local = {
+				x: roundCoord(offset ? at.x - offset.x : at.x),
+				y: roundCoord(offset ? at.y - offset.y : at.y)
+			};
+			const writes: EntityKeyWrite[] = [
+				{id, kind: entity.kind, key: 'at', ref: entity.ref, value: local}
+			];
+
+			if (roundCoord(scale) !== roundCoord(entity.scale)) {
+				writes.push({
+					id,
+					kind: entity.kind,
+					key: 'scale',
+					ref: entity.ref,
+					// Same bargain the resize handle strikes: 1 is the default, so at the
+					// top of the scene it is REMOVED, and on a beat it has to be said out
+					// loud because a beat inherits what it does not mention.
+					reset: 1,
+					value: scale === 1 ? undefined : roundCoord(scale)
+				});
+			}
+
+			mergePatch({[id]: {at: local}});
+			commit(writes, EDIT_ORIGIN);
+		},
+		[commit, mergePatch, offsets, stage]
 	);
 
 	// Every gesture below reads the value it is changing out of the stage the author is
@@ -1325,14 +1390,20 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const stageBody = (
 		<StageEditorOverlay
 			bgLocked={bgLocked}
+			blockedNote={blockedNote}
 			editable={editable}
 			grid={grid}
+			origStage={origStage}
+			prevStage={prevStage}
 			onAdvance={canAdvance ? advanceAsReader : undefined}
 			onCameraPatch={setCamera}
 			onCancel={handleCancel}
 			onCommit={handleCommit}
 			onDropAsset={handleDropAsset}
 			onDropFiles={handleDropFiles}
+			// Absent when a click could not write: locked stage, or the scrubber parked on
+			// a beat this entity has no line in. `blockedNote` then tells the author why.
+			onJumpTo={editable && !blockedNote ? jumpTo : undefined}
 			onOpenEntity={handleOpenEntity}
 			onPatch={setPatch}
 			parentOffsets={offsets}

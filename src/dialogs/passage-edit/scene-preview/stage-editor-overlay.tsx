@@ -49,6 +49,8 @@ import {
 	snapTargetsY
 } from './stage-geometry';
 import type {HandleId, HitTarget, SnapTarget} from './stage-geometry';
+import {entityTraces} from './stage-history';
+import {StageTraceLayer} from './stage-trace-layer';
 import {CAMERA_ORIGIN} from './use-scene-writer';
 import type {EntityKeyWrite, SceneWrite, StagePatch} from './use-scene-writer';
 import './stage-editor-overlay.css';
@@ -179,6 +181,29 @@ export interface StageEditorOverlayProps {
 	 */
 	grid?: boolean;
 	/**
+	 * The arrival stage — `states[0]`, `of:` RESOLVED — for the measuring overlay's ghosts.
+	 *
+	 * Passed in rather than derived here because resolving a stage is `scene-core`'s job and
+	 * the overlay only ever speaks absolute coordinates.
+	 */
+	origStage?: Stage;
+	/** The stage the previous beat left behind, resolved. Undefined below beat 2. */
+	prevStage?: Stage;
+	/**
+	 * Put the selected entity back where a ghost says it was.
+	 *
+	 * Absent when the numbers must not be clickable — the stage is locked, or the scrubber
+	 * is parked on a beat this entity has no line in, which is the same rule a drag obeys.
+	 * The labels are then plain text, which is still the readout the grid was turned on for.
+	 */
+	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
+	/**
+	 * Why `onJumpTo` is absent, in the author's words. The selection controls show the same
+	 * sentence; here it is the disabled rows' tooltip, so a click that does nothing says
+	 * why on the spot.
+	 */
+	blockedNote?: string;
+	/**
 	 * The background is pinned: no pan, no wheel zoom, and a dropped backdrop does not
 	 * replace the one in the scene. Entities stay fully editable — this is the narrow lock,
 	 * for staging a cast against a shot that is already framed.
@@ -270,6 +295,7 @@ export function snapDropPoint(
 export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const {
 		bgLocked,
+		blockedNote,
 		children,
 		editable,
 		grid,
@@ -279,10 +305,13 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onCommit,
 		onDropAsset,
 		onDropFiles,
+		onJumpTo,
 		onOpenEntity,
 		onPatch,
 		onSelect,
+		origStage,
 		parentOffsets,
+		prevStage,
 		onToggleFullScreen,
 		player,
 		renderer,
@@ -963,6 +992,23 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	);
 	const centre = grid && box ? gridCentre(box, camera) : undefined;
 
+	// Same bargain as the grid lines: the traces move with the camera and with every
+	// relayout, and none of this is computed while the grid is off.
+	const traces = React.useMemo(
+		() =>
+			grid
+				? entityTraces({
+						box,
+						camera,
+						orig: origStage,
+						prev: prevStage,
+						rects,
+						stage
+				  })
+				: [],
+		[box, camera, grid, origStage, prevStage, rects, stage]
+	);
+
 	const single = selection.length === 1 ? selection[0] : undefined;
 	const singleRect = single === undefined ? undefined : rects.get(single);
 
@@ -1034,6 +1080,18 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							/>
 						)}
 					</div>
+				)}
+				{/* Above the grid, below the selection: the ruler's outlines and ghosts are
+				    what the grid lines are for, and the selection box still has to win. */}
+				{grid && (
+					<StageTraceLayer
+						blockedNote={blockedNote}
+						bounds={box}
+						onJumpTo={onJumpTo}
+						quiet={dragging}
+						selection={selection}
+						traces={traces}
+					/>
 				)}
 				{guides.x !== undefined && (
 					<div

@@ -1,0 +1,157 @@
+/* The measuring overlay's own colours. The palette was already spoken for — cyan is the
+   selection box and its handles, green a resting origin, orange the entity a gesture is
+   about, yellow the bubble anchor and the floor, pink the snap guides — so the two history
+   states take the two hues nothing else uses:
+
+     ORIG  violet  the scene's opening position, furthest back in time
+     PREV  white   the beat before this one, nearest
+
+   Both dashed, so a ghost can never be mistaken for a thing that is on stage. Different
+   dash lengths as well as different hues: a 1px dashed line at 60% opacity is a weak colour
+   signal, and the rhythm reads at a glance where the hue does not. */
+
+.stage-editor-ghost {
+	position: absolute;
+}
+
+.stage-editor-ghost.orig {
+	border: 1px dashed rgba(169, 123, 255, 0.85);
+}
+
+.stage-editor-ghost.prev {
+	border: 1px dashed rgba(216, 222, 233, 0.8);
+	border-style: dotted;
+}
+
+/* A small cross rather than the full-size one an entity on stage gets: the ghost's origin
+   is a reference point, not something that can be grabbed. */
+.stage-editor-ghost-origin {
+	height: 9px;
+	margin-left: -4px;
+	margin-top: -4px;
+	position: absolute;
+	width: 9px;
+}
+
+.stage-editor-ghost-origin::before,
+.stage-editor-ghost-origin::after {
+	content: '';
+	position: absolute;
+}
+
+.stage-editor-ghost-origin::before {
+	height: 9px;
+	left: 4px;
+	top: 0;
+	width: 1px;
+}
+
+.stage-editor-ghost-origin::after {
+	height: 1px;
+	left: 0;
+	top: 4px;
+	width: 9px;
+}
+
+.stage-editor-ghost-origin.orig::before,
+.stage-editor-ghost-origin.orig::after {
+	background: rgba(169, 123, 255, 0.95);
+}
+
+.stage-editor-ghost-origin.prev::before,
+.stage-editor-ghost-origin.prev::after {
+	background: rgba(216, 222, 233, 0.9);
+}
+
+/* Every entity's box while the grid is on. Fainter than the selection box on purpose —
+   this is the ruler talking, and the selection still has to be findable inside it. */
+.stage-editor-outline {
+	border: 1px solid rgba(74, 212, 255, 0.28);
+	position: absolute;
+}
+
+/* One panel per selected entity that has moved, rather than a label beside each ghost: two
+   ghosts that differ only in scale share an origin, and labels pinned to them would land on
+   top of each other exactly when the numbers are the only way to tell them apart. */
+.stage-editor-trace-readout {
+	background: rgba(16, 20, 26, 0.9);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	border-radius: 3px;
+	display: flex;
+	flex-direction: column;
+	font-family: var(--font-monospaced, monospace);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.4;
+	overflow: hidden;
+	position: absolute;
+	white-space: nowrap;
+	z-index: 4;
+}
+
+.stage-editor-trace-row {
+	align-items: center;
+	background: none;
+	border: 0;
+	color: #eaf6ef;
+	display: flex;
+	font: inherit;
+	gap: 6px;
+	margin: 0;
+	padding: 2px 6px;
+	text-align: left;
+}
+
+/* Only the history rows are buttons, and only they opt back into the pointer — the marker
+   layer above them is `pointer-events: none` so a click reaches the stage. */
+button.stage-editor-trace-row {
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+button.stage-editor-trace-row:hover,
+button.stage-editor-trace-row:focus-visible {
+	background: rgba(255, 255, 255, 0.12);
+	outline: none;
+}
+
+.stage-editor-trace-swatch {
+	border-radius: 1px;
+	flex: 0 0 auto;
+	height: 8px;
+	width: 8px;
+}
+
+.stage-editor-trace-row.orig .stage-editor-trace-swatch {
+	background: rgba(169, 123, 255, 0.95);
+}
+
+.stage-editor-trace-row.prev .stage-editor-trace-swatch {
+	background: rgba(216, 222, 233, 0.9);
+}
+
+.stage-editor-trace-row.now .stage-editor-trace-swatch {
+	background: #4ad4ff;
+}
+
+.stage-editor-trace-when {
+	color: rgba(234, 246, 239, 0.65);
+	flex: 0 0 auto;
+	/* The three words are different lengths and the numbers after them have to line up, or
+	   the panel reads as three unrelated rows instead of one measurement. */
+	min-width: 54px;
+}
+
+.stage-editor-trace-at {
+	flex: 0 0 auto;
+}
+
+.stage-editor-trace-pixel {
+	color: rgba(234, 246, 239, 0.55);
+	flex: 0 0 auto;
+}
+
+.stage-editor-trace-scale {
+	color: #ff9d5c;
+	flex: 0 0 auto;
+}
