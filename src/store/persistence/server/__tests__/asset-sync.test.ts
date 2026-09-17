@@ -246,4 +246,105 @@ describe('syncStoryAssets', () => {
 			'manifest'
 		]);
 	});
+
+	it('pushes art no scene names yet', async () => {
+		// The order authors actually work in: upload the picture, write the scene later.
+		// A manifest built from the scene references alone drops it, and the art is in the
+		// editor and absent from the server with nothing saying so.
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(
+			await meta(bytes, {id: 'a_lone', name: 'nobody-uses-me'}),
+			new Blob([bytes])
+		);
+
+		const {client, putManifest} = fakeClient({missing: ['a_lone']});
+		const result = await syncStoryAssets({
+			client,
+			story: storyReferencing('[scene]\n'),
+			store
+		});
+
+		expect(result.uploaded).toEqual(['a_lone']);
+
+		const [, sentManifest] = putManifest.mock.calls[0] as unknown as [
+			string,
+			{assets: {id: string}[]}
+		];
+
+		expect(sentManifest.assets.map(asset => asset.id)).toEqual(['a_lone']);
+	});
+
+	it('does nothing at all when the library has not moved', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+
+		const {client, diffAssets, putAssetBlob, putManifest} = fakeClient({
+			present: ['a_8f21']
+		});
+		const first = await syncStoryAssets({
+			client,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(first.unchanged).toBe(false);
+
+		const second = await syncStoryAssets({
+			client,
+			lastFingerprint: first.fingerprint,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(second.unchanged).toBe(true);
+		// The whole point: the autosave path calls this after every push, so an
+		// unchanged library must not cost a request.
+		expect(diffAssets).toHaveBeenCalledTimes(1);
+		expect(putAssetBlob).not.toHaveBeenCalled();
+		expect(putManifest).toHaveBeenCalledTimes(1);
+	});
+
+	it('syncs again once a character frame is added', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+
+		const {client, putManifest} = fakeClient({present: ['a_8f21']});
+		const first = await syncStoryAssets({
+			client,
+			story: storyReferencing(),
+			store
+		});
+
+		await store.putCharacter({
+			frames: {idle: {asset: 'a_8f21'}},
+			id: 'bob',
+			name: 'bob',
+			origin: {x: 0.5, y: 1},
+			size: {h: 1024, w: 512},
+			tags: []
+		});
+
+		const second = await syncStoryAssets({
+			client,
+			lastFingerprint: first.fingerprint,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(second.unchanged).toBe(false);
+		expect(putManifest).toHaveBeenCalledTimes(2);
+
+		const [, sentManifest] = putManifest.mock.calls[1] as unknown as [
+			string,
+			{characters: {id: string}[]}
+		];
+
+		expect(sentManifest.characters.map(item => item.id)).toEqual(['bob']);
+	});
 });

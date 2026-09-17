@@ -93,6 +93,31 @@ describe('debouncing', () => {
 		expect(putStory).not.toHaveBeenCalled();
 	});
 
+	it('reports a landed push, so art can follow the text up', async () => {
+		const onPushed = jest.fn();
+		const pushed = new SyncQueue({client, onPushed});
+		const story = storyWithText('s1', 'one');
+
+		pushed.push(story);
+		await tick(DEFAULT_DEBOUNCE_MS);
+
+		expect(onPushed).toHaveBeenCalledWith(story);
+		pushed.dispose();
+	});
+
+	it('does not report a push the server refused', async () => {
+		const onPushed = jest.fn();
+		putStory.mockRejectedValue(new ServerError('boom', {code: 'internal', status: 500}));
+
+		const failing = new SyncQueue({client, onPushed});
+
+		failing.push(storyWithText('s1', 'one'));
+		await tick(DEFAULT_DEBOUNCE_MS);
+
+		expect(onPushed).not.toHaveBeenCalled();
+		failing.dispose();
+	});
+
 	it('reads its debounce from localStorage, which is what E2E sets', async () => {
 		window.localStorage.setItem('sliders.sync.debounceMs', '50');
 		queue.push(storyWithText('s1', 'one'));

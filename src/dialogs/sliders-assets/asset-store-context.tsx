@@ -22,6 +22,22 @@ export function refreshAssetLibrary() {
 }
 
 /**
+ * The same signal outside React. Server sync listens here: art added to a library is a
+ * change the store has to hear about, and unlike text it never passes through the stories
+ * reducer, so there is nothing else to watch.
+ *
+ * Deliberately scope-less, like `refreshAssetLibrary` itself. A listener that cares which
+ * library moved has to ask; the alternative is threading a scope through seven call sites
+ * for a signal whose consumers all re-read everything anyway.
+ */
+export function onAssetLibraryChange(listener: () => void): () => void {
+	libraryListeners.add(listener);
+	return () => {
+		libraryListeners.delete(listener);
+	};
+}
+
+/**
  * Bumped by every `refreshAssetLibrary()`. Exported so anything derived from the library —
  * the unreferenced-art scan, say — recomputes on the same signal the grids redraw on.
  */

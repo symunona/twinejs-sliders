@@ -35,6 +35,11 @@ export interface SyncQueueOptions {
 	backoffMs?: number[];
 	/** Called after every state change, before listeners. Used by the hook to log. */
 	onError?: (storyId: string, error: unknown) => void;
+	/**
+	 * Called after a push lands. The hook follows it with an asset sync: a text edit can
+	 * be the first thing that names a picture, and art has no queue of its own.
+	 */
+	onPushed?: (story: Story) => void;
 }
 
 interface Pending {
@@ -249,6 +254,7 @@ export class SyncQueue {
 					rev: result.rev,
 					state: superseded ? 'dirty' : 'idle'
 				});
+				this.options.onPushed?.(story);
 			} catch (error) {
 				this.fail(storyId, entry, error, options);
 			} finally {

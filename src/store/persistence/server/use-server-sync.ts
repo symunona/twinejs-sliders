@@ -14,7 +14,10 @@
 import {v4 as uuid} from '@lukeed/uuid';
 import * as React from 'react';
 import {getAppInfo} from '../../../util/app-info';
-import {slidersAssetStore} from '../../../dialogs/sliders-assets/asset-store-context';
+import {
+	onAssetLibraryChange,
+	slidersAssetStore
+} from '../../../dialogs/sliders-assets/asset-store-context';
 import {unusedName} from '../../../util/unused-name';
 import {usePrefsContext} from '../../prefs';
 import {
@@ -178,6 +181,13 @@ export interface ServerSyncActions {
  */
 export const POLL_INTERVAL = 30000;
 export const SOCKET_POLL_INTERVAL = 300000;
+
+/**
+ * How long a library change waits before it is pushed. Longer than the text debounce on
+ * purpose: dropping six files fires the change signal six times, and one scan of the
+ * library at the end is the whole point of coalescing.
+ */
+export const ASSET_SYNC_DEBOUNCE_MS = 3000;
 
 export interface ServerSyncContextProps {
 	/**
@@ -404,6 +414,14 @@ export function useServerSync(): ServerSyncContextProps {
 	const clientName =
 		backendUsername || `user-${(backendClientId || '').slice(0, 4)}`;
 
+	/** Story id -> the library fingerprint the server was last told about. */
+	const assetFingerprints = React.useRef(new Map<string, string>());
+	/** Story id -> pending debounce timer for a background asset sync. */
+	const assetTimers = React.useRef(
+		new Map<string, ReturnType<typeof setTimeout>>()
+	);
+	const assetSyncRef = React.useRef<(story: Story) => void>(() => {});
+
 	const client = React.useMemo<ServerClient | undefined>(() => {
 		if (!backendUrl || !backendToken || !backendClientId) {
 			return undefined;
@@ -434,7 +452,11 @@ export function useServerSync(): ServerSyncContextProps {
 				if (isServerError(error) && error.network) {
 					setConnected(false);
 				}
-			}
+			},
+			// Through a ref: the queue is memoised on `client` alone, and rebuilding it
+			// whenever a callback identity changed would drop every pending debounce
+			// timer with it — the author's last sentence among them.
+			onPushed: story => assetSyncRef.current(story)
 		});
 	}, [client]);
 
@@ -502,27 +524,113 @@ export function useServerSync(): ServerSyncContextProps {
 	);
 
 	const pushAssets = React.useCallback(
-		async (story: Story) => {
+		async (story: Story, options: {quiet?: boolean} = {}) => {
 			if (!client) {
 				return;
 			}
 
 			try {
-				await syncStoryAssets({
+				const result = await syncStoryAssets({
 					client,
-					onProgress: next => setStoryProgress(story.id, next),
+					// The autosave path runs this after every push. Scanning and diffing
+					// are not news; only bytes actually going up are worth a progress row,
+					// or the story card blinks on every keystroke batch.
+					lastFingerprint: options.quiet
+						? assetFingerprints.current.get(story.id)
+						: undefined,
+					onProgress: next => {
+						if (
+							options.quiet &&
+							(next.phase === 'scan' || next.phase === 'diff')
+						) {
+							return;
+						}
+
+						setStoryProgress(story.id, next);
+					},
 					story,
 					store: slidersAssetStore(story.id)
 				});
+
+				// Only a run that reached the manifest counts. Remembering a half-finished
+				// one would skip the retry that finishes it.
+				assetFingerprints.current.set(story.id, result.fingerprint);
 			} catch (error) {
 				// Art failing to upload is worth reporting but must not undo the text
 				// push that just succeeded.
+				assetFingerprints.current.delete(story.id);
 				setLastError(error instanceof Error ? error.message : String(error));
 			} finally {
 				setStoryProgress(story.id, undefined);
 			}
 		},
 		[client, setStoryProgress]
+	);
+
+	/**
+	 * Art has no queue of its own, so this is it: coalesce, then sync in the background.
+	 *
+	 * Two things call it. A story push, because a text edit can be the first thing that
+	 * names a picture; and a library change, because dropping a file in the asset dialog
+	 * never touches story text and would otherwise reach the server only at the next
+	 * Publish. Both are cheap when nothing moved — `lastFingerprint` short-circuits the
+	 * whole run before any request goes out.
+	 */
+	const scheduleAssetSync = React.useCallback(
+		(story: Story) => {
+			if (!client || !backendAutosave || story.sync !== true) {
+				return;
+			}
+
+			const existing = assetTimers.current.get(story.id);
+
+			if (existing) {
+				clearTimeout(existing);
+			}
+
+			assetTimers.current.set(
+				story.id,
+				setTimeout(() => {
+					assetTimers.current.delete(story.id);
+
+					// Re-read: the debounce is seconds long and the story it was armed
+					// with may have been edited, unshared or deleted since.
+					const current = storiesRef.current.find(
+						item => item.id === story.id
+					);
+
+					if (current?.sync === true) {
+						void pushAssets(current, {quiet: true});
+					}
+				}, ASSET_SYNC_DEBOUNCE_MS)
+			);
+		},
+		[backendAutosave, client, pushAssets]
+	);
+
+	React.useEffect(() => {
+		assetSyncRef.current = scheduleAssetSync;
+	}, [scheduleAssetSync]);
+
+	React.useEffect(() => {
+		const timers = assetTimers.current;
+
+		return () => {
+			timers.forEach(timer => clearTimeout(timer));
+			timers.clear();
+		};
+	}, []);
+
+	// Art changed in a dialog. The signal is scope-less, so ask every synced story; the
+	// fingerprint makes the ones whose library did not move free.
+	React.useEffect(
+		() =>
+			onAssetLibraryChange(() => {
+				storiesRef.current
+					.filter(story => story.sync === true)
+					.forEach(story => scheduleAssetSync(story));
+			}),
+		[scheduleAssetSync]
 	);
 
 	/**
