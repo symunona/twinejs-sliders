@@ -21,6 +21,7 @@ import {
 	BEAT_COMMANDS,
 	ENTITY_KEY_ORDER,
 	TOP_LEVEL_ORDER,
+	type NodeRange,
 	beatsSeqOf,
 	entityMapOf,
 	findPair,
@@ -229,6 +230,132 @@ export function removePairEdit(
 // setEntityKey / removeEntityKey
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Promoting a bare dialogue beat
+// ---------------------------------------------------------------------------
+
+/**
+ * Can this scalar's SOURCE sit inside a flow map (`{say: …, at: …}`) unchanged?
+ *
+ * Two ways it cannot. A block scalar (`|`, `>`) carries its text on the lines BELOW the
+ * indicator, which a flow map has no room for; and a plain multi-word scalar may hold the
+ * flow indicators `,{}[]`, which would end the value early — `- bob: Hello, world` promoted
+ * naively becomes a map with a key called `world`.
+ *
+ * A quoted scalar is safe whatever is inside it, as long as it is one line.
+ */
+function flowSafeScalar(source: string): boolean {
+	if (source.includes('\n') || /^[|>]/.test(source)) {
+		return false;
+	}
+
+	return /^["']/.test(source) || !/[,{}[\]]/.test(source);
+}
+
+/** Re-indent a block scalar's content (or a folded scalar's continuation lines). */
+function shiftLines(lines: string[], indent: string): string[] {
+	const body = lines.filter(line => line.trim() !== '');
+	const base = Math.min(
+		...body.map(line => line.length - line.trimStart().length)
+	);
+
+	return lines.map(line =>
+		line.trim() === ''
+			? ''
+			: indent + ' '.repeat(line.length - line.trimStart().length - base) +
+			  line.trimStart()
+	);
+}
+
+/**
+ * `- bob: |` plus a stage key. The flow form cannot hold a block scalar, so the beat
+ * becomes a block map instead, with the dialogue kept verbatim and moved one level in.
+ *
+ *     - bob:                          - bob: |
+ *         say: |                          Hello.
+ *           Hello.            <--
+ *         at: [0.1, 0]
+ *
+ * The content is re-indented as a whole, so a line the author indented further stays
+ * further in. Everything else about it — quoting, trailing spaces, blank lines — is the
+ * author's and is carried across untouched.
+ */
+function promoteToBlock(
+	text: string,
+	pair: Pair<unknown, unknown>,
+	range: NodeRange,
+	entries: readonly (readonly [string, string])[]
+): TextEdit {
+	const keyRange = rangeOf(pair.key);
+	// The COLUMN of the key, not the line's leading whitespace: a beat's key sits after
+	// `- `, and anything under it must be indented past the key itself.
+	const keyStart = keyRange ? keyRange[0] : range[0];
+	const childIndent = ' '.repeat(keyStart - lineStartAt(text, keyStart) + 2);
+	const source = text.slice(range[0], range[1]);
+	const trailing = source.endsWith('\n') ? '\n' : '';
+	const [first, ...rest] = source.replace(/\n+$/, '').split('\n');
+	const value =
+		rest.length === 0
+			? first
+			: [first, ...shiftLines(rest, childIndent + '  ')].join('\n');
+
+	// Back over the spaces after the colon, so the promoted line does not keep a stray one.
+	let from = range[0];
+
+	while (from > 0 && text[from - 1] === ' ') {
+		from--;
+	}
+
+	return {
+		from,
+		insert:
+			'\n' +
+			entries
+				.map(([key, formatted], index) =>
+					index === 0
+						? `${childIndent}${key}: ${value}`
+						: `${childIndent}${key}: ${formatted}`
+				)
+				.join('\n') +
+			trailing,
+		to: range[1]
+	};
+}
+
+/**
+ * A bare dialogue beat gaining its first key: `- bob: "Hi."` -> `- bob: {say: "Hi.", …}`.
+ *
+ * The dialogue is carried across as its ORIGINAL source text, so `'single'` stays
+ * single-quoted and an escaped `\"` stays escaped — re-serializing the parsed string would
+ * quietly rewrite the author's prose. When that source cannot live in a flow map, the beat
+ * is promoted to block form instead; see `promoteToBlock`.
+ */
+function promoteScalarBeat(
+	text: string,
+	pair: Pair<unknown, unknown>,
+	textKey: string,
+	entries: readonly (readonly [string, string])[]
+): TextEdit | undefined {
+	const range = rangeOf(pair.value);
+
+	if (!range) {
+		return undefined;
+	}
+
+	const source = text.slice(range[0], range[1]);
+	const all = [[textKey, source] as const, ...entries];
+
+	if (!flowSafeScalar(source)) {
+		return promoteToBlock(text, pair, range, all);
+	}
+
+	return {
+		from: range[0],
+		insert: `{${all.map(([key, value]) => `${key}: ${value}`).join(', ')}}`,
+		to: range[1]
+	};
+}
+
 function writeKey(
 	parsed: Parsed,
 	pair: Pair<unknown, unknown>,
@@ -259,15 +386,9 @@ function writeKey(
 	const scalar = isScalar(body) ? (body as Scalar).value : null;
 
 	// `- mira: "Get out."` — a bare dialogue beat. Adding a stage key means promoting it to
-	// `{say: "…", at: …}` (spec 02, "Beats"). The dialogue is carried across as its ORIGINAL
-	// source text, so `'single'` stays single-quoted and an escaped `\"` stays escaped —
-	// re-serializing the parsed string would quietly rewrite the author's prose.
+	// `{say: "…", at: …}` (spec 02, "Beats").
 	if (inBeat && typeof scalar === 'string' && valueRange) {
-		return {
-			from: valueRange[0],
-			insert: `{say: ${text.slice(valueRange[0], valueRange[1])}, ${key}: ${formatted}}`,
-			to: valueRange[1]
-		};
+		return promoteScalarBeat(text, pair, 'say', [[key, formatted]]);
 	}
 
 	// `mira: ~` — an explicit removal being dragged back onto the stage.
@@ -855,20 +976,9 @@ export function setBeatBubble(
 	}
 
 	// A bare scalar beat. Promote it, keeping the source text of the line exactly.
-	const range = rangeOf(body);
-
-	if (!range) {
-		return undefined;
-	}
-
-	const said = text.slice(range[0], range[1]);
-	const textKey = beat.key === 'box' ? 'text' : 'say';
-
-	return {
-		from: range[0],
-		insert: `{${textKey}: ${said}, bubble: ${formatBubbleMap(entries)}}`,
-		to: range[1]
-	};
+	return promoteScalarBeat(text, beat.pair, beat.key === 'box' ? 'text' : 'say', [
+		['bubble', formatBubbleMap(entries)]
+	]);
 }
 
 /**
@@ -920,20 +1030,9 @@ export function setBeatKey(
 		return undefined;
 	}
 
-	const range = rangeOf(body);
-
-	if (!range) {
-		return undefined;
-	}
-
-	const said = text.slice(range[0], range[1]);
-	const textKey = beat.key === 'box' ? 'text' : 'say';
-
-	return {
-		from: range[0],
-		insert: `{${textKey}: ${said}, ${key}: ${formatValue(key, value)}}`,
-		to: range[1]
-	};
+	return promoteScalarBeat(text, beat.pair, beat.key === 'box' ? 'text' : 'say', [
+		[key, formatValue(key, value)]
+	]);
 }
 
 function formatBubbleMap(
