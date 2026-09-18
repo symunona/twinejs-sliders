@@ -59,6 +59,22 @@ function sameVec(a: Vec2, b: Vec2): boolean {
 	return a.x === b.x && a.y === b.y;
 }
 
+/**
+ * What the sprite is drawing, pose and cycle together.
+ *
+ * A cycle carries its first step in `frame`, so `frame: idle` -> `frame: [idle, blink]`
+ * leaves that string alone while the sprite starts moving. Comparing the whole thing is
+ * what makes that a `frame` transition, which is the one the renderer cross-fades and
+ * restarts the cycle on.
+ */
+function frameKey(entity: StageEntity): string {
+	return entity.frames
+		? `${entity.frame ?? ''}\u0000${entity.frameLoop ?? ''}\u0000${JSON.stringify(
+				entity.frames
+		  )}`
+		: entity.frame ?? '';
+}
+
 function samePlacement(a: StageEntity, b: StageEntity): boolean {
 	return (
 		sameVec(a.at, b.at) &&
@@ -178,7 +194,7 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 			});
 		}
 
-		if (before.frame !== after.frame) {
+		if (frameKey(before) !== frameKey(after)) {
 			out.push({
 				duration: DEFAULT_DURATIONS.frame,
 				entityId: id,

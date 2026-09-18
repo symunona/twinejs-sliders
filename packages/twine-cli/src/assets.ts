@@ -16,7 +16,7 @@
 
 import {sceneBg} from '@sliders/scene-core';
 import {splitSceneRef} from '@sliders/scene-index';
-import type {Character, Scene} from '@sliders/scene-types';
+import type {Character, EntityPatchBody, Scene} from '@sliders/scene-types';
 import type {AssetMetaRow, Manifest, Source} from './types';
 
 /**
@@ -299,14 +299,31 @@ export function resolveSceneAssets(
 					wanted.push({name: patch.frame, via: `cast/${id}`});
 				}
 
+				// A `frame:` list is a cycle, and every pose in it is art the story cannot
+				// open without. `frame` above is only its first step.
+				for (const step of patch.frames ?? []) {
+					wanted.push({name: step.name, via: `cast/${id} frame step`});
+				}
+
 				for (const beat of current.beats ?? []) {
 					const who = (beat as {who?: string}).who;
-					const frame = (beat as {patch?: {frame?: string}}).patch?.frame;
+					const body = (beat as {patch?: EntityPatchBody}).patch;
 
-					if (who === id && frame) {
+					if (who !== id || !body) {
+						continue;
+					}
+
+					if (body.frame) {
 						wanted.push({
-							name: frame,
-							via: `beats/${beat.index} patch frame: ${frame}`
+							name: body.frame,
+							via: `beats/${beat.index} patch frame: ${body.frame}`
+						});
+					}
+
+					for (const step of body.frames ?? []) {
+						wanted.push({
+							name: step.name,
+							via: `beats/${beat.index} frame step: ${step.name}`
 						});
 					}
 				}

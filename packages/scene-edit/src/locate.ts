@@ -45,6 +45,7 @@ export const ENTITY_KEY_ORDER = [
 	'at',
 	'scale',
 	'frame',
+	'frameLoop',
 	'flip',
 	'layer',
 	'z',

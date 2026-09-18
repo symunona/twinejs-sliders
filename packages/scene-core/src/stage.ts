@@ -9,6 +9,7 @@ import {LAYER_BASELINE} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityPatch,
+	FrameStep,
 	Stage,
 	StageEntity,
 	StageFx,
@@ -33,8 +34,16 @@ export function cloneCamera(camera: Camera): Camera {
 	return {at: cloneVec(camera.at), zoom: camera.zoom};
 }
 
+export function cloneFrames(steps: FrameStep[]): FrameStep[] {
+	return steps.map(step => (step.at ? {...step, at: cloneVec(step.at)} : {...step}));
+}
+
 export function cloneEntity(entity: StageEntity): StageEntity {
-	return {...entity, at: cloneVec(entity.at)};
+	return {
+		...entity,
+		at: cloneVec(entity.at),
+		...(entity.frames ? {frames: cloneFrames(entity.frames)} : {})
+	};
 }
 
 export function cloneFx(fx: StageFx[]): StageFx[] {
@@ -88,6 +97,21 @@ export function mergePatch(
 		next.frame = patch.frame;
 	}
 
+	// `frame` and `frames` are two halves of ONE YAML key, so they move together: a patch
+	// naming a still pose STOPS a cycle an earlier beat started. Reading it off the absence
+	// of `frames` is what keeps a `frames: null` out of every ordinary patch — and the rule
+	// is the author's own, since `frame: idle` cannot be written in the same breath as a
+	// list.
+	if (patch.frames !== undefined) {
+		next.frames = cloneFrames(patch.frames);
+	} else if (patch.frame !== undefined) {
+		next.frames = undefined;
+	}
+
+	if (patch.frameLoop !== undefined) {
+		next.frameLoop = patch.frameLoop;
+	}
+
 	if (patch.flip !== undefined) {
 		next.flip = patch.flip;
 	}
@@ -113,6 +137,8 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		at: patch.at ? cloneVec(patch.at) : cloneVec(ENTITY_DEFAULTS.at),
 		flip: patch.flip ?? ENTITY_DEFAULTS.flip,
 		frame: patch.frame,
+		frameLoop: patch.frameLoop,
+		frames: patch.frames && cloneFrames(patch.frames),
 		id,
 		kind: patch.kind,
 		// No default: an entity with no `of` is in world space, and `of: ~` on a brand-new

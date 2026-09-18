@@ -11,7 +11,7 @@
 import {sceneBg} from '@sliders/scene-core';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
-import type {Scene} from '@sliders/scene-types';
+import type {FrameStep, Scene} from '@sliders/scene-types';
 import type {SceneAssetRefs} from './bundle.types';
 import type {Story} from '../../store/stories';
 
@@ -69,6 +69,27 @@ function addFrame(
 	frames.add(name);
 }
 
+/**
+ * Every pose one entity or beat patch names — the still `frame`, and each step of a
+ * `frame:` cycle.
+ *
+ * A cycle's steps ARE art the story cannot open without, so they go in the same bucket the
+ * still pose does. `frame` already holds step 1, which is why this takes the whole body
+ * rather than a string: passing it a name would silently bundle a walk cycle's first frame
+ * and nothing else.
+ */
+function addFrames(
+	sets: RefSets,
+	entityId: string,
+	body: {frame?: string; frames?: FrameStep[]} | undefined
+): void {
+	addFrame(sets, entityId, body?.frame);
+
+	for (const step of body?.frames ?? []) {
+		addFrame(sets, entityId, step.name);
+	}
+}
+
 function addScene(sets: RefSets, scene: Scene): void {
 	// `bg: ~` means "removed" under `from:`, and removal names nothing. An `id:` with no
 	// `bg:` names the backdrop implicitly: bundle it if such art exists, but never report
@@ -93,7 +114,7 @@ function addScene(sets: RefSets, scene: Scene): void {
 				: sets.assetRefs,
 			entity.ref
 		);
-		addFrame(sets, id, entity.frame);
+		addFrames(sets, id, entity);
 	}
 
 	for (const fx of scene.fx ?? []) {
@@ -120,7 +141,7 @@ function addScene(sets: RefSets, scene: Scene): void {
 			case 'set':
 				// A beat can name a frame for an entity the block never declared — that is
 				// still a frame the character has to have.
-				addFrame(sets, beat.who, beat.patch?.frame);
+				addFrames(sets, beat.who, beat.patch);
 				break;
 		}
 	}

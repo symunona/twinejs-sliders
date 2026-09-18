@@ -511,6 +511,7 @@ describe('half-typed and malformed input', () => {
 			at: {x: -0.6, y: -0.2},
 			flip: true,
 			frame: 'idle',
+			frameLoop: 'once',
 			kind: 'prop',
 			of: 'table',
 			opacity: 0.5,

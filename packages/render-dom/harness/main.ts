@@ -141,6 +141,32 @@ const STEPS: Step[] = [
 			}
 		],
 		box: 'The candle gutters. Something in the corner does not resolve.'
+	},
+	{
+		title: 'Mira walks the cycle, Joren blinks once and holds',
+		stage: stageOf([
+			// A cycle that also travels: each step names its own `at`, so the sprite glides
+			// across the stage while the poses swap under it.
+			cast('mira', {x: -0.6}, {
+				frames: [
+					{name: 'idle', dur: 0.25, at: {x: -0.6, y: FLOOR}},
+					{name: 'wave', dur: 0.25, at: {x: 0, y: FLOOR}},
+					{name: 'angry', dur: 0.25, at: {x: 0.6, y: FLOOR}}
+				]
+			}),
+			// A cycle in place, played through once.
+			cast('joren', {x: 0.4}, {
+				frameLoop: 'once',
+				frames: [
+					{name: 'idle', dur: 0.4},
+					{name: 'angry'}
+				]
+			}),
+			prop('table', 'obj_table', {x: 0.15})
+		]),
+		transitions: [{kind: 'enter', duration: 0.4}],
+		bubbles: [],
+		box: 'Frame cycles run on the renderer\'s own clock, not the beat\'s.'
 	}
 ];
 

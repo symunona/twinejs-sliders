@@ -69,6 +69,36 @@ export interface Frac2 {
  */
 export type EntityKind = 'cast' | 'prop' | 'auto';
 
+/** How a `frames` cycle ends. */
+export const FRAME_LOOPS = ['all', 'once'] as const;
+
+export type FrameLoop = (typeof FRAME_LOOPS)[number];
+
+/** Seconds a step holds when it names no `dur:` of its own. */
+export const DEFAULT_FRAME_STEP_SECONDS = 0.1;
+
+/**
+ * One step of a frame cycle: a pose, how long it is held, and optionally where the sprite
+ * is while it is held.
+ *
+ * The placement keys are the entity's own (`at`, `scale`, `flip`, `opacity`), and they mean
+ * exactly what they mean on the entity — a step that sets none of them leaves the entity's
+ * placement alone, so a plain blink cycle stays four names and four numbers. They exist
+ * because a walk is a pose cycle AND a translation, and splitting the two across a beat's
+ * `dur:` and a frame list would make the author keep them in sync by hand.
+ */
+export interface FrameStep {
+	/** The character frame to draw. Required — a step with no pose is not a step. */
+	name: string;
+	/** Seconds held. Defaults to `DEFAULT_FRAME_STEP_SECONDS`. */
+	dur?: number;
+	/** Placement while this step is on screen. Absolute, like the entity's own `at`. */
+	at?: Vec2;
+	scale?: number;
+	flip?: boolean;
+	opacity?: number;
+}
+
 export interface StageEntity {
 	id: EntityId;
 	kind: EntityKind;
@@ -94,8 +124,26 @@ export interface StageEntity {
 	 * up double-offset.
 	 */
 	of?: EntityId;
-	/** Named frame for cast; ignored for simple props. */
+	/**
+	 * Named frame for cast; ignored for simple props.
+	 *
+	 * When the author wrote a LIST (`frame: [{name: walk_1, dur: 0.1}, …]`) this holds the
+	 * first step's name and `frames` holds the whole cycle. Two keys for one YAML key so
+	 * that everything which only ever wanted "which pose is this" — the differ, the
+	 * editor's frame picker, the asset collectors, the rig's anchor lookup — keeps reading
+	 * one string and never has to know about animation.
+	 */
 	frame?: string;
+	/**
+	 * A frame CYCLE, played by the renderer on its own clock. Absent for a still pose.
+	 *
+	 * Timing lives here rather than in the beat's `dur:` because the two answer different
+	 * questions: `dur:` is how long the reader looks at the beat, this is how fast the
+	 * sprite's own legs move, and a walk cycle outlives the line that started it.
+	 */
+	frames?: FrameStep[];
+	/** How `frames` ends. Default `all` — loop forever. `once` holds the last step. */
+	frameLoop?: FrameLoop;
 	flip: boolean;
 	/**
 	 * Explicit draw order. When undefined, z derives from y — lower on screen is nearer, so

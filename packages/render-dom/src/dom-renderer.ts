@@ -19,6 +19,8 @@ import type {
 	EntityId,
 	Frac2,
 	FrameFit,
+	FrameLoop,
+	FrameStep,
 	Renderer,
 	Stage,
 	StageEntity,
@@ -27,6 +29,7 @@ import type {
 	TransitionKind,
 	Vec2
 } from '@sliders/scene-types';
+import {DEFAULT_FRAME_STEP_SECONDS} from '@sliders/scene-types';
 import {
 	DEFAULT_ANCHORS,
 	DEFAULT_ORIGIN,
@@ -55,6 +58,15 @@ export const ENTER_RISE = 0.03;
 /** Fallback when an entity has no `frame` and the manifest has no `idle`. */
 const DEFAULT_FRAME_NAME = 'idle';
 
+/**
+ * Floor on a frame step's hold.
+ *
+ * A `dur: 0` step is legal YAML and means "as fast as possible"; without a floor it is a
+ * `setTimeout(0)` loop that never yields a painted frame, so the cycle would burn the main
+ * thread and show nothing. One screen frame is as fast as possible.
+ */
+const MIN_FRAME_STEP_SECONDS = 1 / 60;
+
 export interface DomRendererOptions {
 	/** Draw the centre + floor guides. Makes `at: 0` and the feet origin legible (spec 06). */
 	guides?: boolean;
@@ -77,6 +89,13 @@ interface EntityRecord {
 	metrics: SpriteMetrics;
 	/** Target rect in BOX pixels. */
 	rect: Rect;
+	/**
+	 * What the stage last resolved for this entity, so a frame cycle's tick can re-run the
+	 * same code an update runs without resolving anything again.
+	 */
+	res?: ResolvedEntity;
+	/** The running frame cycle, if the entity has one. */
+	anim?: AnimState;
 	img?: HTMLImageElement;
 	/** Asset currently shown, so we only touch `src` when it actually changes. */
 	assetId?: string;
@@ -102,6 +121,48 @@ interface ResolvedEntity {
 	placeholderLabel?: string;
 	/** The id that failed to resolve. Exposed as `data-asset-id` for tests to assert on. */
 	placeholderId?: string;
+	/** The resolved frame cycle, when the entity declared one. */
+	steps?: ResolvedStep[];
+	loop?: FrameLoop;
+}
+
+/** One step of a resolved cycle. `res.entity` is the entity as this step stages it. */
+interface ResolvedStep {
+	res: ResolvedEntity;
+	seconds: number;
+	moves: boolean;
+}
+
+interface AnimState {
+	/**
+	 * The cycle this state is playing, as written. Compared on every apply: a cycle that did
+	 * not change keeps playing, because restarting it on each keystroke would make the
+	 * editor's preview stutter and never reach step 2.
+	 */
+	key: string;
+	steps: ResolvedStep[];
+	loop: FrameLoop;
+	index: number;
+	timer?: ReturnType<typeof setTimeout>;
+}
+
+/** The entity a step effectively stages: the base, with the step's own keys over it. */
+function applyFrameStep(entity: StageEntity, step: FrameStep): StageEntity {
+	return {
+		...entity,
+		at: step.at ?? entity.at,
+		flip: step.flip ?? entity.flip,
+		frame: step.name,
+		opacity: step.opacity ?? entity.opacity,
+		scale: step.scale ?? entity.scale
+	};
+}
+
+/** Identity of a cycle. Changes only when the author's own list does. */
+function animKey(entity: StageEntity): string {
+	return entity.frames
+		? `${entity.frameLoop ?? 'all'}\u0000${JSON.stringify(entity.frames)}`
+		: '';
 }
 
 export class DomRenderer implements Renderer {
@@ -305,6 +366,8 @@ export class DomRenderer implements Renderer {
 			if (rec.exitTimer !== undefined) {
 				clearTimeout(rec.exitTimer);
 			}
+
+			this.stopAnim(rec);
 		}
 
 		this.rootEl?.remove();
@@ -458,11 +521,47 @@ export class DomRenderer implements Renderer {
 		entity: StageEntity,
 		character: Character
 	): Promise<ResolvedEntity> {
-		const frameName = pickFrameName(character, entity.frame);
+		const still = await this.resolvePose(entity, character, entity.frame);
+
+		if (!entity.frames?.length) {
+			return still;
+		}
+
+		// Resolve the whole cycle up front, so a tick is synchronous DOM work. Each step is
+		// a ResolvedEntity of its own, carrying the entity the step effectively stages —
+		// which makes a tick exactly the same code path as an ordinary update.
+		const steps: ResolvedStep[] = [];
+
+		for (const step of entity.frames) {
+			steps.push({
+				res: await this.resolvePose(
+					applyFrameStep(entity, step),
+					character,
+					step.name
+				),
+				seconds: Math.max(
+					MIN_FRAME_STEP_SECONDS,
+					step.dur ?? DEFAULT_FRAME_STEP_SECONDS
+				),
+				/** A step with no `at` of its own must not glide anywhere. */
+				moves: step.at !== undefined
+			});
+		}
+
+		return {...still, loop: entity.frameLoop ?? 'all', steps};
+	}
+
+	/** One pose of one character, resolved for the entity that is wearing it. */
+	private async resolvePose(
+		entity: StageEntity,
+		character: Character,
+		wanted: string | undefined
+	): Promise<ResolvedEntity> {
+		const frameName = pickFrameName(character, wanted);
 		const frame = frameName ? character.frames?.[frameName] : undefined;
 
 		if (!frame) {
-			const missingFrame = `${entity.ref}/${entity.frame ?? DEFAULT_FRAME_NAME}`;
+			const missingFrame = `${entity.ref}/${wanted ?? DEFAULT_FRAME_NAME}`;
 
 			return {
 				entity,
@@ -588,6 +687,7 @@ export class DomRenderer implements Renderer {
 		};
 
 		this.entities.set(id, rec);
+		rec.res = res;
 		this.setContent(rec, res);
 		this.applyFit(rec, res);
 		this.entityLayerEl?.appendChild(el);
@@ -597,6 +697,7 @@ export class DomRenderer implements Renderer {
 		this.layout(rec, 0, {rise: ENTER_RISE * this.box.height, opacity: 0});
 		void el.offsetWidth;
 		this.layout(rec, duration);
+		this.syncAnim(rec, res, duration);
 	}
 
 	private updateEntity(
@@ -620,9 +721,7 @@ export class DomRenderer implements Renderer {
 		rec.character = res.character;
 		rec.frameName = res.frameName;
 		rec.metrics = this.metricsFor(res);
-
-		this.setContent(rec, res, durations.duration('frame', rec.id));
-		this.applyFit(rec, res);
+		rec.res = res;
 
 		// One element carries position, mirror and size, and CSS gives it one
 		// transition-duration, so the longest of the three wins. A scale left out here would
@@ -634,10 +733,143 @@ export class DomRenderer implements Renderer {
 			durations.duration('scale', rec.id)
 		);
 
+		// A cycle still on its feet keeps the screen: the stage's own `frame` is the cycle's
+		// FIRST step, so drawing it here would flash step 1 on every keystroke. `syncAnim`
+		// redraws the step the cycle is actually standing on, against the new base.
+		if (this.syncAnim(rec, res, duration)) {
+			return;
+		}
+
+		this.setContent(rec, res, durations.duration('frame', rec.id));
+		this.applyFit(rec, res);
 		this.layout(rec, duration);
 	}
 
+	// -----------------------------------------------------------------------
+	// Frame cycles
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Start, keep or stop an entity's frame cycle, and draw the step it stands on.
+	 *
+	 * Returns true when a cycle is running and has taken over the drawing, so the caller
+	 * must not also paint the stage's still pose over it.
+	 *
+	 * A cycle runs on the renderer's own clock, not on the beat's: `dur:` is how long the
+	 * reader looks at a moment, a step's `dur` is how fast the sprite's legs move, and a
+	 * walk outlives the line that started it. Which is also why an unchanged cycle is left
+	 * alone across applies — the editor re-applies on every keystroke, and a cycle restarted
+	 * each time would never reach its second step.
+	 */
+	private syncAnim(
+		rec: EntityRecord,
+		res: ResolvedEntity,
+		duration: number
+	): boolean {
+		const key = res.steps?.length ? animKey(res.entity) : '';
+
+		if (!key) {
+			this.stopAnim(rec);
+			return false;
+		}
+
+		if (rec.anim?.key === key) {
+			// Same cycle, possibly a moved entity: steps are re-resolved against the new
+			// base, and the one on screen is redrawn where the base now puts it.
+			rec.anim.steps = res.steps!;
+			rec.anim.loop = res.loop ?? 'all';
+			rec.anim.index = Math.min(rec.anim.index, res.steps!.length - 1);
+			this.drawStep(rec, duration);
+			return true;
+		}
+
+		this.stopAnim(rec);
+		rec.anim = {
+			index: 0,
+			key,
+			loop: res.loop ?? 'all',
+			steps: res.steps!
+		};
+		this.drawStep(rec, duration);
+		this.scheduleStep(rec);
+
+		return true;
+	}
+
+	private stopAnim(rec: EntityRecord): void {
+		if (rec.anim?.timer !== undefined) {
+			clearTimeout(rec.anim.timer);
+		}
+
+		rec.anim = undefined;
+	}
+
+	/**
+	 * Draw the step the cycle is standing on. Everything an ordinary update does, against
+	 * the step's own resolved entity — so a step's `at`/`scale`/`flip` need no second code
+	 * path to reach the screen.
+	 *
+	 * Frames swap HARD (`setContent` duration 0): a cross-fade is for a pose change the
+	 * reader is meant to notice, and cross-fading a ten-per-second cycle is a blur.
+	 */
+	private drawStep(rec: EntityRecord, duration = 0): void {
+		const anim = rec.anim;
+		const step = anim?.steps[anim.index];
+
+		if (!anim || !step) {
+			return;
+		}
+
+		rec.entity = step.res.entity;
+		rec.character = step.res.character;
+		rec.frameName = step.res.frameName;
+		rec.metrics = this.metricsFor(step.res);
+
+		this.setContent(rec, step.res, 0);
+		this.applyFit(rec, step.res);
+
+		// A step that names an `at` GLIDES over its own hold, so a walk translates smoothly
+		// while the poses swap. A step that names none inherits the entity's placement, and
+		// must not re-animate a move the beat already finished.
+		this.layout(rec, step.moves ? step.seconds : duration);
+
+		if (step.moves) {
+			// The sprite is travelling, so the y that decides draw order is travelling too.
+			this.assignZ();
+		}
+	}
+
+	private scheduleStep(rec: EntityRecord): void {
+		const anim = rec.anim;
+
+		if (!anim) {
+			return;
+		}
+
+		const current = anim.steps[anim.index];
+		const last = anim.index >= anim.steps.length - 1;
+
+		if (!current || (last && anim.loop === 'once')) {
+			// `once` holds its final pose. Nothing more to schedule, and the state stays put
+			// so a later apply with the same cycle does not restart it.
+			return;
+		}
+
+		anim.timer = setTimeout(() => {
+			if (rec.anim !== anim || rec.exiting) {
+				return;
+			}
+
+			anim.index = last ? 0 : anim.index + 1;
+			this.drawStep(rec);
+			this.scheduleStep(rec);
+		}, current.seconds * 1000);
+	}
+
 	private exitEntity(rec: EntityRecord, duration: number): void {
+		// A departing sprite fades as it is; nothing is gained by cycling its legs into the
+		// void, and the timer would outlive the element it draws to.
+		this.stopAnim(rec);
 		rec.exiting = true;
 		rec.el.style.transitionDuration = `${duration}s`;
 		rec.el.style.opacity = '0';

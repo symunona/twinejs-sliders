@@ -32,6 +32,7 @@ import {
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
 	Character,
+	FRAME_LOOPS,
 	LAYERS
 } from '@sliders/scene-types';
 import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-context';
@@ -63,6 +64,8 @@ export type HintSlot =
 	| {kind: 'entities'}
 	| {kind: 'frame'; entity: string}
 	| {kind: 'layer'}
+	/** `frameLoop:` — how an animated `frame:` list ends. */
+	| {kind: 'frameLoop'}
 	| {kind: 'fx'}
 	/** `music:` / `sfx:` — a sound asset's name. Both take the same list. */
 	| {kind: 'sound'}
@@ -609,6 +612,9 @@ export function sceneHintContext(
 				case 'layer':
 					return found({kind: 'layer'});
 
+				case 'frameLoop':
+					return found({kind: 'frameLoop'});
+
 				case 'fx':
 					return found({kind: 'fx'});
 
@@ -768,6 +774,9 @@ function namesForSlot(
 
 		case 'layer':
 			return [...LAYERS];
+
+		case 'frameLoop':
+			return [...FRAME_LOOPS];
 
 		/**
 		 * Whoever is on stage, then the rest of the cast, then the commands.

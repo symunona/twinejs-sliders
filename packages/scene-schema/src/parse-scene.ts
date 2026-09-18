@@ -14,6 +14,7 @@ import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
+	FRAME_LOOPS,
 	LAYERS,
 	LAYER_BASELINE,
 	LAYER_Z,
@@ -26,6 +27,8 @@ import {
 	type EntityPatch,
 	type EntityPatchBody,
 	type Frac2,
+	type FrameLoop,
+	type FrameStep,
 	type Layer,
 	type ParseResult,
 	type Scene,
@@ -64,11 +67,29 @@ export const ENTITY_KEYS = [
 	'of',
 	'scale',
 	'frame',
+	'frameLoop',
 	'flip',
 	'layer',
 	'z',
 	'opacity',
 	'ref'
+] as const;
+
+/**
+ * Keys inside one step of a `frame:` list.
+ *
+ * `name` is the pose; the rest are the entity's own placement keys, meaning what they mean
+ * on the entity. `of`, `z` and `ref` are deliberately NOT here: a cycle animates one sprite
+ * in place, and a step that could re-parent or re-point it would be a beat wearing a
+ * frame's clothes.
+ */
+export const FRAME_STEP_KEYS = [
+	'name',
+	'dur',
+	'at',
+	'scale',
+	'flip',
+	'opacity'
 ] as const;
 
 /** Beat map keys that are commands rather than a speaker id. */
@@ -779,6 +800,162 @@ function parseSceneLock(
 }
 
 /**
+ * `frame:` written as a list — a cycle the renderer plays on its own clock.
+ *
+ * A bare scalar item is the short form of `{name: …}`, so a plain pose cycle stays a list
+ * of names. `baseline` is the entity's own: a step's `at` means what the entity's `at`
+ * means, which under `of:` is an offset from the parent and otherwise sits on the floor.
+ */
+function parseFrameSteps(
+	ctx: Ctx,
+	seq: YAMLSeq,
+	baseline: number
+): FrameStep[] {
+	const out: FrameStep[] = [];
+
+	for (const item of seq.items) {
+		if (isScalar(item)) {
+			const name = asSourceString(ctx, item, 'frame');
+
+			if (name !== undefined) {
+				out.push({name});
+			}
+
+			continue;
+		}
+
+		if (!isMap(item)) {
+			addError(
+				ctx,
+				'bad-value',
+				'A frame step is a name, or a map of properties.',
+				item,
+				{hint: 'frame: [walk_1, walk_2] or frame: [{name: walk_1, dur: 0.1}]'}
+			);
+			continue;
+		}
+
+		const step: Partial<FrameStep> = {};
+
+		for (const pair of (item as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === undefined) {
+				addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+				continue;
+			}
+
+			switch (key) {
+				case 'name': {
+					const name = asSourceString(ctx, pair.value, 'frame name');
+
+					if (name !== undefined) {
+						step.name = name;
+					}
+
+					break;
+				}
+
+				case 'dur': {
+					// Its own key name in its own errors: `dur` on a beat and `dur` on a step
+					// are different lengths of time and the hint has to point at the right one.
+					const dur = parseSeconds(
+						ctx,
+						pair.value,
+						'dur',
+						'A step is held for at least one screen frame.'
+					);
+
+					if (dur !== undefined) {
+						step.dur = dur;
+					}
+
+					break;
+				}
+
+				case 'at': {
+					const at = parseAt(ctx, pair.value, 'at', baseline);
+
+					if (at) {
+						step.at = at;
+					}
+
+					break;
+				}
+
+				case 'scale': {
+					const scale = asNumber(ctx, pair.value, 'scale');
+
+					if (scale !== undefined) {
+						if (scale <= 0) {
+							addError(
+								ctx,
+								'bad-value',
+								`scale of ${scale} is not a size.`,
+								pair.value,
+								{hint: 'scale multiplies the natural size. 1 is normal.'}
+							);
+							break;
+						}
+
+						step.scale = scale;
+					}
+
+					break;
+				}
+
+				case 'flip': {
+					const flip = asBoolean(ctx, pair.value, 'flip');
+
+					if (flip !== undefined) {
+						step.flip = flip;
+					}
+
+					break;
+				}
+
+				case 'opacity': {
+					const opacity = asNumber(ctx, pair.value, 'opacity');
+
+					if (opacity !== undefined) {
+						if (opacity < 0 || opacity > 1) {
+							addError(
+								ctx,
+								'bad-value',
+								`opacity of ${opacity} is outside 0..1.`,
+								pair.value,
+								{hint: '0 is invisible, 1 is solid.'}
+							);
+							break;
+						}
+
+						step.opacity = opacity;
+					}
+
+					break;
+				}
+
+				default:
+					addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+						...keyFix(key, FRAME_STEP_KEYS)
+					});
+			}
+		}
+
+		if (step.name === undefined) {
+			addError(ctx, 'bad-value', 'A frame step needs a name.', item, {
+				hint: 'name: is the pose to draw, e.g. {name: walk_1, dur: 0.1}.'
+			});
+			continue;
+		}
+
+		out.push(step as FrameStep);
+	}
+
+	return out;
+}
+
+/**
  * The shared body of `cast:`/`props:` entries and of beat patches. `allowSay` is what
  * separates the two: `say:` is only meaningful inside a beat.
  */
@@ -894,10 +1071,56 @@ function parseEntityBody(
 			}
 
 			case 'frame': {
+				// A list is a cycle. `frame` still carries the first step's name, so
+				// everything that only ever wanted "which pose" — the differ, the frame
+				// picker, the asset collectors — is untouched by animation.
+				if (isSeq(pair.value)) {
+					const steps = parseFrameSteps(
+						ctx,
+						pair.value as YAMLSeq,
+						baseline
+					);
+
+					if (steps.length > 0) {
+						body.patch.frames = steps;
+						body.patch.frame = steps[0].name;
+					}
+
+					break;
+				}
+
 				const frame = asSourceString(ctx, pair.value, 'frame');
 
 				if (frame !== undefined) {
+					// No `frames`, deliberately: `frame:` is ONE key, so a patch that names
+					// a still pose is a patch that stops a cycle. mergePatch reads the
+					// absence, which keeps `frames: null` out of every ordinary patch.
 					body.patch.frame = frame;
+				}
+
+				break;
+			}
+
+			case 'frameLoop': {
+				const loop = asString(ctx, pair.value, 'frameLoop');
+
+				if (loop === undefined) {
+					break;
+				}
+
+				if ((FRAME_LOOPS as readonly string[]).includes(loop)) {
+					body.patch.frameLoop = loop as FrameLoop;
+				} else {
+					addError(
+						ctx,
+						'bad-value',
+						`Unknown frameLoop '${loop}'.`,
+						pair.value,
+						{
+							...keyFix(loop, FRAME_LOOPS),
+							hint: `Must be one of ${FRAME_LOOPS.join(', ')}.`
+						}
+					);
 				}
 
 				break;

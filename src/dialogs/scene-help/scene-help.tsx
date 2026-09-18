@@ -28,6 +28,7 @@ import {
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
+	FRAME_LOOPS,
 	LAYERS,
 	SCENE_LOCKS
 } from '@sliders/scene-types';
@@ -66,7 +67,11 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	at: 'Position. A bare number is x, with the feet on the stage baseline; [x, y] is both.',
 	flip: 'true mirrors the sprite horizontally.',
-	frame: 'Which named frame of the character to draw — idle, angry, whatever it has.',
+	frame:
+		'Which named frame of the character to draw — idle, angry, whatever it has. A LIST animates: frame: [walk_1, walk_2], or frame: [{name: walk_1, dur: 0.1, at: -0.2}] to time and move each step. dur is seconds, 0.1 by default.',
+	frameLoop: `How an animated frame: list ends. ${FRAME_LOOPS.join(
+		', '
+	)} — all loops forever (the default), once plays through and holds the last step.`,
 	layer: `Legacy sugar for z:. ${LAYERS.join(', ')} — back is z: -1, front is z: 2, mid writes nothing. An explicit z: wins.`,
 	of: `Hang this entity off another one: at: becomes an offset from it. of: ~ detaches.`,
 	opacity: '0 to 1. 1 is the default.',
