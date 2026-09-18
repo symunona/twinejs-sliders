@@ -50,7 +50,9 @@ function manifest(missing: string[] = []): Manifest {
 			asset('a_crossed', 'mira/arms-crossed', 'frame'),
 			asset('a_angry', 'mira/angry', 'frame'),
 			asset('a_candle', 'candle', 'object'),
-			asset('a_orphan', 'moon', 'object')
+			asset('a_orphan', 'moon', 'object'),
+			asset('a_bed', 'tavern-loop', 'sound'),
+			asset('a_slam', 'door-slam', 'sound')
 		],
 		characters: [mira],
 		missing,
@@ -171,6 +173,38 @@ describe('resolveSceneAssets', () => {
 		);
 	});
 
+	it('reaches the bed and the one-shots a beat fires', async () => {
+		const rows = resolveSceneAssets(
+			scene(
+				`id: tavern-night
+music: tavern-loop@0.4
+beats:
+  - sfx: door-slam
+  - mira: {say: "Oh.", sfx: door-slam}
+`
+			),
+			await catalog()
+		);
+		const byVia = new Map(rows.map(row => [row.via, row]));
+
+		expect(byVia.get('music:')).toMatchObject({id: 'a_bed', kind: 'sound'});
+		expect(byVia.get('beats/0 sfx:')).toMatchObject({id: 'a_slam', kind: 'sound'});
+
+		// Same sound twice is one row, like any other repeated reference.
+		expect(rows.filter(row => row.id === 'a_slam')).toHaveLength(1);
+	});
+
+	it('calls an unknown sound missing, unlike an fx token', async () => {
+		const rows = resolveSceneAssets(
+			scene('id: x\nmusic: no-such-bed\nfx: [rain@0.6]\n'),
+			await catalog()
+		);
+
+		expect(rows).toEqual([
+			expect.objectContaining({name: 'no-such-bed', present: 'unknown', via: 'music:'})
+		]);
+	});
+
 	it('walks the from: parent and marks what it brings in', async () => {
 		const parent = scene(TAVERN);
 		const child = scene('id: tavern-fight\nfrom: tavern-night@tense\ncast:\n  mira: {frame: angry}\n');
@@ -203,7 +237,7 @@ describe('unusedAssets', () => {
 
 		// Every frame of a cast member counts as used, so only the prop nobody placed is
 		// orphaned.
-		expect(unused.map(row => row.id)).toEqual(['a_orphan']);
+		expect(unused.map(row => row.id)).toEqual(['a_orphan', 'a_bed', 'a_slam']);
 		expect(unused[0]).toMatchObject({kind: 'object', name: 'moon'});
 	});
 });

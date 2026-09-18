@@ -251,8 +251,9 @@ export function resolveSceneAssets(
 			}
 		}
 
-		// 1b — backdrops a beat cuts to. Never implicit: a beat that names one asked for it
-		// out loud, so a miss is an unknown asset exactly like a `bg:` line's would be.
+		// 1b — backdrops a beat cuts to, and the one-shots a beat fires. Neither is ever
+		// implicit: a beat that names one asked for it out loud, so a miss is an unknown
+		// asset exactly like a `bg:` line's would be.
 		for (const beat of current.beats ?? []) {
 			if (typeof beat.bg === 'string' && beat.bg !== '') {
 				push(
@@ -266,6 +267,26 @@ export function resolveSceneAssets(
 					)
 				);
 			}
+
+			if (beat.sfx) {
+				push(
+					rowFor(
+						catalog,
+						beat.sfx.id,
+						`beats/${beat.index} sfx:`,
+						'sfx',
+						inherited,
+						'sound'
+					)
+				);
+			}
+		}
+
+		// 1c — the bed. Unlike `fx:`, a sound name is always a reference to an asset: there
+		// is no renderer-owned sound the manifest is allowed not to know about, so a miss
+		// here is a missing asset and not a shader token.
+		if (current.music) {
+			push(rowFor(catalog, current.music.id, 'music:', 'music', inherited, 'sound'));
 		}
 
 		for (const [id, patch] of Object.entries(current.entities ?? {})) {
