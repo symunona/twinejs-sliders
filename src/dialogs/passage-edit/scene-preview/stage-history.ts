@@ -56,6 +56,8 @@ export interface TracePoint {
 	/** Scene units, ABSOLUTE — `of:` already resolved, the same space the grid is in. */
 	at: Vec2;
 	scale: number;
+	/** Degrees clockwise about the origin. 0 when the entity was never tilted. */
+	rot: number;
 	/** Scene position in design pixels, 1920x1080, y down. Integers. */
 	pixel: Vec2;
 	/** Where the outline goes, in MOUNT px. Derived for the past, measured for the present. */
@@ -126,7 +128,8 @@ function samePlace(a: StageEntity, b: StageEntity): boolean {
 	return (
 		roundCoord(a.at.x) === roundCoord(b.at.x) &&
 		roundCoord(a.at.y) === roundCoord(b.at.y) &&
-		roundCoord(a.scale) === roundCoord(b.scale)
+		roundCoord(a.scale) === roundCoord(b.scale) &&
+		(a.rot ?? 0) === (b.rot ?? 0)
 	);
 }
 
@@ -160,7 +163,11 @@ function pointFor(
 		kind,
 		origin,
 		pixel: imagePoint(entity.at),
+		// The rect stays AXIS-ALIGNED here, at every state. A tilt is drawn by turning the
+		// box about its origin in CSS, exactly as the sprite itself is turned, so the
+		// geometry this derives never has to know about it.
 		rect: kind === 'now' ? rect : ghostRect(rect, fraction, origin, ratio),
+		rot: entity.rot ?? 0,
 		scale: entity.scale
 	};
 }

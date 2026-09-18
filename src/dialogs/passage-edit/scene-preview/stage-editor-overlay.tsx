@@ -22,7 +22,7 @@ import type {
 	StageEntity,
 	Vec2
 } from '@sliders/scene-types';
-import {sortByZ} from '@sliders/render-dom';
+import {rotatePoint, sortByZ} from '@sliders/render-dom';
 import type {DomRenderer, Rect, StageBox} from '@sliders/render-dom';
 import {
 	imageFilesFrom,
@@ -33,6 +33,7 @@ import {
 import type {AssetDragPayload} from './asset-drag';
 import {cameraWrite, panCamera, wheelZoomFactor, zoomCamera} from './scene-gestures';
 import {
+	boxRotation,
 	displaySize,
 	dragTo,
 	gridCentre,
@@ -254,7 +255,12 @@ export interface StageEditorOverlayProps {
  */
 export function hitTargets(
 	stage: Stage,
-	rectOf: (id: EntityId) => Rect | null | undefined
+	rectOf: (id: EntityId) => Rect | null | undefined,
+	/**
+	 * Where a tilted sprite pivots, MOUNT px. Optional: a caller with no stage box has no
+	 * pivot to give, and `hitTest` then treats the rect as the axis-aligned box it is.
+	 */
+	pivotOf?: (entity: StageEntity) => Vec2 | undefined
 ): HitTarget[] {
 	const targets: HitTarget[] = [];
 	const ids = Object.keys(stage?.entities ?? {});
@@ -267,7 +273,13 @@ export function hitTargets(
 		const rect = rectOf(entity.id);
 
 		if (rect) {
-			targets.push({id: entity.id, rect, zIndex: targets.length});
+			targets.push({
+				id: entity.id,
+				pivot: entity.rot ? pivotOf?.(entity) : undefined,
+				rect,
+				rot: entity.rot,
+				zIndex: targets.length
+			});
 		}
 	}
 
@@ -444,8 +456,13 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}, [renderer, stage]);
 
 	const targets = React.useMemo(
-		() => hitTargets(stage, id => rects.get(id)),
-		[rects, stage]
+		() =>
+			hitTargets(
+				stage,
+				id => rects.get(id),
+				entity => (box ? originPoint(box, camera, entity) : undefined)
+			),
+		[box, camera, rects, stage]
 	);
 	const targetsRef = React.useRef(targets);
 
@@ -1033,6 +1050,13 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 	const single = selection.length === 1 ? selection[0] : undefined;
 	const singleRect = single === undefined ? undefined : rects.get(single);
+	// A tilted sprite's handles ride round with its box. Only their POSITION turns: a
+	// resize is a distance from the pivot, and rotating about that pivot leaves every
+	// distance alone, so `scaleFrom` needs to know nothing about any of this.
+	const singleEntity = single === undefined ? undefined : stage.entities?.[single];
+	const singleRot = singleEntity?.rot ?? 0;
+	const singlePivot =
+		box && singleEntity ? originPoint(box, camera, singleEntity) : undefined;
 
 	// The entity a live move or resize is speaking for. A multi-select move reports the one
 	// that was grabbed first rather than four stacked readouts, and a pan reports nothing —
@@ -1151,7 +1175,8 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 									height: rect.height,
 									left: rect.left,
 									top: rect.top,
-									width: rect.width
+									width: rect.width,
+									...boxRotation(rect, origin, entity.rot)
 								}}
 							/>
 							{origin && (
@@ -1231,7 +1256,12 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				{editable &&
 					single !== undefined &&
 					singleRect &&
-					Object.entries(handlePoints(singleRect)).map(([handle, point]) => (
+					Object.entries(handlePoints(singleRect)).map(([handle, corner]) => {
+						const point = singlePivot
+							? rotatePoint(corner, singlePivot, singleRot)
+							: corner;
+
+						return (
 						<div
 							className={`stage-editor-handle ${handle}`}
 							data-handle={handle}
@@ -1246,7 +1276,8 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							}}
 							style={{left: point.x, top: point.y}}
 						/>
-					))}
+						);
+					})}
 			</div>
 		</div>
 	);

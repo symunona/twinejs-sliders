@@ -24,7 +24,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {Rect} from '@sliders/render-dom';
 import type {EntityId, Vec2} from '@sliders/scene-types';
-import {roundCoord} from './stage-geometry';
+import {boxRotation, roundCoord} from './stage-geometry';
 import {hasGhosts} from './stage-history';
 import type {EntityTrace, TraceKind, TracePoint} from './stage-history';
 import './stage-trace-layer.css';
@@ -224,7 +224,12 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 									height: trace.now.rect.height,
 									left: trace.now.rect.left,
 									top: trace.now.rect.top,
-									width: trace.now.rect.width
+									width: trace.now.rect.width,
+									...boxRotation(
+										trace.now.rect,
+										trace.now.origin,
+										trace.now.rot
+									)
 								}}
 							/>
 						)}
@@ -252,7 +257,8 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 										height: point.rect.height,
 										left: point.rect.left,
 										top: point.rect.top,
-										width: point.rect.width
+										width: point.rect.width,
+										...boxRotation(point.rect, point.origin, point.rot)
 									}}
 								/>
 								{/* The ghost's own origin, so a move that only changed the

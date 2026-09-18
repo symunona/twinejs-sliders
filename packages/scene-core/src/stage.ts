@@ -129,6 +129,10 @@ export function mergePatch(
 		next.scale = patch.scale;
 	}
 
+	if (patch.rot !== undefined) {
+		next.rot = patch.rot;
+	}
+
 	return next;
 }
 
@@ -147,6 +151,9 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		of: patch.of ?? undefined,
 		opacity: patch.opacity ?? ENTITY_DEFAULTS.opacity,
 		ref: patch.ref,
+		// No default: absent is 0, and 0 is the identity — so an entity that was never
+		// rotated carries no key rather than a number every renderer has to read.
+		rot: patch.rot,
 		scale: patch.scale ?? ENTITY_DEFAULTS.scale,
 		z: patch.z
 	};

@@ -3,6 +3,7 @@ import {LAYER_BASELINE} from '@sliders/scene-types';
 import type {Camera, Vec2} from '@sliders/scene-types';
 import {
 	DEFAULT_SNAP_TOLERANCE_PX,
+	boxRotation,
 	dragTo,
 	gridCentre,
 	gridLines,
@@ -16,7 +17,8 @@ import {
 	sceneTolerance,
 	snapTargetsX,
 	snapTargetsY,
-	THIRD
+	THIRD,
+	unrotate
 } from '../stage-geometry';
 
 const BOX = computeStageBox(1600, 900);
@@ -235,6 +237,74 @@ describe('hitTest', () => {
 		expect(hitTest([a], {x: 0, y: 0})).toBe('a');
 		expect(hitTest([a], {x: 100, y: 100})).toBe('a');
 		expect(hitTest([a], {x: 100.5, y: 100})).toBeUndefined();
+	});
+
+	// A tilted sprite is tested by turning the POINTER back into its frame, so the rect
+	// stays the one axis-aligned thing the rest of this module agrees it is.
+	describe('under a tilt', () => {
+		// 100x100 at the origin, pivoting on its own bottom-left corner. A quarter turn
+		// clockwise swings it out to the RIGHT of that corner.
+		const tilted = {
+			id: 'tilted',
+			pivot: {x: 0, y: 100},
+			rect: {left: 0, top: 0, width: 100, height: 100},
+			rot: 90,
+			zIndex: 1
+		};
+
+		it('picks the sprite where it is drawn, not where its rect is', () => {
+			expect(hitTest([tilted], {x: 50, y: 150})).toBe('tilted');
+		});
+
+		it('misses the rect the sprite has turned out of', () => {
+			expect(hitTest([tilted], {x: 50, y: 50})).toBeUndefined();
+		});
+
+		it('ignores the pivot when there is no rotation', () => {
+			expect(hitTest([{...tilted, rot: 0}], {x: 50, y: 50})).toBe('tilted');
+		});
+
+		it('falls back to the plain rect when no pivot was supplied', () => {
+			expect(
+				hitTest([{...tilted, pivot: undefined}], {x: 50, y: 50})
+			).toBe('tilted');
+		});
+	});
+});
+
+describe('boxRotation', () => {
+	const rect = {left: 10, top: 20, width: 100, height: 200};
+
+	it('is empty for no rotation, so an untilted box keeps a bare stylesheet', () => {
+		expect(boxRotation(rect, {x: 60, y: 220}, 0)).toEqual({});
+		expect(boxRotation(rect, {x: 60, y: 220}, undefined)).toEqual({});
+	});
+
+	it('is empty with no pivot to turn about', () => {
+		expect(boxRotation(rect, undefined, 15)).toEqual({});
+	});
+
+	it('expresses the pivot relative to the rect, as transform-origin needs', () => {
+		expect(boxRotation(rect, {x: 60, y: 220}, 15)).toEqual({
+			transform: 'rotate(15deg)',
+			transformOrigin: '50px 200px'
+		});
+	});
+});
+
+describe('unrotate', () => {
+	it('inverts a turn about the pivot', () => {
+		const out = unrotate({x: 0, y: 10}, {x: 0, y: 0}, 90);
+
+		expect(out.x).toBeCloseTo(10);
+		expect(out.y).toBeCloseTo(0);
+	});
+
+	it('hands the point straight back when there is nothing to undo', () => {
+		const p = {x: 4, y: 9};
+
+		expect(unrotate(p, {x: 0, y: 0}, 0)).toBe(p);
+		expect(unrotate(p, undefined, 90)).toBe(p);
 	});
 });
 

@@ -44,7 +44,9 @@ import {
 	cameraOffsetPx,
 	characterMetrics,
 	computeStageBox,
+	originPointInRect,
 	propMetrics,
+	rotatePoint,
 	safeZoom,
 	sortByZ,
 	spriteRect
@@ -154,6 +156,7 @@ function applyFrameStep(entity: StageEntity, step: FrameStep): StageEntity {
 		flip: step.flip ?? entity.flip,
 		frame: step.name,
 		opacity: step.opacity ?? entity.opacity,
+		rot: step.rot ?? entity.rot,
 		scale: step.scale ?? entity.scale
 	};
 }
@@ -348,8 +351,16 @@ export class DomRenderer implements Renderer {
 			!!rec.entity.flip
 		);
 
+		// ...turned about the origin the way the element's own `rotate()` turns it, so a
+		// bubble stays on the shoulder of a character who is leaning...
+		const turned = rotatePoint(
+			inBox,
+			originPointInRect(rec.rect, rec.metrics.origin),
+			rec.entity.rot ?? 0
+		);
+
 		// ...then through the camera, then out of the box into MOUNT px.
-		return boxToMount(this.box, applyCamera(this.box, this.camera, inBox));
+		return boxToMount(this.box, applyCamera(this.box, this.camera, turned));
 	}
 
 	destroy(): void {
@@ -742,6 +753,7 @@ export class DomRenderer implements Renderer {
 		const duration = Math.max(
 			durations.duration('move', rec.id),
 			durations.duration('flip', rec.id),
+			durations.duration('rot', rec.id),
 			durations.duration('scale', rec.id)
 		);
 
@@ -1050,9 +1062,16 @@ export class DomRenderer implements Renderer {
 		style.height = `${metrics.height}px`;
 		style.transformOrigin = `${metrics.origin.x * 100}% ${metrics.origin.y * 100}%`;
 		style.transitionDuration = `${Math.max(0, duration)}s`;
-		style.transform = `translate3d(${rec.rect.left}px, ${y}px, 0) scaleX(${
-			entity.flip ? -1 : 1
-		})`;
+		// Order is the renderer's to decide, and this is why `rot` is a key rather than a
+		// CSS string the author writes: the mirror has to come LAST so it is applied to the
+		// sprite FIRST, and a positive `rot` therefore leans the same way on screen whether
+		// the character faces left or right. Written the other way round, flipping a tilted
+		// sprite would silently reverse its tilt.
+		const rot = entity.rot ?? 0;
+
+		style.transform = `translate3d(${rec.rect.left}px, ${y}px, 0)${
+			rot ? ` rotate(${rot}deg)` : ''
+		} scaleX(${entity.flip ? -1 : 1})`;
 		style.opacity = String(
 			from ? from.opacity : clamp01(entity.opacity ?? 1)
 		);

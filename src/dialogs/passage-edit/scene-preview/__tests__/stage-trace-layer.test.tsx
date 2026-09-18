@@ -8,7 +8,8 @@ function point(
 	kind: TracePoint['kind'],
 	x: number,
 	y: number,
-	scale = 1
+	scale = 1,
+	rot = 0
 ): TracePoint {
 	const rect: Rect = {height: 400, left: x, top: y, width: 200};
 
@@ -18,6 +19,7 @@ function point(
 		origin: {x: x + 100, y: y + 400},
 		pixel: {x, y},
 		rect,
+		rot,
 		scale
 	};
 }

@@ -174,10 +174,34 @@ cannot carry one.
 | `at` | position. See Coordinates. |
 | `of` | another entity's id. Makes `at` relative to it. See Relative placement. |
 | `scale` | uniform size multiplier. 1 = natural size. Scales about the origin, so a character keeps its feet on the floor. Must be > 0. |
+| `rot` | tilt, degrees CLOCKWISE, about the same origin `scale` grows about. Negative leans the other way. Absent = 0. |
 | `frame` | which named frame of the character/prop (D5) |
 | `flip` | mirror horizontally |
 | `layer` | `back` / `mid` / `front`. Optional. |
 | `z` | numeric escape hatch within a layer |
+
+### Rotation — `rot:`
+
+```yaml
+props:
+  sign: {at: -0.4, rot: -8}          # leaning left
+beats:
+  - sign: {rot: 40, dur: 1}          # tips over the course of a second
+```
+
+| Rule | |
+|---|---|
+| Unit | degrees, clockwise. |
+| Pivot | the entity's **own origin** — a character's feet, a prop's anchor. Pin that anchor in the asset editor or character editor; there is no per-scene pivot key. |
+| Absent vs `rot: 0` | the same rotation. A beat gaining `rot: 0` produces no transition. |
+| With `flip` | the mirror is applied FIRST, so a positive `rot` leans the same way on screen whichever way the sprite faces. |
+| Past 360 | accepted with a warning — it draws as `rot % 360`. A spin is a frame cycle, not a pose. |
+| `of:` children | do not inherit it. |
+| Frame steps | a step of a `frame:` cycle may carry its own `rot`, like `at`/`scale`/`flip`. |
+
+There is deliberately **no** `transform:` string key. Composition order is the renderer's, so
+that `at`, `scale`, `rot` and `flip` each stay one number the differ can time, the beat
+writer can patch and the editor can drag.
 
 ## Coordinates
 
@@ -207,7 +231,7 @@ props:
 |---|---|
 | Bare `at: 0.4` on a child | x offset only, **y level with the parent**. Not the layer baseline — see below. |
 | What inherits | **position only.** |
-| What does NOT | `scale`, `flip`, `frame`, `layer`, `z` — a child keeps its own. |
+| What does NOT | `scale`, `rot`, `flip`, `frame`, `layer`, `z` — a child keeps its own. |
 | Chains | allowed, any depth. `of:` edges must form a DAG. |
 | Id space | `cast:` and `props:` share one, so a prop may hang off a character. |
 | Unknown parent | error in a snapshot scene; ignored in a patch scene, where it may be inherited. |

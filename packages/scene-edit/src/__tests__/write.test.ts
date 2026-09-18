@@ -516,6 +516,7 @@ describe('half-typed and malformed input', () => {
 			of: 'table',
 			opacity: 0.5,
 			ref: 'tankard',
+			rot: 12,
 			scale: 0.8,
 			z: 2
 		};

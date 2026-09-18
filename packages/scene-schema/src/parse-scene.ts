@@ -68,6 +68,7 @@ export const ENTITY_KEYS = [
 	'at',
 	'of',
 	'scale',
+	'rot',
 	'frame',
 	'frameLoop',
 	'flip',
@@ -90,6 +91,7 @@ export const FRAME_STEP_KEYS = [
 	'dur',
 	'at',
 	'scale',
+	'rot',
 	'flip',
 	'opacity'
 ] as const;
@@ -152,6 +154,13 @@ const MAX_SCALE = 10;
  * A warning, not an error — a deliberately long hold is a legitimate effect.
  */
 const MAX_DUR = 60;
+
+/**
+ * A rotation past a full turn draws exactly as `rot % 360` does, so writing one is almost
+ * always a misunderstanding — an author reaching for a spin, which is a frame cycle's job,
+ * not a pose's. A warning, not an error: the drawing is still well defined.
+ */
+const MAX_ROT = 360;
 
 interface Ctx {
 	errors: SceneError[];
@@ -375,6 +384,36 @@ function asNumber(ctx: Ctx, node: unknown, what: string): number | undefined {
 
 	addError(ctx, 'bad-value', `${what} must be a number.`, node);
 	return undefined;
+}
+
+/**
+ * `rot:` — degrees, clockwise, about the entity's own origin.
+ *
+ * Shared by the entity body and by one step of a frame cycle so the two can never disagree
+ * about what a rotation is. Negative is anticlockwise and perfectly ordinary, so the only
+ * thing worth saying is that a value past a whole turn draws as a smaller one.
+ */
+function parseRot(ctx: Ctx, node: unknown): number | undefined {
+	const rot = asNumber(ctx, node, 'rot');
+
+	if (rot === undefined) {
+		return undefined;
+	}
+
+	if (Math.abs(rot) > MAX_ROT) {
+		addError(
+			ctx,
+			'bad-value',
+			`rot of ${rot} draws the same as ${rot % MAX_ROT}.`,
+			node,
+			{
+				hint: 'rot is degrees clockwise about the entity origin. A spin is a frame cycle, not a pose.',
+				severity: 'warning'
+			}
+		);
+	}
+
+	return rot;
 }
 
 function asBoolean(ctx: Ctx, node: unknown, what: string): boolean | undefined {
@@ -924,6 +963,16 @@ function parseFrameSteps(
 					break;
 				}
 
+				case 'rot': {
+					const rot = parseRot(ctx, pair.value);
+
+					if (rot !== undefined) {
+						step.rot = rot;
+					}
+
+					break;
+				}
+
 				case 'flip': {
 					const flip = asBoolean(ctx, pair.value, 'flip');
 
@@ -1085,6 +1134,16 @@ function parseEntityBody(
 					}
 
 					body.patch.scale = scale;
+				}
+
+				break;
+			}
+
+			case 'rot': {
+				const rot = parseRot(ctx, pair.value);
+
+				if (rot !== undefined) {
+					body.patch.rot = rot;
 				}
 
 				break;

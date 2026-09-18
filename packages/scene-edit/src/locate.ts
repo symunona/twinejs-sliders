@@ -51,6 +51,7 @@ export const ENTITY_KEY_ORDER = [
 	'of',
 	'at',
 	'scale',
+	'rot',
 	'frame',
 	'frameLoop',
 	'flip',

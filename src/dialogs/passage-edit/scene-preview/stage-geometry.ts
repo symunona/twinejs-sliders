@@ -28,6 +28,7 @@ import {
 	boxToMount,
 	boxToScene,
 	cameraOffsetPx,
+	rotatePoint,
 	safeZoom,
 	sceneToBox
 } from '@sliders/render-dom';
@@ -129,6 +130,22 @@ export function sceneToMount(box: StageBox, camera: Camera, at: Vec2): Vec2 {
 	return boxToMount(box, applyCamera(box, camera, sceneToBox(box, safe)));
 }
 
+/**
+ * A point turned back out of a tilted sprite's frame, so the rest of the editor's maths can
+ * go on treating every rect as axis-aligned.
+ *
+ * The forward turn is the renderer's `rotate()` about the sprite origin; this is its
+ * inverse. Imported from `render-dom` rather than written again here for the reason at the
+ * top of this file — one formula, one place.
+ */
+export function unrotate(
+	p: Vec2,
+	pivot: Vec2 | undefined,
+	rot: number | undefined
+): Vec2 {
+	return rot && pivot ? rotatePoint(p, pivot, -rot) : p;
+}
+
 // ---------------------------------------------------------------------------
 // Hit testing
 // ---------------------------------------------------------------------------
@@ -138,6 +155,10 @@ export interface HitTarget {
 	/** MOUNT px, camera already applied — i.e. what the eye sees. */
 	rect: Rect;
 	zIndex: number;
+	/** Degrees clockwise the sprite is drawn at, if any. */
+	rot?: number;
+	/** What that rotation pivots about, MOUNT px — the sprite's origin. */
+	pivot?: Vec2;
 }
 
 /**
@@ -149,6 +170,10 @@ export interface HitTarget {
  *
  * Ties on `zIndex` go to the LAST target in the list: same rule the painter's algorithm
  * uses, so whatever was drawn on top is what gets picked.
+ *
+ * A tilted sprite is tested by turning the POINTER back into the sprite's own frame rather
+ * than by turning the rect into four corners. Same answer, and it keeps `Rect` the one
+ * axis-aligned thing every other function here already agrees it is.
  */
 export function hitTest(targets: HitTarget[], p: Vec2): string | undefined {
 	if (!targets?.length || !Number.isFinite(p?.x) || !Number.isFinite(p?.y)) {
@@ -165,11 +190,13 @@ export function hitTest(targets: HitTarget[], p: Vec2): string | undefined {
 			continue;
 		}
 
+		const q = unrotate(p, t.pivot, t.rot);
+
 		if (
-			p.x < r.left ||
-			p.x > r.left + r.width ||
-			p.y < r.top ||
-			p.y > r.top + r.height
+			q.x < r.left ||
+			q.x > r.left + r.width ||
+			q.y < r.top ||
+			q.y > r.top + r.height
 		) {
 			continue;
 		}
@@ -605,4 +632,34 @@ export function gridLines(box: StageBox, camera: Camera): GridLine[] {
 /** Scene (0, 0) in MOUNT px — where the centre marker goes. */
 export function gridCentre(box: StageBox, camera: Camera): Vec2 {
 	return sceneToMount(box, camera, ORIGIN);
+}
+
+/**
+ * The CSS that turns an overlay box the way `rot:` turns the sprite it describes.
+ *
+ * Every rect the editor draws — the selection box, the grid's per-entity outline, a ghost
+ * of where something used to stand — is computed axis-aligned and then turned in CSS,
+ * exactly as the renderer computes an axis-aligned rect and turns the element. Rotating
+ * the geometry instead would mean carrying four corners everywhere a `Rect` goes, and the
+ * two would drift the first time one of them was updated alone.
+ *
+ * `origin` is the pivot in MOUNT px — the sprite's own origin, which is what `rot` turns
+ * about — so it has to be expressed relative to the rect's top-left for `transform-origin`.
+ * Returns an empty object for no rotation, so an untilted box keeps a bare stylesheet.
+ * Plain style fields rather than `React.CSSProperties`, because this module has no React in
+ * it and spreading the result into a `style` prop types the same either way.
+ */
+export function boxRotation(
+	rect: Rect,
+	origin: Vec2 | undefined,
+	rot: number | undefined
+): {transform?: string; transformOrigin?: string} {
+	if (!rot || !origin) {
+		return {};
+	}
+
+	return {
+		transform: `rotate(${rot}deg)`,
+		transformOrigin: `${origin.x - rect.left}px ${origin.y - rect.top}px`
+	};
 }

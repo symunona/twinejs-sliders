@@ -95,6 +95,7 @@ export interface FrameStep {
 	/** Placement while this step is on screen. Absolute, like the entity's own `at`. */
 	at?: Vec2;
 	scale?: number;
+	rot?: number;
 	flip?: boolean;
 	opacity?: number;
 }
@@ -160,6 +161,22 @@ export interface StageEntity {
 	 * multiply by something, and an optional key would put a `?? 1` in each of them.
 	 */
 	scale: number;
+	/**
+	 * Clockwise rotation in DEGREES, about the entity's own origin — the same pivot `scale`
+	 * grows about, so a tilted character still has its feet on the floor and a lamp post
+	 * leans from its base.
+	 *
+	 * Optional, unlike `scale`: 0 is a true identity, so a renderer that never saw the key
+	 * emits no rotation at all rather than a `rotate(0deg)` it has to multiply in. Degrees
+	 * rather than turns or radians because an author writing a scene by hand thinks in
+	 * them, and because CSS does.
+	 *
+	 * Composition is the RENDERER's, not the author's — that is the whole reason this is
+	 * its own key instead of a CSS `transform:` string. `flip` applies first and rotation
+	 * second, so a positive `rot` leans the same way on screen whichever way the sprite
+	 * faces.
+	 */
+	rot?: number;
 }
 
 export interface StageFx {
@@ -701,6 +718,7 @@ export type TransitionKind =
 	| 'exit'
 	| 'move'
 	| 'scale'
+	| 'rot'
 	| 'frame'
 	| 'flip'
 	| 'bg'

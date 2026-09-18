@@ -162,6 +162,39 @@ export function anchorPointInRect(
 	};
 }
 
+/** The sprite's origin as a BOX-space point — what every transform on it pivots about. */
+export function originPointInRect(rect: Rect, origin: Frac2): Vec2 {
+	return {
+		x: rect.left + origin.x * rect.width,
+		y: rect.top + origin.y * rect.height
+	};
+}
+
+/**
+ * Turn a point about a pivot, clockwise, in degrees — the same sense `rotate()` has in CSS,
+ * where y grows downwards.
+ *
+ * `measure()` has to do this because `rot` is applied to the sprite element as a whole: an
+ * anchor that ignored it would leave every speech bubble hanging off a tilted character's
+ * unrotated shoulder, and `measure()` IS the contract the bubbles are placed by.
+ */
+export function rotatePoint(p: Vec2, pivot: Vec2, degrees: number): Vec2 {
+	if (!degrees) {
+		return p;
+	}
+
+	const rad = (degrees * Math.PI) / 180;
+	const cos = Math.cos(rad);
+	const sin = Math.sin(rad);
+	const dx = p.x - pivot.x;
+	const dy = p.y - pivot.y;
+
+	return {
+		x: pivot.x + dx * cos - dy * sin,
+		y: pivot.y + dx * sin + dy * cos
+	};
+}
+
 /**
  * Apply the camera to a BOX-space point. Mirrors exactly what the CSS transform on the layer
  * stack does, so `measure()` agrees with what the eye sees:

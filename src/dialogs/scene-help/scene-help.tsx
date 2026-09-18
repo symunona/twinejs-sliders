@@ -78,6 +78,7 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	of: `Hang this entity off another one: at: becomes an offset from it. of: ~ detaches.`,
 	opacity: '0 to 1. 1 is the default.',
 	ref: 'The asset or character this id draws, when the id is not the asset name itself.',
+	rot: 'Tilt, in degrees clockwise, about the same origin scale: grows about — so a leaning character keeps its feet where they were. Negative leans the other way. Pin that origin in the asset or character editor.',
 	scale: 'Uniform size multiplier, about the origin, so feet stay on the floor. > 0.',
 	z: 'Draw order for the whole stage. Higher is nearer. Otherwise depth comes from y.'
 };

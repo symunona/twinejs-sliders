@@ -32,6 +32,10 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
 	// that takes a second to change looks broken, and music that changes in a tenth of one
 	// sounds like a mistake.
 	music: 1.5,
+	// Its own kind rather than part of `move`, for the same reason `scale` is: a sprite can
+	// turn where it stands, and a renderer that wants a lean to settle slower than a walk
+	// has nowhere else to say so.
+	rot: 0.3,
 	scale: 0.3
 };
 
@@ -191,6 +195,18 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 				from: before.scale,
 				kind: 'scale',
 				to: after.scale
+			});
+		}
+
+		// Absent and 0 are the same rotation, so they must not read as a change — an entity
+		// that gains `rot: 0` on a beat has not turned.
+		if ((before.rot ?? 0) !== (after.rot ?? 0)) {
+			out.push({
+				duration: DEFAULT_DURATIONS.rot,
+				entityId: id,
+				from: before.rot ?? 0,
+				kind: 'rot',
+				to: after.rot ?? 0
 			});
 		}
 
