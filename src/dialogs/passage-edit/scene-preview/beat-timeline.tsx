@@ -400,6 +400,10 @@ function labelParts(
 			return {dur: dur ?? seconds(beat.seconds), who: 'wait'};
 		case 'fx':
 			return {dur, text: beat.fx.id, who: 'fx'};
+		case 'sfx':
+			// The speaker slot carries the note, so a sound beat is findable in a strip of
+			// forty at a glance \u2014 the same job the crosshair does for a mark.
+			return {dur, text: beat.sfx.id, who: '\u266a'};
 		default:
 			return {dur, text: beat.name, who: '\u2316'};
 	}

@@ -32,7 +32,8 @@ const TABS: {kind?: AssetKind; labelKey: string}[] = [
 	{kind: 'bg', labelKey: 'dialogs.slidersAssets.backgrounds'},
 	{kind: 'object', labelKey: 'dialogs.slidersAssets.objects'},
 	{kind: undefined, labelKey: 'dialogs.slidersAssets.characters'},
-	{kind: 'fx', labelKey: 'dialogs.slidersAssets.fx'}
+	{kind: 'fx', labelKey: 'dialogs.slidersAssets.fx'},
+	{kind: 'sound', labelKey: 'dialogs.slidersAssets.sounds'}
 ];
 
 /**
@@ -243,6 +244,10 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			<ButtonBar>
 				{!importing && (
 					<UploadButton
+						// The file picker on the Sounds tab must offer sounds, or the tab is
+						// a dead end for everybody who reaches for the button instead of
+						// dragging — the picker would show no files at all.
+						accept={kind === 'sound' ? 'audio/*' : 'image/*'}
 						commandId="slidersAssets.upload"
 						commandScope="sliders-assets"
 						label={t('dialogs.slidersAssets.upload')}
@@ -361,7 +366,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 							{!library.busy && empty && (
 								<p className="sliders-empty">
 									{t(
-										tab.kind
+										tab.kind === 'sound'
+											? 'dialogs.slidersAssets.emptySounds'
+											: tab.kind
 											? 'dialogs.slidersAssets.empty'
 											: 'dialogs.slidersAssets.emptyCharacters'
 									)}
@@ -374,7 +381,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						<TabPanel key={tab.labelKey}>
 							<UploadDropZone
 								label={
-									tab.kind
+									tab.kind === 'sound'
+										? t('dialogs.slidersAssets.dropHintSounds')
+										: tab.kind
 										? t('dialogs.slidersAssets.dropHint', {kind: t(tab.labelKey)})
 										: t('dialogs.slidersAssets.dropHintCharacters')
 								}

@@ -23,6 +23,7 @@ interface RefSets {
 	fxRefs: Set<string>;
 	frameRefs: Map<string, Set<string>>;
 	optionalAssetRefs: Set<string>;
+	soundRefs: Set<string>;
 }
 
 function emptyRefSets(): RefSets {
@@ -32,7 +33,8 @@ function emptyRefSets(): RefSets {
 		characterRefs: new Set(),
 		frameRefs: new Map(),
 		fxRefs: new Set(),
-		optionalAssetRefs: new Set()
+		optionalAssetRefs: new Set(),
+		soundRefs: new Set()
 	};
 }
 
@@ -98,7 +100,17 @@ function addScene(sets: RefSets, scene: Scene): void {
 		add(sets.fxRefs, fx.id);
 	}
 
+	if (scene.music) {
+		add(sets.soundRefs, scene.music.id);
+	}
+
 	for (const beat of scene.beats) {
+		// On every kind, not inside the switch: `sfx:` rides on a line and on a stage move
+		// as readily as on a beat of its own.
+		if (beat.sfx) {
+			add(sets.soundRefs, beat.sfx.id);
+		}
+
 		switch (beat.kind) {
 			case 'fx':
 				add(sets.fxRefs, beat.fx.id);
@@ -137,7 +149,8 @@ function freeze(sets: RefSets): SceneAssetRefs {
 		characterRefs: [...sets.characterRefs].sort(),
 		frameRefs,
 		fxRefs: [...sets.fxRefs].sort(),
-		optionalAssetRefs: [...sets.optionalAssetRefs].sort()
+		optionalAssetRefs: [...sets.optionalAssetRefs].sort(),
+		soundRefs: [...sets.soundRefs].sort()
 	};
 }
 

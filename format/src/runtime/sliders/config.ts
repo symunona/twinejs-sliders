@@ -19,6 +19,15 @@ export const FULL_SCREEN = 'sliders.fullScreen';
 /** Where the current stage is published for other code to read. */
 export const STAGE_VAR = 'sliders.stage';
 
+/**
+ * Silence a scene's `music:` and `sfx:`.
+ *
+ * A story sets it (`sliders.mute: true` in a vars section) for a chapter that should be
+ * read in silence; the reader has the browser's own tab mute, which no story can override
+ * and which is the control they already know.
+ */
+export const MUTE = 'sliders.mute';
+
 export const DEFAULT_AUTO_ADVANCE = 3;
 
 export const slidersDefaults = {
@@ -34,6 +43,11 @@ export function flagOn(name: string): boolean {
 
 export function fullScreenScenes(): boolean {
 	return flagOn(FULL_SCREEN);
+}
+
+/** Opt-IN to silence, unlike the flags above: absent means a scene may be heard. */
+export function muted(): boolean {
+	return get(MUTE) === true;
 }
 
 /** Milliseconds, because that is what `setTimeout` wants. 0 means "wait for a click". */

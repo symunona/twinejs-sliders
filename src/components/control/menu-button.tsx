@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {createPortal} from 'react-dom';
 import {usePopper} from 'react-popper';
+import type {Placement} from '@popperjs/core';
 import {CSSTransition} from 'react-transition-group';
 import {ButtonBar, ButtonBarSeparator} from '../container/button-bar';
 import {ButtonCard} from '../container/button-card';
@@ -19,6 +20,16 @@ export interface UncheckableLabeledMenuItem {
 	disabled?: boolean;
 	label: string;
 	onClick: () => void;
+	/**
+	 * Pointer enter (`true`) and leave (`false`) on this item, for a menu whose items
+	 * PREVIEW their effect before they are chosen.
+	 *
+	 * The menu can vanish out from under the pointer -- a click elsewhere closes it and no
+	 * leave event follows -- so a consumer that turns a preview on here must also turn it
+	 * off from `onChangeOpen`. Nothing in the menu can do that for it: the items are gone
+	 * by the time anyone could ask.
+	 */
+	onHover?: (hovering: boolean) => void;
 	separator?: undefined;
 	variant?: IconButtonProps['variant'];
 }
@@ -49,32 +60,63 @@ export interface MenuButtonProps extends Omit<IconButtonProps, 'onClick'> {
 	 * keyboard shortcut.
 	 */
 	open?: boolean;
+	/**
+	 * Where the menu hangs, if not below the button.
+	 *
+	 * For a menu that must not cover what it is about: the scene editor's frame menu opens
+	 * upward, because dropping it down would land it on the very sprite whose pose the
+	 * items are previewing. Popper still flips when the side it was asked for has no room.
+	 */
+	placement?: Placement;
 }
 
 export const MenuButton: React.FC<MenuButtonProps> = props => {
-	const {items, onChangeOpen, open: controlledOpen, ...other} = props;
+	const {
+		items,
+		onChangeOpen,
+		open: controlledOpen,
+		placement = 'bottom-end',
+		...other
+	} = props;
 	const [buttonEl, setButtonEl] = React.useState<HTMLButtonElement | null>(
 		null
 	);
 	const [menuEl, setMenuEl] = React.useState<HTMLDivElement | null>(null);
 	const [open, setOpen] = useControlledOpen(controlledOpen, onChangeOpen);
 	const {styles, attributes} = usePopper(buttonEl, menuEl, {
-		// Right-aligned to the button, not centred under it. Popper's default is `bottom`,
-		// which hangs a wide menu off both sides of a narrow toolbar button and pushes it
-		// past whatever panel edge is nearest.
-		placement: 'bottom-end',
+		// Right-aligned to the button by default, not centred under it. Popper's own default
+		// is `bottom`, which hangs a wide menu off both sides of a narrow toolbar button and
+		// pushes it past whatever panel edge is nearest.
+		placement,
 		strategy: 'fixed'
 	});
 
-	React.useEffect(() => {
-		const closer = () => setOpen(false);
+	/**
+	 * Closed by a click anywhere, through a ref rather than `setOpen` itself.
+	 *
+	 * `setOpen` changes identity whenever `onChangeOpen` does, and a caller passing an
+	 * inline arrow -- the ordinary thing to write -- changes it on EVERY render. With
+	 * `setOpen` in the dependency list this listener was then torn down and re-added while a
+	 * click was still being dispatched: the DOM fixes a target's listener list when dispatch
+	 * reaches it, so the removed one no longer ran and the freshly added one was not called
+	 * either. The menu stayed open for exactly the callers whose items change state, which
+	 * is most of them. The listener's lifetime is `open`, and nothing else.
+	 */
+	const setOpenRef = React.useRef(setOpen);
 
-		if (open) {
-			document.addEventListener('click', closer);
+	setOpenRef.current = setOpen;
+
+	React.useEffect(() => {
+		if (!open) {
+			return;
 		}
 
+		const closer = () => setOpenRef.current(false);
+
+		document.addEventListener('click', closer);
+
 		return () => document.removeEventListener('click', closer);
-	}, [menuEl, open, setOpen]);
+	}, [open]);
 
 	return (
 		<span className="menu-button">
@@ -129,6 +171,8 @@ export const MenuButton: React.FC<MenuButtonProps> = props => {
 											key={index}
 											label={item.label}
 											onChange={item.onClick}
+											onPointerEnter={() => item.onHover?.(true)}
+											onPointerLeave={() => item.onHover?.(false)}
 											uncheckedIcon={<IconEmpty />}
 											value={item.checked}
 										/>
@@ -140,6 +184,8 @@ export const MenuButton: React.FC<MenuButtonProps> = props => {
 											key={index}
 											label={item.label}
 											onClick={item.onClick}
+											onPointerEnter={() => item.onHover?.(true)}
+											onPointerLeave={() => item.onHover?.(false)}
 											variant={item.variant}
 										/>
 									);

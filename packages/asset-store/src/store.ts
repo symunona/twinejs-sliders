@@ -163,7 +163,13 @@ export class BackedAssetStore implements AssetStore {
 					options.name ?? nameFromFilename(file.name),
 					this.namesIn(manifest)
 				),
-				kind: options.kind ?? (options.ownerCharacter ? 'frame' : 'bg'),
+				// Bytes beat the caller here. A sound dropped on the Backgrounds tab is a
+				// mis-aim, not a request for a backdrop made of an mp3, and the old
+				// `kind ?? 'bg'` fallthrough is exactly how frames once became backgrounds
+				// in silence.
+				kind: prepared.audio
+					? 'sound'
+					: options.kind ?? (options.ownerCharacter ? 'frame' : 'bg'),
 				tags: options.tags ?? [],
 				animated: prepared.animated,
 				w: prepared.width,
@@ -173,7 +179,10 @@ export class BackedAssetStore implements AssetStore {
 				mime: prepared.mime,
 				ownerCharacter: options.ownerCharacter,
 				sourceAsset: options.sourceAsset,
-				origin: options.origin
+				origin: options.origin,
+				...(prepared.duration !== undefined
+					? {duration: prepared.duration}
+					: {})
 			};
 
 			await this.storage.writeBlob(id, prepared.blob);

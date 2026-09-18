@@ -25,6 +25,15 @@ export interface IconButtonProps {
 	iconPosition?: 'start' | 'end';
 	label: string;
 	onClick?: (e: React.MouseEvent) => void;
+	/**
+	 * Pointer enter/leave on the button itself.
+	 *
+	 * For a control that PREVIEWS what choosing it would do -- the scene editor's frame
+	 * menu draws the hovered frame on the stage before it is picked. Never for styling:
+	 * that is `:hover`'s job and does not need a round trip through React.
+	 */
+	onPointerEnter?: (e: React.PointerEvent) => void;
+	onPointerLeave?: (e: React.PointerEvent) => void;
 	preventDefault?: boolean;
 	role?: string;
 	selectable?: boolean;
@@ -50,6 +59,8 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 			iconOnly,
 			iconPosition = 'start',
 			onClick,
+			onPointerEnter,
+			onPointerLeave,
 			preventDefault,
 			role,
 			selectable = false,
@@ -91,6 +102,8 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 					disabled={disabled}
 					className={className}
 					onClick={handleOnClick}
+					onPointerEnter={onPointerEnter}
+					onPointerLeave={onPointerLeave}
 					ref={setButton}
 					role={role}
 				>

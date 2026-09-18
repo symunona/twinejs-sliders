@@ -8,7 +8,15 @@
  * receives the full target stage too, so a missing transition means "snap", never "wrong".
  */
 
-import type {Camera, Stage, StageEntity, StageFx, Transition, Vec2} from '@sliders/scene-types';
+import type {
+	Camera,
+	Stage,
+	StageEntity,
+	StageFx,
+	StageSound,
+	Transition,
+	Vec2
+} from '@sliders/scene-types';
 
 /** Seconds. Deliberately in one place so a renderer or theme can override them. */
 export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
@@ -20,6 +28,10 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
 	frame: 0.15,
 	fx: 0.3,
 	move: 0.3,
+	// A bed crossfades rather than cuts. Longer than anything visual on purpose: a picture
+	// that takes a second to change looks broken, and music that changes in a tenth of one
+	// sounds like a mistake.
+	music: 1.5,
 	scale: 0.3
 };
 
@@ -207,7 +219,30 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 		});
 	}
 
+	// The bed. Compared by id AND volume, so turning the same track down is a transition and
+	// re-declaring the same track at the same volume is not — walking from scene to scene
+	// under one piece of music must not restart it.
+	if (!sameSound(prev.music, next.music)) {
+		out.push({
+			duration: DEFAULT_DURATIONS.music,
+			from: prev.music ? {...prev.music} : undefined,
+			kind: 'music',
+			to: next.music ? {...next.music} : undefined
+		});
+	}
+
 	return out;
+}
+
+function sameSound(
+	a: StageSound | undefined,
+	b: StageSound | undefined
+): boolean {
+	if (!a || !b) {
+		return a === b;
+	}
+
+	return a.id === b.id && a.amount === b.amount;
 }
 
 /**

@@ -53,7 +53,8 @@ export function cloneStage(stage: Stage): Stage {
 		bgImplicit: stage.bgImplicit,
 		camera: cloneCamera(stage.camera),
 		entities,
-		fx: cloneFx(stage.fx)
+		fx: cloneFx(stage.fx),
+		...(stage.music ? {music: {...stage.music}} : {})
 	};
 }
 

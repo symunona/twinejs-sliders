@@ -115,6 +115,18 @@ export async function resolveBundleRefs(
 		}
 	}
 
+	// Sounds resolve by name and nothing else: there is no `entityKey` mangle to undo,
+	// because no fragment ever slugified one — `- sfx: door-slam` writes the name whole.
+	for (const ref of refs.soundRefs ?? []) {
+		const meta = await byKey(ref);
+
+		if (meta) {
+			take(meta);
+		} else {
+			unresolved.add(ref);
+		}
+	}
+
 	for (const ref of refs.fxRefs) {
 		const direct = await byKey(ref);
 

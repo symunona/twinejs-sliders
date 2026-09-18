@@ -52,7 +52,7 @@ const BEAT_COMMAND_NAMES = [...BEAT_COMMAND_KEYS];
  * `- mark: here`. They have no body map, so there are no keys to offer inside one --
  * `box:` is the only command that takes a map.
  */
-const SCALAR_BEAT_COMMANDS: readonly string[] = ['wait', 'fx', 'mark'];
+const SCALAR_BEAT_COMMANDS: readonly string[] = ['wait', 'fx', 'sfx', 'mark'];
 
 /** What the cursor is sitting in, and therefore what to offer. */
 export type HintSlot =
@@ -64,6 +64,8 @@ export type HintSlot =
 	| {kind: 'frame'; entity: string}
 	| {kind: 'layer'}
 	| {kind: 'fx'}
+	/** `music:` / `sfx:` — a sound asset's name. Both take the same list. */
+	| {kind: 'sound'}
 	/** A beat's own key: who speaks this line. */
 	| {kind: 'speaker'}
 	/** `as:` — a bubble style token. */
@@ -610,6 +612,10 @@ export function sceneHintContext(
 				case 'fx':
 					return found({kind: 'fx'});
 
+				case 'music':
+				case 'sfx':
+					return found({kind: 'sound'});
+
 				case 'frame': {
 					const entity = entityOfLine(lines, blockStart, cursor.line);
 
@@ -792,6 +798,18 @@ function namesForSlot(
 		case 'fx':
 			return [...FX_IDS];
 
+		/**
+		 * Sounds ONLY, where every other asset slot ranks its preferred kinds first and
+		 * still lists the rest. A backdrop's name in `sfx:` is not an unusual choice, it is
+		 * a mistake with no sound at the end of it — there is nothing to play. `fx:` is the
+		 * other closed list, for the opposite reason: those ids are the renderer's CSS.
+		 */
+		case 'sound':
+			return all
+				.filter(asset => asset.kind === 'sound')
+				.map(asset => asset.name)
+				.sort((a, b) => a.localeCompare(b));
+
 		case 'frame': {
 			// An entity id IS its ref unless `ref:` overrides it -- the parser
 			// does `ref: body.ref ?? id`.
@@ -842,6 +860,10 @@ const BEAT_SCAFFOLDS: Record<string, {prefix: string; value: string; suffix: str
 	box: {prefix: ': "', suffix: '"', value: ''},
 	fx: {prefix: ': ', suffix: '', value: 'rain'},
 	mark: {prefix: ': ', suffix: '', value: 'here'},
+	// No placeholder name to select: unlike `fx: rain`, whose ids ship with the renderer,
+	// nobody's library is guaranteed to hold a sound called anything in particular. An empty
+	// value leaves the cursor where the name goes, and the dropdown reopens there on it.
+	sfx: {prefix: ': ', suffix: '', value: ''},
 	wait: {prefix: ': ', suffix: '', value: '1'}
 };
 

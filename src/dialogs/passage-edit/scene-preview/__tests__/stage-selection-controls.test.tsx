@@ -39,6 +39,7 @@ function renderControls(
 		onDelete: jest.fn(),
 		onFlip: jest.fn(),
 		onFrame: jest.fn(),
+		onPreviewFrame: jest.fn(),
 		onStepZ: jest.fn()
 	};
 
@@ -57,8 +58,57 @@ function renderControls(
 	return handlers;
 }
 
-function selects() {
-	return Array.from(document.querySelectorAll('select'));
+/**
+ * i18n is not initialised under jest, so every `t()` is its own key here. Real frame names
+ * come from the manifest and are unaffected; only the Automatic row is a key.
+ */
+const AUTO_LABEL = 'dialogs.passageEdit.scenePreview.frameAuto';
+
+/**
+ * The frame control's own button. Found structurally — it is the row's only `MenuButton` —
+ * rather than by label: the row also holds flip, two depth steps and delete, their order is
+ * not what these tests are about, and their labels are all keys in this environment.
+ */
+function frameButton(): HTMLButtonElement | undefined {
+	return (
+		document.querySelector<HTMLButtonElement>(
+			'.scene-preview-selection .menu-button button'
+		) ?? undefined
+	);
+}
+
+/** The open menu's rows. Portalled to the body, so this cannot be scoped to the row. */
+function frameItems(): HTMLButtonElement[] {
+	return Array.from(document.querySelectorAll('.menu-button-menu button'));
+}
+
+function itemNamed(label: string): HTMLButtonElement {
+	const item = frameItems().find(button => button.textContent === label);
+
+	if (!item) {
+		throw new Error(`no menu item "${label}" in [${frameItems().map(i => i.textContent).join(', ')}]`);
+	}
+
+	return item;
+}
+
+async function openFrameMenu() {
+	await waitFor(() => expect(frameButton()).toBeDefined());
+	fireEvent.click(frameButton() as HTMLButtonElement);
+	await waitFor(() => expect(frameItems().length).toBeGreaterThan(0));
+}
+
+/**
+ * React 16 derives `onPointerEnter`/`onPointerLeave` from the pointerover/pointerout pair,
+ * so dispatching `pointerenter` — which does not bubble — reaches nothing. These are the
+ * events the component actually sees in a browser.
+ */
+function hover(item: HTMLElement) {
+	fireEvent.pointerOver(item);
+}
+
+function unhover(item: HTMLElement) {
+	fireEvent.pointerOut(item);
 }
 
 describe('<StageSelectionControls>', () => {
@@ -79,43 +129,76 @@ describe('<StageSelectionControls>', () => {
 
 	it('offers the character manifest frames, plus automatic', async () => {
 		renderControls(['mira']);
+		await openFrameMenu();
 
-		await waitFor(() => expect(selects()).toHaveLength(1));
-
-		const frame = selects()[0];
-
-		expect(Array.from(frame.options).map(option => option.value)).toEqual([
-			'',
+		expect(frameItems().map(item => item.textContent)).toEqual([
+			AUTO_LABEL,
 			'angry',
 			'idle'
 		]);
-		expect(frame.value).toBe('angry');
+		// The scene's own frame is the one ticked, so the menu reports as well as offers.
+		expect(
+			frameItems()
+				.filter(item => item.getAttribute('aria-checked') === 'true')
+				.map(item => item.textContent)
+		).toEqual(['angry']);
 	});
 
 	it('writes the chosen frame, and removes the key for automatic', async () => {
 		const {onFrame} = renderControls(['mira']);
 
-		await waitFor(() => expect(selects()).toHaveLength(1));
-
-		fireEvent.change(selects()[0], {target: {value: 'idle'}});
+		await openFrameMenu();
+		fireEvent.click(itemNamed('idle'));
 		expect(onFrame).toHaveBeenCalledWith('idle');
 
-		fireEvent.change(selects()[0], {target: {value: ''}});
+		await openFrameMenu();
+		fireEvent.click(itemNamed(AUTO_LABEL));
 		expect(onFrame).toHaveBeenLastCalledWith(undefined);
+	});
+
+	it('previews the hovered frame and takes it back on leave', async () => {
+		const {onFrame, onPreviewFrame} = renderControls(['mira']);
+
+		await openFrameMenu();
+		hover(itemNamed('idle'));
+		expect(onPreviewFrame).toHaveBeenLastCalledWith('idle');
+
+		// Automatic previews the fallback, so it is a frame to look at like any other.
+		hover(itemNamed(AUTO_LABEL));
+		expect(onPreviewFrame).toHaveBeenLastCalledWith('');
+
+		unhover(itemNamed(AUTO_LABEL));
+		expect(onPreviewFrame).toHaveBeenLastCalledWith(null);
+
+		// Hovering is a question, not an answer.
+		expect(onFrame).not.toHaveBeenCalled();
+	});
+
+	it('takes the preview back when the menu closes without a leave', async () => {
+		const {onPreviewFrame} = renderControls(['mira']);
+
+		await openFrameMenu();
+		hover(itemNamed('idle'));
+		onPreviewFrame.mockClear();
+
+		// What a click anywhere else does: the items unmount under the pointer and no leave
+		// event ever arrives.
+		fireEvent.click(document.body);
+		expect(onPreviewFrame).toHaveBeenCalledWith(null);
 	});
 
 	it('offers no frames for a prop — props are one image', async () => {
 		renderControls(['candle']);
 
-		// Nothing left to select at all now that depth is two buttons. Waited on so a late
+		// Nothing left to choose at all now that depth is two buttons. Waited on so a late
 		// resolver cannot sneak one in after the assertion.
-		await waitFor(() => expect(selects()).toHaveLength(0));
+		await waitFor(() => expect(frameButton()).toBeUndefined());
 	});
 
 	it('offers no frames for a multi-selection', async () => {
 		renderControls(['mira', 'joren']);
 
-		await waitFor(() => expect(selects()).toHaveLength(0));
+		await waitFor(() => expect(frameButton()).toBeUndefined());
 	});
 
 	// A prop, so nothing is fetched and the buttons are all there is.

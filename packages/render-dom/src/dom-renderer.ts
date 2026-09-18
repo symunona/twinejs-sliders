@@ -22,6 +22,7 @@ import type {
 	Renderer,
 	Stage,
 	StageEntity,
+	StageSound,
 	Transition,
 	TransitionKind,
 	Vec2
@@ -45,6 +46,7 @@ import {
 	sortByZ,
 	spriteRect
 } from './coords';
+import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
@@ -138,6 +140,14 @@ export class DomRenderer implements Renderer {
 	private urlCache = new Map<string, string | undefined>();
 	private metaCache = new Map<string, AssetMeta | undefined>();
 
+	/**
+	 * Built lazily: a renderer mounted in jsdom, or one that never meets a scene with sound,
+	 * should not create audio machinery to hold nothing.
+	 */
+	private deck?: SoundDeck;
+	private mutedWanted = true;
+	private blockedSound = false;
+
 	constructor(options: DomRendererOptions = {}) {
 		this.opts = options;
 	}
@@ -223,6 +233,7 @@ export class DomRenderer implements Renderer {
 		this.syncBg(stage.bg, durations.duration('bg'), stage.bgImplicit === true);
 		this.syncEntities(resolved, durations);
 		this.syncFx(stage.fx ?? []);
+		this.syncMusic(stage.music, durations.duration('music'));
 		this.syncCamera(durations.duration('camera'));
 
 		this.notify();
@@ -267,6 +278,12 @@ export class DomRenderer implements Renderer {
 
 	destroy(): void {
 		this.applyGen++;
+		// Before anything else: a stage that is going away must not be heard from again, and
+		// an <audio> element is not attached to the DOM this tears down, so removing the
+		// root would not stop it.
+		this.deck?.stop();
+		this.deck = undefined;
+		this.blockedSound = false;
 		this.observer?.disconnect();
 		this.observer = undefined;
 
@@ -907,6 +924,74 @@ export class DomRenderer implements Renderer {
 		}
 
 		return img;
+	}
+
+	// -----------------------------------------------------------------------
+	// Sound
+	// -----------------------------------------------------------------------
+
+	/**
+	 * The deck, built on first use and told who resolves names.
+	 *
+	 * `undefined` where there is no document to build <audio> in — jsdom without the
+	 * element, a server render — so every caller treats sound as best-effort.
+	 */
+	private soundDeck(): SoundDeck | undefined {
+		if (!this.doc || typeof this.doc.createElement !== 'function') {
+			return undefined;
+		}
+
+		if (!this.deck) {
+			this.deck = new SoundDeck({
+				doc: this.doc,
+				onBlocked: () => {
+					this.blockedSound = true;
+					this.notify();
+				}
+			});
+			this.deck.setMuted(this.mutedWanted);
+		}
+
+		this.deck.setResolver(this.assets);
+		return this.deck;
+	}
+
+	private syncMusic(music: Stage['music'], duration: number): void {
+		// Nothing playing and nothing asked for is the common case, and building a deck for
+		// it would mean every silent scene in the editor carrying audio machinery.
+		if (!music && !this.deck) {
+			return;
+		}
+
+		void this.soundDeck()?.music(music, duration);
+	}
+
+	/** Fire a one-shot. See `Renderer.cue` for why this is not part of `apply()`. */
+	cue(sound: StageSound): void {
+		void this.soundDeck()?.cue(sound);
+	}
+
+	setMuted(muted: boolean): void {
+		this.mutedWanted = muted;
+
+		if (!muted) {
+			// Unmuting is the gesture that lifts an autoplay refusal, so the flag goes with it.
+			this.blockedSound = false;
+		}
+
+		this.deck?.setMuted(muted);
+
+		// A stage muted before its first apply() has no deck yet; one built later reads
+		// `mutedWanted`. Unmuting, though, means the author wants to hear what is already on
+		// stage, so the bed has to be started rather than waited for.
+		if (!muted && !this.deck) {
+			this.soundDeck();
+		}
+	}
+
+	/** True when a sound was refused for want of a user gesture. */
+	soundBlocked(): boolean {
+		return this.blockedSound;
 	}
 
 	private syncFx(fx: {id: string; amount: number}[]): void {

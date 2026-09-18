@@ -1,0 +1,15 @@
+.sound-preview {
+	align-items: center;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	height: 100%;
+	justify-content: center;
+}
+
+.sound-preview-duration {
+	color: var(--dark-gray);
+	font-size: var(--font-small);
+	/* Tabular, so a column of tiles does not jitter between 0:07 and 1:04. */
+	font-variant-numeric: tabular-nums;
+}

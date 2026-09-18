@@ -8,22 +8,30 @@
  *
  * `frame:` is cast-only and single-selection-only: props are one image and have no frames
  * (spec 03), and two characters share no frame vocabulary. An `entities:` entry is kind
- * `auto` — the resolver decides. Asking it for frames and showing the select only when it
+ * `auto` — the resolver decides. Asking it for frames and showing the menu only when it
  * answers with some IS the refinement: a name that turns out to be an asset comes back
- * empty and the select stays hidden.
+ * empty and the menu stays hidden.
+ *
+ * The frame control is a `MenuButton` and not the `TextSelect` it used to be, for one
+ * reason: hovering an item previews that pose on the stage. A native `<select>` cannot do
+ * that — its popup is drawn by the browser, its `<option>`s are not elements the page gets
+ * pointer events from, and there is no way to ask which one the pointer is over. Frame
+ * names are the case that needs it most; `shock` and `surprise` are the same word until
+ * you have seen both.
  */
 
 import {
 	IconArrowDown,
 	IconArrowUp,
 	IconFlipHorizontal,
+	IconMoodSmile,
 	IconTrash
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {AssetResolver, StageEntity} from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
-import {TextSelect} from '../../../components/control/text-select';
+import {MenuButton} from '../../../components/control/menu-button';
 
 export interface StageSelectionControlsProps {
 	assets: AssetResolver;
@@ -42,6 +50,15 @@ export interface StageSelectionControlsProps {
 	onDelete: () => void;
 	onFlip: () => void;
 	onFrame: (frame: string | undefined) => void;
+	/**
+	 * Draw a frame on the stage without writing it: `AUTO_FRAME` for the fallback, a name
+	 * for that pose, `null` to stop previewing and go back to what the scene says.
+	 *
+	 * The stage answers a hover, not a click, because choosing a pose is a question about
+	 * what it LOOKS like and the names alone do not answer it — `shock` and `surprise` are
+	 * the same word until you see them. See `onPreviewFrame` in `scene-preview`.
+	 */
+	onPreviewFrame: (frame: string | null) => void;
 	/** One z step. -1 sends backward, +1 brings forward — same as `[` and `]`. */
 	onStepZ: (delta: number) => void;
 }
@@ -103,6 +120,7 @@ export const StageSelectionControls: React.FC<
 		onDelete,
 		onFlip,
 		onFrame,
+		onPreviewFrame,
 		onStepZ
 	} = props;
 	const {t} = useTranslation();
@@ -111,6 +129,12 @@ export const StageSelectionControls: React.FC<
 		assets,
 		single && single.kind !== 'prop' ? single.ref : undefined
 	);
+	// A `frame:` naming a pose the character does not declare is an error the list cannot
+	// show, so it reads as Automatic here — which is what the renderer does NOT do (see
+	// `pickFrameName`: a frame that was asked for and missed draws `? frame`). The menu is
+	// for choosing, not for reporting; the scene errors already carry the complaint.
+	const current =
+		single?.frame && frames.includes(single.frame) ? single.frame : AUTO_FRAME;
 
 	// Nothing to offer, nothing to draw. The row floats OVER the stage rather than sitting
 	// above it, so it can come and go without moving the scene — which is what the empty
@@ -158,23 +182,50 @@ export const StageSelectionControls: React.FC<
 				onClick={() => onStepZ(1)}
 			/>
 			{single && single.kind !== 'prop' && frames.length > 0 && (
-				<TextSelect
-					onChange={event => onFrame(event.target.value || undefined)}
-					options={[
-						{
-							label: t('dialogs.passageEdit.scenePreview.frameAuto'),
-							value: AUTO_FRAME
+				<MenuButton
+					icon={<IconMoodSmile />}
+					items={[AUTO_FRAME, ...frames].map(name => ({
+						checkable: true as const,
+						checked: name === current,
+						label:
+							name === AUTO_FRAME
+								? t('dialogs.passageEdit.scenePreview.frameAuto')
+								: name,
+						onClick: () => {
+							// The scene says this pose now, so there is nothing left to
+							// preview. Cleared here as well as on close because choosing is
+							// the one case where the answer outlives the question.
+							onPreviewFrame(null);
+							onFrame(name || undefined);
 						},
-						...frames.map(name => ({label: name, value: name}))
-					]}
-					value={
-						single.frame && frames.includes(single.frame)
-							? single.frame
-							: AUTO_FRAME
-					}
-				>
-					{t('dialogs.passageEdit.scenePreview.frame')}
-				</TextSelect>
+						onHover: (hovering: boolean) =>
+							onPreviewFrame(hovering ? name : null)
+					}))}
+					label={t('dialogs.passageEdit.scenePreview.frameNamed', {
+						frame:
+							current === AUTO_FRAME
+								? t('dialogs.passageEdit.scenePreview.frameAuto')
+								: current
+					})}
+					// The menu can close without a leave event — a click anywhere does it,
+					// and the items unmount under the pointer — so the preview is turned
+					// off here as well as on leave. Turning it off twice costs nothing;
+					// missing the second one leaves the stage showing a pose the scene
+					// does not say.
+					onChangeOpen={open => {
+						if (!open) {
+							onPreviewFrame(null);
+						}
+					}}
+					// Upward, because this row sits across the TOP of the stage and a menu
+					// dropped from it lands on the sprite it is previewing — on a docked
+					// stage, squarely on it. Above the row is the editor's own chrome,
+					// which is nothing the author is looking at while choosing a pose.
+					// Popper flips it back down when there is no room, which is full
+					// screen, where the stage is large enough not to care.
+					placement="top-end"
+					tooltipLabel={t('dialogs.passageEdit.scenePreview.frameHint')}
+				/>
 			)}
 			<IconButton
 			commandId="scene.delete"

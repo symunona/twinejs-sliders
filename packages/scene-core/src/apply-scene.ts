@@ -86,6 +86,20 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 		out.fx = cloneFx(scene.fx);
 	}
 
+	// --- music ---------------------------------------------------------------
+	// Three states, not two: absent inherits (a snapshot starts empty, so there it means
+	// silence), `null` is `music: ~` and silences a patch's inherited bed, a value plays.
+	// Same shape as `bg`.
+	//
+	// So a scene that wants music says so, every time, even mid-chapter. That looks like
+	// repetition and is not: `diffStages` compares id AND volume, so re-declaring the same
+	// track emits no transition and the bed plays straight through the passage change. The
+	// alternative — music that carries over silently — cannot work, because the editor
+	// previews ONE passage and would have no way to know what was playing before it.
+	if (scene.music !== undefined) {
+		out.music = scene.music === null ? undefined : {...scene.music};
+	}
+
 	// --- entities -----------------------------------------------------------
 	if (isPatch && (scene.replaceCast || scene.replaceProps || scene.replaceEntities)) {
 		for (const id of Object.keys(out.entities)) {

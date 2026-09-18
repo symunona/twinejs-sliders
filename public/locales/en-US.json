@@ -412,6 +412,8 @@
 				"zBack": "Send backward",
 				"zFront": "Bring forward",
 				"frame": "Frame",
+				"frameHint": "Pick a pose. Hovering one shows it on the stage.",
+				"frameNamed": "Frame: {{frame}}",
 				"frameAuto": "Automatic",
 				"moveBubble": "Move this bubble",
 				"lockBg": "Lock the background: no camera pan or zoom, and a dropped background will not replace it",

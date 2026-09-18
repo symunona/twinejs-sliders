@@ -119,6 +119,18 @@ export interface StageFx {
 	amount: number;
 }
 
+/**
+ * A sound, named the way art is named: by asset name, never by path or id.
+ *
+ * `amount` is volume, and it is the same `name@amount` token `fx:` already uses — one
+ * grammar the author learns once. A sound is not an entity: it has no position, no z and
+ * no anchor, so it never reaches the stage's entity map.
+ */
+export interface StageSound {
+	id: string;
+	amount: number;
+}
+
 export interface Camera {
 	at: Vec2;
 	zoom: number;
@@ -137,6 +149,16 @@ export interface Stage {
 	/** Keyed by entity id. Insertion order is not significant; z decides drawing. */
 	entities: Record<EntityId, StageEntity>;
 	fx: StageFx[];
+	/**
+	 * The bed: one looping sound the scene sits in, or nothing.
+	 *
+	 * State rather than an event, exactly like `bg`. Walking into a scene that declares the
+	 * same music as the one before must not restart it, and stepping the editor's scrubber
+	 * backwards must not stack a second copy — both fall out of asking "what should be
+	 * playing now" instead of "what just happened". One-shot sounds are the opposite thing
+	 * and live on a beat (`BeatBase.sfx`).
+	 */
+	music?: StageSound;
 }
 
 export function emptyStage(): Stage {
@@ -147,7 +169,7 @@ export function emptyStage(): Stage {
 // Beats — the timeline laid over the stage.
 // ---------------------------------------------------------------------------
 
-export type BeatKind = 'say' | 'box' | 'wait' | 'fx' | 'mark' | 'set';
+export type BeatKind = 'say' | 'box' | 'wait' | 'fx' | 'sfx' | 'mark' | 'set';
 
 export interface BeatBase {
 	kind: BeatKind;
@@ -168,6 +190,16 @@ export interface BeatBase {
 	 * (`wait` *is* a duration; a second spelling of it would be two ways to say one thing.)
 	 */
 	dur?: number;
+	/**
+	 * A one-shot sound fired as this beat arrives. On `BeatBase` for the same reason `dur`
+	 * is: a door slams under a line, under a move, or on its own, and three copies of the
+	 * key would disagree the moment one of them grew an option.
+	 *
+	 * Deliberately NOT stage state. Firing is an event — it happens once, at a moment, and
+	 * a stage snapshot has no way to say "again". `- sfx: door` is the beat whose only job
+	 * is this, and it is `kind: 'sfx'`.
+	 */
+	sfx?: StageSound;
 }
 
 /**
@@ -299,6 +331,15 @@ export interface FxBeat extends BeatBase {
 	fx: StageFx;
 }
 
+/**
+ * A beat whose whole content is a sound. The sound itself is `BeatBase.sfx`, so nothing has
+ * to look in two places for it — this kind only says "that is all this beat does".
+ */
+export interface SfxBeat extends BeatBase {
+	kind: 'sfx';
+	sfx: StageSound;
+}
+
 export interface MarkBeat extends BeatBase {
 	kind: 'mark';
 	name: string;
@@ -311,7 +352,14 @@ export interface SetBeat extends BeatBase {
 	patch: EntityPatchBody;
 }
 
-export type Beat = SayBeat | BoxBeat | WaitBeat | FxBeat | MarkBeat | SetBeat;
+export type Beat =
+	| SayBeat
+	| BoxBeat
+	| WaitBeat
+	| FxBeat
+	| SfxBeat
+	| MarkBeat
+	| SetBeat;
 
 // ---------------------------------------------------------------------------
 // Links (D3)
@@ -378,6 +426,12 @@ export interface Scene {
 	/** Entity patches keyed by id. `null` means "remove this entity" (only valid with from). */
 	entities: Record<EntityId, EntityPatch | null>;
 	fx?: StageFx[];
+	/**
+	 * The scene's bed. `null` is `music: ~` — silence, stated — which a patch scene needs to
+	 * be able to say, since an absent key there means "inherit" (spec 02's merge flip). It
+	 * reads exactly like `bg: ~`, which is the point.
+	 */
+	music?: StageSound | null;
 	beats: Beat[];
 	links: Record<string, SceneLink>;
 	/** True when `cast: !only {...}` was used — replace rather than merge. */
@@ -505,7 +559,8 @@ export type TransitionKind =
 	| 'flip'
 	| 'bg'
 	| 'camera'
-	| 'fx';
+	| 'fx'
+	| 'music';
 
 export interface Transition {
 	kind: TransitionKind;
@@ -586,7 +641,12 @@ export interface Character {
 	tags: string[];
 }
 
-export type AssetKind = 'bg' | 'object' | 'frame' | 'fx';
+export type AssetKind = 'bg' | 'object' | 'frame' | 'fx' | 'sound';
+
+/** The kinds that are pictures. A `sound` has no pixels, so `w`/`h` mean nothing for it. */
+export function isVisualKind(kind: AssetKind): boolean {
+	return kind !== 'sound';
+}
 
 export interface AssetMeta {
 	id: AssetId;
@@ -612,6 +672,12 @@ export interface AssetMeta {
 	 * bytes and the hash alone.
 	 */
 	origin?: Frac2;
+	/**
+	 * How long a `sound` runs, in seconds. Absent when it could not be measured — a decoder
+	 * that will not read the file headless, say — so every reader must treat it as a label
+	 * and never as timing the player depends on.
+	 */
+	duration?: number;
 }
 
 /** Resolves asset ids to something a renderer can draw. */
@@ -631,4 +697,15 @@ export interface Renderer {
 	/** Screen-space position of a named anchor, in px relative to the mount element. */
 	measure(entityId: EntityId, anchor: string): Vec2 | null;
 	destroy(): void;
+	/**
+	 * Fire a one-shot sound.
+	 *
+	 * Optional, and separate from `apply()` on purpose: `apply()` takes a STATE, and firing
+	 * is not one — the stage after a door slams looks exactly like the stage before it. The
+	 * caller is whoever is stepping beats, which is the player in the format and the
+	 * scrubber in the editor.
+	 */
+	cue?(sound: StageSound): void;
+	/** Silence, without forgetting what should be playing. Renderers without sound may omit. */
+	setMuted?(muted: boolean): void;
 }

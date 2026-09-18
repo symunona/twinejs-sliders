@@ -44,8 +44,15 @@ function applyBeat(stage: Stage, beat: Beat): void {
 		case 'box':
 		case 'wait':
 		case 'mark':
+		case 'sfx':
 			// Timeline-only. The stage is unchanged, but the state still gets its own slot
 			// so `@mark` can name it and the scrubber can step onto it.
+			//
+			// `sfx` belongs here rather than with `fx` because firing a sound is an EVENT:
+			// the stage after it looks exactly like the stage before it. Were it state, a
+			// scrubber stepping back and forth over the beat would have to decide whether
+			// "the door is slammed" is a thing a stage can be, and replaying a state would
+			// mean replaying every sound in it.
 			break;
 	}
 }

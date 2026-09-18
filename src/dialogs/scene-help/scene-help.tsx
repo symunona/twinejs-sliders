@@ -55,6 +55,8 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	id:
 		'Names this scene so from: can point at it, and names its backdrop when there is no bg:. Must be unique in the story.',
 	links: 'Ways out of the scene. In a scene passage these are the ONLY ways out.',
+	music:
+		'The bed: one sound, looping, by asset name. music: rain@0.4 turns it down, music: ~ is silence. Say it in every scene that wants it — the same track at the same volume plays straight through a passage change without restarting.',
 	locked: `What the visual editor must not let a gesture change here: true for the whole stage, or a list — ${SCENE_LOCKS.join(
 		', '
 	)}. An editor hint only; the player ignores it. Use it on a shot that is already framed, where grabbing empty ground would pan it by accident.`,
@@ -85,10 +87,14 @@ const CAMERA_HELP: KeyHelp<typeof CAMERA_KEYS> = {
 const DUR_HELP =
 	'Seconds this beat holds the screen, and how long its stage changes take. Without it, a line waits for the reader and a stage-only beat plays straight on.';
 
+const SFX_HELP =
+	'Fire a sound once, as this beat arrives, by asset name. sfx: door@0.5 turns it down. For a sound that keeps playing, use the scene’s music: instead.';
+
 const BEAT_HELP: KeyHelp<typeof BEAT_COMMAND_KEYS> = {
 	box: 'Narration, with nobody speaking.',
 	fx: 'Fire an effect for this beat.',
 	mark: 'Name this state so another scene can start from: it. Draws nothing.',
+	sfx: SFX_HELP,
 	wait: 'Pause, in seconds.'
 };
 
@@ -102,11 +108,13 @@ const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 	as: 'The style, by name. Same tokens a bubble uses.',
 	bubble: 'Style and placement, as a map.',
 	dur: DUR_HELP,
+	sfx: SFX_HELP,
 	text: 'The narration itself. box: "…" is the short way of writing this.'
 };
 
 const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
-	dur: DUR_HELP
+	dur: DUR_HELP,
+	sfx: SFX_HELP
 };
 
 const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {

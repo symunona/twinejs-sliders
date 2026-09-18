@@ -1,5 +1,6 @@
 import {blobBytes} from './blob-bytes';
 import {isTranscodable, sniffImage, SniffResult} from './sniff';
+import {isAudioMime, measureAudioDuration, sniffAudio} from './sniff-audio';
 
 export const WEBP_QUALITY = 0.9;
 
@@ -21,6 +22,10 @@ export interface PreparedUpload {
 	/** True when the bytes were re-encoded rather than stored verbatim. */
 	transcoded: boolean;
 	sniffed: SniffResult;
+	/** Seconds, for a sound. Absent for anything with pixels. */
+	duration?: number;
+	/** True when the header says this is a sound rather than a picture. */
+	audio?: boolean;
 }
 
 function canTranscode(): boolean {
@@ -69,6 +74,26 @@ async function measure(
  */
 export async function prepareUpload(file: File): Promise<PreparedUpload> {
 	const buffer = await blobBytes(file);
+	const audio = sniffAudio(buffer);
+
+	// Before the image path, not inside its fallback: `measure()` would hand a sound to
+	// `createImageBitmap`, which rejects slowly and logs a warning for every file in a drop
+	// of forty. A sound is stored verbatim — there is no canvas equivalent to transcode it
+	// with, and re-encoding audio in the browser is a different project.
+	if (audio || isAudioMime(file.type)) {
+		return {
+			blob: file,
+			mime: audio?.mime ?? file.type,
+			animated: false,
+			audio: true,
+			duration: await measureAudioDuration(file),
+			height: 0,
+			transcoded: false,
+			sniffed: {animated: false, format: 'unknown', mime: audio?.mime ?? file.type},
+			width: 0
+		};
+	}
+
 	const sniffed = sniffImage(buffer);
 
 	if (!isTranscodable(sniffed) || !canTranscode()) {

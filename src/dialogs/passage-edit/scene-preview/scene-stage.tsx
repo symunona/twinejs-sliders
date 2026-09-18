@@ -25,6 +25,11 @@ export interface SceneStageProps {
 	 */
 	onRenderer?: (renderer: DomRenderer | undefined) => void;
 	/**
+	 * Whether the stage may be heard. Muted is the default everywhere the editor mounts one
+	 * — see `DomRenderer.setMuted`.
+	 */
+	muted?: boolean;
+	/**
 	 * The story's stylesheet, injected next to the stage so a bubble token the story paints
 	 * itself (`as: ghostly`) previews the way it will play. Scoped to this element rather
 	 * than the document: the story's CSS is written against the player's page, and letting
@@ -43,6 +48,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	animate,
 	assets,
 	beat,
+	muted = true,
 	onLink,
 	onRenderer,
 	stage,
@@ -55,6 +61,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	const prevStageRef = React.useRef<Stage>();
 	// Held in refs so remounting never depends on their identity.
 	const assetsRef = React.useRef(assets);
+	const beatRef = React.useRef(beat);
 	const onLinkRef = React.useRef(onLink);
 	const onRendererRef = React.useRef(onRenderer);
 	const [ready, setReady] = React.useState(false);
@@ -67,6 +74,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	const beatDur = beat?.dur;
 
 	assetsRef.current = assets;
+	beatRef.current = beat;
 	onLinkRef.current = onLink;
 	onRendererRef.current = onRenderer;
 
@@ -137,6 +145,38 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		prevStageRef.current = stage;
 		void renderer.apply(stage, transitions);
 	}, [animate, beatDur, ready, stage]);
+
+	React.useEffect(() => {
+		if (ready) {
+			rendererRef.current?.setMuted(muted);
+		}
+	}, [muted, ready]);
+
+	/**
+	 * Fire a beat's one-shot when the scrubber ARRIVES on it.
+	 *
+	 * Keyed on the beat index, not on the beat object: the parser hands back fresh objects
+	 * on every keystroke, and a sound that re-fired while somebody typed the line under it
+	 * would be unbearable. Stepping back and then forward over the same beat does fire it
+	 * again, which is right — landing on the beat is what plays it, in the editor and in the
+	 * player alike.
+	 */
+	const sfxIndex = beat?.sfx ? beat.index : undefined;
+
+	React.useEffect(() => {
+		if (!ready || sfxIndex === undefined || muted) {
+			return;
+		}
+
+		const sound = beatRef.current?.sfx;
+
+		if (sound) {
+			rendererRef.current?.cue(sound);
+		}
+		// `beatRef` deliberately absent: reading the sound through a ref is what keeps this
+		// effect from re-running when the same beat is re-parsed.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [muted, ready, sfxIndex]);
 
 	/**
 	 * The story's CSS, as one style element inside the stage.

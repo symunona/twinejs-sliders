@@ -16,12 +16,24 @@ export function assetFragment(meta: AssetMeta): string {
 		case 'fx':
 			return `fx: [{id: ${entityKey(meta.name)}, amount: 1}]`;
 
+		case 'sound':
+			// The beat form, not `music:`. A one-shot is the commoner half by a long way, it
+			// is the half an author cannot guess the spelling of, and it pastes into the
+			// `beats:` list where the cursor already is. The Sounds tile offers the `music:`
+			// line as a second, explicit action.
+			return `- sfx: ${entityKey(meta.name)}`;
+
 		case 'frame':
 			// Frames are addressed through their character, never on their own.
 			return meta.ownerCharacter
 				? `${meta.ownerCharacter}: {at: 0, frame: ${entityKey(meta.name)}}`
 				: `bg: ${meta.name}`;
 	}
+}
+
+/** The other half of a sound: the scene-level bed, which loops until the scene changes. */
+export function musicFragment(meta: AssetMeta): string {
+	return `music: ${entityKey(meta.name)}`;
 }
 
 export function characterFragment(character: Character): string {

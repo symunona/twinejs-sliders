@@ -36,6 +36,7 @@ import {
 	type SceneLock,
 	type SceneSpan,
 	type StageFx,
+	type StageSound,
 	type Vec2
 } from '@sliders/scene-types';
 import {keyFix} from './levenshtein';
@@ -50,6 +51,7 @@ export const TOP_LEVEL_KEYS = [
 	'props',
 	'entities',
 	'fx',
+	'music',
 	'autoAdvance',
 	'locked',
 	'beats',
@@ -70,10 +72,10 @@ export const ENTITY_KEYS = [
 ] as const;
 
 /** Beat map keys that are commands rather than a speaker id. */
-export const BEAT_COMMAND_KEYS = ['box', 'wait', 'fx', 'mark'] as const;
+export const BEAT_COMMAND_KEYS = ['box', 'wait', 'fx', 'sfx', 'mark'] as const;
 
 /** Keys accepted inside a `box:` map. The scalar form `box: "text"` stays the short way. */
-export const BOX_KEYS = ['text', 'as', 'bubble', 'dur'] as const;
+export const BOX_KEYS = ['text', 'as', 'bubble', 'dur', 'sfx'] as const;
 
 /** Keys a beat may add to its speaker's entry beyond the entity keys. */
 export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
@@ -88,9 +90,12 @@ export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
  *
  * Not `BEAT_KEYS`: that name is already a local in the format's `scene-mode.ts`.
  */
-export const BEAT_BODY_KEYS = ['dur'] as const;
+export const BEAT_BODY_KEYS = ['dur', 'sfx'] as const;
 
 export const CAMERA_KEYS = ['at', 'zoom'] as const;
+
+/** Keys inside the long form of a `music:` or `sfx:` entry. */
+export const SOUND_KEYS = ['id', 'volume'] as const;
 
 export const LINK_KEYS = ['to', 'if', 'icon', 'transition'] as const;
 
@@ -666,6 +671,8 @@ interface EntityBody {
 	 * turning `- mira: {dur: 1}` into a set beat that stages nothing.
 	 */
 	dur?: number;
+	/** From `sfx:`. Only a beat can carry it, for the same reason `dur` can. */
+	sfx?: StageSound;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
 	ofNode?: unknown;
 }
@@ -1023,6 +1030,18 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'sfx': {
+				if (!allowSay) {
+					addError(ctx, 'unknown-key', `Unknown key 'sfx'.`, pair.key, {
+						hint: 'sfx: fires at a moment, so it only belongs to a beat.'
+					});
+					break;
+				}
+
+				body.sfx = parseSoundNode(ctx, pair.value, 'sfx');
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, valid)
@@ -1134,6 +1153,76 @@ function parseFxNode(ctx: Ctx, node: unknown): StageFx | undefined {
 	}
 
 	addError(ctx, 'bad-value', 'An fx entry must be a name or {id, amount}.', node);
+	return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Sound
+// ---------------------------------------------------------------------------
+
+/**
+ * `door-slam`, `rain@0.4`, or the long form `{id: rain, volume: 0.4}`.
+ *
+ * The `name@amount` half is `fx:`'s token, on purpose — an author who has written
+ * `fx: [rain@0.6]` already knows how to turn a sound down. The long form spells the number
+ * `volume:` rather than `amount:`, because that is what it is called everywhere a person
+ * has ever turned one down, and the two forms never appear in the same line.
+ *
+ * `label` names the key in errors, so `music:` and `sfx:` each complain about themselves.
+ */
+function parseSoundNode(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): StageSound | undefined {
+	if (isScalar(node)) {
+		// asSourceString, not asString: a sound file called `04.mp3` is an asset named `04`,
+		// and the YAML core schema would hand back the number 4 (see the `to: 04` note).
+		const token = asSourceString(ctx, node, label);
+
+		return token === undefined ? undefined : parseFxToken(token);
+	}
+
+	if (isMap(node)) {
+		let id: string | undefined;
+		let amount = 1;
+
+		for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === 'id') {
+				id = asSourceString(ctx, pair.value, `${label} id`);
+			} else if (key === 'volume') {
+				amount = asNumber(ctx, pair.value, `${label} volume`) ?? 1;
+			} else if (key === 'amount') {
+				// The one wrong guess worth predicting: `fx:` spells this `amount`, and
+				// levenshtein is nowhere near close enough to suggest `volume` for it.
+				addError(ctx, 'unknown-key', `Unknown key 'amount'.`, pair.key, {
+					hint: `A sound's is spelled volume: — ${label}: {id: …, volume: 0.4}.`
+				});
+			} else if (key !== undefined) {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+					...keyFix(key, SOUND_KEYS)
+				});
+			}
+		}
+
+		if (id === undefined) {
+			addError(ctx, 'bad-value', `A ${label} entry needs an id.`, node, {
+				hint: `${label}: {id: rain, volume: 0.4}`
+			});
+			return undefined;
+		}
+
+		return {amount, id};
+	}
+
+	addError(
+		ctx,
+		'bad-value',
+		`${label}: must be a sound's name, e.g. \`${label}: rain\` or \`${label}: rain@0.4\`.`,
+		node
+	);
 	return undefined;
 }
 
@@ -1271,6 +1360,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	let style: BubbleStyle | undefined;
 	let textNode: unknown;
 	let dur: number | undefined;
+	let sfx: StageSound | undefined;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
 		const key = keyName(pair);
@@ -1298,6 +1388,11 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 				break;
 			}
 
+			case 'sfx': {
+				sfx = parseSoundNode(ctx, pair.value, 'sfx');
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown box key '${key}'.`, pair.key, {
 					...keyFix(key, BOX_KEYS)
@@ -1318,7 +1413,8 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 		kind: 'box',
 		text,
 		...(style ? {style} : {}),
-		...(dur !== undefined ? {dur} : {})
+		...(dur !== undefined ? {dur} : {}),
+		...(sfx ? {sfx} : {})
 	};
 }
 
@@ -1362,6 +1458,12 @@ function parseBeat(
 			const fx = parseFxNode(ctx, pair.value);
 
 			return fx === undefined ? undefined : {fx, index, kind: 'fx'};
+		}
+
+		case 'sfx': {
+			const sfx = parseSoundNode(ctx, pair.value, 'sfx');
+
+			return sfx === undefined ? undefined : {index, kind: 'sfx', sfx};
 		}
 
 		default: {
@@ -1418,7 +1520,8 @@ function parseBeat(
 						who,
 						...(hasPatch ? {patch: body.patch} : {}),
 						...(body.style ? {style: body.style} : {}),
-						...(body.dur !== undefined ? {dur: body.dur} : {})
+						...(body.dur !== undefined ? {dur: body.dur} : {}),
+						...(body.sfx ? {sfx: body.sfx} : {})
 					};
 				}
 
@@ -1430,6 +1533,13 @@ function parseBeat(
 						pair.value,
 						body.style
 							? {hint: 'A style needs a line to paint: add say: to this beat.'}
+							: body.sfx
+							? {
+									// A sound belongs to the moment, not to whoever is standing
+									// there, so a beat with nothing but `sfx:` has a speaker for
+									// no reason. The beat form says the same thing and is shorter.
+									hint: `A sound needs no speaker: write \`- sfx: ${body.sfx.id}\` as its own beat.`
+							  }
 							: body.dur !== undefined
 							? {hint: 'dur: times a beat, it cannot be the whole of one.'}
 							: undefined
@@ -1442,7 +1552,8 @@ function parseBeat(
 					kind: 'set',
 					patch: body.patch,
 					who,
-					...(body.dur !== undefined ? {dur: body.dur} : {})
+					...(body.dur !== undefined ? {dur: body.dur} : {}),
+					...(body.sfx ? {sfx: body.sfx} : {})
 				};
 			}
 
@@ -1809,6 +1920,19 @@ export function parseScene(text: string): ParseResult {
 				}
 
 				scene.fx = fx;
+				break;
+			}
+
+			case 'music': {
+				// `music: ~` is silence stated out loud, the same shape `bg: ~` has. Under
+				// `from:` it is the only way to turn an inherited bed off, since an absent
+				// key there means inherit.
+				if (isNullNode(pair.value)) {
+					scene.music = null;
+					break;
+				}
+
+				scene.music = parseSoundNode(ctx, pair.value, 'music');
 				break;
 			}
 

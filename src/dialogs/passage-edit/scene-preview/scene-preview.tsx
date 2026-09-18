@@ -154,6 +154,17 @@ const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
 const GRID_KEY = 'sliders.preview.grid';
 
 /**
+ * How solid the frame menu's hover preview is drawn.
+ *
+ * Near enough to opaque to judge the pose by — that is the only reason the preview exists —
+ * and far enough off it that the sprite is visibly answering a question rather than showing
+ * a change that has been made. Nothing else on the stage is drawn at a fraction, so one
+ * step is enough of a signal; a heavier fade would make a dark frame hard to read against
+ * the background it is being judged against.
+ */
+const FRAME_PREVIEW_OPACITY = 0.9;
+
+/**
  * Whether the beat strip names its beats.
  *
  * Off by default: the strip's job is spacing, and the labels cost rows of height that full
@@ -902,6 +913,51 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 
 	/**
+	 * The pose the frame menu is hovering: drawn, never written. `null` is not hovering,
+	 * `''` is the Automatic row — the fallback the renderer picks when no frame is named.
+	 *
+	 * A preview is not an optimistic patch and deliberately does not go through
+	 * `StagePatch`: that map is the value a gesture is PRODUCING, it settles against the
+	 * next parse and it times out, and a hover produces nothing. This one is thrown away
+	 * whole the moment the pointer leaves.
+	 */
+	const [framePreview, setFramePreview] = React.useState<string | null>(null);
+	// Only ever the single selection the frame menu itself needs. Kept apart from the menu
+	// so the preview cannot outlive the entity: selecting something else clears it below.
+	const previewId = selection.length === 1 ? selection[0] : undefined;
+
+	React.useEffect(() => setFramePreview(null), [previewId]);
+
+	/**
+	 * What the renderer draws: the stage, plus the hovered pose at 90%.
+	 *
+	 * The overlay keeps the REAL stage — boxes, handles and every write are about what the
+	 * scene says, not about what the pointer is passing over. Fading is the whole of what
+	 * makes this readable as a question rather than as a change that already happened; the
+	 * entity's own `opacity` is multiplied rather than replaced, so previewing a sprite the
+	 * scene has already faded does not brighten it.
+	 */
+	const drawnStage = React.useMemo(() => {
+		const entity = previewId ? stage.entities?.[previewId] : undefined;
+
+		if (framePreview === null || !previewId || !entity) {
+			return stage;
+		}
+
+		return {
+			...stage,
+			entities: {
+				...stage.entities,
+				[previewId]: {
+					...entity,
+					frame: framePreview || undefined,
+					opacity: entity.opacity * FRAME_PREVIEW_OPACITY
+				}
+			}
+		};
+	}, [framePreview, previewId, stage]);
+
+	/**
 	 * Everything that would change the text is off while the lock is on.
 	 *
 	 * One flag, checked in one place: the overlay already treats "not editable" as "select
@@ -1456,7 +1512,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				beat={drawnBeat}
 				onLink={handleLink}
 				onRenderer={handleRenderer}
-				stage={stage}
+				stage={drawnStage}
 				stylesheet={stylesheet}
 			/>
 			{/* Over the stage rather than above it. A row that appeared with the
@@ -1479,6 +1535,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDelete={remove}
 				onFlip={flip}
 				onFrame={setFrame}
+				onPreviewFrame={setFramePreview}
 				onStepZ={stepZ}
 			/>
 			{/* A dropped file is not a background, an object, a cast member or a pose until

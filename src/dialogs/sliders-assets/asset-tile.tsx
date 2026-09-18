@@ -1,6 +1,6 @@
-import {assetFragment} from '@sliders/asset-store';
+import {assetFragment, musicFragment} from '@sliders/asset-store';
 import {AssetMeta} from '@sliders/scene-types';
-import {IconPhotoEdit, IconTrash} from '@tabler/icons';
+import {IconMusic, IconPhotoEdit, IconTrash} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Badge} from '../../components/badge/badge';
@@ -10,7 +10,9 @@ import {IconButton} from '../../components/control/icon-button';
 import {TagCardButton} from '../../components/tag/tag-card-button';
 import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
+import {copyText} from '../../util/copy-text';
 import {AssetPreview} from './asset-preview';
+import {SoundPreview} from './sound-preview';
 import {TileUses} from './tile-uses';
 
 export interface AssetTileProps {
@@ -64,6 +66,9 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		meta.kind === 'bg' || meta.kind === 'object'
 			? {label: meta.name, ref: meta.name, target: meta.kind === 'bg' ? 'bg' : 'prop'}
 			: undefined;
+	// A sound has no pixels, so the whole art half of a tile means something else for it:
+	// audition instead of thumbnail, length instead of dimensions, and no image editor.
+	const isSound = meta.kind === 'sound';
 
 	React.useEffect(() => {
 		if (focused) {
@@ -75,31 +80,59 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		<div
 			className={`sliders-tile${focused ? ' focused' : ''}`}
 			data-asset-id={meta.id}
-			draggable={!!dragPayload}
-			onDragStart={event =>
-				dragPayload &&
-				setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta))
-			}
+			draggable={!!dragPayload || isSound}
+			onDragStart={event => {
+				if (dragPayload) {
+					setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta));
+					return;
+				}
+
+				if (isSound) {
+					// Text only, and deliberately no ASSET_DRAG_MIME: a sound has nowhere to
+					// land ON the stage, so advertising it to the stage's drop target would
+					// mean inventing a position for a thing that has none. Dropped into the
+					// passage text it pastes its beat, which is the whole gesture.
+					event.dataTransfer.effectAllowed = 'copy';
+					event.dataTransfer.setData('text/plain', assetFragment(meta));
+				}
+			}}
 			ref={tileRef}
-			title={dragPayload ? t('dialogs.slidersAssets.dragToStage') : undefined}
+			title={
+				dragPayload
+					? t('dialogs.slidersAssets.dragToStage')
+					: isSound
+					? t('dialogs.slidersAssets.dragSoundToText')
+					: undefined
+			}
 		>
 			<div className="sliders-tile-art">
-				{/* Only when the asset carries one: a cross on every default-anchored tile is
-				    nine crosses saying nothing. */}
-				<AssetPreview alt={meta.name} assetId={meta.id} origin={meta.origin} />
-				{/* Dimensions only. Bytes and format are in the tooltip: the pixel size is
-				    what an author checks against the stage, the rest is housekeeping. */}
-				<span
-					className="sliders-tile-size"
-					title={t('dialogs.slidersAssets.assetDetail', {
-						width: meta.w,
-						height: meta.h,
-						size: formatBytes(meta.bytes),
-						format: meta.mime.replace(/^image\//, '')
-					})}
-				>
-					{meta.w}×{meta.h}
-				</span>
+				{isSound ? (
+					<SoundPreview
+						assetId={meta.id}
+						duration={meta.duration}
+						name={meta.name}
+					/>
+				) : (
+					<>
+						{/* Only when the asset carries one: a cross on every default-anchored
+						    tile is nine crosses saying nothing. */}
+						<AssetPreview alt={meta.name} assetId={meta.id} origin={meta.origin} />
+						{/* Dimensions only. Bytes and format are in the tooltip: the pixel size
+						    is what an author checks against the stage, the rest is
+						    housekeeping. */}
+						<span
+							className="sliders-tile-size"
+							title={t('dialogs.slidersAssets.assetDetail', {
+								width: meta.w,
+								height: meta.h,
+								size: formatBytes(meta.bytes),
+								format: meta.mime.replace(/^image\//, '')
+							})}
+						>
+							{meta.w}×{meta.h}
+						</span>
+					</>
+				)}
 			</div>
 			<div className="sliders-tile-name">{meta.name}</div>
 			<TileUses passages={usedIn ?? []} />
@@ -117,18 +150,31 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 				))}
 			</div>
 			<ButtonBar>
-				<IconButton
-					// Editing an animation would flatten it to one frame.
-					disabled={meta.animated}
-					icon={<IconPhotoEdit />}
-					iconOnly
-					label={
-						meta.animated
-							? t('dialogs.slidersAssets.editImageAnimated')
-							: t('dialogs.slidersAssets.editImage')
-					}
-					onClick={onEdit}
-				/>
+				{isSound ? (
+					// The other half of the pair the tile hands out. The drag (and the tile's
+					// own fragment) writes the one-shot beat, because that is the commoner
+					// half; this writes the scene's looping bed, which is the half an author
+					// would otherwise have to remember the spelling of.
+					<IconButton
+						icon={<IconMusic />}
+						iconOnly
+						label={t('dialogs.slidersAssets.copyMusicLine')}
+						onClick={() => void copyText(musicFragment(meta))}
+					/>
+				) : (
+					<IconButton
+						// Editing an animation would flatten it to one frame.
+						disabled={meta.animated}
+						icon={<IconPhotoEdit />}
+						iconOnly
+						label={
+							meta.animated
+								? t('dialogs.slidersAssets.editImageAnimated')
+								: t('dialogs.slidersAssets.editImage')
+						}
+						onClick={onEdit}
+					/>
+				)}
 				<TagCardButton
 					allTags={allTags}
 					iconOnly

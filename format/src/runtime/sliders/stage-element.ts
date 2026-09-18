@@ -23,7 +23,7 @@ import {get, set} from '../state';
 import {CustomElement} from '../util/custom-element';
 import {manifestResolver} from './assets';
 import {enterCinema, leaveCinema} from './cinema';
-import {STAGE_VAR, autoAdvanceMs, fullScreenScenes} from './config';
+import {STAGE_VAR, autoAdvanceMs, fullScreenScenes, muted} from './config';
 import {stageFrom} from './scene-graph';
 
 const {warn} = createLoggers('scene');
@@ -70,6 +70,19 @@ export class SlidersStage extends CustomElement {
 		if (!(event.target as HTMLElement | null)?.closest('a')) {
 			void this.play();
 		}
+	};
+
+	/**
+	 * The gesture the autoplay policy is waiting for.
+	 *
+	 * A stage mounts muted and unmutes here rather than trying to play and being refused,
+	 * because `setMuted(false)` is what actually starts the bed — so the first sound a
+	 * reader hears begins on their first tap instead of never. On the document, not on the
+	 * stage: a reader who pressed a key or clicked the page chrome has given the browser
+	 * the same permission, and the story's first passage is often not a scene at all.
+	 */
+	private handleGesture = () => {
+		this.unlockSound();
 	};
 
 	async connectedCallback() {
@@ -120,7 +133,32 @@ export class SlidersStage extends CustomElement {
 		await this.renderer.apply(to, diffStages(from, to));
 		publishStage(entry);
 		this.addEventListener('click', this.handleClick);
+		this.listenForGesture();
 		void this.play();
+	}
+
+	/**
+	 * Unmute now if the reader has already interacted with the page, and otherwise as soon
+	 * as they do.
+	 *
+	 * `userActivation.hasBeenActive` is the difference between a story whose second scene
+	 * has music and one whose every scene needs its own tap first: activation is sticky for
+	 * the document, so a reader who clicked to get here has already paid for it.
+	 */
+	private listenForGesture() {
+		if (navigator.userActivation?.hasBeenActive) {
+			this.unlockSound();
+			return;
+		}
+
+		document.addEventListener('pointerdown', this.handleGesture, {once: true});
+		document.addEventListener('keydown', this.handleGesture, {once: true});
+	}
+
+	private unlockSound() {
+		// Re-read the config rather than cache it: a vars section in this very passage may
+		// have just silenced the chapter.
+		this.renderer?.setMuted?.(muted());
 	}
 
 	disconnectedCallback() {
@@ -130,6 +168,11 @@ export class SlidersStage extends CustomElement {
 		}
 
 		this.removeEventListener('click', this.handleClick);
+		// `once` removes it on the way in, never on the way out — a stage that left before
+		// the reader touched anything would otherwise unmute the NEXT stage's renderer
+		// through a closure over a destroyed one.
+		document.removeEventListener('pointerdown', this.handleGesture);
+		document.removeEventListener('keydown', this.handleGesture);
 		window.clearTimeout(this.timer);
 		this.dialogue?.destroy();
 		this.renderer?.destroy();
@@ -167,6 +210,12 @@ export class SlidersStage extends CustomElement {
 					timeTransitions(diffStages(from, to), beat.dur)
 				);
 				publishStage(after);
+			}
+
+			// Before the switch, not inside it: a sound rides on a line, on a stage move or
+			// on a beat of its own, and all three arrive here.
+			if (beat.sfx) {
+				this.renderer?.cue?.(beat.sfx);
 			}
 
 			switch (beat.kind) {

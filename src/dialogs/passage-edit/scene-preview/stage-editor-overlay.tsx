@@ -81,6 +81,25 @@ const DROP_SNAP_TOLERANCE_PX = 24;
  */
 const WHEEL_COMMIT_DELAY_MS = 220;
 
+/**
+ * A press that belongs to something else, not to the stage.
+ *
+ * Links inside bubbles are real anchors (D3) and the marker layer does not cover them, so a
+ * click on one is a click on the link. The player's corner controls, the selection row and
+ * the bubble editor sit INSIDE the stage for the same reason and are read the same way: a
+ * press on them is theirs, and must not also pan, clear the selection the row is speaking
+ * for, or turn the page.
+ *
+ * `.menu-button-menu` is the odd one, and the reason this is a constant rather than two
+ * literals. A `MenuButton`'s popover is portalled to `document.body` — but React bubbles a
+ * portal's events up the React TREE, not the DOM one, so a press on a menu opened from the
+ * selection row still arrives here. Its DOM ancestors are the body's, so none of the other
+ * entries in this list can match it; without its own the frame menu's first pointerdown
+ * cleared the very selection whose frame it was about to set, and the click never landed.
+ */
+const OWN_PRESS_SELECTOR =
+	'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor, .menu-button-menu';
+
 /** Feet, bottom centre — the fallback when there is no rect to invert an origin out of. */
 const DEFAULT_ORIGIN_FRAC = {x: 0.5, y: 1};
 
@@ -782,16 +801,9 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}
 
 	function handlePointerDown(event: React.PointerEvent) {
-		// Links inside bubbles are real anchors (D3) and the marker layer does not cover
-		// them, so a click on one is a click on the link, not on the stage. The player's
-		// corner controls and the selection row sit inside the stage for the same reason
-		// and are read the same way: a press on them is theirs, and must not also pan, clear
-		// the selection the row is speaking for, or turn the page.
 		if (
 			(event.button !== 0 && event.button !== 1) ||
-			(event.target as HTMLElement).closest?.(
-				'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor'
-			)
+			(event.target as HTMLElement).closest?.(OWN_PRESS_SELECTOR)
 		) {
 			return;
 		}
@@ -952,11 +964,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}
 
 	function handleDoubleClick(event: React.MouseEvent) {
-		if (
-			(event.target as HTMLElement).closest?.(
-				'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor'
-			)
-		) {
+		if ((event.target as HTMLElement).closest?.(OWN_PRESS_SELECTOR)) {
 			return;
 		}
 

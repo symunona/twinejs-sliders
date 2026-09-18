@@ -58,6 +58,15 @@ export interface SceneAssetRefs {
 	 */
 	fxRefs: string[];
 	/**
+	 * Sound names from `music:` and `sfx:`.
+	 *
+	 * Their own bucket rather than `assetRefs`, because an unresolved one means something
+	 * different: a missing picture leaves a visible `? bg` on the stage, while a missing
+	 * sound is simply inaudible, and the export report is the only place it can ever be
+	 * mentioned. Optional: bundles written before sounds existed have none.
+	 */
+	soundRefs?: string[];
+	/**
 	 * Frame names seen in `frame:` on entities and beat patches, keyed by the entity id
 	 * that carried them. Only used to report frames a character does not have — a
 	 * referenced character contributes all of its frames regardless.
@@ -71,7 +80,8 @@ export function emptySceneAssetRefs(): SceneAssetRefs {
 		characterRefs: [],
 		frameRefs: {},
 		fxRefs: [],
-		optionalAssetRefs: []
+		optionalAssetRefs: [],
+		soundRefs: []
 	};
 }
 
