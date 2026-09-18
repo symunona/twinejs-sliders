@@ -199,6 +199,9 @@ export class DomRenderer implements Renderer {
 		el.appendChild(root);
 
 		this.rootEl = root;
+		// Stated from the start, not only once something flips it: "no attribute" would be
+		// indistinguishable from "not muted" to anything reading this from outside.
+		root.dataset.muted = String(this.mutedWanted);
 		this.boxEl = box;
 		this.cameraEl = camera;
 		this.fxStackEl = fxStack;
@@ -997,6 +1000,13 @@ export class DomRenderer implements Renderer {
 
 	setMuted(muted: boolean): void {
 		this.mutedWanted = muted;
+
+		// On the root so it is visible from outside, like `data-music`. A story that wants
+		// to draw "tap for sound" has nothing else to hang it on — the autoplay refusal
+		// happens inside a detached element nobody can see.
+		if (this.rootEl) {
+			this.rootEl.dataset.muted = String(muted);
+		}
 
 		if (!muted) {
 			// Unmuting is the gesture that lifts an autoplay refusal, so the flag goes with it.
