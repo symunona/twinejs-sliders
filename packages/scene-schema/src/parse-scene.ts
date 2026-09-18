@@ -43,6 +43,7 @@ import {
 	type StageSound,
 	type Vec2
 } from '@sliders/scene-types';
+import {RaggedBlockLine, raggedBlockLines} from './block-scalar';
 import {keyFix} from './levenshtein';
 import {scanWikiLinks} from './links';
 
@@ -2153,7 +2154,55 @@ function checkOfEdges(ctx: Ctx, scene: Scene): void {
 	}
 }
 
+/**
+ * One error for a line that fell out of the block scalar above it, replacing the three or
+ * four YAML complaints it causes. See `block-scalar.ts`.
+ */
+function raggedBlockError(ragged: RaggedBlockLine): SceneError {
+	return {
+		code: 'yaml-syntax',
+		col: ragged.col,
+		endCol: ragged.col + 1,
+		fix: {
+			col: 1,
+			endCol: ragged.col,
+			label: 'Indent to match the block',
+			line: ragged.line,
+			replaces: ragged.indentText,
+			text: ' '.repeat(ragged.blockIndent)
+		},
+		hint: `Every line of a \`|\` block shares one indent — the first line's. Indent this one to column ${
+			ragged.blockIndent + 1
+		}, or move it out to where \`${ragged.key}:\` sits.`,
+		line: ragged.line,
+		message: `This line is indented less than the text block above, so it is not part of \`${ragged.key}:\` — and too far in to be anything else.`,
+		severity: 'error'
+	};
+}
+
 export function parseScene(text: string): ParseResult {
+	const ragged = raggedBlockLines(text);
+	const result = parseSceneDoc(text);
+
+	if (ragged.length === 0) {
+		return result;
+	}
+
+	// Everything reported on one of these lines is downstream of the indent: the scalar
+	// ended early, so the rest of the line was read as structure. Including a beat error
+	// about a beat the author never wrote.
+	const lines = new Set(ragged.map(entry => entry.line));
+
+	return {
+		...result,
+		errors: [
+			...result.errors.filter(error => !lines.has(error.line)),
+			...ragged.map(raggedBlockError)
+		].sort((a, b) => a.line - b.line || a.col - b.col)
+	};
+}
+
+function parseSceneDoc(text: string): ParseResult {
 	const scene = emptyScene();
 	const lineCounter = new LineCounter();
 	const ctx: Ctx = {
