@@ -258,7 +258,8 @@ describe('the fixture story references what this suite relies on', () => {
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
 			fxRefs: ['rain'],
-			optionalAssetRefs: []
+			optionalAssetRefs: [],
+			soundRefs: []
 		});
 	});
 

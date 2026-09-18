@@ -779,7 +779,8 @@ describe('exportStoryBundle', () => {
 			characterRefs: ['mira'],
 			frameRefs: {mira: ['smile']},
 			fxRefs: ['rain'],
-			optionalAssetRefs: []
+			optionalAssetRefs: [],
+			soundRefs: []
 		});
 	});
 });

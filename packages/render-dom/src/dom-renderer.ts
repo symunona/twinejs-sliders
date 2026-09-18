@@ -147,6 +147,7 @@ export class DomRenderer implements Renderer {
 	private deck?: SoundDeck;
 	private mutedWanted = true;
 	private blockedSound = false;
+	private cues = 0;
 
 	constructor(options: DomRendererOptions = {}) {
 		this.opts = options;
@@ -957,6 +958,19 @@ export class DomRenderer implements Renderer {
 	}
 
 	private syncMusic(music: Stage['music'], duration: number): void {
+		// What the stage BELIEVES is playing, on the root element. The deck's <audio>
+		// elements are deliberately detached, so this attribute is the only thing a test —
+		// or a story's own CSS — can see; without it, "is the bed running" is unanswerable
+		// from outside. Set even while muted: it says what the scene asks for, not what a
+		// speaker is doing.
+		if (this.rootEl) {
+			if (music) {
+				this.rootEl.dataset.music = music.id;
+			} else {
+				delete this.rootEl.dataset.music;
+			}
+		}
+
 		// Nothing playing and nothing asked for is the common case, and building a deck for
 		// it would mean every silent scene in the editor carrying audio machinery.
 		if (!music && !this.deck) {
@@ -968,6 +982,16 @@ export class DomRenderer implements Renderer {
 
 	/** Fire a one-shot. See `Renderer.cue` for why this is not part of `apply()`. */
 	cue(sound: StageSound): void {
+		// Counted, for the same reason `data-music` exists: a one-shot leaves no trace at
+		// all otherwise — it is detached, it is brief, and by the time anything looks it has
+		// ended. The count is what a test asserts on and what says a cue arrived.
+		this.cues++;
+
+		if (this.rootEl) {
+			this.rootEl.dataset.sfx = sound.id;
+			this.rootEl.dataset.sfxCount = String(this.cues);
+		}
+
 		void this.soundDeck()?.cue(sound);
 	}
 

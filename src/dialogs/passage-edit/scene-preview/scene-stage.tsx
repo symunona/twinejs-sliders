@@ -173,9 +173,9 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		if (sound) {
 			rendererRef.current?.cue(sound);
 		}
-		// `beatRef` deliberately absent: reading the sound through a ref is what keeps this
-		// effect from re-running when the same beat is re-parsed.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// `beatRef` is deliberately not a dependency (it is a ref, so it cannot be one):
+		// reading the sound through it is what keeps this effect from re-running when the
+		// same beat is re-parsed on the next keystroke.
 	}, [muted, ready, sfxIndex]);
 
 	/**

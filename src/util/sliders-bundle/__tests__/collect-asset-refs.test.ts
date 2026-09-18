@@ -189,7 +189,8 @@ describe('collectPassageRefs', () => {
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: [],
-			optionalAssetRefs: []
+			optionalAssetRefs: [],
+			soundRefs: []
 		});
 	});
 
@@ -294,7 +295,8 @@ describe('collectAssetRefs', () => {
 			characterRefs: [],
 			frameRefs: {},
 			fxRefs: [],
-			optionalAssetRefs: []
+			optionalAssetRefs: [],
+			soundRefs: []
 		});
 	});
 });
