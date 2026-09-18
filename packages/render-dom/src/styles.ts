@@ -377,6 +377,54 @@ export const DIALOGUE_CSS = `
 
 .sliders-bubble[data-entering='true'] { opacity: 0; }
 
+/* A drawn shape REPLACES the box: no fill, no rounding, no shadow, no CSS tail. The
+   padding it needs is written inline by the dialogue layer, because only the shape knows
+   how much of its own rectangle is outline, scallop or slab. */
+.sliders-bubble[data-shape] {
+	background: none;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.sliders-bubble[data-shape] .sliders-bubble-tail { display: none !important; }
+
+/* sizing: absolute states the rectangle and the type is fitted into it, so the width the
+   layout writes inline is the whole truth and the stylesheet's cap must not argue with it.
+   The clip is on the BODY, never on the bubble: clipping the bubble would cut off the very
+   drawing that reaches outside it. */
+.sliders-bubble[data-sizing='absolute'] {
+	max-width: none;
+	min-width: 0;
+}
+
+.sliders-bubble[data-sizing='absolute'] .sliders-bubble-body {
+	height: 100%;
+	overflow: hidden;
+}
+
+/* Sized and offset by the SVG's own inline left/top, so the drawing may reach outside the
+   bubble box without moving the text inside it. */
+.sliders-bubble-shape {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+}
+
+.sliders-bubble-shape-svg {
+	position: absolute;
+	overflow: visible;
+}
+
+/* The text has to sit above the drawing, and a positioned child is what makes that true
+   without giving every bubble a z-index of its own. */
+.sliders-bubble-body {
+	position: relative;
+	z-index: 1;
+}
+
 .sliders-bubble-name {
 	display: block;
 	margin-bottom: 2px;

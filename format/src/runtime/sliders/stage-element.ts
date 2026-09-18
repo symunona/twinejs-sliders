@@ -24,7 +24,13 @@ import {get, set} from '../state';
 import {CustomElement} from '../util/custom-element';
 import {manifestResolver} from './assets';
 import {enterCinema, leaveCinema} from './cinema';
-import {STAGE_VAR, autoAdvanceMs, fullScreenScenes, muted} from './config';
+import {
+	STAGE_VAR,
+	autoAdvanceMs,
+	fullScreenScenes,
+	muted,
+	storyBubbleDefaults
+} from './config';
 import {stageFrom} from './scene-graph';
 
 const {warn} = createLoggers('scene');
@@ -232,16 +238,27 @@ export class SlidersStage extends CustomElement {
 				case 'say':
 					this.dialogue?.setBox(null);
 					this.dialogue?.say(beat.who, beat.text, {
-						// The speaking character's own `bubble:` is the default; the beat's
-						// `as:`/`bubble:` overrides it key by key.
-						style: mergeBubbleStyle(await this.bubbleDefaults(beat.who), beat.style)
+						// Four layers, widest first: the story's `sliders.bubble.*`
+						// variables, the scene's own `bubble:`, the speaking character's,
+						// then this beat's `as:`/`bubble:`. Merged key by key the whole
+						// way, so each one only states what it cares about.
+						style: mergeBubbleStyle(
+							mergeBubbleStyle(
+								this.sceneBubbleDefaults(),
+								await this.bubbleDefaults(beat.who)
+							),
+							beat.style
+						)
 					});
 					this.waitForReader(beat.dur);
 					return;
 
 				case 'box':
 					this.dialogue?.clear();
-					this.dialogue?.setBox(beat.text, beat.style);
+					this.dialogue?.setBox(
+						beat.text,
+						mergeBubbleStyle(this.sceneBubbleDefaults(), beat.style)
+					);
 					this.waitForReader(beat.dur);
 					return;
 
@@ -266,6 +283,11 @@ export class SlidersStage extends CustomElement {
 		}
 
 		this.removeAttribute('data-waiting');
+	}
+
+	/** The story's variables with this scene's own `bubble:` over them. */
+	private sceneBubbleDefaults() {
+		return mergeBubbleStyle(storyBubbleDefaults(), this.scene?.bubble);
 	}
 
 	/**

@@ -23,6 +23,13 @@ export {
 	scanLinkTargets,
 	sceneLinkTargets
 } from './references';
+export {
+	STORY_BUBBLE_KEYS,
+	STORY_BUBBLE_PREFIX,
+	storyBubbleStyle,
+	storyBubbleVar
+} from './story-bubble';
+export type {StoryBubbleKey} from './story-bubble';
 export {scanWikiLinks} from './links';
 export type {WikiLink} from './links';
 export {keyFix, keyHint, levenshtein, nearestKey} from './levenshtein';

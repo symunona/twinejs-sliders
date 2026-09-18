@@ -404,6 +404,57 @@ export const BUBBLE_PRESETS = [
 export type BubblePreset = (typeof BUBBLE_PRESETS)[number];
 
 /**
+ * Styles the renderer DRAWS, rather than paints with CSS.
+ *
+ * A shape is a pure function of the bubble's size, its tail direction and two colours, and
+ * it returns SVG (`packages/render-dom/src/bubble-shapes.ts`). That is the whole reason
+ * these are a separate list from `BUBBLE_PRESETS`: a CSS preset is a look laid over the
+ * ordinary rounded box and composes with any other CSS, a shape REPLACES the box — no
+ * background, no border, no CSS tail — so the two can never be layered and an author has
+ * to pick one.
+ *
+ * Open like the presets are: a token naming neither is still handed to the DOM as
+ * `data-style` for a story's own stylesheet to paint.
+ */
+export const BUBBLE_SHAPES = ['comic', 'shard', 'impact', 'thought'] as const;
+
+export type BubbleShapeName = (typeof BUBBLE_SHAPES)[number];
+
+/**
+ * How a bubble decides its size.
+ *
+ * `auto` is the default and the historical behaviour: the box snaps to its content, `w`
+ * caps how wide it may get before the text wraps, and the height is whatever the words
+ * need. The text size does not change, so a long line makes a tall bubble.
+ *
+ * `absolute` is the opposite trade: the box is EXACTLY `w` x `h` of the stage box, which
+ * is what a fixed comic panel wants, and the TEXT is scaled to fit inside it. Two lines
+ * and ten lines then occupy the same rectangle, at different type sizes.
+ *
+ * The word is `absolute` rather than `fixed` because it says what the size is measured
+ * against — the slide — not that it never changes: an absolute bubble still grows with the
+ * stage, which is the point of it being a fraction.
+ */
+export const BUBBLE_SIZINGS = ['auto', 'absolute'] as const;
+
+export type BubbleSizing = (typeof BUBBLE_SIZINGS)[number];
+
+/**
+ * What a bubble hangs off.
+ *
+ * `speaker` is the default: the bubble follows the character's `bubble` anchor, and a
+ * pinned one (`at:`/`place:`) still grows a tail back towards them.
+ *
+ * `scene` DETACHES it. The bubble belongs to the stage, not to whoever is speaking: no
+ * tail, no anchor to follow, `at:` alone says where it goes. It is what a caption, a
+ * voice-over or an off-screen shout wants, and unlike `place: …` it says so out loud
+ * instead of leaving a tail pointing at a character who happens to be standing there.
+ */
+export const BUBBLE_ANCHORS = ['speaker', 'scene'] as const;
+
+export type BubbleAnchor = (typeof BUBBLE_ANCHORS)[number];
+
+/**
  * Where a bubble sits when it is not hanging off its speaker.
  *
  * `auto` is the default and the only one that follows a character: the bubble hangs off
@@ -430,9 +481,13 @@ export type BubblePlace = (typeof BUBBLE_PLACES)[number];
 export const BUBBLE_KEYS = [
 	'as',
 	'place',
+	'anchor',
+	'sizing',
 	'at',
 	'w',
+	'h',
 	'bg',
+	'accent',
 	'color',
 	'font',
 	'size'
@@ -448,18 +503,47 @@ export const BUBBLE_KEYS = [
  * compose with a preset rather than replacing it.
  */
 export interface BubbleStyle {
-	/** Preset name, or any token the story's stylesheet defines. */
+	/**
+	 * Preset name, shape name, or any token the story's stylesheet defines.
+	 *
+	 * One token, three answers, resolved in that order: a `BUBBLE_SHAPES` name is DRAWN,
+	 * a `BUBBLE_PRESETS` name is painted by the shipped CSS, anything else reaches the DOM
+	 * as `data-style` for the story to paint.
+	 */
 	as?: string;
 	place?: BubblePlace;
+	/** `scene` detaches the bubble from its speaker. Default `speaker`. */
+	anchor?: BubbleAnchor;
+	/** `absolute` fixes the box to `w` x `h` of the stage and scales the text to fit. */
+	sizing?: BubbleSizing;
 	/**
 	 * Explicit position: the bubble's CENTRE, in fractions of the stage box measured from
 	 * its top left. Wins over `place`.
 	 */
 	at?: Frac2;
-	/** Width as a fraction of the stage box's width. */
+	/**
+	 * Width as a fraction of the stage box's width.
+	 *
+	 * The maximum the text may wrap to under `sizing: auto`, the exact width under
+	 * `sizing: absolute`.
+	 */
 	w?: number;
-	/** Background colour. Any CSS colour. */
+	/**
+	 * Height as a fraction of the stage box's height. Only `sizing: absolute` reads it —
+	 * an auto bubble is as tall as its words, which is what auto means.
+	 */
+	h?: number;
+	/** Background colour. Any CSS colour. A drawn shape fills itself with it. */
 	bg?: string;
+	/**
+	 * The second colour: a drawn shape's outline, offset slab or highlight.
+	 *
+	 * Meaningless to the CSS presets, which have one surface. It is here rather than in a
+	 * shape-only map because `bg`/`accent` are the pair every shape takes, and an author
+	 * recolouring a bubble should not have to know which of the two keys the style they
+	 * picked happens to read.
+	 */
+	accent?: string;
 	/** Text colour. */
 	color?: string;
 	/** Font family, e.g. `Georgia, serif`. */
@@ -606,6 +690,20 @@ export interface Scene {
 	 * reader's to argue with, the shape of a movement is the author's alone.
 	 */
 	ease?: BeatEase;
+	/**
+	 * How every line in this scene is painted, unless it says otherwise.
+	 *
+	 * The middle of four layers, widest first: the STORY's `sliders.bubble.*` variables,
+	 * this, the speaking character's own `bubble:`, then the beat's `as:`/`bubble:`. Merged
+	 * per key the whole way down, so a scene that names only a `font:` leaves a character's
+	 * `as: whisper` alone.
+	 *
+	 * Under the character rather than over it on purpose: a character's bubble is part of
+	 * who they are and holds for every scene they appear in, while this key is the look of
+	 * one episode. A scene that really must override a specific speaker writes it on their
+	 * beats, which is the narrower statement anyway.
+	 */
+	bubble?: BubbleStyle;
 	/**
 	 * What the visual editor must not let a gesture change in this scene.
 	 *

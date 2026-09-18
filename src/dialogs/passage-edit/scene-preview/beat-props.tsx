@@ -23,7 +23,14 @@
 
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {BUBBLE_PLACES, BUBBLE_PRESETS, EASE_NAMES} from '@sliders/scene-types';
+import {
+	BUBBLE_ANCHORS,
+	BUBBLE_PLACES,
+	BUBBLE_PRESETS,
+	BUBBLE_SHAPES,
+	BUBBLE_SIZINGS,
+	EASE_NAMES
+} from '@sliders/scene-types';
 import type {Beat, BubbleStyle} from '@sliders/scene-types';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
@@ -299,6 +306,13 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 										label: t('dialogs.passageEdit.beatProps.inherit'),
 										value: INHERIT
 									},
+									// Drawn shapes lead: they are what most authors come to
+									// this dropdown for, and they change the bubble rather
+									// than restyling its text.
+									...BUBBLE_SHAPES.map(shape => ({
+										label: shape,
+										value: shape
+									})),
 									...BUBBLE_PRESETS.map(preset => ({
 										label: preset,
 										value: preset
@@ -322,6 +336,42 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 								value={style?.place ?? INHERIT}
 							>
 								{t('dialogs.passageEdit.beatProps.place')}
+							</TextSelect>
+							<TextSelect
+								onChange={event =>
+									onSetBubble('sizing', event.target.value || null)
+								}
+								options={[
+									{
+										label: t('dialogs.passageEdit.beatProps.inherit'),
+										value: INHERIT
+									},
+									...BUBBLE_SIZINGS.map(sizing => ({
+										label: sizing,
+										value: sizing
+									}))
+								]}
+								value={style?.sizing ?? INHERIT}
+							>
+								{t('dialogs.passageEdit.beatProps.sizing')}
+							</TextSelect>
+							<TextSelect
+								onChange={event =>
+									onSetBubble('anchor', event.target.value || null)
+								}
+								options={[
+									{
+										label: t('dialogs.passageEdit.beatProps.inherit'),
+										value: INHERIT
+									},
+									...BUBBLE_ANCHORS.map(anchor => ({
+										label: anchor,
+										value: anchor
+									}))
+								]}
+								value={style?.anchor ?? INHERIT}
+							>
+								{t('dialogs.passageEdit.beatProps.anchor')}
 							</TextSelect>
 						</>
 					)}

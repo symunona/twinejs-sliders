@@ -341,11 +341,64 @@ Two keys on a say beat, and the same two inside a `box:` map:
 
 | Key | Means |
 |---|---|
-| `as` | style token |
+| `as` | style token — a DRAWN shape, a CSS preset, or your own |
 | `place` | `auto` (hang off the speaker) · `top` · `bottom` · `left` · `right` · the four corners · `centre` |
+| `anchor` | `speaker` (default) · `scene` — detach from the speaker: no tail, `at:` alone places it |
+| `sizing` | `auto` (default, snap to the words) · `absolute` (box is `w` x `h` of the slide, TEXT is fitted to it) |
 | `at` | `[x, y]`, the bubble's centre as fractions of the stage box. Beats `place`. |
-| `w` | width, fraction of the stage width |
-| `bg` `color` `font` `size` | one-off overrides, written as CSS custom properties |
+| `w` | width, fraction of the stage width. Wrap cap under `auto`, exact width under `absolute`. |
+| `h` | height, fraction of the stage height. `absolute` only. |
+| `bg` `accent` `color` `font` `size` | one-off overrides. `bg`/`accent` are the pair a drawn shape paints with. |
+
+### Four layers, widest first
+
+A line's look is merged key by key down this chain, so each layer states only what it cares
+about:
+
+| Layer | Written as |
+|---|---|
+| story | `sliders.bubble.as`, `.font`, `.sizing`, … in a vars section (the editor's Story ▸ Details writes them into the start passage) |
+| scene | `bubble: {…}` at the top of the scene |
+| character | the character's own `bubble:` in the library |
+| beat | `as:` / `bubble:` on the line |
+
+### Drawn shapes
+
+`comic`, `shard`, `impact`, `thought` are DRAWN, not styled: the renderer builds an SVG from
+the bubble's size, its tail direction and the two colours, and the CSS box behind it is
+turned off. They are pure functions of those numbers
+(`packages/render-dom/src/bubble-shapes.ts`), so the same bubble always draws the same
+outline, and the drawing may reach outside the box — a tail, an ink line, an offset slab —
+without moving the text inside it.
+
+| Name | Looks like |
+|---|---|
+| `comic` | fat squircle balloon, thick ink outline, straight spike |
+| `shard` | hard panel on an offset colour plate, lightning-bolt tail |
+| `impact` | `shard` plus an accent mark at the corner opposite the tail |
+| `thought` | scalloped cloud, a trail of shrinking puffs instead of a tail |
+
+A shape and a CSS preset cannot be combined — one token, and a shape replaces the box.
+
+### Fixed size
+
+```yaml
+bubble: {sizing: absolute, w: 0.42, h: 0.22, as: shard}
+```
+
+Every line in that scene is the same rectangle, 42% x 22% of the slide, and the type is
+scaled until the words fit it. That is the opposite trade from `auto`, where the type is
+fixed and the box grows. Use it when the panel is part of the composition; use `auto` when
+the words are.
+
+### Detached
+
+```yaml
+- mira: {say: "She walks. The caption does not.", bubble: {anchor: scene, at: [0.3, 0.22]}}
+```
+
+`anchor: scene` takes the bubble off its speaker: it grows no tail, it does not follow them,
+and `at:` is the whole story. A caption, a voice-over, an off-screen shout.
 
 Presets with CSS in the renderer: `normal`, `bold`, `italic`, `bold-italic`, `yell` (spiky
 burst), `whisper`, `narrator`. **Any other token is legal**: it reaches the DOM as

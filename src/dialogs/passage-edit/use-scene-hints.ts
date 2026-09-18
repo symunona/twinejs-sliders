@@ -30,9 +30,12 @@ import {
 import {
 	AssetMeta,
 	BG_MOTIONS,
+	BUBBLE_ANCHORS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
+	BUBBLE_SHAPES,
+	BUBBLE_SIZINGS,
 	Character,
 	EASE_KINDS,
 	EASE_NAMES,
@@ -83,6 +86,8 @@ export type HintSlot =
 	| {kind: 'style'}
 	/** `place:` — where the bubble sits. */
 	| {kind: 'place'}
+	| {kind: 'bubbleAnchor'}
+	| {kind: 'sizing'}
 	/**
 	 * Key position in a map whose schema is known: the scene root, an entity, a
 	 * `bubble:`, a link. `id` only names the MRU bucket.
@@ -683,6 +688,14 @@ export function sceneHintContext(
 				case 'place':
 					return found({kind: 'place'});
 
+				// Both only exist inside a bubble: map, and neither word is a key
+				// anywhere else in the subset, so no chain walk is needed.
+				case 'anchor':
+					return found({kind: 'bubbleAnchor'});
+
+				case 'sizing':
+					return found({kind: 'sizing'});
+
 				case 'ref': {
 					// `ref:` names a character under `cast:` and an asset under
 					// `props:`, so the block the entity lives in decides.
@@ -841,11 +854,19 @@ function namesForSlot(
 			];
 		}
 
+		// Drawn shapes first: they are the styles that change what a bubble IS, and a
+		// list that opened with seven weights of text would bury them.
 		case 'style':
-			return [...BUBBLE_PRESETS];
+			return [...BUBBLE_SHAPES, ...BUBBLE_PRESETS];
 
 		case 'place':
 			return [...BUBBLE_PLACES];
+
+		case 'bubbleAnchor':
+			return [...BUBBLE_ANCHORS];
+
+		case 'sizing':
+			return [...BUBBLE_SIZINGS];
 
 		case 'fx':
 			return [...FX_IDS];

@@ -29,7 +29,8 @@ import {
 	EntityId,
 	Vec2
 } from '@sliders/scene-types';
-import {parseLinkText} from '@sliders/render-dom';
+import {mergeBubbleStyle, parseLinkText} from '@sliders/render-dom';
+import {storyBubbleDefaults} from '../../../util/story-bubble';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
@@ -901,6 +902,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	}, [clear, commit, selection, stage]);
 
 	/**
+	 * The look every line in this scene starts from: the story's `sliders.bubble.*`
+	 * variables with the scene's own `bubble:` over them.
+	 *
+	 * The story half is scanned out of the passages, which is the only way the editor can
+	 * read a Chapbook variable — there is no running state machine here. `passages` is
+	 * absent in a bare preview, and then a scene gets its own `bubble:` and nothing wider,
+	 * which is the same answer as a story that declared none.
+	 */
+	const bubbleDefaults = React.useMemo(
+		() =>
+			mergeBubbleStyle(
+				passages ? storyBubbleDefaults(passages) : undefined,
+				parse.result?.scene.bubble
+			),
+		[parse.result, passages]
+	);
+
+	/**
 	 * The passages this scene can reach: every `links:` target, plus any `[[link]]` written
 	 * outside the block — prose under the scene is a way out too.
 	 *
@@ -1597,6 +1616,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				animate={playing}
 				assets={assets}
 				beat={drawnBeat}
+				bubbleDefaults={bubbleDefaults}
 				muted={!sound}
 				onLink={handleLink}
 				onRenderer={handleRenderer}

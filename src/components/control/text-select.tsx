@@ -10,6 +10,8 @@ export interface SelectOption {
 
 export interface TextSelectProps {
 	children: React.ReactNode;
+	/** Greys the control out, for a choice that has nothing to act on yet. */
+	disabled?: boolean;
 	onChange?: React.ChangeEventHandler<HTMLSelectElement>;
 	options: SelectOption[];
 	orientation?: 'horizontal' | 'vertical';
@@ -17,7 +19,7 @@ export interface TextSelectProps {
 }
 
 export const TextSelect: React.FC<TextSelectProps> = props => {
-	const {children, onChange, options, orientation, value} = props;
+	const {children, disabled, onChange, options, orientation, value} = props;
 	const className = classNames(
 		'text-select',
 		`orientation-${orientation ?? 'horizontal'}`
@@ -28,7 +30,7 @@ export const TextSelect: React.FC<TextSelectProps> = props => {
 			<label>
 				<span className="text-select-label">{children}</span>
 				<span className="text-select-control">
-					<select onChange={onChange} value={value}>
+					<select disabled={disabled} onChange={onChange} value={value}>
 						{options.map(option => (
 							<option
 								disabled={option.disabled}

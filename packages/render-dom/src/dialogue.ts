@@ -11,8 +11,12 @@
  */
 
 import type {BubblePlace, BubbleStyle, EntityId, Vec2} from '@sliders/scene-types';
+import type {BubblePadding, BubbleSide} from './bubble-shapes';
+import {bubbleShape, hashSeed, isBubbleShape} from './bubble-shapes';
 import type {StageBox} from './coords';
 import {injectStyles} from './styles';
+
+export type {BubbleSide};
 
 /** The slice of a renderer a dialogue layer needs. Any renderer can satisfy it. */
 export interface MeasuringRenderer {
@@ -63,19 +67,44 @@ const TAIL_HALF = 9;
 /** Keep the tail this far from the bubble's rounded corners. */
 const TAIL_INSET = 8;
 
-/** Which side of the anchor the bubble hangs off. The tail sits on the opposite edge. */
-export type BubbleSide = 'above' | 'below' | 'left' | 'right';
-
 /** The anchor every character defines for "where the words come out". */
 const MOUTH_ANCHOR = 'mouth';
+
+/**
+ * What an `sizing: absolute` bubble is when the author gave no numbers.
+ *
+ * Half the stage wide and a fifth of it tall is a caption panel: enough for two or three
+ * lines at a readable size, and small enough that the default does not cover the art it is
+ * spoken over.
+ */
+const ABSOLUTE_W = 0.5;
+const ABSOLUTE_H = 0.2;
+
+/**
+ * Type size in an absolute bubble, as a fraction of the STAGE height before fitting.
+ *
+ * Measured against the stage rather than against the bubble because the whole point of
+ * `sizing: absolute` is that the picture is composed at a fixed scale: two panels of
+ * different sizes on one slide should still be set in the same type.
+ */
+const ABSOLUTE_TEXT = 0.055;
+
+/** How far the fitter may take the type from that base. */
+const FIT_MIN = 0.25;
+const FIT_MAX = 2.4;
 
 interface BubbleRecord {
 	el: HTMLDivElement;
 	body: HTMLDivElement;
 	tail: HTMLDivElement;
+	shape: HTMLDivElement;
 	spec: BubbleSpec;
 	/** Last text rendered, so unchanged text is never re-parsed or re-created. */
 	rendered?: string;
+	/** Last drawn shape, so an unchanged one is never rebuilt from a string. */
+	shapeKey?: string;
+	/** Room the drawn shape asked the text to leave it. */
+	padding?: BubblePadding;
 }
 
 export class DialogueLayer {
@@ -259,17 +288,20 @@ export class DialogueLayer {
 	private positionBubble(rec: BubbleRecord, box: StageBox): void {
 		const style = rec.spec.style;
 		const anchorName = rec.spec.anchor ?? 'bubble';
-		const anchor = this.renderer?.measure(rec.spec.who, anchorName) ?? null;
+		// A detached bubble belongs to the stage: it never asks where its speaker is, so it
+		// keeps its place when they walk off, and it grows no tail back to them.
+		const detached = style?.anchor === 'scene';
+		const anchor = detached
+			? null
+			: this.renderer?.measure(rec.spec.who, anchorName) ?? null;
 		const el = rec.el;
 		const margin = this.opts.margin ?? 12;
 		const gap = this.opts.tailGap ?? 12;
 
-		// Width first: it decides how tall the text wraps, and both are read below.
-		el.style.width = style?.w ? `${style.w * box.width}px` : '';
-
-		const w = el.offsetWidth;
-		const h = el.offsetHeight;
-		const pinned = pinnedRect(style, box, w, h, margin);
+		const {w, h} = this.sizeBubble(rec, box);
+		const pinned =
+			pinnedRect(style, box, w, h, margin) ??
+			(detached ? centreRect(box, w, h, margin) : undefined);
 
 		if (pinned) {
 			// The author said where this goes. The tail still points home when the speaker is
@@ -283,6 +315,7 @@ export class DialogueLayer {
 			if (!tail) {
 				el.dataset.side = 'above';
 				rec.tail.style.display = 'none';
+				this.paintShape(rec, {w, h, side: 'above', anchor: null});
 
 				return;
 			}
@@ -290,6 +323,12 @@ export class DialogueLayer {
 			el.dataset.side = tail.side;
 			rec.tail.style.display = '';
 			this.placeTail(rec, tail.side, tail.offset);
+			this.paintShape(rec, {
+				w,
+				h,
+				side: tail.side,
+				anchor: localPoint(anchor!, pinned)
+			});
 
 			return;
 		}
@@ -303,6 +342,7 @@ export class DialogueLayer {
 			el.style.transform = `translate(${box.left + (box.width - w) / 2}px, ${
 				box.top + margin
 			}px)`;
+			this.paintShape(rec, {w, h, side: 'above', anchor: null});
 
 			return;
 		}
@@ -319,6 +359,226 @@ export class DialogueLayer {
 		el.dataset.side = place.side;
 		el.style.transform = `translate(${place.left}px, ${place.top}px)`;
 		this.placeTail(rec, place.side, place.tail);
+		this.paintShape(rec, {
+			w,
+			h,
+			side: place.side,
+			anchor: localPoint(anchor, place)
+		});
+	}
+
+	// -----------------------------------------------------------------------
+	// Size
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Settle the bubble's box, and report it.
+	 *
+	 * Two modes, and they pull in opposite directions (`BubbleSizing`). `auto` lets the
+	 * words decide the height and only caps the width. `absolute` states the rectangle in
+	 * fractions of the stage and scales the type until the words fit it.
+	 *
+	 * The loop is here because a drawn shape's padding is a fraction of the box, and the
+	 * box under `auto` is a function of the padding: fewer than a couple of passes and a
+	 * cloud's first frame has its text against the edge. It converges immediately in
+	 * practice — the second pass changes the height by a line at most — so it is capped
+	 * rather than run to a fixed point.
+	 */
+	private sizeBubble(rec: BubbleRecord, box: StageBox): {w: number; h: number} {
+		const style = rec.spec.style;
+		const el = rec.el;
+		const absolute = style?.sizing === 'absolute';
+
+		if (absolute) {
+			const w = (style?.w ?? ABSOLUTE_W) * box.width;
+			const h = (style?.h ?? ABSOLUTE_H) * box.height;
+
+			el.style.width = `${w}px`;
+			el.style.height = `${h}px`;
+			this.applyPadding(rec, w, h);
+			this.fitText(rec, box, w, h);
+
+			return {w, h};
+		}
+
+		el.style.height = '';
+		el.style.width = style?.w ? `${style.w * box.width}px` : '';
+		rec.body.style.fontSize = '';
+
+		let w = el.offsetWidth;
+		let h = el.offsetHeight;
+
+		for (let pass = 0; pass < 3; pass++) {
+			if (!this.applyPadding(rec, w, h)) {
+				break;
+			}
+
+			const nw = el.offsetWidth;
+			const nh = el.offsetHeight;
+
+			if (Math.abs(nw - w) < 1 && Math.abs(nh - h) < 1) {
+				w = nw;
+				h = nh;
+				break;
+			}
+
+			w = nw;
+			h = nh;
+		}
+
+		return {w, h};
+	}
+
+	/** Returns true when the padding changed, i.e. when the box must be measured again. */
+	private applyPadding(rec: BubbleRecord, w: number, h: number): boolean {
+		const name = rec.spec.style?.as;
+
+		if (!isBubbleShape(name) || w <= 0 || h <= 0) {
+			if (!rec.padding) {
+				return false;
+			}
+
+			rec.padding = undefined;
+			rec.el.style.removeProperty('--sliders-bubble-pad');
+			rec.el.style.removeProperty('padding');
+
+			return true;
+		}
+
+		const shape = bubbleShape(name, {
+			width: w,
+			height: h,
+			side: 'above',
+			anchor: null,
+			color: rec.spec.style?.bg ?? '',
+			accent: rec.spec.style?.accent ?? '',
+			seed: this.seedFor(rec)
+		})!;
+		const pad = shape.padding;
+		const was = rec.padding;
+
+		if (
+			was &&
+			Math.abs(was.top - pad.top) < 0.5 &&
+			Math.abs(was.left - pad.left) < 0.5
+		) {
+			return false;
+		}
+
+		rec.padding = pad;
+		rec.el.style.padding = `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`;
+
+		return true;
+	}
+
+	/**
+	 * Grow or shrink the type until the words fill the fixed box without spilling.
+	 *
+	 * A binary search rather than a measure-and-divide: the text wraps, so height is a step
+	 * function of the type size and there is no formula to divide by. Twelve passes get
+	 * within a thousandth of the largest size that fits, and each pass is one reflow of one
+	 * small element.
+	 */
+	private fitText(
+		rec: BubbleRecord,
+		box: StageBox,
+		w: number,
+		h: number
+	): void {
+		const pad = rec.padding;
+		const innerW = w - (pad ? pad.left + pad.right : 0);
+		const innerH = h - (pad ? pad.top + pad.bottom : 0);
+		const base = box.height * ABSOLUTE_TEXT * (rec.spec.style?.size ?? 1);
+		const body = rec.body;
+		const fits = (size: number) => {
+			body.style.fontSize = `${size}px`;
+
+			return body.scrollHeight <= innerH + 0.5 && body.scrollWidth <= innerW + 0.5;
+		};
+
+		let lo = base * FIT_MIN;
+		let hi = base * FIT_MAX;
+
+		if (fits(hi)) {
+			return;
+		}
+
+		for (let i = 0; i < 12; i++) {
+			const mid = (lo + hi) / 2;
+
+			if (fits(mid)) {
+				lo = mid;
+			} else {
+				hi = mid;
+			}
+		}
+
+		body.style.fontSize = `${lo}px`;
+	}
+
+	// -----------------------------------------------------------------------
+	// Drawn shapes
+	// -----------------------------------------------------------------------
+
+	/**
+	 * The seed a shape's wobble comes from.
+	 *
+	 * Speaker plus style token, so one character's balloon keeps its outline for the whole
+	 * scene while it moves and re-wraps, and two characters on stage do not get identical
+	 * ones. Not the text: a balloon that changes shape when a word changes flickers under
+	 * the editor's live re-parse.
+	 */
+	private seedFor(rec: BubbleRecord): number {
+		return hashSeed(`${rec.spec.who}:${rec.spec.style?.as ?? ''}`);
+	}
+
+	private paintShape(
+		rec: BubbleRecord,
+		at: {w: number; h: number; side: BubbleSide; anchor: Vec2 | null}
+	): void {
+		const style = rec.spec.style;
+		const name = style?.as;
+
+		if (!isBubbleShape(name) || at.w <= 0 || at.h <= 0) {
+			if (rec.shapeKey) {
+				rec.shapeKey = undefined;
+				rec.shape.replaceChildren();
+				delete rec.el.dataset.shape;
+			}
+
+			return;
+		}
+
+		// Sub-pixel jitter from a reflow must not rebuild the drawing on every frame.
+		const key = [
+			name,
+			Math.round(at.w),
+			Math.round(at.h),
+			at.side,
+			at.anchor ? `${Math.round(at.anchor.x)},${Math.round(at.anchor.y)}` : 'none',
+			style?.bg ?? '',
+			style?.accent ?? ''
+		].join('|');
+
+		rec.el.dataset.shape = name;
+
+		if (rec.shapeKey === key) {
+			return;
+		}
+
+		rec.shapeKey = key;
+
+		const drawn = bubbleShape(name, {
+			width: at.w,
+			height: at.h,
+			side: at.side,
+			anchor: at.anchor,
+			color: style?.bg ?? '',
+			accent: style?.accent ?? '',
+			seed: this.seedFor(rec)
+		})!;
+
+		rec.shape.innerHTML = drawn.svg;
 	}
 
 	/**
@@ -387,11 +647,17 @@ export class DialogueLayer {
 
 		tail.className = 'sliders-bubble-tail';
 
-		el.append(body, tail);
+		// Behind the text and outside the box: a drawn shape spills past the bubble on every
+		// side (its tail, its outline, its offset slab), and the text must not move for it.
+		const shape = this.doc!.createElement('div');
+
+		shape.className = 'sliders-bubble-shape';
+
+		el.append(shape, body, tail);
 		this.rootEl!.appendChild(el);
 		this.fadeIn(el);
 
-		return {el, body, tail, spec};
+		return {el, body, tail, shape, spec};
 	}
 
 	private renderBubbleContent(rec: BubbleRecord): void {
@@ -506,6 +772,18 @@ export function applyStyleAttributes(
 		delete el.dataset.style;
 	}
 
+	if (style?.sizing) {
+		el.dataset.sizing = style.sizing;
+	} else {
+		delete el.dataset.sizing;
+	}
+
+	if (style?.anchor) {
+		el.dataset.anchorMode = style.anchor;
+	} else {
+		delete el.dataset.anchorMode;
+	}
+
 	setVar(el, '--sliders-bubble-bg', style?.bg);
 	setVar(el, '--sliders-bubble-color', style?.color);
 	setVar(el, '--sliders-bubble-font', style?.font);
@@ -572,6 +850,38 @@ export function pinnedRect(
 		: centreY;
 
 	return {left: clamp(left, minLeft, maxLeft), top: clamp(top, minTop, maxTop)};
+}
+
+/** A point in mount px, expressed from a bubble's own top left. */
+function localPoint(point: Vec2, rect: {left: number; top: number}): Vec2 {
+	return {x: point.x - rect.left, y: point.y - rect.top};
+}
+
+/**
+ * Where a DETACHED bubble goes when the author named no place at all.
+ *
+ * Dead centre, because a detached bubble has nothing to be beside: the alternatives all
+ * imply a relationship (over the speaker, along the bottom like narration) that
+ * `anchor: scene` is the author saying they do not want.
+ */
+function centreRect(
+	box: StageBox,
+	w: number,
+	h: number,
+	margin: number
+): {left: number; top: number} {
+	return {
+		left: clamp(
+			box.left + (box.width - w) / 2,
+			box.left + margin,
+			box.left + box.width - w - margin
+		),
+		top: clamp(
+			box.top + (box.height - h) / 2,
+			box.top + margin,
+			box.top + box.height - h - margin
+		)
+	};
 }
 
 /**

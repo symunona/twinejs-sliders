@@ -37,6 +37,22 @@ export type {
 	PlaceBubbleInput
 } from './dialogue';
 
+export {
+	BUBBLE_SHAPE_FNS,
+	bubbleShape,
+	cssColour,
+	hashSeed,
+	isBubbleShape,
+	spliceTail
+} from './bubble-shapes';
+export type {
+	BubblePadding,
+	BubbleShapeFn,
+	BubbleShapeInput,
+	BubbleShapeResult,
+	SplicedOutline
+} from './bubble-shapes';
+
 export {createStubResolver, defaultStubCast, colorFor} from './stub-resolver';
 export type {
 	StubAssetSpec,

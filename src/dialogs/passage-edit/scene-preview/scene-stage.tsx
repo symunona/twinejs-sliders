@@ -9,6 +9,7 @@ import {
 	AssetResolver,
 	Beat,
 	BeatEase,
+	BubbleStyle,
 	Stage,
 	Transition
 } from '@sliders/scene-types';
@@ -28,6 +29,15 @@ export interface SceneStageProps {
 	 * it is exactly the thing that applies when the beat says nothing.
 	 */
 	sceneEase?: BeatEase;
+	/**
+	 * The look every line starts from: the story's `sliders.bubble.*` variables with the
+	 * scene's own `bubble:` over them, already merged.
+	 *
+	 * Passed in for the same reason `sceneEase` is — neither belongs to a beat, and this
+	 * component only ever sees one beat at a time. The speaking character's own defaults
+	 * and then the beat's keys go over the top of it here.
+	 */
+	bubbleDefaults?: BubbleStyle;
 	onLink?: LinkHandler;
 	/**
 	 * Hands the renderer out once it is mounted, and `undefined` on teardown.
@@ -61,6 +71,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	animate,
 	assets,
 	beat,
+	bubbleDefaults,
 	muted = true,
 	onLink,
 	onRenderer,
@@ -253,7 +264,10 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 			dialogue.setBubbles([
 				{
-					style: mergeBubbleStyle(onStage, beat.style),
+					style: mergeBubbleStyle(
+						mergeBubbleStyle(bubbleDefaults, onStage),
+						beat.style
+					),
 					text: beat.text,
 					who: beat.who
 				}
@@ -269,7 +283,10 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 					if (live && character?.bubble) {
 						dialogue.setBubbles([
 							{
-								style: mergeBubbleStyle(character.bubble, beat.style),
+								style: mergeBubbleStyle(
+									mergeBubbleStyle(bubbleDefaults, character.bubble),
+									beat.style
+								),
 								text: beat.text,
 								who: beat.who
 							}
@@ -283,12 +300,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			}
 		} else if (beat?.kind === 'box') {
 			dialogue.setBubbles([]);
-			dialogue.setBox(beat.text, beat.style);
+			dialogue.setBox(beat.text, mergeBubbleStyle(bubbleDefaults, beat.style));
 		} else {
 			dialogue.setBubbles([]);
 			dialogue.setBox(null);
 		}
-	}, [beat, ready, stage]);
+	}, [beat, bubbleDefaults, ready, stage]);
 
 	return <div className="scene-stage" ref={hostRef} />;
 };

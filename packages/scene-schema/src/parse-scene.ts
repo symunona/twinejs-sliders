@@ -12,8 +12,10 @@
 import {LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument} from 'yaml';
 import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {
+	BUBBLE_ANCHORS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
+	BUBBLE_SIZINGS,
 	EASE_KINDS,
 	EASE_NAMES,
 	FRAME_LOOPS,
@@ -24,7 +26,9 @@ import {
 	easeValue,
 	type Beat,
 	type BeatEase,
+	type BubbleAnchor,
 	type BubblePlace,
+	type BubbleSizing,
 	type BubbleStyle,
 	type Camera,
 	type EntityKind,
@@ -63,6 +67,7 @@ export const TOP_LEVEL_KEYS = [
 	'music',
 	'autoAdvance',
 	'ease',
+	'bubble',
 	'locked',
 	'beats',
 	'links'
@@ -649,6 +654,46 @@ function parseBubbleStyle(
 				break;
 			}
 
+			case 'anchor': {
+				const anchor = asString(ctx, pair.value, 'anchor');
+
+				if (anchor === undefined) {
+					break;
+				}
+
+				if (!(BUBBLE_ANCHORS as readonly string[]).includes(anchor)) {
+					addError(ctx, 'bad-value', `Unknown anchor '${anchor}'.`, pair.value, {
+						hint: `anchor: is one of ${BUBBLE_ANCHORS.join(
+							', '
+						)}. 'scene' detaches the bubble from its speaker.`
+					});
+					break;
+				}
+
+				style.anchor = anchor as BubbleAnchor;
+				break;
+			}
+
+			case 'sizing': {
+				const sizing = asString(ctx, pair.value, 'sizing');
+
+				if (sizing === undefined) {
+					break;
+				}
+
+				if (!(BUBBLE_SIZINGS as readonly string[]).includes(sizing)) {
+					addError(ctx, 'bad-value', `Unknown sizing '${sizing}'.`, pair.value, {
+						hint:
+							`sizing: is one of ${BUBBLE_SIZINGS.join(', ')}. ` +
+							"'absolute' fixes the box to w x h of the stage and scales the text."
+					});
+					break;
+				}
+
+				style.sizing = sizing as BubbleSizing;
+				break;
+			}
+
 			case 'at': {
 				const at = parseFrac2(ctx, pair.value, 'bubble at');
 
@@ -659,25 +704,31 @@ function parseBubbleStyle(
 				break;
 			}
 
-			case 'w': {
-				const w = asNumber(ctx, pair.value, 'w');
+			case 'w':
+			case 'h': {
+				const value = asNumber(ctx, pair.value, key);
 
-				if (w === undefined) {
+				if (value === undefined) {
 					break;
 				}
 
-				if (w <= 0 || w > 1) {
+				if (value <= 0 || value > 1) {
 					addError(
 						ctx,
 						'bad-value',
-						`Bubble width of ${w} is outside 0 to 1.`,
+						`Bubble ${key === 'w' ? 'width' : 'height'} of ${value} is outside 0 to 1.`,
 						pair.value,
-						{hint: 'w: is a fraction of the stage width. 0.4 is a wide bubble.'}
+						{
+							hint:
+								key === 'w'
+									? 'w: is a fraction of the stage width. 0.4 is a wide bubble.'
+									: 'h: is a fraction of the stage height, and only sizing: absolute reads it.'
+						}
 					);
 					break;
 				}
 
-				style.w = w;
+				style[key] = value;
 				break;
 			}
 
@@ -704,6 +755,7 @@ function parseBubbleStyle(
 			}
 
 			case 'bg':
+			case 'accent':
 			case 'color':
 			case 'font': {
 				const value = asString(ctx, pair.value, key);
@@ -2628,6 +2680,19 @@ function parseSceneDoc(text: string): ParseResult {
 
 				if (ease !== undefined) {
 					scene.ease = ease;
+				}
+
+				break;
+			}
+
+			case 'bubble': {
+				// Scene-wide defaults for every line. Merged UNDER a character's own
+				// `bubble:` and under a beat's keys, so this never takes a look away
+				// from a speaker who states one — see `Scene.bubble`.
+				const style = parseBubbleStyle(ctx, pair.value, 'bubble');
+
+				if (style) {
+					scene.bubble = style;
 				}
 
 				break;

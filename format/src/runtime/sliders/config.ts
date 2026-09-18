@@ -5,6 +5,8 @@
  * same way it changes `config.header.center`.
  */
 
+import {storyBubbleStyle as bubbleStyleFromVars} from '@sliders/scene-schema';
+import type {BubbleStyle} from '@sliders/scene-types';
 import {get} from '../state';
 
 /** Seconds to wait before advancing past a beat on its own. 0 disables it. */
@@ -27,6 +29,17 @@ export const STAGE_VAR = 'sliders.stage';
  * and which is the control they already know.
  */
 export const MUTE = 'sliders.mute';
+
+/**
+ * The story's own speech bubble defaults, or nothing when it stated none.
+ *
+ * Read fresh on every line rather than cached: they are ordinary state variables, so a
+ * passage may change the look of the story halfway through it, and a cache would make that
+ * work for the next chapter but not for the next line.
+ */
+export function storyBubbleDefaults(): BubbleStyle | undefined {
+	return bubbleStyleFromVars(get) as BubbleStyle | undefined;
+}
 
 export const DEFAULT_AUTO_ADVANCE = 3;
 

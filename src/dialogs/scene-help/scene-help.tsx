@@ -27,8 +27,11 @@ import {
 import {
 	BG_MOTIONS,
 	BUBBLE_KEYS,
+	BUBBLE_ANCHORS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
+	BUBBLE_SHAPES,
+	BUBBLE_SIZINGS,
 	EASE_KINDS,
 	EASE_NAMES,
 	FRAME_LOOPS,
@@ -50,6 +53,8 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	ease:
 		'The curve every beat in this scene moves on, unless the beat says otherwise. Same shapes a beat\u2019s ease: takes \u2014 one name, or a map keyed by what is moving. There is no reader preference under this one: pacing is theirs to argue with, the shape of a movement is yours.',
 	beats: 'The timeline. A list, played in order.',
+	bubble:
+		'How every line in this scene is painted, unless it says otherwise. Takes the same keys a beat\u2019s bubble: takes. Four layers, widest first: the story\u2019s sliders.bubble.* variables, this, the speaking character\u2019s own bubble:, then the beat. Merged key by key, so a scene naming only a font: leaves a character\u2019s as: whisper alone.',
 	bg: `Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none. The long form gives it motion: bg: {id: cellar, fx: parallax_left, speed: 20} — fx: is one of ${BG_MOTIONS.join(
 		', '
 	)} or a token your stylesheet paints, speed: is the seconds one cycle takes (each motion has its own default). A beat may carry the same key to cut to another backdrop.`,
@@ -145,7 +150,14 @@ const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
 };
 
 const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
-	as: `Style token. Ships with: ${BUBBLE_PRESETS.join(
+	accent:
+		'The second colour: a drawn style\u2019s outline, offset slab or highlight. The CSS presets have one surface and ignore it.',
+	anchor: `What the bubble hangs off: ${BUBBLE_ANCHORS.join(
+		', '
+	)}. scene detaches it \u2014 no tail, no following the speaker, at: alone says where it goes. Good for a caption or an off-screen voice.`,
+	as: `Style token. DRAWN styles (SVG, they replace the box): ${BUBBLE_SHAPES.join(
+		', '
+	)}. CSS presets (a look over the normal box): ${BUBBLE_PRESETS.join(
 		', '
 	)}. Any other name is yours to paint in the story stylesheet.`,
 	at:
@@ -156,8 +168,12 @@ const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
 	place: `Where the bubble sits: ${BUBBLE_PLACES.join(
 		', '
 	)}. auto hangs it off the speaker.`,
+	h: 'Height, as a fraction of the stage height. Only sizing: absolute reads it \u2014 an auto bubble is as tall as its words.',
 	size: 'Text size multiplier. 1 is the stage default.',
-	w: 'Width, as a fraction of the stage width. Resizing a bubble in the preview writes this.'
+	sizing: `How the box is decided: ${BUBBLE_SIZINGS.join(
+		', '
+	)}. auto snaps to the words and w: only caps the width. absolute fixes the box to w: x h: of the STAGE and scales the text to fit it, so every panel is composed at the same size whatever it says.`,
+	w: 'Width, as a fraction of the stage width. The wrap cap under sizing: auto, the exact width under sizing: absolute. Resizing a bubble in the preview writes this.'
 };
 
 const LINK_HELP: KeyHelp<typeof LINK_KEYS> = {

@@ -776,8 +776,13 @@ const BUBBLE_KEY_ORDER = [
 export interface BubbleGeometry {
 	at?: {x: number; y: number} | null;
 	w?: number | null;
+	h?: number | null;
 	as?: string | null;
 	place?: string | null;
+	/** `scene` detaches the bubble from its speaker. */
+	anchor?: string | null;
+	/** `absolute` fixes the box and fits the text to it. */
+	sizing?: string | null;
 }
 
 /** `[0.7, 0.25]` — fractions of the stage box, so never the bare-number `at:` form. */

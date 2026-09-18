@@ -378,7 +378,9 @@
 				"noneArrival": "The stage before the first beat \u2014 nothing to time here. Pick a beat above.",
 				"noneCommand": "This beat carries no timing or bubble of its own.",
 				"noneWait": "A wait beat is already a duration \u2014 set it in the passage text.",
-				"place": "Place"
+				"place": "Place",
+				"anchor": "Anchor",
+				"sizing": "Sizing"
 			},
 			"scenePreview": {
 				"title": "Scene Editor",
@@ -557,6 +559,14 @@
 			"width": "Width"
 		},
 		"storyDetails": {
+			"bubbleExplanation": "Speech bubble defaults for the whole story. Written as sliders.bubble.* variables at the top of \u201c{{passage}}\u201d, so a scene or a single line can still override any of them.",
+			"bubbleFont": "Bubble font",
+			"bubbleNoStart": "Set a start passage to give this story bubble defaults \u2014 they are written as variables at the top of it.",
+			"bubbleNone": "\u2014",
+			"bubbleSizing": "Bubble sizing",
+			"bubbleSizing_auto": "auto \u2014 snap to the words",
+			"bubbleSizing_absolute": "absolute \u2014 fixed box, fitted text",
+			"bubbleStyle": "Bubble style",
 			"storyFormatExplanation": "What's a story format?",
 			"snapToGrid": "Snap To Grid",
 			"stats": {
