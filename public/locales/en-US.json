@@ -372,6 +372,8 @@
 				"beat": "Beat {{number}}",
 				"dur": "Hold",
 				"durDisabled": "Auto is on, so this beat rides the scene's pace. Turn Auto off to hold it for a set time.",
+				"ease": "Ease",
+				"easePerKind": "Per kind…",
 				"inherit": "—",
 				"noneArrival": "The stage before the first beat \u2014 nothing to time here. Pick a beat above.",
 				"noneCommand": "This beat carries no timing or bubble of its own.",

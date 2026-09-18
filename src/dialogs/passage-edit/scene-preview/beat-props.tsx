@@ -23,7 +23,7 @@
 
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {BUBBLE_PLACES, BUBBLE_PRESETS} from '@sliders/scene-types';
+import {BUBBLE_PLACES, BUBBLE_PRESETS, EASE_NAMES} from '@sliders/scene-types';
 import type {Beat, BubbleStyle} from '@sliders/scene-types';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
@@ -62,6 +62,15 @@ export interface BeatPropsProps {
 
 /** The empty option: "whatever the character or the renderer already says". */
 const INHERIT = '';
+
+/**
+ * Stands in for an `ease:` written as a per-kind map, which one dropdown cannot say.
+ *
+ * Shown rather than hidden: an author parked on a beat whose movement is eased in two
+ * different ways must not be told the beat has no curve. Picking it writes nothing; picking
+ * a real name replaces the map, which is a deliberate choice made out loud.
+ */
+const PER_KIND = '\u0000per-kind';
 
 /** What unchecking Auto puts in the box, in seconds: the pace the beat already ran at. */
 function defaultHold(autoAdvanceMs: number | undefined): number {
@@ -147,6 +156,12 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 * only wait-for-a-click there is the READER's setting, which an author does not own.
 	 */
 	const auto = beat?.dur === undefined;
+	const ease =
+		typeof beat?.ease === 'string'
+			? beat.ease
+			: beat?.ease
+			? PER_KIND
+			: INHERIT;
 	const emptyKey = emptyReasonKey(beat, beatNumber);
 	// The one genuinely disabled control here. Its reason lives on the field itself as well
 	// as on the checkbox that causes it: an author who notices the grey box looks at the
@@ -216,6 +231,34 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							value={auto}
 						/>
 					)}
+					<TextSelect
+						onChange={event => {
+							// The map form is a readout, not a value to write back.
+							if (event.target.value === PER_KIND) {
+								return;
+							}
+
+							onSetKey('ease', event.target.value || null);
+						}}
+						options={[
+							{
+								label: t('dialogs.passageEdit.beatProps.inherit'),
+								value: INHERIT
+							},
+							...(ease === PER_KIND
+								? [
+										{
+											label: t('dialogs.passageEdit.beatProps.easePerKind'),
+											value: PER_KIND
+										}
+								  ]
+								: []),
+							...EASE_NAMES.map(name => ({label: name, value: name}))
+						]}
+						value={ease}
+					>
+						{t('dialogs.passageEdit.beatProps.ease')}
+					</TextSelect>
 					<span
 						className="scene-preview-beat-props-dur"
 						// On the wrapper, not the input: a disabled input is inert to the

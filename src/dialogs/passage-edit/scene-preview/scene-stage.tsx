@@ -5,8 +5,14 @@ import {
 	LinkHandler,
 	mergeBubbleStyle
 } from '@sliders/render-dom';
-import {AssetResolver, Beat, Stage, Transition} from '@sliders/scene-types';
-import {diffStages, timeTransitions} from '@sliders/scene-core';
+import {
+	AssetResolver,
+	Beat,
+	BeatEase,
+	Stage,
+	Transition
+} from '@sliders/scene-types';
+import {diffStages, easeTransitions, timeTransitions} from '@sliders/scene-core';
 
 export interface SceneStageProps {
 	assets: AssetResolver;
@@ -15,6 +21,13 @@ export interface SceneStageProps {
 	beat?: Beat;
 	/** When true, play the derived transitions. When false, snap. */
 	animate?: boolean;
+	/**
+	 * The scene's own `ease:`, under whatever the beat asks for.
+	 *
+	 * Passed in rather than read off the beat, because a scene default belongs to no beat —
+	 * it is exactly the thing that applies when the beat says nothing.
+	 */
+	sceneEase?: BeatEase;
 	onLink?: LinkHandler;
 	/**
 	 * Hands the renderer out once it is mounted, and `undefined` on teardown.
@@ -51,6 +64,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	muted = true,
 	onLink,
 	onRenderer,
+	sceneEase,
 	stage,
 	stylesheet
 }) => {
@@ -72,7 +86,19 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	 * stage on every keystroke; the number only changes when the author retimes the beat.
 	 */
 	const beatDur = beat?.dur;
+	/**
+	 * The same trick `beatDur` plays, for a value that can be a map.
+	 *
+	 * An ease is an object as often as it is a string, so it is a fresh identity on every
+	 * parse exactly the way `beat` is. The effect depends on this STRING and reads the real
+	 * values out of a ref, so retiming a curve re-applies the stage and typing does not.
+	 */
+	const easeKey = `${JSON.stringify(beat?.ease ?? null)}\u0000${JSON.stringify(
+		sceneEase ?? null
+	)}`;
+	const easeRef = React.useRef<{beat?: BeatEase; scene?: BeatEase}>({});
 
+	easeRef.current = {beat: beat?.ease, scene: sceneEase};
 	assetsRef.current = assets;
 	beatRef.current = beat;
 	onLinkRef.current = onLink;
@@ -131,9 +157,14 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		let transitions: Transition[] = [];
 
 		if (prev) {
-			// The beat's own `dur:` first, then the snap -- a scene being typed into must
-			// not animate whatever the author timed the beat at.
-			transitions = timeTransitions(diffStages(prev, stage), beatDur);
+			// The beat's own `dur:` first, then its curve, THEN the snap -- a scene being
+			// typed into must not animate whatever the author timed the beat at, and a
+			// zeroed duration with a curve on it is still a snap.
+			transitions = easeTransitions(
+				timeTransitions(diffStages(prev, stage), beatDur),
+				easeRef.current.beat,
+				easeRef.current.scene
+			);
 
 			// Snap while typing: derive the same set but with zero duration, so entities
 			// still enter and exit correctly without animating on every keystroke.
@@ -144,7 +175,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 		prevStageRef.current = stage;
 		void renderer.apply(stage, transitions);
-	}, [animate, beatDur, ready, stage]);
+	}, [animate, beatDur, easeKey, ready, stage]);
 
 	React.useEffect(() => {
 		if (ready) {

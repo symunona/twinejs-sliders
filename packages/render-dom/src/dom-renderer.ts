@@ -29,7 +29,11 @@ import type {
 	TransitionKind,
 	Vec2
 } from '@sliders/scene-types';
-import {DEFAULT_FRAME_STEP_SECONDS, bgMotionTiles} from '@sliders/scene-types';
+import {
+	DEFAULT_FRAME_STEP_SECONDS,
+	bgMotionTiles,
+	cssEase
+} from '@sliders/scene-types';
 import {
 	DEFAULT_ANCHORS,
 	DEFAULT_ORIGIN,
@@ -56,6 +60,14 @@ import {injectStyles} from './styles';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
 export const ENTER_RISE = 0.03;
+
+/**
+ * The kinds that all land on the sprite box's one `transform`, longest first in a tie.
+ *
+ * `move` leads because when two of these change over the same span it is the travel the
+ * reader is watching, and the curve should be the one describing it.
+ */
+const ENTITY_TRANSFORM_KINDS = ['move', 'scale', 'rot', 'flip'] as const;
 
 /** Fallback when an entity has no `frame` and the manifest has no `idle`. */
 const DEFAULT_FRAME_NAME = 'idle';
@@ -133,6 +145,8 @@ interface ResolvedStep {
 	res: ResolvedEntity;
 	seconds: number;
 	moves: boolean;
+	/** The step's own curve, already CSS. Only meaningful where `moves` is true. */
+	ease?: string;
 }
 
 interface AnimState {
@@ -306,14 +320,19 @@ export class DomRenderer implements Renderer {
 			Object.keys(stage.entities ?? {}).map((id, index) => [id, index])
 		);
 
-		this.syncBg(stage.bg, durations.duration('bg'), stage.bgImplicit === true);
+		this.syncBg(
+			stage.bg,
+			durations.duration('bg'),
+			stage.bgImplicit === true,
+			durations.ease('bg')
+		);
 		// After syncBg, always: the motion rides on whatever element that just decided on,
 		// and a backdrop swap builds a new <img> with no animation on it.
 		this.syncBgFx(stage.bgFx);
 		this.syncEntities(resolved, durations);
 		this.syncFx(stage.fx ?? []);
 		this.syncMusic(stage.music, durations.duration('music'));
-		this.syncCamera(durations.duration('camera'));
+		this.syncCamera(durations.duration('camera'), durations.ease('camera'));
 
 		this.notify();
 	}
@@ -567,7 +586,12 @@ export class DomRenderer implements Renderer {
 					step.dur ?? DEFAULT_FRAME_STEP_SECONDS
 				),
 				/** A step with no `at` of its own must not glide anywhere. */
-				moves: step.at !== undefined
+				moves: step.at !== undefined,
+				// Resolved as a `move`, because that is what a step's glide IS: the sprite
+				// travels while its poses swap.
+				...(step.ease !== undefined
+					? {ease: cssEase(step.ease, 'move')}
+					: {})
 			});
 		}
 
@@ -674,7 +698,11 @@ export class DomRenderer implements Renderer {
 		// Depart: anything we hold that the new stage does not.
 		for (const [id, rec] of this.entities) {
 			if (!resolved.has(id) && !rec.exiting) {
-				this.exitEntity(rec, durations.duration('exit', id));
+				this.exitEntity(
+					rec,
+					durations.duration('exit', id),
+					durations.ease('exit', id)
+				);
 			}
 		}
 
@@ -684,14 +712,24 @@ export class DomRenderer implements Renderer {
 			if (existing) {
 				this.updateEntity(existing, res, durations);
 			} else {
-				this.createEntity(id, res, durations.duration('enter', id));
+				this.createEntity(
+					id,
+					res,
+					durations.duration('enter', id),
+					durations.ease('enter', id)
+				);
 			}
 		}
 
 		this.assignZ();
 	}
 
-	private createEntity(id: EntityId, res: ResolvedEntity, duration: number): void {
+	private createEntity(
+		id: EntityId,
+		res: ResolvedEntity,
+		duration: number,
+		ease = cssEase(undefined, 'enter')
+	): void {
 		const el = this.el('div', 'sliders-entity');
 
 		// Stable hooks the e2e suite selects on. Do not rename.
@@ -719,8 +757,8 @@ export class DomRenderer implements Renderer {
 		// reflow so the browser has something to animate FROM, then transition to the target.
 		this.layout(rec, 0, {rise: ENTER_RISE * this.box.height, opacity: 0});
 		void el.offsetWidth;
-		this.layout(rec, duration);
-		this.syncAnim(rec, res, duration);
+		this.layout(rec, duration, undefined, ease);
+		this.syncAnim(rec, res, duration, ease);
 	}
 
 	private updateEntity(
@@ -747,26 +785,26 @@ export class DomRenderer implements Renderer {
 		rec.res = res;
 
 		// One element carries position, mirror and size, and CSS gives it one
-		// transition-duration, so the longest of the three wins. A scale left out here would
-		// snap while the move glides, which is exactly what listing width/height in the CSS
-		// transition is there to prevent.
-		const duration = Math.max(
-			durations.duration('move', rec.id),
-			durations.duration('flip', rec.id),
-			durations.duration('rot', rec.id),
-			durations.duration('scale', rec.id)
-		);
+		// transition-duration AND one timing function, so the longest of the four supplies
+		// both. A scale left out here would snap while the move glides, which is exactly
+		// what listing width/height in the CSS transition is there to prevent.
+		const {duration, ease} = durations.longest(ENTITY_TRANSFORM_KINDS, rec.id);
 
 		// A cycle still on its feet keeps the screen: the stage's own `frame` is the cycle's
 		// FIRST step, so drawing it here would flash step 1 on every keystroke. `syncAnim`
 		// redraws the step the cycle is actually standing on, against the new base.
-		if (this.syncAnim(rec, res, duration)) {
+		if (this.syncAnim(rec, res, duration, ease)) {
 			return;
 		}
 
-		this.setContent(rec, res, durations.duration('frame', rec.id));
+		this.setContent(
+			rec,
+			res,
+			durations.duration('frame', rec.id),
+			durations.ease('frame', rec.id)
+		);
 		this.applyFit(rec, res);
-		this.layout(rec, duration);
+		this.layout(rec, duration, undefined, ease);
 	}
 
 	// -----------------------------------------------------------------------
@@ -788,7 +826,8 @@ export class DomRenderer implements Renderer {
 	private syncAnim(
 		rec: EntityRecord,
 		res: ResolvedEntity,
-		duration: number
+		duration: number,
+		ease?: string
 	): boolean {
 		const key = res.steps?.length ? animKey(res.entity) : '';
 
@@ -803,7 +842,7 @@ export class DomRenderer implements Renderer {
 			rec.anim.steps = res.steps!;
 			rec.anim.loop = res.loop ?? 'all';
 			rec.anim.index = Math.min(rec.anim.index, res.steps!.length - 1);
-			this.drawStep(rec, duration);
+			this.drawStep(rec, duration, ease);
 			return true;
 		}
 
@@ -814,7 +853,7 @@ export class DomRenderer implements Renderer {
 			loop: res.loop ?? 'all',
 			steps: res.steps!
 		};
-		this.drawStep(rec, duration);
+		this.drawStep(rec, duration, ease);
 		this.scheduleStep(rec);
 
 		return true;
@@ -836,7 +875,7 @@ export class DomRenderer implements Renderer {
 	 * Frames swap HARD (`setContent` duration 0): a cross-fade is for a pose change the
 	 * reader is meant to notice, and cross-fading a ten-per-second cycle is a blur.
 	 */
-	private drawStep(rec: EntityRecord, duration = 0): void {
+	private drawStep(rec: EntityRecord, duration = 0, ease?: string): void {
 		const anim = rec.anim;
 		const step = anim?.steps[anim.index];
 
@@ -855,7 +894,16 @@ export class DomRenderer implements Renderer {
 		// A step that names an `at` GLIDES over its own hold, so a walk translates smoothly
 		// while the poses swap. A step that names none inherits the entity's placement, and
 		// must not re-animate a move the beat already finished.
-		this.layout(rec, step.moves ? step.seconds : duration);
+		//
+		// The step's own `ease` is the narrowest layer there is, and it applies only to the
+		// glide it is about: a step that moves nowhere is still standing in the beat's
+		// movement, so the beat's curve is the right one to leave on the element.
+		this.layout(
+			rec,
+			step.moves ? step.seconds : duration,
+			undefined,
+			step.moves ? step.ease ?? ease : ease
+		);
 
 		if (step.moves) {
 			// The sprite is travelling, so the y that decides draw order is travelling too.
@@ -890,12 +938,17 @@ export class DomRenderer implements Renderer {
 		}, current.seconds * 1000);
 	}
 
-	private exitEntity(rec: EntityRecord, duration: number): void {
+	private exitEntity(
+		rec: EntityRecord,
+		duration: number,
+		ease = cssEase(undefined, 'exit')
+	): void {
 		// A departing sprite fades as it is; nothing is gained by cycling its legs into the
 		// void, and the timer would outlive the element it draws to.
 		this.stopAnim(rec);
 		rec.exiting = true;
 		rec.el.style.transitionDuration = `${duration}s`;
+		rec.el.style.transitionTimingFunction = ease;
 		rec.el.style.opacity = '0';
 
 		const finish = () => {
@@ -919,7 +972,12 @@ export class DomRenderer implements Renderer {
 	 * Point the element at the right image, or at a labelled placeholder. Only touches `src`
 	 * when the asset actually changed — reassigning it restarts an animated webp.
 	 */
-	private setContent(rec: EntityRecord, res: ResolvedEntity, duration = 0): void {
+	private setContent(
+		rec: EntityRecord,
+		res: ResolvedEntity,
+		duration = 0,
+		ease = cssEase(undefined, 'frame')
+	): void {
 		const wantsPlaceholder = !!res.placeholderLabel;
 
 		if (wantsPlaceholder) {
@@ -964,6 +1022,7 @@ export class DomRenderer implements Renderer {
 		if (previous && duration > 0) {
 			previous.classList.add('sliders-ghost');
 			previous.style.transitionDuration = `${duration}s`;
+			previous.style.transitionTimingFunction = ease;
 			rec.el.appendChild(img);
 			rec.el.appendChild(previous);
 			void previous.offsetWidth;
@@ -1049,7 +1108,8 @@ export class DomRenderer implements Renderer {
 	private layout(
 		rec: EntityRecord,
 		duration: number,
-		from?: {rise: number; opacity: number}
+		from?: {rise: number; opacity: number},
+		ease = cssEase(undefined, 'move')
 	): void {
 		const {entity, metrics} = rec;
 
@@ -1062,6 +1122,7 @@ export class DomRenderer implements Renderer {
 		style.height = `${metrics.height}px`;
 		style.transformOrigin = `${metrics.origin.x * 100}% ${metrics.origin.y * 100}%`;
 		style.transitionDuration = `${Math.max(0, duration)}s`;
+		style.transitionTimingFunction = ease;
 		// Order is the renderer's to decide, and this is why `rot` is a key rather than a
 		// CSS string the author writes: the mirror has to come LAST so it is applied to the
 		// sprite FIRST, and a positive `rot` therefore leans the same way on screen whether
@@ -1109,7 +1170,8 @@ export class DomRenderer implements Renderer {
 	private syncBg(
 		bg: string | undefined,
 		duration: number,
-		implicit: boolean
+		implicit: boolean,
+		ease = cssEase(undefined, 'bg')
 	): void {
 		if (bg === this.bgId) {
 			return;
@@ -1136,6 +1198,7 @@ export class DomRenderer implements Renderer {
 
 			if (duration > 0) {
 				previous.style.transitionDuration = `${duration}s`;
+				previous.style.transitionTimingFunction = ease;
 				previous.style.opacity = '0';
 				setTimeout(() => previous.remove(), duration * 1000);
 			} else {
@@ -1155,7 +1218,7 @@ export class DomRenderer implements Renderer {
 		const url = this.urlCache.get(bg);
 
 		if (url) {
-			this.bgEl = this.makeBgImage(url, layer, duration);
+			this.bgEl = this.makeBgImage(url, layer, duration, ease);
 		} else if (implicit) {
 			// An `id:`-derived backdrop is a guess, not a request. No art by that name just
 			// means the scene has none — placeholding it would nag about every scene id.
@@ -1267,7 +1330,8 @@ export class DomRenderer implements Renderer {
 	private makeBgImage(
 		url: string,
 		layer: HTMLElement,
-		duration: number
+		duration: number,
+		ease = cssEase(undefined, 'bg')
 	): HTMLImageElement {
 		const img = this.doc!.createElement('img');
 
@@ -1281,6 +1345,7 @@ export class DomRenderer implements Renderer {
 			layer.appendChild(img);
 			void img.offsetWidth;
 			img.style.transitionDuration = `${duration}s`;
+			img.style.transitionTimingFunction = ease;
 			img.style.opacity = '1';
 		} else {
 			layer.appendChild(img);
@@ -1417,7 +1482,10 @@ export class DomRenderer implements Renderer {
 		}
 	}
 
-	private syncCamera(duration: number): void {
+	private syncCamera(
+		duration: number,
+		ease = cssEase(undefined, 'camera')
+	): void {
 		if (!this.cameraEl) {
 			return;
 		}
@@ -1426,6 +1494,7 @@ export class DomRenderer implements Renderer {
 		const zoom = safeZoom(this.camera.zoom);
 
 		this.cameraEl.style.transitionDuration = `${Math.max(0, duration)}s`;
+		this.cameraEl.style.transitionTimingFunction = ease;
 		this.cameraEl.style.transform = `scale(${zoom}) translate(${-offset.x}px, ${-offset.y}px)`;
 	}
 
@@ -1523,8 +1592,25 @@ export class DomRenderer implements Renderer {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** How long a change takes and what shape it takes, which always travel together. */
+interface TransitionTiming {
+	duration: number;
+	/** Always a CSS timing function — `cssEase` falls back to the kind's default. */
+	ease: string;
+}
+
 interface TransitionIndex {
 	duration(kind: TransitionKind, entityId?: EntityId): number;
+	ease(kind: TransitionKind, entityId?: EntityId): string;
+	/**
+	 * The timing that wins when several kinds land on ONE element, which is the case for
+	 * an entity's move, flip and scale: CSS gives that element a single
+	 * `transition-duration` and a single `transition-timing-function`, so the longest
+	 * change has to supply both. Taking the duration from one kind and the curve from
+	 * another would produce a movement neither of them describes. Ties go to the first
+	 * kind listed.
+	 */
+	longest(kinds: readonly TransitionKind[], entityId?: EntityId): TransitionTiming;
 }
 
 /**
@@ -1533,6 +1619,7 @@ interface TransitionIndex {
  */
 function indexTransitions(transitions: Transition[]): TransitionIndex {
 	const byKey = new Map<string, number>();
+	const easeByKey = new Map<string, string>();
 
 	for (const t of transitions ?? []) {
 		if (!t) {
@@ -1543,13 +1630,41 @@ function indexTransitions(transitions: Transition[]): TransitionIndex {
 		const seconds = Number.isFinite(t.duration) ? Math.max(0, t.duration) : 0;
 
 		byKey.set(key, Math.max(byKey.get(key) ?? 0, seconds));
+
+		if (t.ease !== undefined) {
+			easeByKey.set(key, t.ease);
+		}
 	}
 
-	return {
+	const index: TransitionIndex = {
 		duration(kind, entityId) {
 			return byKey.get(`${kind}:${entityId ?? ''}`) ?? byKey.get(`${kind}:`) ?? 0;
+		},
+		ease(kind, entityId) {
+			// The entity's own token, then the stage-wide one, then the kind's default.
+			const token =
+				easeByKey.get(`${kind}:${entityId ?? ''}`) ?? easeByKey.get(`${kind}:`);
+
+			return cssEase(token, kind);
+		},
+		longest(kinds, entityId) {
+			let best: TransitionKind = kinds[0];
+			let duration = 0;
+
+			for (const kind of kinds) {
+				const seconds = index.duration(kind, entityId);
+
+				if (seconds > duration) {
+					duration = seconds;
+					best = kind;
+				}
+			}
+
+			return {duration, ease: index.ease(best, entityId)};
 		}
 	};
+
+	return index;
 }
 
 function pickFrameName(

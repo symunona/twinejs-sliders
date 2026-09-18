@@ -8,6 +8,7 @@ import {
 	LINK_KEYS,
 	SAY_KEYS
 } from '@sliders/scene-schema';
+import {EASE_KINDS} from '@sliders/scene-types';
 import {sceneHintContext} from '../use-scene-hints';
 
 /**
@@ -307,6 +308,63 @@ describe('sceneHintContext()', () => {
 			expect(
 				contextAt('[scene]\nbeats:\n  - mira: "worth {|"')
 			).toBeUndefined();
+		});
+	});
+
+	/**
+	 * `ease:` is the one key in the subset whose MAP is keyed by transition kinds, and four
+	 * of those kinds (`bg`, `fx`, `frame`, `music`) are keys that mean something else one
+	 * level out. So both sides have to ask who owns the line, not just what the key says.
+	 */
+	describe('ease:', () => {
+		it('offers the preset names after ease:', () => {
+			expect(contextAt('[scene]\nease: ba|')).toMatchObject({
+				slot: {kind: 'ease'},
+				typed: 'ba'
+			});
+		});
+
+		it('offers them on a beat too', () => {
+			expect(
+				contextAt('[scene]\nbeats:\n  - mira: {at: 0.4, ease: |}')
+			).toMatchObject({slot: {kind: 'ease'}});
+		});
+
+		it('offers the transition kinds in an ease map key position', () => {
+			expect(contextAt('[scene]\nease: {|}')).toMatchObject({
+				slot: {id: 'ease', kind: 'keys', names: EASE_KINDS}
+			});
+		});
+
+		it('offers the kinds in a beat ease map too', () => {
+			expect(
+				contextAt('[scene]\nbeats:\n  - mira: {at: 0, ease: {mo|}}')
+			).toMatchObject({slot: {id: 'ease', kind: 'keys'}, typed: 'mo'});
+		});
+
+		it('offers a CURVE after a kind whose name is a key elsewhere', () => {
+			// Without the owner check this reads `bg:` and offers backdrop art, which is
+			// the one wrong answer this slot can give.
+			expect(contextAt('[scene]\nease: {bg: li|}')).toMatchObject({
+				slot: {kind: 'ease'},
+				typed: 'li'
+			});
+			expect(contextAt('[scene]\nease: {fx: |}')).toMatchObject({
+				slot: {kind: 'ease'}
+			});
+			expect(contextAt('[scene]\nease: {music: |}')).toMatchObject({
+				slot: {kind: 'ease'}
+			});
+		});
+
+		it('still offers backdrop art for a real bg: one level out', () => {
+			expect(contextAt('[scene]\nbg: ha|')).toMatchObject({slot: {kind: 'bg'}});
+		});
+
+		it('offers a curve on a frame step', () => {
+			expect(
+				contextAt('[scene]\ncast:\n  mira: {frame: [{name: a, ease: |}]}')
+			).toMatchObject({slot: {kind: 'ease'}});
 		});
 	});
 });

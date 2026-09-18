@@ -1600,6 +1600,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				muted={!sound}
 				onLink={handleLink}
 				onRenderer={handleRenderer}
+				sceneEase={parse.result?.scene.ease}
 				stage={drawnStage}
 				stylesheet={stylesheet}
 			/>

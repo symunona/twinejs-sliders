@@ -179,3 +179,66 @@ describe('<BeatProps> persistence', () => {
 		expect(screen.queryByTestId('scene-preview-beat-props')).toBeNull();
 	});
 });
+
+/**
+ * The curve, beside the Hold field.
+ *
+ * i18n is not initialised under jest, so `t()` is its own key and the selects cannot be
+ * found by their visible label. They are found by position instead: Ease is the first,
+ * Style and Place follow it and only on a beat that speaks.
+ */
+function easeSelect(): HTMLSelectElement {
+	return screen.getAllByRole('combobox')[0] as HTMLSelectElement;
+}
+
+/** The row that stands in for an `ease:` written as a per-kind map. */
+const PER_KIND = '\u0000per-kind';
+
+describe('<BeatProps> ease', () => {
+	it('shows the preset the beat names', () => {
+		renderProps({...say(0.6), ease: 'back_out'});
+		expect(easeSelect().value).toBe('back_out');
+	});
+
+	it('is the inherit row when the beat names none', () => {
+		renderProps(say(0.6));
+		expect(easeSelect().value).toBe('');
+	});
+
+	it('writes the picked name onto the beat', () => {
+		const {onSetKey} = renderProps(say(0.6));
+
+		fireEvent.change(easeSelect(), {target: {value: 'back_out'}});
+		expect(onSetKey).toHaveBeenCalledWith('ease', 'back_out');
+	});
+
+	// Clearing means "no opinion", which is a removal -- the same rule Hold follows.
+	it('removes the key when the inherit row is picked', () => {
+		const {onSetKey} = renderProps({...say(0.6), ease: 'back_out'});
+
+		fireEvent.change(easeSelect(), {target: {value: ''}});
+		expect(onSetKey).toHaveBeenCalledWith('ease', null);
+	});
+
+	// A per-kind map is more than one dropdown can say, and saying nothing would tell the
+	// author this beat has no curve when it has two.
+	it('shows a per-kind map as its own row rather than as empty', () => {
+		renderProps({...say(0.6), ease: {move: 'back_out', scale: 'linear'}});
+		expect(easeSelect().value).toBe(PER_KIND);
+	});
+
+	it('writes nothing when the per-kind row is re-picked', () => {
+		const {onSetKey} = renderProps({...say(0.6), ease: {move: 'back_out'}});
+
+		fireEvent.change(easeSelect(), {target: {value: PER_KIND}});
+		expect(onSetKey).not.toHaveBeenCalled();
+	});
+
+	// A `set` beat moves something, so it has a curve even though it has no bubble.
+	it('is offered on a stage-only beat, which has no bubble keys', () => {
+		renderProps({index: 0, kind: 'set', patch: {}, who: 'mira'});
+
+		expect(screen.getAllByRole('combobox')).toHaveLength(1);
+		expect(easeSelect().value).toBe('');
+	});
+});

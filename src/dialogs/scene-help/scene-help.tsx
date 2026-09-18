@@ -29,6 +29,8 @@ import {
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
+	EASE_KINDS,
+	EASE_NAMES,
 	FRAME_LOOPS,
 	LAYERS,
 	SCENE_LOCKS
@@ -45,6 +47,8 @@ type KeyHelp<T extends readonly string[]> = Record<T[number], string>;
 const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	autoAdvance:
 		'Seconds a beat holds the screen when it has no dur: of its own. 0 waits for a click. Overrides the reader\u2019s own setting, and is overridden by a beat\u2019s dur:. Not inherited through from:.',
+	ease:
+		'The curve every beat in this scene moves on, unless the beat says otherwise. Same shapes a beat\u2019s ease: takes \u2014 one name, or a map keyed by what is moving. There is no reader preference under this one: pacing is theirs to argue with, the shape of a movement is yours.',
 	beats: 'The timeline. A list, played in order.',
 	bg: `Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none. The long form gives it motion: bg: {id: cellar, fx: parallax_left, speed: 20} — fx: is one of ${BG_MOTIONS.join(
 		', '
@@ -92,6 +96,13 @@ const CAMERA_HELP: KeyHelp<typeof CAMERA_KEYS> = {
  * One sentence, two tables: a beat body and a `box:` map both take `dur:` and mean the
  * same thing by it.
  */
+const EASE_HELP =
+	`How this beat\u2019s stage changes move, where dur: says how long. One name for everything it moves \u2014 ${EASE_NAMES.join(
+		', '
+	)}, or a CSS timing function written out \u2014 or a map keyed by WHAT is moving: ease: {move: back_out, scale: linear}. Those keys are ${EASE_KINDS.join(
+		', '
+	)}.`;
+
 const DUR_HELP =
 	'Seconds this beat holds the screen, and how long its stage changes take. Without it, a line waits for the reader and a stage-only beat plays straight on.';
 
@@ -121,6 +132,7 @@ const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 	bg: BG_BEAT_HELP,
 	bubble: 'Style and placement, as a map.',
 	dur: DUR_HELP,
+	ease: EASE_HELP,
 	sfx: SFX_HELP,
 	text: 'The narration itself. box: "…" is the short way of writing this.'
 };
@@ -128,6 +140,7 @@ const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
 	bg: BG_BEAT_HELP,
 	dur: DUR_HELP,
+	ease: EASE_HELP,
 	sfx: SFX_HELP
 };
 
@@ -410,6 +423,34 @@ beats:
 							&quot;do not dwell here&quot; and plays straight on;{' '}
 							<code>autoAdvance: 0</code> on the scene means &quot;let them
 							click&quot;.
+						</p>
+						<h3>Easing</h3>
+						<p>
+							<code>dur:</code> says how long a change takes;{' '}
+							<code>ease:</code> says what shape it takes. Ships with{' '}
+							<code>{EASE_NAMES.join(', ')}</code>, and any CSS timing function
+							written out in full works too. An unknown name is a warning and
+							falls back, so a typo costs the shape of one movement and nothing
+							else.
+						</p>
+						<p>
+							A map eases one kind of change differently from another. Its keys
+							are what is MOVING, not the entity keys that caused it:{' '}
+							<code>{EASE_KINDS.join(', ')}</code>. There is deliberately no way
+							to ease one sprite differently from another in the same beat — a
+							beat is a moment, and two curves are two beats.
+						</p>
+						<Sample>{`ease: ease_in_out   # every beat in this scene, unless it says otherwise
+
+beats:
+  - mira: {at: 0.4, dur: 0.6, ease: back_out}            # overshoots and settles
+  - tav: {at: -0.3, ease: {move: ease_out, scale: linear}}
+  - mira: {frame: [{name: step, at: 0.1, ease: linear}]}  # one step's own glide`}</Sample>
+						<p>
+							Narrowest wins: a frame step&apos;s <code>ease</code>, then the
+							beat&apos;s, then the scene&apos;s, then the default for that kind
+							of change. Resolved per kind, so a beat naming only{' '}
+							<code>move</code> keeps the scene&apos;s curve for everything else.
 						</p>
 						<h3>Speaking</h3>
 						<KeyTable keys={SAY_KEYS} help={SAY_HELP} />

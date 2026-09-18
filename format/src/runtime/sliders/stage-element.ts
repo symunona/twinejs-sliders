@@ -11,6 +11,7 @@
 import {
 	applyScene,
 	diffStages,
+	easeTransitions,
 	resolveStage,
 	runBeats,
 	timeTransitions
@@ -212,7 +213,11 @@ export class SlidersStage extends CustomElement {
 
 				await this.renderer?.apply(
 					to,
-					timeTransitions(diffStages(from, to), beat.dur)
+					easeTransitions(
+						timeTransitions(diffStages(from, to), beat.dur),
+						beat.ease,
+						this.scene?.ease
+					)
 				);
 				publishStage(after);
 			}

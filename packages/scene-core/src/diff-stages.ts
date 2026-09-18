@@ -9,12 +9,14 @@
  */
 
 import type {
+	BeatEase,
 	Camera,
 	Stage,
 	StageEntity,
 	StageFx,
 	StageSound,
 	Transition,
+	TransitionKind,
 	Vec2
 } from '@sliders/scene-types';
 
@@ -301,4 +303,53 @@ export function timeTransitions(
 	const duration = Math.max(0, seconds);
 
 	return transitions.map(transition => ({...transition, duration}));
+}
+
+/**
+ * Give a beat's transitions their curves.
+ *
+ * A SIBLING of `timeTransitions`, for the same reason that one is a sibling of `diffStages`
+ * and not an argument to it: what changed is a function of two stages, how long it takes
+ * and what shape it takes are two more questions, each answered by a caller that knows
+ * which beat produced the change. Chained at both call sites:
+ *
+ *     easeTransitions(timeTransitions(diffStages(a, b), beat.dur), beat.ease, scene.ease)
+ *
+ * `fallback` is the scene's own `ease:`, resolved PER KIND rather than as a whole: a beat
+ * that names `{move: back_out}` gets an overshooting move and keeps the scene's curve for
+ * everything else, which is what "narrowest wins" has to mean for a key that can be a map.
+ *
+ * Nothing is stamped when neither asks for anything — the list comes back as it went in,
+ * and `cssEase` supplies `DEFAULT_EASES` at draw time. Stamping defaults here instead would
+ * make every transition carry a token nobody wrote, and would hide the difference between
+ * "the author chose linear" and "nobody chose".
+ */
+export function easeTransitions(
+	transitions: Transition[],
+	ease: BeatEase | undefined,
+	fallback?: BeatEase
+): Transition[] {
+	if (ease === undefined && fallback === undefined) {
+		return transitions;
+	}
+
+	return transitions.map(transition => {
+		const token =
+			easeForKind(ease, transition.kind) ??
+			easeForKind(fallback, transition.kind);
+
+		return token === undefined ? transition : {...transition, ease: token};
+	});
+}
+
+/** A scalar `ease:` speaks for every kind; a map speaks only for the kinds it names. */
+function easeForKind(
+	ease: BeatEase | undefined,
+	kind: TransitionKind
+): string | undefined {
+	if (ease === undefined) {
+		return undefined;
+	}
+
+	return typeof ease === 'string' ? ease : ease[kind];
 }

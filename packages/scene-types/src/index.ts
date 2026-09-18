@@ -98,6 +98,14 @@ export interface FrameStep {
 	rot?: number;
 	flip?: boolean;
 	opacity?: number;
+	/**
+	 * How this step's glide moves, narrower than anything the beat says.
+	 *
+	 * One token, never a per-kind map: a step is one change to one sprite over one hold,
+	 * and the renderer writes it as one timing function on one element. Only meaningful on
+	 * a step that carries an `at` — a step that moves nowhere has nothing to ease.
+	 */
+	ease?: string;
 }
 
 export interface StageEntity {
@@ -343,6 +351,18 @@ export interface BeatBase {
 	bg?: AssetId | null;
 	/** The motion for that backdrop. Absent CLEARS an inherited one — see `applyBeat`. */
 	bgFx?: StageBgFx;
+	/**
+	 * How this beat's stage changes move — the companion to `dur:`, which says how long.
+	 *
+	 * One token for the whole beat, or one per transition kind
+	 * (`{move: ease_out, scale: linear}`), because a sprite that slides in while its size
+	 * snaps is a perfectly ordinary thing to want and the two are one element's
+	 * `transition-duration` away from being impossible to ask for.
+	 *
+	 * On `BeatBase` for the same reason `dur` is, and gated by the parser the same way:
+	 * `wait`, `fx` and `mark` are scalars with no body map to write one in.
+	 */
+	ease?: BeatEase;
 }
 
 /**
@@ -575,6 +595,18 @@ export interface Scene {
 	 */
 	autoAdvance?: number;
 	/**
+	 * How this scene's stage changes move, for every beat that does not say otherwise.
+	 *
+	 * The middle of three layers, narrowest first: a frame step's own `ease`, the beat's
+	 * `ease:`, this, then `DEFAULT_EASES`. Resolved per KIND, so a scene that says
+	 * `ease: ease_in_out` and a beat that says `ease: {move: back_out}` give that beat an
+	 * overshooting move and an eased-in-out everything-else.
+	 *
+	 * Unlike `autoAdvance:` there is no reader preference under this one — pacing is the
+	 * reader's to argue with, the shape of a movement is the author's alone.
+	 */
+	ease?: BeatEase;
+	/**
 	 * What the visual editor must not let a gesture change in this scene.
 	 *
 	 * `true` is the whole stage; a list names what is pinned, so `[bg]` holds the camera and
@@ -733,6 +765,146 @@ export interface Transition {
 	to?: unknown;
 	/** Seconds. 0 means snap. */
 	duration: number;
+	/**
+	 * HOW it moves, as the author's token — an `EASES` name, or a raw CSS timing function.
+	 *
+	 * Absent means "the kind's default", which is `DEFAULT_EASES`, which is what `cssEase`
+	 * falls back to. Resolved here rather than stamped by the differ so that
+	 * `easeTransitions(ts, undefined)` can hand back the same list it was given, exactly
+	 * as `timeTransitions` does.
+	 *
+	 * Deliberately NOT on `StageEntity`. An ease is not part of a stage — two stages that
+	 * differ only in ease describe the same picture, and `samePlacement()` would read the
+	 * difference as a move and emit a phantom `move` transition on every beat that retimed
+	 * one. It is born from the beat, and it lives on what the beat produced.
+	 */
+	ease?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Easing — HOW a change moves, as opposed to how long it takes.
+// ---------------------------------------------------------------------------
+
+/**
+ * The presets, as CSS timing functions.
+ *
+ * Named in the scene's own dialect (`ease_out`, not `cubic-bezier(0, 0, 0.58, 1)`) for the
+ * same reason `fx: rain` is: an author writing a scene is describing a feeling, and the
+ * curve behind it is the renderer's business. The raw form is still accepted, so a story
+ * that needs a curve nobody anticipated does not have to wait for one.
+ *
+ * `bounce_out` is a CSS `linear()` easing function rather than keyframes: a bounce is a
+ * shape, and expressing it as a timing function means it composes with every duration and
+ * every property the renderer already transitions, instead of needing an animation of its
+ * own per kind.
+ */
+export const EASES = {
+	linear: 'linear',
+	ease_in: 'cubic-bezier(0.42, 0, 1, 1)',
+	ease_out: 'cubic-bezier(0, 0, 0.58, 1)',
+	ease_in_out: 'cubic-bezier(0.42, 0, 0.58, 1)',
+	/** Overshoots the target and settles back. */
+	back_out: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+	/** Pulls back before going, like a wind-up. */
+	anticipate: 'cubic-bezier(0.6, -0.28, 0.74, 0.05)',
+	bounce_out: 'linear(0, 0.5, 0.9, 1, 0.92, 1)'
+} as const;
+
+export type EaseName = keyof typeof EASES;
+
+/** The preset names, for the editor's completion list and for `keyFix()`. */
+export const EASE_NAMES = Object.keys(EASES) as EaseName[];
+
+/**
+ * What an `ease:` key holds: one token for everything, or one per transition kind.
+ *
+ * `string` rather than `EaseName` because a raw `cubic-bezier(…)` is legal and because an
+ * unknown word is a WARNING, not an error — the parser keeps what the author wrote so the
+ * text and the model never disagree, and `cssEase` falls back at draw time.
+ */
+export type BeatEase = string | Partial<Record<TransitionKind, string>>;
+
+/**
+ * The curve each kind uses when nothing asks for another.
+ *
+ * Exhaustive over `TransitionKind` on purpose: a new kind is a new thing that moves, and
+ * moving without a stated curve is a decision, not a default to inherit silently. Adding
+ * one fails the build here until it is made.
+ *
+ * `enter`/`exit` are opposites (out of nothing, back into it) and `bg`/`frame`/`fx` are
+ * linear because a cross-fade that eases is a cross-fade that looks mistimed.
+ */
+export const DEFAULT_EASES: Record<TransitionKind, EaseName> = {
+	bg: 'linear',
+	camera: 'ease_in_out',
+	enter: 'ease_out',
+	exit: 'ease_in',
+	flip: 'ease_out',
+	frame: 'linear',
+	fx: 'linear',
+	move: 'ease_out',
+	music: 'linear',
+	rot: 'ease_out',
+	scale: 'ease_out'
+};
+
+/**
+ * The kinds an `ease:` map may name — the same list, in the same order.
+ *
+ * Derived from `DEFAULT_EASES` rather than written again, so the completion list and the
+ * parser's unknown-key check cannot drift from what actually has a default.
+ */
+export const EASE_KINDS = Object.keys(DEFAULT_EASES) as TransitionKind[];
+
+/**
+ * A timing function written out in full, rather than named.
+ *
+ * Deliberately narrow: the token is assigned to `style.transitionTimingFunction`, and while
+ * the CSSOM drops a value it cannot parse rather than letting anything escape, a token that
+ * is obviously not a timing function is far more likely to be a typo the author wants told
+ * about than a curve nobody has thought of.
+ */
+const RAW_TIMING = /^(?:cubic-bezier|linear|steps)\(\s*[-\w.,%\s]*\)$/i;
+
+/** The CSS keywords that are not already preset names. */
+const CSS_TIMING_KEYWORDS = new Set([
+	'ease',
+	'ease-in',
+	'ease-out',
+	'ease-in-out',
+	'step-start',
+	'step-end'
+]);
+
+/**
+ * The CSS the token means, or `undefined` when it means nothing — which is the editor's
+ * cue to warn and the renderer's cue to fall back.
+ */
+export function easeValue(token: string | undefined): string | undefined {
+	if (typeof token !== 'string') {
+		return undefined;
+	}
+
+	const trimmed = token.trim();
+
+	// hasOwnProperty, not `in`: `constructor` is `in` every object literal.
+	if (Object.prototype.hasOwnProperty.call(EASES, trimmed)) {
+		return EASES[trimmed as EaseName];
+	}
+
+	return CSS_TIMING_KEYWORDS.has(trimmed.toLowerCase()) ||
+		RAW_TIMING.test(trimmed)
+		? trimmed
+		: undefined;
+}
+
+/** What to write into `transition-timing-function`. Never fails — a bad token snaps back
+ * to the kind's own default, so a typo slows nothing down and breaks no animation. */
+export function cssEase(
+	token: string | undefined,
+	kind: TransitionKind
+): string {
+	return easeValue(token) ?? EASES[DEFAULT_EASES[kind]];
 }
 
 // ---------------------------------------------------------------------------

@@ -14,12 +14,16 @@ import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
+	EASE_KINDS,
+	EASE_NAMES,
 	FRAME_LOOPS,
 	LAYERS,
 	LAYER_BASELINE,
 	LAYER_Z,
 	SCENE_LOCKS,
+	easeValue,
 	type Beat,
+	type BeatEase,
 	type BubblePlace,
 	type BubbleStyle,
 	type Camera,
@@ -58,6 +62,7 @@ export const TOP_LEVEL_KEYS = [
 	'fx',
 	'music',
 	'autoAdvance',
+	'ease',
 	'locked',
 	'beats',
 	'links'
@@ -89,6 +94,7 @@ export const ENTITY_KEYS = [
 export const FRAME_STEP_KEYS = [
 	'name',
 	'dur',
+	'ease',
 	'at',
 	'scale',
 	'rot',
@@ -107,7 +113,15 @@ export const BEAT_COMMAND_KEYS = [
 ] as const;
 
 /** Keys accepted inside a `box:` map. The scalar form `box: "text"` stays the short way. */
-export const BOX_KEYS = ['text', 'as', 'bubble', 'dur', 'sfx', 'bg'] as const;
+export const BOX_KEYS = [
+	'text',
+	'as',
+	'bubble',
+	'dur',
+	'ease',
+	'sfx',
+	'bg'
+] as const;
 
 /** Keys a beat may add to its speaker's entry beyond the entity keys. */
 export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
@@ -122,7 +136,7 @@ export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
  *
  * Not `BEAT_KEYS`: that name is already a local in the format's `scene-mode.ts`.
  */
-export const BEAT_BODY_KEYS = ['dur', 'sfx', 'bg'] as const;
+export const BEAT_BODY_KEYS = ['dur', 'ease', 'sfx', 'bg'] as const;
 
 export const CAMERA_KEYS = ['at', 'zoom'] as const;
 
@@ -749,6 +763,8 @@ interface EntityBody {
 	 * turning `- mira: {dur: 1}` into a set beat that stages nothing.
 	 */
 	dur?: number;
+	/** From `ease:`. Only a beat can carry it, for the same reason `dur` can. */
+	ease?: BeatEase;
 	/** From `sfx:`. Only a beat can carry it, for the same reason `dur` can. */
 	sfx?: StageSound;
 	/** From `bg:`. Only a beat can carry it: `cast:` names the backdrop at the top. */
@@ -859,6 +875,101 @@ function parseSceneLock(
 }
 
 /**
+ * One ease token, checked but never rejected.
+ *
+ * An unrecognised word is a WARNING with a typo fix, and the word is KEPT: the renderer
+ * falls back to the kind's default (`cssEase`), so a mistyped curve costs the shape of one
+ * movement and nothing else, and the text the author is looking at still matches the model
+ * the editor is showing them. Unlike `bg: {fx: …}` or `bubble: {as: …}` there is no
+ * stylesheet escape hatch to be careful of — a timing function is written inline, so an
+ * unknown token can only be a typo or a curve spelled out in full, and `easeValue` already
+ * knows the second one when it sees it.
+ */
+function parseEaseToken(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): string | undefined {
+	const token = asString(ctx, node, label);
+
+	if (token === undefined) {
+		return undefined;
+	}
+
+	if (easeValue(token) === undefined) {
+		addError(ctx, 'bad-value', `Unknown ease '${token}'.`, node, {
+			...keyFix(token, EASE_NAMES),
+			hint: `One of ${EASE_NAMES.join(
+				', '
+			)}, or a CSS timing function written out, e.g. cubic-bezier(0.34, 1.56, 0.64, 1).`,
+			severity: 'warning'
+		});
+	}
+
+	return token;
+}
+
+/**
+ * `ease:` — one token for everything this beat moves, or one per transition kind.
+ *
+ * The map's keys are TRANSITION kinds, not entity keys, which is the one thing about this
+ * key worth reading twice: `scale` names the transition a size change produces, and there
+ * is deliberately no way to ease one entity differently from another in the same beat. A
+ * beat is a moment; if two sprites need different curves they are two beats.
+ */
+function parseEase(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): BeatEase | undefined {
+	if (isNullNode(node)) {
+		return undefined; // `ease: ~` is "no opinion", same as leaving the key out.
+	}
+
+	if (isScalar(node)) {
+		return parseEaseToken(ctx, node, label);
+	}
+
+	if (!isMap(node)) {
+		addError(
+			ctx,
+			'bad-value',
+			`${label}: is one ease, or a map of them by what is moving.`,
+			node,
+			{hint: `${label}: back_out, or ${label}: {move: back_out, scale: linear}`}
+		);
+		return undefined;
+	}
+
+	const out: Partial<Record<string, string>> = {};
+
+	for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+		const key = keyName(pair);
+
+		if (key === undefined) {
+			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+			continue;
+		}
+
+		if (!EASE_KINDS.includes(key as (typeof EASE_KINDS)[number])) {
+			addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+				...keyFix(key, EASE_KINDS),
+				hint: `An ease map is keyed by what is moving: ${EASE_KINDS.join(', ')}.`
+			});
+			continue;
+		}
+
+		const token = parseEaseToken(ctx, pair.value, `${label} ${key}`);
+
+		if (token !== undefined) {
+			out[key] = token;
+		}
+	}
+
+	return Object.keys(out).length > 0 ? (out as BeatEase) : undefined;
+}
+
+/**
  * `frame:` written as a list — a cycle the renderer plays on its own clock.
  *
  * A bare scalar item is the short form of `{name: …}`, so a plain pose cycle stays a list
@@ -927,6 +1038,19 @@ function parseFrameSteps(
 
 					if (dur !== undefined) {
 						step.dur = dur;
+					}
+
+					break;
+				}
+
+				case 'ease': {
+					// Scalar only. A step is one change to one sprite over one hold, so
+					// there is exactly one thing here to give a curve to; a per-kind map
+					// would be asking which of one.
+					const ease = parseEaseToken(ctx, pair.value, 'frame ease');
+
+					if (ease !== undefined) {
+						step.ease = ease;
 					}
 
 					break;
@@ -1329,6 +1453,18 @@ function parseEntityBody(
 				}
 
 				body.dur = parseDur(ctx, pair.value);
+				break;
+			}
+
+			case 'ease': {
+				if (!allowSay) {
+					addError(ctx, 'unknown-key', `Unknown key 'ease'.`, pair.key, {
+						hint: 'ease: shapes one moment\u2019s movement, so it only belongs to a beat. For the whole scene, put it at the top.'
+					});
+					break;
+				}
+
+				body.ease = parseEase(ctx, pair.value, 'ease');
 				break;
 			}
 
@@ -1808,6 +1944,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	let style: BubbleStyle | undefined;
 	let textNode: unknown;
 	let dur: number | undefined;
+	let ease: BeatEase | undefined;
 	let sfx: StageSound | undefined;
 	let bg: ParsedBg | undefined;
 
@@ -1834,6 +1971,11 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 
 			case 'dur': {
 				dur = parseDur(ctx, pair.value);
+				break;
+			}
+
+			case 'ease': {
+				ease = parseEase(ctx, pair.value, 'ease');
 				break;
 			}
 
@@ -1868,6 +2010,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 		text,
 		...(style ? {style} : {}),
 		...(dur !== undefined ? {dur} : {}),
+		...(ease !== undefined ? {ease} : {}),
 		...(sfx ? {sfx} : {}),
 		...bgFields(bg)
 	};
@@ -1984,6 +2127,7 @@ function parseBeat(
 						...(hasPatch ? {patch: body.patch} : {}),
 						...(body.style ? {style: body.style} : {}),
 						...(body.dur !== undefined ? {dur: body.dur} : {}),
+						...(body.ease !== undefined ? {ease: body.ease} : {}),
 						...(body.sfx ? {sfx: body.sfx} : {}),
 						...bgFields(body.bg)
 					};
@@ -2014,6 +2158,12 @@ function parseBeat(
 							  }
 							: body.dur !== undefined
 							? {hint: 'dur: times a beat, it cannot be the whole of one.'}
+							: body.ease !== undefined
+							? {
+									// Same shape as the dur hint: a curve shapes a movement,
+									// so a beat with nothing but a curve shapes nothing.
+									hint: 'ease: shapes a beat\u2019s movement, it cannot be the whole of one.'
+							  }
 							: undefined
 					);
 					return undefined;
@@ -2025,6 +2175,7 @@ function parseBeat(
 					patch: body.patch,
 					who,
 					...(body.dur !== undefined ? {dur: body.dur} : {}),
+					...(body.ease !== undefined ? {ease: body.ease} : {}),
 					...(body.sfx ? {sfx: body.sfx} : {}),
 					...bgFields(body.bg)
 				};
@@ -2467,6 +2618,16 @@ function parseSceneDoc(text: string): ParseResult {
 
 				if (seconds !== undefined) {
 					scene.autoAdvance = seconds;
+				}
+
+				break;
+			}
+
+			case 'ease': {
+				const ease = parseEase(ctx, pair.value, 'ease');
+
+				if (ease !== undefined) {
+					scene.ease = ease;
 				}
 
 				break;

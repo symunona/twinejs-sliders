@@ -34,6 +34,8 @@ import {
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
 	Character,
+	EASE_KINDS,
+	EASE_NAMES,
 	FRAME_LOOPS,
 	LAYERS
 } from '@sliders/scene-types';
@@ -73,6 +75,8 @@ export type HintSlot =
 	| {kind: 'sound'}
 	/** `fx:` INSIDE a `bg:` map — a backdrop motion, not a stage effect. */
 	| {kind: 'bgFx'}
+	/** `ease:` — a curve, by preset name. */
+	| {kind: 'ease'}
 	/** A beat's own key: who speaks this line. */
 	| {kind: 'speaker'}
 	/** `as:` — a bubble style token. */
@@ -346,6 +350,13 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'bg':
 			return keys('bg', BG_KEYS);
 
+		// An `ease:` map is keyed by WHAT is moving, not by an entity key. Its members
+		// collide with real keys elsewhere in the subset (`bg`, `fx`, `frame`, `music`),
+		// which is why the value side below has to ask who owns the line before it
+		// decides what a key like `bg:` wants.
+		case 'ease':
+			return keys('ease', EASE_KINDS);
+
 		case 'bubble':
 			return keys('bubble', BUBBLE_KEYS);
 
@@ -617,7 +628,18 @@ export function sceneHintContext(
 			[...flow.owners, ...enclosingKeys(lines, blockStart, cursor.line)][0];
 
 		const valueHint = ((): SceneHintContext | undefined => {
+			// Before the switch, and the only slot that has to be: inside an `ease:` map
+			// EVERY key is a transition kind and every value is a curve, and four of those
+			// kinds (`bg`, `fx`, `frame`, `music`) are keys that mean something else one
+			// level out. Asking the key first would offer backdrop names for `ease: {bg: }`.
+			if (owner() === 'ease') {
+				return found({kind: 'ease'});
+			}
+
 			switch (key) {
+				case 'ease':
+					return found({kind: 'ease'});
+
 				case 'bg':
 					return found({kind: 'bg'});
 
@@ -835,6 +857,15 @@ function namesForSlot(
 		 */
 		case 'bgFx':
 			return [...BG_MOTIONS];
+
+		/**
+		 * The presets the renderer ships. A closed list like `fx:` and `bgFx:`, but for the
+		 * opposite reason to `bgFx:` — there is no stylesheet escape hatch here, because a
+		 * timing function is written inline. A curve nobody anticipated is spelled out in
+		 * full (`cubic-bezier(…)`), which no list could offer anyway.
+		 */
+		case 'ease':
+			return [...EASE_NAMES];
 
 		/**
 		 * Sounds ONLY, where every other asset slot ranks its preferred kinds first and
