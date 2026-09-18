@@ -35,7 +35,7 @@ import {extractSceneBlock} from '@sliders/scene-index';
 const ENTITY_MAP_KEYS = ['cast', 'props', 'entities'];
 
 /** Beat keys that are commands rather than a speaker id. Mirrors `BEAT_COMMAND_KEYS`. */
-const BEAT_COMMANDS = ['box', 'wait', 'fx', 'mark'];
+const BEAT_COMMANDS = ['box', 'wait', 'fx', 'sfx', 'mark', 'bg'];
 
 /** A scalar to replace, as a character range within the BLOCK text. */
 interface Target {

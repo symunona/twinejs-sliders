@@ -12,6 +12,21 @@ import {cloneStage, mergePatch, upsertFx} from './stage';
 
 /** Apply one beat to a stage in place. The stage must already be a private clone. */
 function applyBeat(stage: Stage, beat: Beat): void {
+	// Outside the switch, like the backdrop's own key: `bg:` rides on a line of dialogue
+	// and on a stage move as readily as on a beat of its own, so `kind: 'bg'` is only the
+	// case where it is ALL the beat does.
+	//
+	// Unlike `sfx` this is state, not an event: the backdrop stays changed for every later
+	// beat, and a scrubber stepping back shows the old one because the state before the
+	// beat still holds it. `null` is `bg: ~` and takes the backdrop away. `bgImplicit` is
+	// cleared either way — a beat naming a backdrop asked for it out loud, so a missing
+	// file must draw the `? bg` placeholder rather than staying silent.
+	if (beat.bg !== undefined) {
+		stage.bg = beat.bg ?? undefined;
+		stage.bgImplicit = undefined;
+		stage.bgFx = beat.bgFx ? {...beat.bgFx} : undefined;
+	}
+
 	switch (beat.kind) {
 		case 'say': {
 			if (beat.patch) {
@@ -45,7 +60,9 @@ function applyBeat(stage: Stage, beat: Beat): void {
 		case 'wait':
 		case 'mark':
 		case 'sfx':
-			// Timeline-only. The stage is unchanged, but the state still gets its own slot
+		case 'bg':
+			// Timeline-only -- `bg` included, since the backdrop it names was already applied
+			// above. The stage is otherwise unchanged, but the state still gets its own slot
 			// so `@mark` can name it and the scrubber can step onto it.
 			//
 			// `sfx` belongs here rather than with `fx` because firing a sound is an EVENT:

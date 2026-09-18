@@ -132,6 +132,12 @@ function addScene(sets: RefSets, scene: Scene): void {
 			add(sets.soundRefs, beat.sfx.id);
 		}
 
+		// Likewise a backdrop cut, and it is never optional: a beat that names one asked
+		// for it out loud, unlike the scene's `id:`-derived default.
+		if (beat.bg) {
+			add(sets.assetRefs, beat.bg);
+		}
+
 		switch (beat.kind) {
 			case 'fx':
 				add(sets.fxRefs, beat.fx.id);

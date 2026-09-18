@@ -26,7 +26,14 @@ export const TOP_LEVEL_ORDER = [
 ] as const;
 
 /** Beat keys that are commands, not speaker ids (spec 02, "Beats"). */
-export const BEAT_COMMANDS = ['box', 'wait', 'fx', 'mark'] as const;
+export const BEAT_COMMANDS = [
+	'box',
+	'wait',
+	'fx',
+	'sfx',
+	'mark',
+	'bg'
+] as const;
 
 /**
  * Order used when a whole entity entry is written out.

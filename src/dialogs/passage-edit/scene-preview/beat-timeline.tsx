@@ -404,6 +404,10 @@ function labelParts(
 			// The speaker slot carries the note, so a sound beat is findable in a strip of
 			// forty at a glance \u2014 the same job the crosshair does for a mark.
 			return {dur, text: beat.sfx.id, who: '\u266a'};
+		case 'bg':
+			// `bg` like `fx` and `wait`: the YAML keyword the author typed, not a locale
+			// string. `~` is what they typed to take the backdrop away.
+			return {dur, text: beat.bg ?? '~', who: 'bg'};
 		default:
 			return {dur, text: beat.name, who: '\u2316'};
 	}

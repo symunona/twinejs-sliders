@@ -25,6 +25,7 @@ import {
 	TOP_LEVEL_KEYS
 } from '@sliders/scene-schema';
 import {
+	BG_MOTIONS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
@@ -45,8 +46,9 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	autoAdvance:
 		'Seconds a beat holds the screen when it has no dur: of its own. 0 waits for a click. Overrides the reader\u2019s own setting, and is overridden by a beat\u2019s dur:. Not inherited through from:.',
 	beats: 'The timeline. A list, played in order.',
-	bg:
-		'Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none.',
+	bg: `Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none. The long form gives it motion: bg: {id: cellar, fx: parallax_left, speed: 20} — fx: is one of ${BG_MOTIONS.join(
+		', '
+	)} or a token your stylesheet paints, speed: is the seconds one cycle takes (each motion has its own default). A beat may carry the same key to cut to another backdrop.`,
 	camera: `{at: [x, y], zoom: 1}. Origin is screen centre, +y is up.`,
 	cast: 'Characters on stage, as id: {…} entries.',
 	entities:
@@ -92,10 +94,14 @@ const CAMERA_HELP: KeyHelp<typeof CAMERA_KEYS> = {
 const DUR_HELP =
 	'Seconds this beat holds the screen, and how long its stage changes take. Without it, a line waits for the reader and a stage-only beat plays straight on.';
 
+const BG_BEAT_HELP =
+	'Change the backdrop from this beat on, by asset name, or bg: ~ to take it away. Takes the same long form the scene\u2019s own bg: does, so a cut can add or drop a motion. It is stage state: every later beat keeps it, and the scrubber stepping back shows the old one.';
+
 const SFX_HELP =
 	'Fire a sound once, as this beat arrives, by asset name. sfx: door@0.5 turns it down. For a sound that keeps playing, use the scene’s music: instead.';
 
 const BEAT_HELP: KeyHelp<typeof BEAT_COMMAND_KEYS> = {
+	bg: BG_BEAT_HELP,
 	box: 'Narration, with nobody speaking.',
 	fx: 'Fire an effect for this beat.',
 	mark: 'Name this state so another scene can start from: it. Draws nothing.',
@@ -111,6 +117,7 @@ const SAY_HELP: KeyHelp<typeof SAY_KEYS> = {
 
 const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 	as: 'The style, by name. Same tokens a bubble uses.',
+	bg: BG_BEAT_HELP,
 	bubble: 'Style and placement, as a map.',
 	dur: DUR_HELP,
 	sfx: SFX_HELP,
@@ -118,6 +125,7 @@ const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 };
 
 const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
+	bg: BG_BEAT_HELP,
 	dur: DUR_HELP,
 	sfx: SFX_HELP
 };

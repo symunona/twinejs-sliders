@@ -184,6 +184,42 @@ export interface Camera {
 	zoom: number;
 }
 
+/**
+ * Motions a backdrop can be given, as `bg: {id: …, fx: parallax_left}`.
+ *
+ * A list of PRESETS, not a closed set: the token is handed to the renderer as a data
+ * attribute, so a story's own stylesheet can define `fx: lava_glow` the same way it can
+ * define a `bubble: {as: …}` token. These are the ones the renderer paints itself, and the
+ * ones the editor offers.
+ */
+export const BG_MOTIONS = [
+	'parallax_left',
+	'parallax_right',
+	'parallax_up',
+	'parallax_down',
+	'earthquake',
+	'circling'
+] as const;
+
+export type BgMotion = (typeof BG_MOTIONS)[number];
+
+/**
+ * A backdrop that moves on its own: a slow parallax drift, a shudder, a lazy circle.
+ *
+ * Kept OUT of `Stage.bg` — which stays the plain asset name every collector, differ and
+ * placeholder already reads — for the same reason `StageEntity.frames` is kept out of
+ * `frame`: one YAML key, two fields, and nothing downstream has to learn about the new one
+ * to keep working.
+ *
+ * `speed` is the seconds one cycle of the motion takes. Absent means the preset's own
+ * pace, which is not one number: a parallax drifts for twenty seconds and an earthquake
+ * shudders in half of one, so the default lives in each preset's CSS rather than here.
+ */
+export interface StageBgFx {
+	id: string;
+	speed?: number;
+}
+
 /** A complete, renderable snapshot of the stage. No history, no beats. */
 export interface Stage {
 	bg?: AssetId;
@@ -193,6 +229,8 @@ export interface Stage {
 	 * silent if it does not, so no lint, bundle report or `? bg` placeholder fires for it.
 	 */
 	bgImplicit?: boolean;
+	/** The backdrop's own motion, if it has one. State, like `bg` itself. */
+	bgFx?: StageBgFx;
 	camera: Camera;
 	/** Keyed by entity id. Insertion order is not significant; z decides drawing. */
 	entities: Record<EntityId, StageEntity>;
@@ -217,7 +255,15 @@ export function emptyStage(): Stage {
 // Beats — the timeline laid over the stage.
 // ---------------------------------------------------------------------------
 
-export type BeatKind = 'say' | 'box' | 'wait' | 'fx' | 'sfx' | 'mark' | 'set';
+export type BeatKind =
+	| 'say'
+	| 'box'
+	| 'wait'
+	| 'fx'
+	| 'sfx'
+	| 'mark'
+	| 'set'
+	| 'bg';
 
 export interface BeatBase {
 	kind: BeatKind;
@@ -248,6 +294,20 @@ export interface BeatBase {
 	 * is this, and it is `kind: 'sfx'`.
 	 */
 	sfx?: StageSound;
+	/**
+	 * A new backdrop, from this beat on. `null` is `bg: ~` — the backdrop is taken away.
+	 *
+	 * On `BeatBase` beside `sfx` and `dur`, so the cut can ride on the line that motivates
+	 * it (`- mira: {say: "…", bg: cellar}`) instead of costing a beat of its own; `- bg:
+	 * cellar` is the beat whose only job is this, and it is `kind: 'bg'`.
+	 *
+	 * Unlike `sfx` this IS stage state: every later beat keeps the new backdrop, and the
+	 * scrubber stepping back to an earlier beat shows the old one, because both fall out of
+	 * `runBeats` replaying the change rather than remembering that it fired.
+	 */
+	bg?: AssetId | null;
+	/** The motion for that backdrop. Absent CLEARS an inherited one — see `applyBeat`. */
+	bgFx?: StageBgFx;
 }
 
 /**
@@ -388,6 +448,16 @@ export interface SfxBeat extends BeatBase {
 	sfx: StageSound;
 }
 
+/**
+ * A beat whose whole content is a backdrop change. The backdrop itself is `BeatBase.bg`,
+ * so nothing has to look in two places for it — this kind only says "that is all this beat
+ * does", exactly as `SfxBeat` does for a sound.
+ */
+export interface BgBeat extends BeatBase {
+	kind: 'bg';
+	bg: AssetId | null;
+}
+
 export interface MarkBeat extends BeatBase {
 	kind: 'mark';
 	name: string;
@@ -407,7 +477,8 @@ export type Beat =
 	| FxBeat
 	| SfxBeat
 	| MarkBeat
-	| SetBeat;
+	| SetBeat
+	| BgBeat;
 
 // ---------------------------------------------------------------------------
 // Links (D3)
@@ -449,6 +520,15 @@ export interface Scene {
 	/** `other-scene` | `other-scene@enter` | `other-scene@markName` */
 	from?: string;
 	bg?: AssetId | null;
+	/**
+	 * The backdrop's motion, from `bg: {id: …, fx: …, speed: …}`.
+	 *
+	 * Absent does NOT mean "inherit" on its own: the rule is read off `bg`, the way
+	 * `mergePatch` reads a frame cycle off `frame`. A scene that names a backdrop at all
+	 * states its motion completely, so `bg: cellar` after an inherited parallax stops it —
+	 * a drift left over from art that is no longer on screen is never what was meant.
+	 */
+	bgFx?: StageBgFx;
 	camera?: Partial<Camera>;
 	/**
 	 * Seconds a beat that did not time itself holds the screen, for this scene only.

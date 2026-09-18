@@ -38,6 +38,7 @@ import {
 	type SceneLink,
 	type SceneLock,
 	type SceneSpan,
+	type StageBgFx,
 	type StageFx,
 	type StageSound,
 	type Vec2
@@ -93,10 +94,17 @@ export const FRAME_STEP_KEYS = [
 ] as const;
 
 /** Beat map keys that are commands rather than a speaker id. */
-export const BEAT_COMMAND_KEYS = ['box', 'wait', 'fx', 'sfx', 'mark'] as const;
+export const BEAT_COMMAND_KEYS = [
+	'box',
+	'wait',
+	'fx',
+	'sfx',
+	'mark',
+	'bg'
+] as const;
 
 /** Keys accepted inside a `box:` map. The scalar form `box: "text"` stays the short way. */
-export const BOX_KEYS = ['text', 'as', 'bubble', 'dur', 'sfx'] as const;
+export const BOX_KEYS = ['text', 'as', 'bubble', 'dur', 'sfx', 'bg'] as const;
 
 /** Keys a beat may add to its speaker's entry beyond the entity keys. */
 export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
@@ -111,12 +119,21 @@ export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
  *
  * Not `BEAT_KEYS`: that name is already a local in the format's `scene-mode.ts`.
  */
-export const BEAT_BODY_KEYS = ['dur', 'sfx'] as const;
+export const BEAT_BODY_KEYS = ['dur', 'sfx', 'bg'] as const;
 
 export const CAMERA_KEYS = ['at', 'zoom'] as const;
 
 /** Keys inside the long form of a `music:` or `sfx:` entry. */
 export const SOUND_KEYS = ['id', 'volume'] as const;
+
+/**
+ * Keys inside the long form of a `bg:` entry — `bg: {id: cellar, fx: parallax_left}`.
+ *
+ * The motion is spelled `fx:` because that is what the stage already calls a visual effect
+ * (`fx: [rain@0.6]`), and `sfx:` next door is a SOUND. Guessing `sfx:` here is the one
+ * wrong guess worth predicting, so it gets a hand-written hint rather than a typo fix.
+ */
+export const BG_KEYS = ['id', 'fx', 'speed'] as const;
 
 export const LINK_KEYS = ['to', 'if', 'icon', 'transition'] as const;
 
@@ -694,6 +711,8 @@ interface EntityBody {
 	dur?: number;
 	/** From `sfx:`. Only a beat can carry it, for the same reason `dur` can. */
 	sfx?: StageSound;
+	/** From `bg:`. Only a beat can carry it: `cast:` names the backdrop at the top. */
+	bg?: ParsedBg;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
 	ofNode?: unknown;
 }
@@ -1265,6 +1284,18 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'bg': {
+				if (!allowSay) {
+					addError(ctx, 'unknown-key', `Unknown key 'bg'.`, pair.key, {
+						hint: 'bg: is the whole stage\'s, so it belongs at the top of the scene or on a beat.'
+					});
+					break;
+				}
+
+				body.bg = parseBgNode(ctx, pair.value, 'bg');
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, valid)
@@ -1450,6 +1481,140 @@ function parseSoundNode(
 }
 
 // ---------------------------------------------------------------------------
+// Backdrop
+// ---------------------------------------------------------------------------
+
+/** What a `bg:` line said: the art, and the motion it was given. */
+interface ParsedBg {
+	/** `null` is `bg: ~`, i.e. no backdrop at all. */
+	id: string | null;
+	fx?: StageBgFx;
+}
+
+/**
+ * `cellar`, `~`, or the long form `{id: cellar, fx: parallax_left, speed: 20}`.
+ *
+ * One parser for all three places a backdrop can be named — the scene's own `bg:`, a beat
+ * of its own, and a `bg:` riding on a line — so `- bg: {…}` cannot drift from `bg: {…}`.
+ *
+ * `label` names the key in errors, the way `parseSoundNode`'s does.
+ */
+function parseBgNode(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): ParsedBg | undefined {
+	if (isNullNode(node)) {
+		return {id: null};
+	}
+
+	if (isScalar(node)) {
+		// asSourceString, not asString: a backdrop called `04.png` is an asset named `04`,
+		// and the YAML core schema would hand back the number 4 (see the `to: 04` note).
+		const id = asSourceString(ctx, node, label);
+
+		return id === undefined ? undefined : {id};
+	}
+
+	if (isMap(node)) {
+		let id: string | null | undefined;
+		let fxId: string | undefined;
+		let speed: number | undefined;
+
+		for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === 'id') {
+				id = isNullNode(pair.value)
+					? null
+					: asSourceString(ctx, pair.value, `${label} id`);
+			} else if (key === 'fx') {
+				fxId = asSourceString(ctx, pair.value, `${label} fx`);
+			} else if (key === 'speed') {
+				const value = asNumber(ctx, pair.value, `${label} speed`);
+
+				if (value !== undefined) {
+					if (value <= 0) {
+						addError(
+							ctx,
+							'bad-value',
+							`${label} speed of ${value} is not a length of time.`,
+							pair.value,
+							{hint: 'speed: is the seconds one cycle of the motion takes.'}
+						);
+					} else {
+						speed = value;
+					}
+				}
+			} else if (key === 'sfx') {
+				// The wrong guess worth predicting: `sfx:` is a SOUND everywhere else in a
+				// scene, and levenshtein would happily "fix" it to the `fx:` that means
+				// something else, with no word about which is which.
+				addError(ctx, 'unknown-key', `Unknown key 'sfx'.`, pair.key, {
+					hint: `A backdrop's motion is spelled fx: — ${label}: {id: …, fx: parallax_left}. sfx: is a sound.`
+				});
+			} else if (key !== undefined) {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+					...keyFix(key, BG_KEYS)
+				});
+			}
+		}
+
+		if (id === undefined) {
+			addError(ctx, 'bad-value', `A ${label} entry needs an id.`, node, {
+				hint: `${label}: {id: cellar, fx: parallax_left, speed: 20}`
+			});
+			return undefined;
+		}
+
+		if (fxId === undefined && speed !== undefined) {
+			addError(
+				ctx,
+				'bad-value',
+				`${label} speed has no motion to time.`,
+				node,
+				{
+					hint: `Add one, e.g. ${label}: {id: …, fx: parallax_left, speed: ${speed}}.`,
+					severity: 'warning'
+				}
+			);
+		}
+
+		return {
+			id,
+			...(fxId !== undefined
+				? {fx: {id: fxId, ...(speed !== undefined ? {speed} : {})}}
+				: {})
+		};
+	}
+
+	addError(
+		ctx,
+		'bad-value',
+		`${label}: must be a backdrop's name, e.g. \`${label}: cellar\` or \`${label}: {id: cellar, fx: parallax_left}\`.`,
+		node
+	);
+	return undefined;
+}
+
+/**
+ * The `bg`/`bgFx` pair a beat carries, spread into the beat object.
+ *
+ * `bg` may legitimately be `null` (`bg: ~` takes the backdrop away), so this cannot be the
+ * usual `...(x ? {x} : {})` — a null would be dropped and the cut would silently not happen.
+ */
+function bgFields(bg: ParsedBg | undefined): {
+	bg?: string | null;
+	bgFx?: StageBgFx;
+} {
+	if (bg === undefined) {
+		return {};
+	}
+
+	return {bg: bg.id, ...(bg.fx ? {bgFx: bg.fx} : {})};
+}
+
+// ---------------------------------------------------------------------------
 // Beats
 // ---------------------------------------------------------------------------
 
@@ -1584,6 +1749,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	let textNode: unknown;
 	let dur: number | undefined;
 	let sfx: StageSound | undefined;
+	let bg: ParsedBg | undefined;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
 		const key = keyName(pair);
@@ -1616,6 +1782,11 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 				break;
 			}
 
+			case 'bg': {
+				bg = parseBgNode(ctx, pair.value, 'bg');
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown box key '${key}'.`, pair.key, {
 					...keyFix(key, BOX_KEYS)
@@ -1637,7 +1808,8 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 		text,
 		...(style ? {style} : {}),
 		...(dur !== undefined ? {dur} : {}),
-		...(sfx ? {sfx} : {})
+		...(sfx ? {sfx} : {}),
+		...bgFields(bg)
 	};
 }
 
@@ -1687,6 +1859,14 @@ function parseBeat(
 			const sfx = parseSoundNode(ctx, pair.value, 'sfx');
 
 			return sfx === undefined ? undefined : {index, kind: 'sfx', sfx};
+		}
+
+		case 'bg': {
+			const bg = parseBgNode(ctx, pair.value, 'bg');
+
+			return bg === undefined
+				? undefined
+				: {index, kind: 'bg', bg: bg.id, ...(bg.fx ? {bgFx: bg.fx} : {})};
 		}
 
 		default: {
@@ -1744,7 +1924,8 @@ function parseBeat(
 						...(hasPatch ? {patch: body.patch} : {}),
 						...(body.style ? {style: body.style} : {}),
 						...(body.dur !== undefined ? {dur: body.dur} : {}),
-						...(body.sfx ? {sfx: body.sfx} : {})
+						...(body.sfx ? {sfx: body.sfx} : {}),
+						...bgFields(body.bg)
 					};
 				}
 
@@ -1763,6 +1944,14 @@ function parseBeat(
 									// no reason. The beat form says the same thing and is shorter.
 									hint: `A sound needs no speaker: write \`- sfx: ${body.sfx.id}\` as its own beat.`
 							  }
+							: body.bg
+							? {
+									// Same shape as the sfx hint: a backdrop belongs to the
+									// stage, not to whoever happens to be standing on it.
+									hint: `A backdrop needs no speaker: write \`- bg: ${
+										body.bg.id ?? '~'
+									}\` as its own beat.`
+							  }
 							: body.dur !== undefined
 							? {hint: 'dur: times a beat, it cannot be the whole of one.'}
 							: undefined
@@ -1776,7 +1965,8 @@ function parseBeat(
 					patch: body.patch,
 					who,
 					...(body.dur !== undefined ? {dur: body.dur} : {}),
-					...(body.sfx ? {sfx: body.sfx} : {})
+					...(body.sfx ? {sfx: body.sfx} : {}),
+					...bgFields(body.bg)
 				};
 			}
 
@@ -2061,15 +2251,11 @@ export function parseScene(text: string): ParseResult {
 			}
 
 			case 'bg': {
-				if (isNullNode(pair.value)) {
-					scene.bg = null;
-					break;
-				}
-
-				const bg = asSourceString(ctx, pair.value, 'bg');
+				const bg = parseBgNode(ctx, pair.value, 'bg');
 
 				if (bg !== undefined) {
-					scene.bg = bg;
+					scene.bg = bg.id;
+					scene.bgFx = bg.fx;
 				}
 
 				break;

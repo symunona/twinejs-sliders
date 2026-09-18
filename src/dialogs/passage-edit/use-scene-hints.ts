@@ -18,6 +18,7 @@ import {extractSceneBlock} from '@sliders/scene-index';
 import {
 	BEAT_BODY_KEYS,
 	BEAT_COMMAND_KEYS,
+	BG_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
@@ -28,6 +29,7 @@ import {
 } from '@sliders/scene-schema';
 import {
 	AssetMeta,
+	BG_MOTIONS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
@@ -69,6 +71,8 @@ export type HintSlot =
 	| {kind: 'fx'}
 	/** `music:` / `sfx:` — a sound asset's name. Both take the same list. */
 	| {kind: 'sound'}
+	/** `fx:` INSIDE a `bg:` map — a backdrop motion, not a stage effect. */
+	| {kind: 'bgFx'}
 	/** A beat's own key: who speaks this line. */
 	| {kind: 'speaker'}
 	/** `as:` — a bubble style token. */
@@ -339,6 +343,9 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case undefined:
 			return keys('top', TOP_LEVEL_KEYS);
 
+		case 'bg':
+			return keys('bg', BG_KEYS);
+
 		case 'bubble':
 			return keys('bubble', BUBBLE_KEYS);
 
@@ -604,10 +611,24 @@ export function sceneHintContext(
 	const promote = () => promotionContext(lines, blockStart, cursor);
 
 	if (key !== undefined) {
+		// The key alone is not always enough: `fx:` is a stage effect at the top of a scene
+		// and a backdrop MOTION inside a `bg:` map, and `id:` names whatever map it is in.
+		const owner = (): string | undefined =>
+			[...flow.owners, ...enclosingKeys(lines, blockStart, cursor.line)][0];
+
 		const valueHint = ((): SceneHintContext | undefined => {
 			switch (key) {
 				case 'bg':
 					return found({kind: 'bg'});
+
+				case 'id':
+					// The scene's own `id:` is a name only the author knows; inside a map it
+					// is that map's asset.
+					return owner() === 'bg'
+						? found({kind: 'bg'})
+						: owner() === 'music' || owner() === 'sfx'
+						? found({kind: 'sound'})
+						: undefined;
 
 				case 'layer':
 					return found({kind: 'layer'});
@@ -616,7 +637,7 @@ export function sceneHintContext(
 					return found({kind: 'frameLoop'});
 
 				case 'fx':
-					return found({kind: 'fx'});
+					return found(owner() === 'bg' ? {kind: 'bgFx'} : {kind: 'fx'});
 
 				case 'music':
 				case 'sfx':
@@ -808,6 +829,14 @@ function namesForSlot(
 			return [...FX_IDS];
 
 		/**
+		 * Backdrop motions: the presets the renderer's own CSS paints. A closed list like
+		 * `fx:` and for the same reason — these are stylesheet rules, not library art — but
+		 * an unlisted token is still legal, since a story's stylesheet may define its own.
+		 */
+		case 'bgFx':
+			return [...BG_MOTIONS];
+
+		/**
 		 * Sounds ONLY, where every other asset slot ranks its preferred kinds first and
 		 * still lists the rest. A backdrop's name in `sfx:` is not an unusual choice, it is
 		 * a mistake with no sound at the end of it — there is nothing to play. `fx:` is the
@@ -873,7 +902,9 @@ const BEAT_SCAFFOLDS: Record<string, {prefix: string; value: string; suffix: str
 	// nobody's library is guaranteed to hold a sound called anything in particular. An empty
 	// value leaves the cursor where the name goes, and the dropdown reopens there on it.
 	sfx: {prefix: ': ', suffix: '', value: ''},
-	wait: {prefix: ': ', suffix: '', value: '1'}
+	wait: {prefix: ': ', suffix: '', value: '1'},
+	// Same as `sfx:`: the name is the author's own art, so there is nothing to pre-select.
+	bg: {prefix: ': ', suffix: '', value: ''}
 };
 
 const SAY_SCAFFOLD = {prefix: ': "', suffix: '"', value: ''};

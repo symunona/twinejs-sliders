@@ -59,9 +59,20 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 	if (bg === null) {
 		out.bg = undefined;
 		out.bgImplicit = undefined;
+		out.bgFx = undefined;
 	} else if (bg !== undefined) {
 		out.bg = bg;
 		out.bgImplicit = scene.bg === undefined ? true : undefined;
+		// The motion is read off `bg`, not off its own absence — the same rule `mergePatch`
+		// uses for a frame cycle. A scene that names a backdrop states its motion in full,
+		// so `bg: cellar` after an inherited parallax STOPS it; an `id:`-derived backdrop
+		// (no `bg:` line at all) leaves an inherited motion alone, because it asked for
+		// nothing.
+		if (scene.bgFx !== undefined) {
+			out.bgFx = {...scene.bgFx};
+		} else if (scene.bg !== undefined) {
+			out.bgFx = undefined;
+		}
 	}
 	// absent + patch -> inherited (already cloned); absent + snapshot -> `id:` or undefined.
 

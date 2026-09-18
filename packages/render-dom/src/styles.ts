@@ -53,6 +53,136 @@ export const RENDER_DOM_CSS = `
 	transition-timing-function: ease;
 }
 
+/*
+ * Backdrop motion — bg: {id: cellar, fx: parallax_left, speed: 20}.
+ *
+ * Keyed on the token the author wrote, so a story's own stylesheet can define its own the
+ * same way it defines a bubble style. Each preset carries its OWN duration, because there
+ * is no one sane number for both a twenty-second drift and a half-second shudder;
+ * --sliders-bg-speed is set only when the author names one, and an empty custom property
+ * falls back to the preset's number.
+ *
+ * A pan needs somewhere to pan to, so the parallax presets oversize the image and offset it
+ * by half the overshoot — the backdrop is object-fit: cover, so it stays covered
+ * throughout. alternate is what makes a loop seamless: a drift that jumped back to its
+ * start would read as a cut, and the price is that a full there-and-back cycle takes twice
+ * speed, which is the honest meaning of "one cycle of the motion".
+ */
+.sliders-bg[data-bg-fx] {
+	will-change: transform;
+	/* The player's own stylesheet caps every img at max-width: 100%, which silently
+	   undid the oversize a pan needs and let the stage edge show through. Measured in
+	   the player: 116% computed back to 100%. */
+	max-width: none;
+	max-height: none;
+	animation-iteration-count: infinite;
+	animation-timing-function: ease-in-out;
+	animation-direction: alternate;
+}
+
+.sliders-bg[data-bg-fx^='parallax_left'],
+.sliders-bg[data-bg-fx^='parallax_right'] {
+	width: 116%;
+	left: -8%;
+}
+
+.sliders-bg[data-bg-fx^='parallax_up'],
+.sliders-bg[data-bg-fx^='parallax_down'] {
+	height: 116%;
+	top: -8%;
+}
+
+.sliders-bg[data-bg-fx='parallax_left'] {
+	animation-name: sliders-bg-parallax-left;
+	animation-duration: var(--sliders-bg-speed, 24s);
+}
+
+.sliders-bg[data-bg-fx='parallax_right'] {
+	animation-name: sliders-bg-parallax-right;
+	animation-duration: var(--sliders-bg-speed, 24s);
+}
+
+.sliders-bg[data-bg-fx='parallax_up'] {
+	animation-name: sliders-bg-parallax-up;
+	animation-duration: var(--sliders-bg-speed, 24s);
+}
+
+.sliders-bg[data-bg-fx='parallax_down'] {
+	animation-name: sliders-bg-parallax-down;
+	animation-duration: var(--sliders-bg-speed, 24s);
+}
+
+.sliders-bg[data-bg-fx='earthquake'] {
+	width: 106%;
+	height: 106%;
+	left: -3%;
+	top: -3%;
+	animation-name: sliders-bg-earthquake;
+	animation-duration: var(--sliders-bg-speed, 0.5s);
+	animation-timing-function: linear;
+	animation-direction: normal;
+}
+
+.sliders-bg[data-bg-fx='circling'] {
+	width: 108%;
+	height: 108%;
+	left: -4%;
+	top: -4%;
+	animation-name: sliders-bg-circling;
+	animation-duration: var(--sliders-bg-speed, 30s);
+	animation-timing-function: linear;
+	animation-direction: normal;
+}
+
+@keyframes sliders-bg-parallax-left {
+	from { transform: translate3d(0, 0, 0); }
+	to { transform: translate3d(-8%, 0, 0); }
+}
+
+@keyframes sliders-bg-parallax-right {
+	from { transform: translate3d(-8%, 0, 0); }
+	to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sliders-bg-parallax-up {
+	from { transform: translate3d(0, 0, 0); }
+	to { transform: translate3d(0, -8%, 0); }
+}
+
+@keyframes sliders-bg-parallax-down {
+	from { transform: translate3d(0, -8%, 0); }
+	to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sliders-bg-earthquake {
+	0% { transform: translate3d(0, 0, 0); }
+	10% { transform: translate3d(-1.2%, 0.6%, 0); }
+	20% { transform: translate3d(1%, -0.9%, 0); }
+	30% { transform: translate3d(-0.8%, -0.5%, 0); }
+	40% { transform: translate3d(1.1%, 0.8%, 0); }
+	50% { transform: translate3d(-1%, 0.3%, 0); }
+	60% { transform: translate3d(0.7%, -1%, 0); }
+	70% { transform: translate3d(-0.9%, 0.9%, 0); }
+	80% { transform: translate3d(1.2%, -0.4%, 0); }
+	90% { transform: translate3d(-0.5%, -0.7%, 0); }
+	100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sliders-bg-circling {
+	0% { transform: translate3d(-2%, 0, 0); }
+	25% { transform: translate3d(0, -2%, 0); }
+	50% { transform: translate3d(2%, 0, 0); }
+	75% { transform: translate3d(0, 2%, 0); }
+	100% { transform: translate3d(-2%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	/* A drifting backdrop is decoration; a reader who asked for stillness gets it. */
+	.sliders-bg[data-bg-fx] {
+		animation: none;
+	}
+}
+
 .sliders-entity {
 	position: absolute;
 	left: 0;

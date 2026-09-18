@@ -251,6 +251,23 @@ export function resolveSceneAssets(
 			}
 		}
 
+		// 1b — backdrops a beat cuts to. Never implicit: a beat that names one asked for it
+		// out loud, so a miss is an unknown asset exactly like a `bg:` line's would be.
+		for (const beat of current.beats ?? []) {
+			if (typeof beat.bg === 'string' && beat.bg !== '') {
+				push(
+					rowFor(
+						catalog,
+						beat.bg,
+						`beats/${beat.index} bg:`,
+						'bg',
+						inherited,
+						'bg'
+					)
+				);
+			}
+		}
+
 		for (const [id, patch] of Object.entries(current.entities ?? {})) {
 			if (patch === null) {
 				continue;

@@ -296,6 +296,9 @@ export class DomRenderer implements Renderer {
 		);
 
 		this.syncBg(stage.bg, durations.duration('bg'), stage.bgImplicit === true);
+		// After syncBg, always: the motion rides on whatever element that just decided on,
+		// and a backdrop swap builds a new <img> with no animation on it.
+		this.syncBgFx(stage.bgFx);
 		this.syncEntities(resolved, durations);
 		this.syncFx(stage.fx ?? []);
 		this.syncMusic(stage.music, durations.duration('music'));
@@ -1131,10 +1134,52 @@ export class DomRenderer implements Renderer {
 			ph.dataset.assetId = bg;
 			ph.textContent = `? bg\n${bg}`;
 			layer.appendChild(ph);
-			this.bgEl = undefined;
+			// Held as the current element, not dropped on the floor: `drop()` removes
+			// whatever the LAST backdrop left behind, so a placeholder nobody remembers is
+			// a placeholder that never leaves. One `? bg` per swap piled up in the layer
+			// until the scene ended, which only became visible once a beat could cut the
+			// backdrop mid-scene.
+			this.bgEl = ph;
 		}
 
 		drop();
+	}
+
+	/**
+	 * The backdrop's own motion — a parallax drift, a shudder — as a data attribute plus a
+	 * custom property, never as a class or an inline animation.
+	 *
+	 * Which means an unknown token is not an error: the preset motions are CSS rules keyed
+	 * on `[data-bg-fx='…']`, and a story's own stylesheet can key on its own token exactly
+	 * the way `bubble: {as: …}` already works. `speed` is optional for the same reason the
+	 * presets differ so much — a parallax drifts for twenty seconds, an earthquake shudders
+	 * in half of one — so each preset's CSS carries its own duration and `--sliders-bg-speed`
+	 * only overrides it when the author said a number.
+	 *
+	 * Also on the root, like `data-music`: from outside, an <img>'s running animation is
+	 * otherwise unanswerable.
+	 */
+	private syncBgFx(fx: Stage['bgFx']): void {
+		const targets = [this.bgEl, this.rootEl];
+
+		for (const el of targets) {
+			if (!el) {
+				continue;
+			}
+
+			if (fx) {
+				el.dataset.bgFx = fx.id;
+			} else {
+				delete el.dataset.bgFx;
+			}
+		}
+
+		if (this.bgEl) {
+			this.bgEl.style.setProperty(
+				'--sliders-bg-speed',
+				fx?.speed === undefined ? '' : `${fx.speed}s`
+			);
+		}
 	}
 
 	private makeBgImage(

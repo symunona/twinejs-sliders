@@ -100,7 +100,7 @@ links:
 |---|---|---|
 | `id` | string | globally unique. Dupe = error. Doubles as the default `bg`. |
 | `from` | ref | inherit a state. Flips merge semantics — see Reuse. |
-| `bg` | asset id | backdrop. Not a layer. Defaults to `id`, `~` for none. |
+| `bg` | asset id or map | backdrop. Not a layer. Defaults to `id`, `~` for none. Map form adds motion. |
 | `camera` | map | optional. `{at, zoom}`. |
 | `cast` | map of id → entity | characters |
 | `props` | map of id → entity | objects |
@@ -121,6 +121,43 @@ key doubles as the asset name.
   never asked for it. An explicit `bg:` that misses is still an error, because they did.
 - A patch (`from:`) is left alone. Its `id` names the variant, not the art, so it inherits
   the backdrop it came from rather than demanding a file per variant.
+
+#### A backdrop that moves
+
+```yaml
+bg: {id: cellar, fx: parallax_left, speed: 20}
+```
+
+| Key | Meaning |
+|---|---|
+| `id` | the art, same as the scalar form. `~` = no backdrop. |
+| `fx` | motion token. `parallax_left`, `parallax_right`, `parallax_up`, `parallax_down`, `earthquake`, `circling` — or any token your story stylesheet paints. |
+| `speed` | seconds one cycle takes. Optional: each preset carries its own pace, since a drift is 24s and a shudder half of one. |
+
+- The motion is spelled `fx:`, NOT `sfx:` — `sfx:` is a sound everywhere else in a scene.
+  Writing it here is an error with a hint, not a typo fix.
+- Motion is read off `bg`, never off its own absence: a scene naming a backdrop states its
+  motion in full, so `bg: cellar` under an inherited parallax STOPS it. A backdrop that came
+  from `id:` alone asked for nothing, so it leaves an inherited motion alone.
+- Unknown tokens are legal. The renderer writes `data-bg-fx` on the backdrop and the stage
+  root and stops there, the way `bubble: {as: …}` already works.
+
+#### A beat can cut the backdrop
+
+```yaml
+beats:
+  - mira: "Down here."
+  - bg: {id: cellar, fx: earthquake}   # a beat of its own
+  - mira: {say: "Not any more.", bg: street}   # or riding on a line
+  - bg: ~                              # take it away
+```
+
+`bg:` sits on the beat BASE, next to `dur:` and `sfx:`, so it rides on a line, on a stage
+move or on a beat of its own. It is stage STATE, not an event like `sfx:` — every later
+beat keeps the new backdrop, and the scrubber stepping back shows the old one. Not accepted
+inside `cast:`/`props:`/`entities:`: a backdrop belongs to the stage, not to whoever is
+standing on it. The three scalar commands (`wait`, `fx`, `mark`) have no body map, so they
+cannot carry one.
 
 ### Entity keys
 

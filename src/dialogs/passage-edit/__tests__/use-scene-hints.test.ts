@@ -1,6 +1,7 @@
 import {extractSceneBlock} from '@sliders/scene-index';
 import {
 	BEAT_BODY_KEYS,
+	BG_KEYS,
 	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
@@ -47,6 +48,39 @@ describe('sceneHintContext()', () => {
 			slot: {kind: 'bg'},
 			typed: 'tav'
 		});
+	});
+
+	it('offers the bg map keys inside bg: {', () => {
+		expect(contextAt('[scene]\nbg: {|')).toMatchObject({
+			slot: {id: 'bg', kind: 'keys', names: BG_KEYS}
+		});
+	});
+
+	it('offers motions for fx: inside a bg map, not screen effects', () => {
+		// The same key means two different things one level apart: `fx:` at the top of a
+		// scene is a screen effect, inside `bg:` it is how the backdrop moves.
+		expect(contextAt('[scene]\nbg: {id: hall, fx: par|}')).toMatchObject({
+			slot: {kind: 'bgFx'}
+		});
+		expect(contextAt('[scene]\nfx: [ra|')).toMatchObject({slot: {kind: 'fx'}});
+	});
+
+	it('offers motions for a bg map written in block form', () => {
+		expect(contextAt('[scene]\nbg:\n  id: hall\n  fx: |')).toMatchObject({
+			slot: {kind: 'bgFx'}
+		});
+	});
+
+	it('offers backgrounds for id: inside a bg map', () => {
+		expect(contextAt('[scene]\nbg: {id: ha|}')).toMatchObject({
+			slot: {kind: 'bg'}
+		});
+	});
+
+	it('offers the bg map keys on a beat that cuts the backdrop', () => {
+		expect(
+			contextAt('[scene]\nbeats:\n  - bg: {|')
+		).toMatchObject({slot: {id: 'bg', kind: 'keys', names: BG_KEYS}});
 	});
 
 	it('offers backgrounds with nothing typed yet', () => {
