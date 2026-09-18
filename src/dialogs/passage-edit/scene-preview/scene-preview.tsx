@@ -9,7 +9,9 @@ import {
 	IconPhotoShield,
 	IconPlayerPause,
 	IconPlayerPlay,
-	IconTimeline
+	IconTimeline,
+	IconVolume,
+	IconVolumeOff
 } from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
@@ -154,6 +156,17 @@ const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
 const GRID_KEY = 'sliders.preview.grid';
 
 /**
+ * Whether the preview may be heard. OFF unless the author turned it on, and remembered
+ * across dialogs like the grid and the lock.
+ *
+ * Silent by default because the editor is not a player: a passage opened to fix a typo
+ * would otherwise start a music bed, and somebody working with headphones on next to other
+ * people would learn to mute the whole browser tab — at which point every sound this
+ * feature exists for is inaudible too.
+ */
+const SOUND_KEY = 'sliders.preview.sound';
+
+/**
  * How solid the frame menu's hover preview is drawn.
  *
  * Near enough to opaque to judge the pose by — that is the only reason the preview exists —
@@ -249,6 +262,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 	const [grid, setGrid] = React.useState(
 		() => window.localStorage.getItem(GRID_KEY) === 'true'
+	);
+	const [sound, setSound] = React.useState(
+		() => window.localStorage.getItem(SOUND_KEY) === 'true'
 	);
 	/**
 	 * What is locked right now: the scene's word over the author's preference.
@@ -1026,6 +1042,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		});
 	}
 
+	function toggleSound() {
+		setSound(value => {
+			window.localStorage.setItem(SOUND_KEY, String(!value));
+
+			return !value;
+		});
+	}
+
 	function toggleTimelineLabels() {
 		setTimelineLabels(value => {
 			window.localStorage.setItem(TIMELINE_LABELS_KEY, String(!value));
@@ -1424,6 +1448,22 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={grid}
 			/>
+			{/* Next to the grid: both are "how this preview behaves for me", not
+			    anything the scene says. A click is also the user gesture the
+			    browser wants before it will play anything, so the button that
+			    turns sound on is the same one that unblocks it. */}
+			<IconButton
+				icon={sound ? <IconVolume /> : <IconVolumeOff />}
+				iconOnly
+				label={t(
+					sound
+						? 'dialogs.passageEdit.scenePreview.soundOn'
+						: 'dialogs.passageEdit.scenePreview.soundOff'
+				)}
+				onClick={toggleSound}
+				selectable
+				selected={sound}
+			/>
 			{/* Beside the stage lock, because it is the same idea one notch
 			    narrower: this one pins the shot and leaves the cast free. */}
 			<IconButton
@@ -1510,6 +1550,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				animate={playing}
 				assets={assets}
 				beat={drawnBeat}
+				muted={!sound}
 				onLink={handleLink}
 				onRenderer={handleRenderer}
 				stage={drawnStage}
