@@ -10,6 +10,7 @@ import {
 } from '../../dialogs';
 import {StoryCardPresence} from '../../components/story/story-card-sync-badge';
 import {
+	isAssetPullProgress,
 	isCheckoutProgress,
 	useServerSyncContext,
 	type CheckoutProgress
@@ -124,6 +125,22 @@ export const InnerStoryListRoute: React.FC = () => {
 		return result;
 	}, [progress]);
 
+	// A pull of new art into a story already on screen. Unlike a checkout it does not
+	// block the card — the story is perfectly usable while its newest picture lands.
+
+	const downloadingAssets = React.useMemo(() => {
+		const result: Record<string, {done: number; total: number} | undefined> =
+			{};
+
+		for (const [storyId, value] of Object.entries(progress ?? {})) {
+			if (isAssetPullProgress(value)) {
+				result[storyId] = {done: value.done, total: value.total};
+			}
+		}
+
+		return result;
+	}, [progress]);
+
 	// Any stories no longer visible should be deselected.
 
 	React.useEffect(() => {
@@ -174,6 +191,7 @@ export const InnerStoryListRoute: React.FC = () => {
 						) : (
 							<StoryCards
 								checkingOut={checkingOut}
+								downloadingAssets={downloadingAssets}
 								checkoutProgress={checkoutProgress}
 								ghosts={visibleGhosts}
 								onCheckOutGhost={entry => actions.checkout(entry.id)}

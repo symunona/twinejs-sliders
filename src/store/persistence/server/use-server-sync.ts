@@ -16,6 +16,7 @@ import * as React from 'react';
 import {getAppInfo} from '../../../util/app-info';
 import {
 	onAssetLibraryChange,
+	refreshAssetLibrary,
 	slidersAssetStore
 } from '../../../dialogs/sliders-assets/asset-store-context';
 import {unusedName} from '../../../util/unused-name';
@@ -32,6 +33,7 @@ import {
 } from '../persistable-changes';
 import {syncStoryAssets, type AssetSyncProgress} from './asset-sync';
 import {checkoutStory, type CheckoutProgress} from './checkout-story';
+import {pullStoryAssets, type AssetPullProgress} from './pull-assets';
 import {
 	NOT_MODIFIED,
 	createServerClient,
@@ -142,7 +144,17 @@ export function reconcileDecision(input: ReconcileInput): ReconcileAction {
 // Context
 // ---------------------------------------------------------------------------
 
-export type SyncProgress = CheckoutProgress | AssetSyncProgress;
+export type SyncProgress =
+	| CheckoutProgress
+	| AssetSyncProgress
+	| AssetPullProgress;
+
+/** Art coming down into a story already on screen. Never blocks the card. */
+export function isAssetPullProgress(
+	progress?: SyncProgress
+): progress is AssetPullProgress {
+	return progress?.phase === 'download';
+}
 
 /**
  * Is this story coming down rather than going up? Checkout is the only half that leaves a
@@ -421,6 +433,15 @@ export function useServerSync(): ServerSyncContextProps {
 		new Map<string, ReturnType<typeof setTimeout>>()
 	);
 	const assetSyncRef = React.useRef<(story: Story) => void>(() => {});
+	/** Story id -> manifest rev this browser has already taken art from. */
+	const assetPullRevs = React.useRef(new Map<string, number>());
+	/** Stories with a pull in flight. The rev guard makes a skipped retry nearly free. */
+	const assetPulls = React.useRef(new Set<string>());
+	/** Story id -> `assetCount:assetBytes` as the index last reported it. */
+	const assetSignatures = React.useRef(new Map<string, string>());
+	const pullAssetsRef = React.useRef<
+		(storyId: string, signature?: string) => void
+	>(() => {});
 
 	const client = React.useMemo<ServerClient | undefined>(() => {
 		if (!backendUrl || !backendToken || !backendClientId) {
@@ -499,6 +520,9 @@ export function useServerSync(): ServerSyncContextProps {
 		previousRef.current.set(story.id, local);
 		notifyStoryPulled(story.id);
 		setRecords({...allSyncRecords()});
+
+		// Text that arrived from somebody else usually names art that did too.
+		pullAssetsRef.current(story.id);
 	}, []);
 
 	const pull = React.useCallback(
@@ -555,6 +579,12 @@ export function useServerSync(): ServerSyncContextProps {
 				// Only a run that reached the manifest counts. Remembering a half-finished
 				// one would skip the retry that finishes it.
 				assetFingerprints.current.set(story.id, result.fingerprint);
+
+				// Our own manifest write moves the rev, and the index row with it. Claim it
+				// here or the next poll reads it as somebody else's art and pulls it back.
+				if (!result.unchanged && result.rev > 0) {
+					assetPullRevs.current.set(story.id, result.rev);
+				}
 			} catch (error) {
 				// Art failing to upload is worth reporting but must not undo the text
 				// push that just succeeded.
@@ -611,6 +641,73 @@ export function useServerSync(): ServerSyncContextProps {
 	React.useEffect(() => {
 		assetSyncRef.current = scheduleAssetSync;
 	}, [scheduleAssetSync]);
+
+	/**
+	 * Art coming DOWN into a story this browser already holds.
+	 *
+	 * Checkout used to be the only path, so a picture added by another editor never
+	 * arrived: the card said synced and the stage drew `? bg forest` until the story was
+	 * unpublished and published again. `pullStoryAssets` is cheap to ask — a manifest GET,
+	 * then a compare against the local library — so every caller here simply asks.
+	 */
+	const pullAssets = React.useCallback(
+		async (storyId: string, signature?: string) => {
+			// The index signature is claimed only by a pull that actually ran. Claiming it
+			// up front looks harmless and is not: a pull refused because the client was
+			// mid-rebuild (the credentials just changed) would leave the signature saying
+			// "seen", and the poll would never look at that story again — art stuck until
+			// the page was reloaded. Measured exactly that way.
+			if (!client || assetPulls.current.has(storyId)) {
+				return;
+			}
+
+			// Only a story this browser holds AND syncs. A ghost's art arrives with its
+			// checkout, and an unsynced local story has no business reading the server's.
+			if (
+				storiesRef.current.find(item => item.id === storyId)?.sync !== true
+			) {
+				return;
+			}
+
+			assetPulls.current.add(storyId);
+
+			try {
+				const result = await pullStoryAssets({
+					client,
+					lastRev: assetPullRevs.current.get(storyId),
+					onProgress: next => setStoryProgress(storyId, next),
+					store: slidersAssetStore(storyId),
+					storyId
+				});
+
+				assetPullRevs.current.set(storyId, result.rev);
+
+				if (signature !== undefined) {
+					assetSignatures.current.set(storyId, signature);
+				}
+
+				if (result.changed) {
+					// Everything drawing on this library re-reads: the stage resolver and both
+					// asset dialogs. It also schedules a push, which is the point of
+					// `changed` being narrow — see the note in `pull-assets.ts`.
+					refreshAssetLibrary();
+				}
+			} catch (error) {
+				// Missing art is worth saying out loud, but it must not mark the story in
+				// error: its text is fine and still syncing.
+				setLastError(error instanceof Error ? error.message : String(error));
+			} finally {
+				assetPulls.current.delete(storyId);
+				setStoryProgress(storyId, undefined);
+			}
+		},
+		[client, setStoryProgress]
+	);
+
+	React.useEffect(() => {
+		pullAssetsRef.current = (storyId, signature) =>
+			void pullAssets(storyId, signature);
+	}, [pullAssets]);
 
 	React.useEffect(() => {
 		const timers = assetTimers.current;
@@ -749,6 +846,39 @@ export function useServerSync(): ServerSyncContextProps {
 	React.useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	/**
+	 * The poll's half of the pull. The index row carries each story's asset count and
+	 * bytes, so a change in either says the manifest moved — no extra request to find out.
+	 *
+	 * First sight of a story counts as a change, and deliberately so: that is what repairs
+	 * a browser holding art from before any of this existed. `pullAssets` answers a
+	 * needless ask with one small GET.
+	 */
+	React.useEffect(() => {
+		for (const entry of index) {
+			if (entry.deleted) {
+				continue;
+			}
+
+			// Not ours to pull yet — the stories may simply not have loaded. Leave the
+			// signature unrecorded so the next sweep tries again.
+			if (
+				storiesRef.current.find(story => story.id === entry.id)?.sync !== true
+			) {
+				continue;
+			}
+
+			const signature = `${entry.assetCount}:${entry.assetBytes}`;
+
+			if (assetSignatures.current.get(entry.id) === signature) {
+				continue;
+			}
+
+			// The signature is recorded by the pull itself, and only once it has run.
+			pullAssetsRef.current(entry.id, signature);
+		}
+	}, [index]);
 
 	// The polling fallback. It is not disabled when the socket is up, only slowed: a
 	// message lost across a reconnect would otherwise never be noticed.
@@ -895,8 +1025,10 @@ export function useServerSync(): ServerSyncContextProps {
 
 				case 'assets':
 					// Asset bytes are not part of the story document, so there is nothing
-					// to reconcile — what changed is the index row's counts. Ask for it.
+					// to reconcile — what changed is the index row's counts. Ask for it,
+					// and fetch whatever art we are now missing.
 					void refresh();
+					pullAssetsRef.current(message.story);
 					break;
 
 				default:

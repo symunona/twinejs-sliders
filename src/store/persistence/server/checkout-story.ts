@@ -20,10 +20,21 @@ import {slidersAssetStore} from '../../../dialogs/sliders-assets/asset-store-con
 import {unusedName} from '../../../util/unused-name';
 import type {StoriesDispatch, Story} from '../../stories';
 import type {ServerClient} from './client';
+import type {AssetManifest} from './server.types';
 import {storyHash, updateSyncRecord} from './sync-record';
 
 export interface CheckoutProgress {
 	phase: 'story' | 'assets';
+	done: number;
+	total: number;
+}
+
+/**
+ * Downloading art, either half of it: `assets` is a checkout, which blocks the story card,
+ * and `download` is a later pull into a story already on screen, which must not.
+ */
+export interface AssetDownloadProgress {
+	phase: 'assets' | 'download';
 	done: number;
 	total: number;
 }
@@ -54,7 +65,9 @@ export interface CheckoutStoryOptions {
  * `putAsset` treats two assets as the same file only when hash *and* owning character
  * match. Same key `planBundle` uses — see the note there.
  */
-function dedupeKey(meta: Pick<AssetMeta, 'hash' | 'ownerCharacter'>): string {
+export function dedupeKey(
+	meta: Pick<AssetMeta, 'hash' | 'ownerCharacter'>
+): string {
 	return `${meta.hash} ${meta.ownerCharacter ?? ''}`;
 }
 
@@ -107,7 +120,12 @@ export async function checkoutStory(
 
 	const {downloaded, missingAssets, warnings} = await checkoutAssets({
 		client,
-		onProgress,
+		onProgress: progress =>
+			onProgress?.({
+				done: progress.done,
+				phase: 'assets',
+				total: progress.total
+			}),
 		store,
 		storyId: story.id
 	});
@@ -125,19 +143,27 @@ export async function checkoutAssets(options: {
 	client: ServerClient;
 	storyId: string;
 	store: AssetStore;
-	onProgress?: (progress: CheckoutProgress) => void;
+	/**
+	 * Already fetched by the caller. The pull path reads the manifest first to learn its
+	 * rev — one GET, not two, and the rev is how it decides there is nothing to do.
+	 */
+	manifest?: AssetManifest;
+	/** What to call this in progress reports. Defaults to a checkout. */
+	phase?: 'assets' | 'download';
+	onProgress?: (progress: AssetDownloadProgress) => void;
 }): Promise<{
 	downloaded: string[];
 	missingAssets: string[];
 	warnings: string[];
 }> {
 	const {client, onProgress, store, storyId} = options;
+	const phase = options.phase ?? 'assets';
 	const missingAssets: string[] = [];
 	const downloaded: string[] = [];
-	let manifest;
+	let manifest = options.manifest;
 
 	try {
-		manifest = await client.getManifest(storyId);
+		manifest = manifest ?? (await client.getManifest(storyId));
 	} catch (error) {
 		// A story with no manifest yet is a story published before assets existed on it.
 		// Nothing to download, and nothing worth failing the checkout over.
@@ -148,7 +174,7 @@ export async function checkoutAssets(options: {
 	const serverMissing = new Set(manifest.missing ?? []);
 	const total = assets.length;
 
-	onProgress?.({done: 0, phase: 'assets', total});
+	onProgress?.({done: 0, phase, total});
 
 	const localByKey = new Map<string, AssetMeta>();
 
@@ -168,7 +194,7 @@ export async function checkoutAssets(options: {
 			// The server told us up front it does not have these bytes — an old revision
 			// whose art the orphan sweep took. Say so; do not try to fetch it.
 			missingAssets.push(meta.id);
-			onProgress?.({done, phase: 'assets', total});
+			onProgress?.({done, phase, total});
 			continue;
 		}
 
@@ -182,7 +208,7 @@ export async function checkoutAssets(options: {
 
 			if (blob) {
 				contents.push({blob, meta});
-				onProgress?.({done, phase: 'assets', total});
+				onProgress?.({done, phase, total});
 				continue;
 			}
 		}
@@ -198,7 +224,7 @@ export async function checkoutAssets(options: {
 			missingAssets.push(meta.id);
 		}
 
-		onProgress?.({done, phase: 'assets', total});
+		onProgress?.({done, phase, total});
 	}
 
 	if (contents.length === 0 && (manifest.characters ?? []).length === 0) {

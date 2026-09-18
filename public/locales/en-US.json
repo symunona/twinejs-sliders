@@ -145,6 +145,8 @@
 			"lastUpdated": "Last edited on {{date}}",
 			"loadingAssets": "Getting artwork…",
 			"loadingAssetsCount": "Getting artwork… {{done}} of {{total}}",
+			"updatingAssets": "Getting new artwork…",
+			"updatingAssetsCount": "Getting new artwork… {{done}} of {{total}}",
 			"passageCount": "1 passage",
 			"passageCount_plural": "{{count}} passages",
 			"sync": {

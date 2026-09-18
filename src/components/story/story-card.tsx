@@ -21,6 +21,12 @@ export interface StoryCardProps extends CardProps {
 	 * belong, which reads as a broken story rather than an unfinished download.
 	 */
 	loading?: CheckoutProgress;
+	/**
+	 * Set while art is being pulled into a story that is already usable. Says so, but
+	 * never blocks the card: the text is current and the pictures are filling in behind
+	 * it, which is nothing like a checkout that has not finished.
+	 */
+	downloading?: {done: number; total: number};
 	onChangeTagColor: (name: string, color: Color) => void;
 	onRemoveTag: (name: string) => void;
 	onEdit: () => void;
@@ -35,6 +41,7 @@ export interface StoryCardProps extends CardProps {
 
 export const StoryCard: React.FC<StoryCardProps> = props => {
 	const {
+		downloading,
 		loading,
 		onChangeTagColor,
 		onEdit,
@@ -97,6 +104,31 @@ export const StoryCard: React.FC<StoryCardProps> = props => {
 								max={1}
 								value={
 									loading.total > 0 ? loading.done / loading.total : undefined
+								}
+							/>
+						</div>
+					)}
+					{!loading && downloading && (
+						<div
+							className="story-card-loading"
+							data-testid="story-card-downloading"
+						>
+							<span>
+								{downloading.total > 0
+									? t('components.storyCard.updatingAssetsCount', {
+											done: downloading.done,
+											total: downloading.total
+										})
+									: t('components.storyCard.updatingAssets')}
+							</span>
+							<progress
+								className="story-card-loading-progress"
+								data-testid="story-card-downloading-progress"
+								max={1}
+								value={
+									downloading.total > 0
+										? downloading.done / downloading.total
+										: undefined
 								}
 							/>
 						</div>

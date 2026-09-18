@@ -30,6 +30,8 @@ export interface StoryCardsProps {
 	 * cards show a loader and cannot be selected until the download ends.
 	 */
 	checkingOut?: Record<string, CheckoutProgress | undefined>;
+	/** Art landing in a story that is already open for business. */
+	downloadingAssets?: Record<string, {done: number; total: number} | undefined>;
 	/** Stories on the server with no local copy. Drawn last, dimmed. */
 	ghosts?: StoryIndexEntry[];
 	onCheckOutGhost?: (entry: StoryIndexEntry) => Promise<unknown> | unknown;
@@ -47,6 +49,7 @@ export interface StoryCardsProps {
 export const StoryCards: React.FC<StoryCardsProps> = props => {
 	const {
 		checkingOut,
+		downloadingAssets,
 		checkoutProgress,
 		ghosts,
 		onCheckOutGhost,
@@ -96,6 +99,7 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 					{list.map(story => (
 						<CSSTransition classNames="pop" key={story.id} timeout={200}>
 							<StoryCard
+								downloading={downloadingAssets?.[story.id]}
 								loading={checkingOut?.[story.id]}
 								onChangeTagColor={handleChangeTagColor}
 								onEdit={() => history.push(`/stories/${story.id}`)}
