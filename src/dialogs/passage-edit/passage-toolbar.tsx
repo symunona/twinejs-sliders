@@ -18,6 +18,7 @@ import {
 } from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {Color} from '../../util/color';
+import {isPassageSize, passageSizes} from '../../util/passage-sizes';
 import {TagCardButton} from '../../components/tag/tag-card-button';
 
 export interface PassageToolbarProps {
@@ -83,27 +84,33 @@ export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
 				items={[
 					{
 						checkable: true,
-						checked: passage.height === 100 && passage.width === 100,
+						checked: isPassageSize(passage, passageSizes.small),
 						label: t('dialogs.passageEdit.sizeSmall'),
-						onClick: () => handleSetSize({height: 100, width: 100})
+						onClick: () => handleSetSize(passageSizes.small)
 					},
 					{
 						checkable: true,
-						checked: passage.height === 200 && passage.width === 200,
+						checked: isPassageSize(passage, passageSizes.large),
 						label: t('dialogs.passageEdit.sizeLarge'),
-						onClick: () => handleSetSize({height: 200, width: 200})
+						onClick: () => handleSetSize(passageSizes.large)
 					},
 					{
 						checkable: true,
-						checked: passage.height === 200 && passage.width === 100,
+						checked: isPassageSize(passage, passageSizes.tall),
 						label: t('dialogs.passageEdit.sizeTall'),
-						onClick: () => handleSetSize({height: 200, width: 100})
+						onClick: () => handleSetSize(passageSizes.tall)
 					},
 					{
 						checkable: true,
-						checked: passage.height === 100 && passage.width === 200,
+						checked: isPassageSize(passage, passageSizes.wide),
 						label: t('dialogs.passageEdit.sizeWide'),
-						onClick: () => handleSetSize({height: 100, width: 200})
+						onClick: () => handleSetSize(passageSizes.wide)
+					},
+					{
+						checkable: true,
+						checked: isPassageSize(passage, passageSizes.largeWithPreview),
+						label: t('dialogs.passageEdit.sizeLargeWithPreview'),
+						onClick: () => handleSetSize(passageSizes.largeWithPreview)
 					}
 				]}
 				label={t('dialogs.passageEdit.size')}

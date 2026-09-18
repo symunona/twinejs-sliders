@@ -177,3 +177,50 @@ it out of flow so the excerpt does not reflow when presence arrives or expires.
 .passage-card.is-locked .card {
 	border: 2px solid var(--dark-blue);
 }
+
+/*
+A `largeWithPreview` card: a wide card's worth of text, then the scene it stages.
+
+The strip is as tall as a 16:9 stage the width of the card, and the card is that much
+taller than a `wide` one -- so the text above keeps exactly the room a 100px-tall card
+gives it. Growing the card is what buys the scene, never what shrinks the excerpt.
+
+Inert: the renderer inside is a stage like any other, and a card is dragged, selected and
+double-clicked on. `pointer-events: none` hands all of that back to the card.
+*/
+
+.passage-card.has-scene-preview .card {
+	display: flex;
+	flex-direction: column;
+}
+
+.passage-card.has-scene-preview .card-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.passage-card-scene {
+	background: #11151f;
+	border-radius: 2px;
+	/* Its own aspect, never a share of the card: the stage inside letterboxes itself to
+	   16:9, so height the picture cannot use would be black bars. The text above takes
+	   what is left, which at this card size is a wide card's worth. */
+	aspect-ratio: 16 / 9;
+	flex: 0 0 auto;
+	margin-top: calc(var(--grid-size) / 2);
+	overflow: hidden;
+	pointer-events: none;
+	position: relative;
+}
+
+.passage-card-scene > * {
+	height: 100%;
+	width: 100%;
+}
+
+/* Too small to read at this zoom; the title is the whole card then. */
+
+.compact-passage-cards .passage-card-scene {
+	display: none;
+}

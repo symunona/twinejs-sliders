@@ -9,6 +9,10 @@ import {SelectableCard} from '../container/card/selectable-card';
 import {Passage, TagColors} from '../../store/stories';
 import {TagStripe} from '../tag/tag-stripe';
 import {passageIsEmpty} from '../../util/passage-is-empty';
+import {passageProse} from '../../util/passage-prose';
+import {passagePreviewsScene} from '../../util/passage-sizes';
+import {PassageCardScene} from './passage-card-scene';
+import {IndexedPassage} from '@sliders/scene-index';
 import './passage-card.css';
 import {TagBadges} from '../tag/tag-badges';
 
@@ -40,6 +44,13 @@ export interface PassageCardProps {
 	onRename?: (passage: Passage, name: string) => void;
 	onSelect: (passage: Passage, exclusive: boolean) => void;
 	passage: Passage;
+	/**
+	 * Every passage in the story, for the scene strip a `largeWithPreview` card draws--a
+	 * patch scene (`from:`) inherits from another passage, so one passage's text is not
+	 * enough to stage it. Passed only to the cards that draw one, so an ordinary card's
+	 * memo is not broken by an array that changes on every edit.
+	 */
+	scenePassages?: IndexedPassage[];
 	tagColors: TagColors;
 	tagDisplay: 'color' | 'name';
 }
@@ -62,10 +73,12 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 		onRename,
 		onSelect,
 		passage,
+		scenePassages,
 		tagColors,
 		tagDisplay
 	} = props;
 	const {t} = useTranslation();
+	const showsScene = !ghost && passagePreviewsScene(passage);
 	const className = React.useMemo(
 		() =>
 			classNames('passage-card', {
@@ -73,10 +86,11 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 				ghost,
 				'has-errors': !!errorCount,
 				'is-locked': !!lockedBy,
+				'has-scene-preview': showsScene,
 				selected: passage.selected,
 				[`tag-display-${tagDisplay}`]: true
 			}),
-		[errorCount, ghost, lockedBy, passage, tagDisplay]
+		[errorCount, ghost, lockedBy, passage, showsScene, tagDisplay]
 	);
 	const container = React.useRef<HTMLDivElement>(null);
 	const excerpt = React.useMemo(() => {
@@ -88,8 +102,17 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 			);
 		}
 
-		if (passage.text.length > 0) {
-			return passage.text.substring(0, excerptLength);
+		// A card that draws the scene shows what the passage SAYS above it, not the YAML
+		// that stages it--that is the picture underneath.
+		const text = showsScene ? passageProse(passage.text) : passage.text;
+
+		if (text.length > 0) {
+			return text.substring(0, excerptLength);
+		}
+
+		if (showsScene) {
+			// Nothing but a scene in this passage. The stage below is the excerpt.
+			return null;
 		}
 
 		return (
@@ -101,7 +124,7 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 				)}
 			</span>
 		);
-	}, [ghost, passage.text, t]);
+	}, [ghost, passage.text, showsScene, t]);
 	const style = React.useMemo(
 		() => ({
 			height: passage.height,
@@ -206,6 +229,12 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 					/>
 				</h2>
 				<CardContent>{excerpt}</CardContent>
+				{showsScene && (
+					<PassageCardScene
+						passages={scenePassages ?? []}
+						text={passage.text}
+					/>
+				)}
 				{tagDisplay === 'name' && (
 					<TagBadges tagColors={tagColors} tags={passage.tags} />
 				)}

@@ -132,7 +132,12 @@ describe('<PassageToolbar>', () => {
 		['small', 'Small', {height: 100, width: 100}],
 		['large', 'Large', {height: 200, width: 200}],
 		['tall', 'Tall', {height: 200, width: 100}],
-		['wide', 'Wide', {height: 100, width: 200}]
+		['wide', 'Wide', {height: 100, width: 200}],
+		[
+			'largeWithPreview',
+			'LargeWithPreview',
+			{height: 215, width: 200}
+		]
 	])(
 		'updates the passage when its size is changed to %s',
 		async (_, label, passageProps) => {
