@@ -134,6 +134,51 @@ export const RENDER_DOM_CSS = `
 	animation-direction: normal;
 }
 
+/*
+ * scroll_infinite_* — the picture LOOPS rather than drifting inside the frame.
+ *
+ * Two copies, one keyframe: each travels a whole frame, and .sliders-bg-tile is parked one
+ * frame ahead, so the instant the first copy has left the second is exactly where the first
+ * began and the restart is invisible. No oversize here — a copy is a full frame wide, and
+ * widening it would break the hand-off by the amount it was widened.
+ */
+.sliders-bg[data-bg-fx^='scroll_infinite'] {
+	animation-direction: normal;
+	animation-timing-function: linear;
+	animation-duration: var(--sliders-bg-speed, 20s);
+}
+
+.sliders-bg[data-bg-fx='scroll_infinite_left'] { animation-name: sliders-bg-scroll-left; }
+.sliders-bg[data-bg-fx='scroll_infinite_right'] { animation-name: sliders-bg-scroll-right; }
+.sliders-bg[data-bg-fx='scroll_infinite_up'] { animation-name: sliders-bg-scroll-up; }
+.sliders-bg[data-bg-fx='scroll_infinite_down'] { animation-name: sliders-bg-scroll-down; }
+
+/* Where the trailing copy waits: the frame the leading one is about to vacate. */
+.sliders-bg-tile[data-bg-fx='scroll_infinite_left'] { left: 100%; }
+.sliders-bg-tile[data-bg-fx='scroll_infinite_right'] { left: -100%; }
+.sliders-bg-tile[data-bg-fx='scroll_infinite_up'] { top: 100%; }
+.sliders-bg-tile[data-bg-fx='scroll_infinite_down'] { top: -100%; }
+
+@keyframes sliders-bg-scroll-left {
+	from { transform: translate3d(0, 0, 0); }
+	to { transform: translate3d(-100%, 0, 0); }
+}
+
+@keyframes sliders-bg-scroll-right {
+	from { transform: translate3d(0, 0, 0); }
+	to { transform: translate3d(100%, 0, 0); }
+}
+
+@keyframes sliders-bg-scroll-up {
+	from { transform: translate3d(0, 0, 0); }
+	to { transform: translate3d(0, -100%, 0); }
+}
+
+@keyframes sliders-bg-scroll-down {
+	from { transform: translate3d(0, 0, 0); }
+	to { transform: translate3d(0, 100%, 0); }
+}
+
 @keyframes sliders-bg-parallax-left {
 	from { transform: translate3d(0, 0, 0); }
 	to { transform: translate3d(-8%, 0, 0); }

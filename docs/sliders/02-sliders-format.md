@@ -131,7 +131,7 @@ bg: {id: cellar, fx: parallax_left, speed: 20}
 | Key | Meaning |
 |---|---|
 | `id` | the art, same as the scalar form. `~` = no backdrop. |
-| `fx` | motion token. `parallax_left`, `parallax_right`, `parallax_up`, `parallax_down`, `earthquake`, `circling` — or any token your story stylesheet paints. |
+| `fx` | motion token. `parallax_left/right/up/down`, `scroll_infinite_left/right/up/down`, `earthquake`, `circling` — or any token your story stylesheet paints. |
 | `speed` | seconds one cycle takes. Optional: each preset carries its own pace, since a drift is 24s and a shudder half of one. |
 
 - The motion is spelled `fx:`, NOT `sfx:` — `sfx:` is a sound everywhere else in a scene.
@@ -141,6 +141,14 @@ bg: {id: cellar, fx: parallax_left, speed: 20}
   from `id:` alone asked for nothing, so it leaves an inherited motion alone.
 - Unknown tokens are legal. The renderer writes `data-bg-fx` on the backdrop and the stage
   root and stops there, the way `bubble: {as: …}` already works.
+
+**parallax vs scroll_infinite.** A parallax DRIFTS inside the frame: the picture is
+oversized by 8% and slides back and forth, so nothing ever leaves. A `scroll_infinite`
+LOOPS the picture: it travels a whole frame and starts over, which is the endless-walk
+backdrop. The renderer draws a second copy one frame ahead for those four, because an
+`<img>` cannot tile — so the restart is invisible, but only if the ART ITSELF tiles. A
+backdrop whose left and right edges do not match will show that mismatch once per lap; that
+is the picture, not the motion.
 
 #### A beat can cut the backdrop
 

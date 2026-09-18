@@ -29,7 +29,7 @@ import type {
 	TransitionKind,
 	Vec2
 } from '@sliders/scene-types';
-import {DEFAULT_FRAME_STEP_SECONDS} from '@sliders/scene-types';
+import {DEFAULT_FRAME_STEP_SECONDS, bgMotionTiles} from '@sliders/scene-types';
 import {
 	DEFAULT_ANCHORS,
 	DEFAULT_ORIGIN,
@@ -184,6 +184,14 @@ export class DomRenderer implements Renderer {
 	private keyOrder = new Map<EntityId, number>();
 	private fxEls = new Map<string, HTMLDivElement>();
 	private bgEl?: HTMLElement;
+	/**
+	 * The trailing copy a `scroll_infinite_*` motion needs.
+	 *
+	 * An <img> does not tile, so a seamless loop is two copies a whole frame apart, sliding
+	 * together: as one leaves, the other is exactly where it started. Built only for those
+	 * motions — every other one is a single element and a transform.
+	 */
+	private bgTwinEl?: HTMLImageElement;
 	private bgId?: string;
 
 	private box: StageBox = {left: 0, top: 0, width: 0, height: 0};
@@ -383,6 +391,7 @@ export class DomRenderer implements Renderer {
 		this.entities.clear();
 		this.fxEls.clear();
 		this.bgEl = undefined;
+		this.bgTwinEl = undefined;
 		this.bgId = undefined;
 		this.mountEl = undefined;
 		this.listeners.clear();
@@ -1096,6 +1105,11 @@ export class DomRenderer implements Renderer {
 			return;
 		}
 
+		// The twin belongs to the image that is going away, and a fade would leave it
+		// sliding over the new backdrop. syncBgFx rebuilds it for the new one.
+		this.bgTwinEl?.remove();
+		this.bgTwinEl = undefined;
+
 		const drop = () => {
 			if (!previous) {
 				return;
@@ -1160,7 +1174,9 @@ export class DomRenderer implements Renderer {
 	 * otherwise unanswerable.
 	 */
 	private syncBgFx(fx: Stage['bgFx']): void {
-		const targets = [this.bgEl, this.rootEl];
+		this.syncBgTwin(fx);
+
+		const targets = [this.bgEl, this.bgTwinEl, this.rootEl];
 
 		for (const el of targets) {
 			if (!el) {
@@ -1174,11 +1190,58 @@ export class DomRenderer implements Renderer {
 			}
 		}
 
-		if (this.bgEl) {
-			this.bgEl.style.setProperty(
+		for (const el of [this.bgEl, this.bgTwinEl]) {
+			el?.style.setProperty(
 				'--sliders-bg-speed',
 				fx?.speed === undefined ? '' : `${fx.speed}s`
 			);
+		}
+	}
+
+	/**
+	 * Build or drop the trailing copy that makes a scroll seamless.
+	 *
+	 * The pair shares one keyframe — a whole frame's travel — and the twin is parked one
+	 * frame ahead by CSS (`left: 100%` and friends), so the loop restarts on the exact
+	 * picture it ended on. Doing it with one element would mean tiling, which an <img>
+	 * cannot do, and a CSS `background-image` tile cannot keep `object-fit: cover`'s
+	 * framing, which is what every still backdrop in the story is composed against.
+	 *
+	 * Only for a real image: a `? bg` placeholder has nothing to loop, and two copies of it
+	 * would just be two labels chasing each other.
+	 */
+	private syncBgTwin(fx: Stage['bgFx']): void {
+		const source = this.bgEl;
+		const wanted =
+			bgMotionTiles(fx?.id) &&
+			!!this.doc &&
+			source instanceof (this.doc.defaultView?.HTMLImageElement ??
+				HTMLImageElement);
+
+		if (!wanted) {
+			this.bgTwinEl?.remove();
+			this.bgTwinEl = undefined;
+
+			return;
+		}
+
+		const img = source as HTMLImageElement;
+
+		if (!this.bgTwinEl) {
+			const twin = this.doc!.createElement('img');
+
+			twin.className = 'sliders-bg sliders-bg-tile';
+			twin.alt = '';
+			twin.draggable = false;
+			// Aria-hidden because it is the same picture twice: a reader being told about a
+			// backdrop should not be told about it a second time.
+			twin.setAttribute('aria-hidden', 'true');
+			img.parentElement?.appendChild(twin);
+			this.bgTwinEl = twin;
+		}
+
+		if (this.bgTwinEl.src !== img.src) {
+			this.bgTwinEl.src = img.src;
 		}
 	}
 

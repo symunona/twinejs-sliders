@@ -8,6 +8,7 @@
  */
 
 import type {Stage} from '@sliders/scene-types';
+import {BG_MOTIONS} from '@sliders/scene-types';
 import {DomRenderer} from '../dom-renderer';
 import {createStubResolver} from '../stub-resolver';
 import {RENDER_DOM_CSS} from '../styles';
@@ -130,21 +131,76 @@ describe('backdrop motion', () => {
 		expect(layer()).toBe(0);
 	});
 
+	it('builds a trailing copy for a scroll, and only for a scroll', async () => {
+		const {mount, renderer} = await mounted();
+		const tiles = () => mount.querySelectorAll('.sliders-bg-tile').length;
+
+		await renderer.apply(stage({bg: 'hall', bgFx: {id: 'parallax_left'}}), []);
+		expect(tiles()).toBe(0);
+
+		await renderer.apply(
+			stage({bg: 'hall', bgFx: {id: 'scroll_infinite_left', speed: 8}}),
+			[]
+		);
+		expect(tiles()).toBe(1);
+
+		const twin = mount.querySelector('.sliders-bg-tile') as HTMLImageElement;
+
+		// Same picture, same motion, same clock: the pair only looks seamless if both are
+		// told everything the leading copy was told.
+		expect(twin.src).toBe(bgOf(mount).src);
+		expect(twin.dataset.bgFx).toBe('scroll_infinite_left');
+		expect(twin.style.getPropertyValue('--sliders-bg-speed')).toBe('8s');
+		expect(twin.getAttribute('aria-hidden')).toBe('true');
+
+		await renderer.apply(stage({bg: 'hall', bgFx: {id: 'circling'}}), []);
+		expect(tiles()).toBe(0);
+	});
+
+	it('gives the trailing copy the new picture after a cut', async () => {
+		const {mount, renderer} = await mounted();
+
+		await renderer.apply(
+			stage({bg: 'hall', bgFx: {id: 'scroll_infinite_right'}}),
+			[]
+		);
+		await renderer.apply(
+			stage({bg: 'cellar', bgFx: {id: 'scroll_infinite_right'}}),
+			[]
+		);
+
+		const tiles = mount.querySelectorAll('.sliders-bg-tile');
+
+		// One twin, not one per backdrop the scene has been through.
+		expect(tiles).toHaveLength(1);
+		expect((tiles[0] as HTMLImageElement).src).toBe(bgOf(mount).src);
+	});
+
+	it('does not double a placeholder, which has nothing to loop', async () => {
+		const {mount, renderer} = await mounted(['nope']);
+
+		await renderer.apply(
+			stage({bg: 'nope', bgFx: {id: 'scroll_infinite_left'}}),
+			[]
+		);
+
+		expect(mount.querySelectorAll('.sliders-bg-tile')).toHaveLength(0);
+		expect(mount.querySelectorAll('.sliders-bg')).toHaveLength(1);
+	});
+
 	it('has a rule and a keyframe for every preset it ships', () => {
-		for (const id of [
-			'parallax_left',
-			'parallax_right',
-			'parallax_up',
-			'parallax_down',
-			'earthquake',
-			'circling'
-		]) {
+		for (const id of BG_MOTIONS) {
 			expect(RENDER_DOM_CSS).toContain(`[data-bg-fx='${id}']`);
 		}
 
 		expect(RENDER_DOM_CSS).toContain('@keyframes sliders-bg-parallax-left');
 		expect(RENDER_DOM_CSS).toContain('@keyframes sliders-bg-earthquake');
 		expect(RENDER_DOM_CSS).toContain('@keyframes sliders-bg-circling');
+		expect(RENDER_DOM_CSS).toContain('@keyframes sliders-bg-scroll-left');
+		// The trailing copy is parked by CSS, not by the renderer: one keyframe drives both.
+		expect(RENDER_DOM_CSS).toContain(
+			".sliders-bg-tile[data-bg-fx='scroll_infinite_left'] { left: 100%; }"
+		);
 		// Each preset names its own default, so `speed:` is genuinely optional.
 		expect(RENDER_DOM_CSS).toContain('var(--sliders-bg-speed, 24s)');
 		expect(RENDER_DOM_CSS).toContain('prefers-reduced-motion');

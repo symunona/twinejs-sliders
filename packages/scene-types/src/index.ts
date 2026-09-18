@@ -197,9 +197,27 @@ export const BG_MOTIONS = [
 	'parallax_right',
 	'parallax_up',
 	'parallax_down',
+	'scroll_infinite_left',
+	'scroll_infinite_right',
+	'scroll_infinite_up',
+	'scroll_infinite_down',
 	'earthquake',
 	'circling'
 ] as const;
+
+/**
+ * Motions that LOOP the picture rather than move it about inside the frame.
+ *
+ * They are the one kind the renderer cannot draw with a single element: an <img> does not
+ * tile, so a second copy trails the first by a whole frame and the pair slides together.
+ * Everything else is one element and a transform.
+ */
+export const BG_MOTION_TILED = 'scroll_infinite';
+
+/** True when `id` is a motion that needs the trailing copy. */
+export function bgMotionTiles(id: string | undefined): boolean {
+	return id !== undefined && id.startsWith(BG_MOTION_TILED);
+}
 
 export type BgMotion = (typeof BG_MOTIONS)[number];
 
