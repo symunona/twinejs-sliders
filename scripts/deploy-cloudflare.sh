@@ -6,6 +6,15 @@
 #   npm run deploy-cloudflare twine                  # same thing, short
 #   npm run deploy-cloudflare list                   # what is known
 #   npm run deploy-cloudflare twine dry-run          # resolve it, build nothing
+#   npm run deploy-cloudflare rebuild                # build even if unchanged
+#
+# The build is SKIPPED when nothing it reads has changed since the last one:
+# every tracked and untracked-but-not-ignored file under the build's inputs is
+# content-hashed into one fingerprint, written next to the output and compared
+# on the next run. A commit is not the unit — this tree is edited by several
+# sessions at once and is dirty most of the time, so a commit hash would both
+# miss real changes and rebuild for changes to files the build never reads.
+# `rebuild` forces one; deleting dist/web or the stamp does the same.
 #
 # The keywords take dashes too (`--list`), but only when this script is run
 # directly: `npm run` keeps a leading-dash argument for itself unless it comes
@@ -69,8 +78,30 @@ declare -A TARGETS=(
 DEFAULT_TARGET=twine-ig.tmpx.space
 DEFAULT_ZONE=tmpx.space
 
+# What `npm run build:web` reads. Anything outside this list is invisible to the
+# skip check, so add a new top-level source directory here as well as to the
+# build — a missed entry means a stale deploy, which is the expensive failure.
+BUILD_INPUTS=(
+	src packages format public scripts
+	index.html package.json package-lock.json .env
+	vite.config.mts tsconfig.json tsconfig.electron.json
+)
+
+# The stamp lives outside dist/ so it is never uploaded, and the build output is
+# checked separately — a wiped dist with a surviving stamp must still rebuild.
+STAMP_FILE="$REPO_ROOT/node_modules/.cache/deploy-cloudflare-build-stamp"
+
+# One hash over the content of every build input. Untracked files count (a new
+# source file is usually the whole point of the deploy); ignored ones do not.
+build_fingerprint() {
+	{
+		git -C "$REPO_ROOT" ls-files -z -- "${BUILD_INPUTS[@]}"
+		git -C "$REPO_ROOT" ls-files -z --others --exclude-standard -- "${BUILD_INPUTS[@]}"
+	} | sort -z | (cd "$REPO_ROOT" && xargs -0 -r sha1sum) | sha1sum | cut -d' ' -f1
+}
+
 usage() {
-	echo "usage: npm run deploy-cloudflare [hostname|label] [dry-run]"
+	echo "usage: npm run deploy-cloudflare [hostname|label] [dry-run] [rebuild]"
 	echo ""
 	echo "known targets:"
 
@@ -89,6 +120,7 @@ usage() {
 # `npm run` keeps any leading-dash argument for itself unless it is written
 # after a `--`, so `npm run deploy-cloudflare --list` never reaches this script.
 DRY_RUN=
+FORCE_BUILD=
 TARGET_ARG=
 
 while [[ $# -gt 0 ]]; do
@@ -99,6 +131,9 @@ while [[ $# -gt 0 ]]; do
 			;;
 		dry-run | dry)
 			DRY_RUN=1
+			;;
+		rebuild | force | force-build)
+			FORCE_BUILD=1
 			;;
 		'')
 			# A bare `--`, which npm uses to stop eating arguments. Not ours.
@@ -169,14 +204,32 @@ if [[ -n $DRY_RUN ]]; then
 	exit 0
 fi
 
-echo "==> Building (npm run build:web)"
-npm run build:web
+FINGERPRINT="$(build_fingerprint)"
+STAMPED=""
+[[ -f "$STAMP_FILE" ]] && STAMPED="$(cat "$STAMP_FILE")"
+
+if [[ -z $FORCE_BUILD && -f "dist/web/index.html" && $STAMPED == "$FINGERPRINT" ]]; then
+	echo "==> Build inputs unchanged since the last deploy, reusing dist/web"
+	echo "    (fingerprint ${FINGERPRINT:0:12}; 'npm run deploy-cloudflare rebuild' to force one)"
+else
+	echo "==> Building (npm run build:web)"
+	# Cleared first: a stamp left over from the previous build would survive an
+	# interrupted one and skip the next deploy's build over a half-written dist.
+	rm -f "$STAMP_FILE"
+	npm run build:web
+fi
 
 if [[ ! -f "dist/web/index.html" ]]; then
 	echo "ERROR: build finished but dist/web/index.html does not exist." >&2
 	echo "Something went wrong with the build; refusing to deploy." >&2
 	exit 1
 fi
+
+# Written only once the build is known good, and re-read from the tree rather
+# than reused: a build that takes minutes can finish after someone else's edit,
+# and stamping the older fingerprint would skip the build that edit needs.
+mkdir -p "$(dirname "$STAMP_FILE")"
+build_fingerprint > "$STAMP_FILE"
 
 echo "==> Deploying dist/web to Cloudflare Pages project '$PROJECT_NAME'"
 npx --no-install wrangler pages deploy dist/web \
