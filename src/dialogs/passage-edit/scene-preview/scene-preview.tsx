@@ -59,6 +59,7 @@ import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
 import {useDialogsContext} from '../../context';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
+import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
@@ -176,6 +177,20 @@ const SOUND_KEY = 'sliders.preview.sound';
  * the background it is being judged against.
  */
 const FRAME_PREVIEW_OPACITY = 0.9;
+
+/**
+ * The entity the trace panel's hover preview is drawn as.
+ *
+ * A SECOND sprite, not the real one moved: the ghost box says where the entity used to
+ * stand and the whole point of filling it in is comparing that against where it stands now,
+ * so the sprite on stage has to stay put. Moving the real one would also corrupt the ruler —
+ * every ghost rect is derived from the rect the renderer reports for NOW (see
+ * `stage-history.ts`), so the boxes would chase the preview that is describing them.
+ *
+ * Invisible to the overlay, which is handed the real stage: nothing hit tests it, nothing
+ * selects it, and no write can ever address it.
+ */
+const TRACE_PREVIEW_ID = '__sliders-trace-preview';
 
 /**
  * Whether the beat strip names its beats.
@@ -945,6 +960,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	React.useEffect(() => setFramePreview(null), [previewId]);
 
 	/**
+	 * The past position the trace panel is hovering: drawn as a second sprite, never
+	 * written. `null` is not hovering.
+	 *
+	 * Same bargain as `framePreview` — a hover produces nothing, so it is not a
+	 * `StagePatch` — except that this one ADDS art instead of changing it, because the
+	 * question it answers ("would it look right back there?") is about two positions at
+	 * once.
+	 */
+	const [tracePreview, setTracePreview] = React.useState<TracePreview | null>(
+		null
+	);
+
+	React.useEffect(() => setTracePreview(null), [selection]);
+
+	/**
 	 * What the renderer draws: the stage, plus the hovered pose at 90%.
 	 *
 	 * The overlay keeps the REAL stage — boxes, handles and every write are about what the
@@ -955,23 +985,39 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const drawnStage = React.useMemo(() => {
 		const entity = previewId ? stage.entities?.[previewId] : undefined;
+		const traced = tracePreview
+			? stage.entities?.[tracePreview.id]
+			: undefined;
 
-		if (framePreview === null || !previewId || !entity) {
+		if (!(framePreview !== null && previewId && entity) && !traced) {
 			return stage;
 		}
 
-		return {
-			...stage,
-			entities: {
-				...stage.entities,
-				[previewId]: {
-					...entity,
-					frame: framePreview || undefined,
-					opacity: entity.opacity * FRAME_PREVIEW_OPACITY
-				}
-			}
-		};
-	}, [framePreview, previewId, stage]);
+		const entities = {...stage.entities};
+
+		if (framePreview !== null && previewId && entity) {
+			entities[previewId] = {
+				...entity,
+				frame: framePreview || undefined,
+				opacity: entity.opacity * FRAME_PREVIEW_OPACITY
+			};
+		}
+
+		// Appended last so it wins a z tie against the sprite it is a copy of: the two
+		// overlap whenever the move was a small one, and the preview is the thing being
+		// asked about.
+		if (tracePreview && traced) {
+			entities[TRACE_PREVIEW_ID] = {
+				...traced,
+				at: tracePreview.at,
+				id: TRACE_PREVIEW_ID,
+				opacity: traced.opacity * FRAME_PREVIEW_OPACITY,
+				scale: tracePreview.scale
+			};
+		}
+
+		return {...stage, entities};
+	}, [framePreview, previewId, stage, tracePreview]);
 
 	/**
 	 * Everything that would change the text is off while the lock is on.
@@ -1535,6 +1581,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			// Absent only when a click could not write at all — a locked stage. Parked on
 			// somebody else's beat the jump still lands, as a new beat of its own.
 			onJumpTo={editable ? jumpTo : undefined}
+			onTracePreview={setTracePreview}
 			onOpenEntity={handleOpenEntity}
 			onPatch={setPatch}
 			parentOffsets={offsets}

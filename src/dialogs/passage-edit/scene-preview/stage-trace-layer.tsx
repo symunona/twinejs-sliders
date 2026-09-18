@@ -26,7 +26,7 @@ import type {Rect} from '@sliders/render-dom';
 import type {EntityId, Vec2} from '@sliders/scene-types';
 import {roundCoord} from './stage-geometry';
 import {hasGhosts} from './stage-history';
-import type {EntityTrace, TracePoint} from './stage-history';
+import type {EntityTrace, TraceKind, TracePoint} from './stage-history';
 import './stage-trace-layer.css';
 
 /** One row of numbers, in MOUNT px. Enough to estimate the panel before it is laid out. */
@@ -60,6 +60,13 @@ function panelTop(rect: Rect, rows: number, bounds?: Rect): number {
 	);
 }
 
+/** A past position the pointer is resting on, for the stage to draw a copy of the art at. */
+export interface TracePreview {
+	id: EntityId;
+	at: Vec2;
+	scale: number;
+}
+
 export interface StageTraceLayerProps {
 	traces: EntityTrace[];
 	selection: EntityId[];
@@ -67,6 +74,13 @@ export interface StageTraceLayerProps {
 	bounds?: Rect;
 	/** Absent = the numbers are not clickable. See `StageEditorOverlayProps.onJumpTo`. */
 	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
+	/**
+	 * A row is under the pointer, so the stage may fill that ghost box in with the real
+	 * art. `null` on leave. Absent = no preview, which is what an unclickable panel gets:
+	 * a row that cannot move the entity has no business showing what moving it would look
+	 * like.
+	 */
+	onPreview?: (preview: TracePreview | null) => void;
 	/**
 	 * What clicking a row will do beyond moving the entity — today: splice a new beat in,
 	 * because the scrubber is parked on a beat this entity has no line in. Replaces the
@@ -86,9 +100,10 @@ const TraceRow: React.FC<{
 	beatNote?: string;
 	id: EntityId;
 	label: string;
+	onHover?: (point: TracePoint | null) => void;
 	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
 	point: TracePoint;
-}> = ({beatNote, id, label, onJumpTo, point}) => {
+}> = ({beatNote, id, label, onHover, onJumpTo, point}) => {
 	const {t} = useTranslation();
 	const numbers = (
 		<>
@@ -126,7 +141,11 @@ const TraceRow: React.FC<{
 			className={className}
 			data-kind={point.kind}
 			data-testid={`stage-editor-trace-${point.kind}`}
+			onBlur={() => onHover?.(null)}
 			onClick={() => onJumpTo(id, point.at, point.scale)}
+			onFocus={() => onHover?.(point)}
+			onPointerEnter={() => onHover?.(point)}
+			onPointerLeave={() => onHover?.(null)}
 			title={
 				beatNote ??
 				t('dialogs.passageEdit.scenePreview.traceRestore', {when: label})
@@ -142,12 +161,49 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 	beatNote,
 	bounds,
 	onJumpTo,
+	onPreview,
 	quiet,
 	selection,
 	traces
 }) => {
 	const {t} = useTranslation();
 	const selected = React.useMemo(() => new Set(selection), [selection]);
+	/** Which ghost box to thicken. The stage draws the art; this draws the frame round it. */
+	const [hovered, setHovered] = React.useState<{
+		id: EntityId;
+		kind: TraceKind;
+	} | null>(null);
+	// Through a ref because the clear-up below must not re-run when the parent re-renders
+	// with a fresh callback — it would clear a preview the pointer is still resting on.
+	const previewRef = React.useRef(onPreview);
+
+	previewRef.current = onPreview;
+
+	const handleHover = React.useCallback(
+		(id: EntityId, point: TracePoint | null) => {
+			setHovered(point ? {id, kind: point.kind} : null);
+			previewRef.current?.(
+				point ? {at: point.at, id, scale: point.scale} : null
+			);
+		},
+		[]
+	);
+
+	/**
+	 * A row that is taken off screen never gets its own `pointerleave`, and the panel goes
+	 * whenever a gesture starts or the selection changes. Without this the art stays drawn
+	 * at a position nothing on screen is still pointing at.
+	 */
+	React.useEffect(() => {
+		if (quiet) {
+			setHovered(null);
+			previewRef.current?.(null);
+		}
+	}, [quiet]);
+
+	// Unmount only. No `setHovered` here: the state is going with the component, and setting
+	// it on the way out is the classic "update on an unmounted component" warning.
+	React.useEffect(() => () => previewRef.current?.(null), []);
 
 	return (
 		<>
@@ -181,7 +237,15 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 						{ghosts.map(point => (
 							<React.Fragment key={point.kind}>
 								<div
-									className={`stage-editor-ghost ${point.kind}`}
+									className={classNames(
+										'stage-editor-ghost',
+										point.kind,
+										{
+											hovered:
+												hovered?.id === trace.id &&
+												hovered.kind === point.kind
+										}
+									)}
 									data-kind={point.kind}
 									data-testid={`stage-editor-ghost-${point.kind}`}
 									style={{
@@ -213,6 +277,7 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 										beatNote={beatNote}
 										id={trace.id}
 										label={t('dialogs.passageEdit.scenePreview.traceOrig')}
+										onHover={point => handleHover(trace.id, point)}
 										onJumpTo={onJumpTo}
 										point={trace.orig}
 									/>
@@ -222,6 +287,7 @@ export const StageTraceLayer: React.FC<StageTraceLayerProps> = ({
 										beatNote={beatNote}
 										id={trace.id}
 										label={t('dialogs.passageEdit.scenePreview.tracePrev')}
+										onHover={point => handleHover(trace.id, point)}
 										onJumpTo={onJumpTo}
 										point={trace.prev}
 									/>

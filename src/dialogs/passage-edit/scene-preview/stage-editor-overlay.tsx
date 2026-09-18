@@ -51,6 +51,7 @@ import {
 import type {HandleId, HitTarget, SnapTarget} from './stage-geometry';
 import {entityTraces} from './stage-history';
 import {StageTraceLayer} from './stage-trace-layer';
+import type {TracePreview} from './stage-trace-layer';
 import {CAMERA_ORIGIN} from './use-scene-writer';
 import type {EntityKeyWrite, SceneWrite, StagePatch} from './use-scene-writer';
 import './stage-editor-overlay.css';
@@ -96,9 +97,14 @@ const WHEEL_COMMIT_DELAY_MS = 220;
  * selection row still arrives here. Its DOM ancestors are the body's, so none of the other
  * entries in this list can match it; without its own the frame menu's first pointerdown
  * cleared the very selection whose frame it was about to set, and the click never landed.
+ *
+ * The trace panel is the same trap without the portal: it hangs off the sprite's rect, so it
+ * routinely covers empty ground, and a press there hit tested through to nothing and cleared
+ * the selection the panel belongs to — taking the panel with it before the click could land.
+ * It only ever worked while the panel happened to overlap its own sprite.
  */
 const OWN_PRESS_SELECTOR =
-	'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor, .menu-button-menu';
+	'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor, .menu-button-menu, .stage-editor-trace-readout';
 
 /** Feet, bottom centre — the fallback when there is no rect to invert an origin out of. */
 const DEFAULT_ORIGIN_FRAC = {x: 0.5, y: 1};
@@ -217,6 +223,12 @@ export interface StageEditorOverlayProps {
 	 */
 	onJumpTo?: (id: EntityId, at: Vec2, scale: number) => void;
 	/**
+	 * The trace panel's hover preview. Passed straight through to `StageTraceLayer`; the
+	 * overlay itself never draws it, because the stage it measures has to stay the stage the
+	 * scene describes.
+	 */
+	onTracePreview?: (preview: TracePreview | null) => void;
+	/**
 	 * What a write here will do to the file, when it is more than editing the line on
 	 * screen — today: it splices a new beat in. The selection controls show the same
 	 * sentence; here it is the trace rows' tooltip, so a click that grows the beat list
@@ -326,6 +338,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onDropAsset,
 		onDropFiles,
 		onJumpTo,
+		onTracePreview,
 		onOpenEntity,
 		onPatch,
 		onSelect,
@@ -1097,6 +1110,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						beatNote={beatNote}
 						bounds={box}
 						onJumpTo={onJumpTo}
+						onPreview={onJumpTo ? onTracePreview : undefined}
 						quiet={dragging}
 						selection={selection}
 						traces={traces}

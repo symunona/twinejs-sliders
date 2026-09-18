@@ -203,3 +203,27 @@ button.stage-editor-trace-row:focus-visible {
 	color: #ff9d5c;
 	flex: 0 0 auto;
 }
+
+/* The ghost the pointer is resting on, while the stage fills it in with the real art.
+
+   Thicker, solid, and haloed — a 1px dashed line is a hint, and once the sprite is drawn
+   inside it the line has to read as a frame ROUND that sprite rather than as one more
+   dashed rectangle among the grid's rules. The dash goes on purpose: dashed says "nothing
+   is here", and for as long as the preview is up something is. The halo is the same one
+   `.stage-editor-outline` wears, for the same reason — a line over artwork needs it. */
+.stage-editor-ghost.hovered {
+	border-style: solid;
+	border-width: 2px;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+	/* The border grew inward-of-nothing: without this the box is 2px bigger than the rect it
+	   is quoting, and this layer's whole job is quoting rects exactly. */
+	margin: -1px;
+}
+
+.stage-editor-ghost.orig.hovered {
+	border-color: rgb(169, 123, 255);
+}
+
+.stage-editor-ghost.prev.hovered {
+	border-color: rgb(236, 240, 247);
+}
