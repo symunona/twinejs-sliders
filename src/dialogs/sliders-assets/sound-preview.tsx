@@ -13,12 +13,26 @@ export interface SoundPreviewProps {
 	name: string;
 }
 
-/** `1:04`, or `0:07`. Minutes, because a music bed is routinely longer than a minute. */
+/**
+ * `1:04` for a bed, `0.4s` for a door slam.
+ *
+ * Two shapes because sounds come in two sizes and one shape lies about the other: a
+ * one-shot is routinely under a second, and rounding it to `0:00` reads as "this file is
+ * broken" on exactly the assets that are working. Minutes take over at ten seconds, which
+ * is past every sfx and short of every bed.
+ */
 export function formatDuration(seconds: number): string {
-	const whole = Math.max(0, Math.round(seconds));
-	const minutes = Math.floor(whole / 60);
+	const safe = Math.max(0, seconds);
 
-	return `${minutes}:${String(whole % 60).padStart(2, '0')}`;
+	if (safe < 10) {
+		// One decimal: 0.45 and 0.5 are the same sound to a listener, and a second digit
+		// would just make the column noisy.
+		return `${safe.toFixed(1)}s`;
+	}
+
+	const whole = Math.round(safe);
+
+	return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
 /**
