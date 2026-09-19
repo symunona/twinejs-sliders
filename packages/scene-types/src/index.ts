@@ -834,6 +834,7 @@ export type SceneErrorCode =
 	| 'unknown-frame'
 	| 'unknown-link'
 	| 'unknown-passage'
+	| 'passage-case'
 	| 'unknown-variable'
 	| 'unknown-parent'
 	| 'of-cycle'
@@ -1236,3 +1237,9 @@ export interface Renderer {
 	/** Silence, without forgetting what should be playing. Renderers without sound may omit. */
 	setMuted?(muted: boolean): void;
 }
+
+// ---------------------------------------------------------------------------
+// Passage names
+// ---------------------------------------------------------------------------
+
+export * from './passage-name';

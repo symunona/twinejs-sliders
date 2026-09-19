@@ -1,4 +1,5 @@
 import Fuse from 'fuse.js';
+import {foldPassageName, matchPassageName} from '@sliders/scene-types';
 import uniq from 'lodash/uniq';
 import {Passage, StorySearchFlags, Story} from './stories.types';
 import {createRegExp} from '../../util/regexp';
@@ -49,7 +50,20 @@ export function passageConnections(
 	connectionParser?: (text: string) => string[]
 ) {
 	const parser = connectionParser ?? ((text: string) => parseLinks(text, true));
+	// Two indexes, one rule: a target matches exactly, else case-insensitively — what
+	// `matchPassageName` says and what the player's `passageNamed()` does. An arrow drawn
+	// by a stricter rule than the player follows is a link the author cannot see working.
 	const passageMap = new Map(passages.map(p => [p.name, p]));
+	const foldedMap = new Map<string, Passage>();
+
+	for (const p of passages) {
+		const folded = foldPassageName(p.name);
+
+		if (!foldedMap.has(folded)) {
+			foldedMap.set(folded, p);
+		}
+	}
+
 	const result = {
 		draggable: {
 			broken: new Set<Passage>(),
@@ -65,10 +79,13 @@ export function passageConnections(
 
 	passages.forEach(passage =>
 		parser(passage.text).forEach(targetName => {
-			if (targetName === passage.name) {
+			const targetPassage =
+				passageMap.get(targetName) ??
+				foldedMap.get(foldPassageName(targetName));
+
+			if (targetPassage === passage) {
 				(passage.selected ? result.draggable : result.fixed).self.add(passage);
 			} else {
-				const targetPassage = passageMap.get(targetName);
 
 				if (targetPassage) {
 					const target =
@@ -172,8 +189,11 @@ export function storyStats(story: Story) {
 		[]
 	);
 
+	// Same rule as the player and the map: only a name that matches nothing, case folded,
+	// is actually broken.
+	const names = story.passages.map(passage => passage.name);
 	const brokenLinks = uniq(links).filter(
-		link => !story.passages.some(passage => passage.name === link)
+		link => matchPassageName(names, link) === undefined
 	);
 
 	return {

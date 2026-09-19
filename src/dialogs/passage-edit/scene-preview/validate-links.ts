@@ -19,7 +19,13 @@
  * `to: Tavren` the author never meant to create.
  */
 
-import {ParseResult, SceneError, SceneFix, SceneSpan} from '@sliders/scene-types';
+import {
+	ParseResult,
+	SceneError,
+	SceneFix,
+	SceneSpan,
+	matchPassageName
+} from '@sliders/scene-types';
 import {nearestKey} from '@sliders/scene-schema';
 
 export interface LinkValidationInput {
@@ -89,6 +95,11 @@ function missingMessage(name: string, to: string): string {
 	return `Link '${name}' points at a passage that doesn't exist: '${to}'.`;
 }
 
+/** A target that only found its passage by case. It works; it is still worth tidying. */
+function caseMessage(to: string, matched: string): string {
+	return `'${to}' differs in case from the passage '${matched}'.`;
+}
+
 /**
  * The hint, and the repair when the name is close enough to be a typo.
  *
@@ -112,6 +123,47 @@ function missingSuggestion(
 		fix: {label: `Change '${to}' to '${nearest}'`, replaces: to, text: nearest},
 		hint: `Did you mean '${nearest}'?`
 	};
+}
+
+/**
+ * What is wrong with one link target, or `undefined` when it names a passage exactly.
+ *
+ * Two answers, because the player resolves a name case-insensitively (`matchPassageName`,
+ * and `passageNamed()` in the format): a target that differs only in case WORKS, so it is
+ * not a missing passage and must not draw a ghost card — but it is still worth saying,
+ * because a story that spells one room two ways is one rename away from a dead link.
+ */
+function targetIssue(
+	to: string,
+	passageNames: string[]
+):
+	| {
+			code: 'unknown-passage' | 'passage-case';
+			fix?: Omit<SceneFix, keyof SceneSpan>;
+			hint: string;
+			matched?: string;
+	  }
+	| undefined {
+	const matched = matchPassageName(passageNames, to);
+
+	if (matched === to) {
+		return undefined;
+	}
+
+	if (matched !== undefined) {
+		return {
+			code: 'passage-case',
+			fix: {
+				label: `Change '${to}' to '${matched}'`,
+				replaces: to,
+				text: matched
+			},
+			hint: `The player finds it anyway, but the passage is called '${matched}'.`,
+			matched
+		};
+	}
+
+	return {code: 'unknown-passage', ...missingSuggestion(to, passageNames)};
 }
 
 /**
@@ -146,7 +198,6 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 		return [];
 	}
 
-	const exists = new Set(passageNames);
 	const errors: LinkTargetError[] = [];
 	const links = result?.scene.links ?? {};
 	const spans = result?.linkSpans ?? {};
@@ -154,18 +205,23 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 	// 1. The scene's own links:, wherever their target was written.
 
 	for (const link of Object.values(links)) {
-		if (!link.to || exists.has(link.to) || EXTERNAL_RE.test(link.to)) {
+		if (!link.to || EXTERNAL_RE.test(link.to)) {
+			continue;
+		}
+
+		const suggestion = targetIssue(link.to, passageNames);
+
+		if (!suggestion) {
 			continue;
 		}
 
 		const span = spans[link.name];
-		const suggestion = missingSuggestion(link.to, passageNames);
 		const line = (span?.line ?? 1) + blockOffset;
 		const endLine =
 			span?.endLine === undefined ? undefined : span.endLine + blockOffset;
 
 		errors.push({
-			code: 'unknown-passage',
+			code: suggestion.code,
 			col: span?.col ?? 1,
 			fix: spanFix(
 				suggestion.fix,
@@ -175,8 +231,10 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 			line,
 			endCol: span?.endCol,
 			endLine,
-			message: missingMessage(link.name, link.to),
-			missingPassage: link.to,
+			message: suggestion.matched
+				? caseMessage(link.to, suggestion.matched)
+				: missingMessage(link.name, link.to),
+			...(suggestion.matched ? {} : {missingPassage: link.to}),
 			severity: 'warning'
 		});
 	}
@@ -185,17 +243,22 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 	//    passage and both deserve a squiggle.
 
 	for (const span of result?.entityLinkSpans ?? []) {
-		if (exists.has(span.to) || EXTERNAL_RE.test(span.to)) {
+		if (EXTERNAL_RE.test(span.to)) {
 			continue;
 		}
 
-		const suggestion = missingSuggestion(span.to, passageNames);
+		const suggestion = targetIssue(span.to, passageNames);
+
+		if (!suggestion) {
+			continue;
+		}
+
 		const line = span.line + blockOffset;
 		const endLine =
 			span.endLine === undefined ? undefined : span.endLine + blockOffset;
 
 		errors.push({
-			code: 'unknown-passage',
+			code: suggestion.code,
 			col: span.col,
 			fix: spanFix(suggestion.fix, {
 				col: span.col,
@@ -207,8 +270,10 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 			line,
 			endCol: span.endCol,
 			endLine,
-			message: `This link points at a passage that doesn't exist: '${span.to}'.`,
-			missingPassage: span.to,
+			message: suggestion.matched
+				? caseMessage(span.to, suggestion.matched)
+				: `This link points at a passage that doesn't exist: '${span.to}'.`,
+			...(suggestion.matched ? {} : {missingPassage: span.to}),
 			severity: 'warning'
 		});
 	}
@@ -233,7 +298,7 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 			const {start, text: to} = targetOfBody(body);
 			const name = to.trim();
 
-			if (name === '' || EXTERNAL_RE.test(name) || exists.has(name)) {
+			if (name === '' || EXTERNAL_RE.test(name)) {
 				continue;
 			}
 
@@ -241,17 +306,24 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 				continue; // `[[stay]]`, routed by links:.
 			}
 
+			const suggestion = targetIssue(name, passageNames);
+
+			if (!suggestion) {
+				continue;
+			}
+
 			const col = match.index + 2 + start + 1;
-			const suggestion = missingSuggestion(name, passageNames);
 			const span = {col, endCol: col + to.length, endLine: i + 1, line: i + 1};
 
 			errors.push({
-				code: 'unknown-passage',
+				code: suggestion.code,
 				...span,
 				fix: spanFix(suggestion.fix, span),
 				hint: suggestion.hint,
-				message: `[[${name}]] points at a passage that doesn't exist.`,
-				missingPassage: name,
+				message: suggestion.matched
+					? caseMessage(name, suggestion.matched)
+					: `[[${name}]] points at a passage that doesn't exist.`,
+				...(suggestion.matched ? {} : {missingPassage: name}),
 				severity: 'warning'
 			});
 		}

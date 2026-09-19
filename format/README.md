@@ -24,6 +24,7 @@ The edits into Chapbook's own files, runtime half:
 | `runtime/template/modifiers/index.ts` | adds `sceneModifier` to the builtins |
 | `runtime/template/render-parsed.ts` | filters blocks through `sceneOnlyBlocks()` |
 | `runtime/template/parse.ts` | `varsSep` comes from `@sliders/scene-schema`, not a local regexp |
+| `runtime/story/story.ts` | `passageNamed()` falls back to a case-insensitive match (`matchPassageName`) |
 
 And the editor half — these are the ones 0.2.0 shipped without:
 

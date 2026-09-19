@@ -130,4 +130,34 @@ describe('linkTargetErrors()', () => {
 			})
 		).toHaveLength(1);
 	});
+
+	// The player follows a case-only mismatch (`passageNamed()` -> `matchPassageName`), so
+	// it is NOT a missing passage: no ghost card, no Create button, and the fix rewrites
+	// the link to the passage's real name.
+	it('warns about a links: target that differs only in case', () => {
+		const errors = parseSceneText(
+			'[scene]\nlinks:\n  stay: {to: street}\n',
+			passages
+		).errors.filter(error => error.code === 'passage-case');
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].severity).toBe('warning');
+		expect(errors[0].message).toContain('Street');
+		expect(errors[0].fix).toMatchObject({replaces: 'street', text: 'Street'});
+		expect((errors[0] as LinkTargetError).missingPassage).toBeUndefined();
+	});
+
+	it('does not report a case-only target as unknown', () => {
+		expect(unknown('[scene]\nlinks:\n  stay: {to: STREET}\n')).toEqual([]);
+	});
+
+	it('warns about a case-only [[…]] outside the block', () => {
+		const errors = parseSceneText(
+			'[scene]\nbg: tavern\n[continued]\nGo [[cellar]].\n',
+			passages
+		).errors.filter(error => error.code === 'passage-case');
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].message).toContain('Cellar');
+	});
 });

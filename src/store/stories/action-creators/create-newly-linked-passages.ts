@@ -1,3 +1,4 @@
+import {matchPassageName} from '@sliders/scene-types';
 import {Thunk} from 'react-hook-thunk-reducer';
 import {
 	CreatePassagesAction,
@@ -33,8 +34,12 @@ export function createNewlyLinkedPassages(
 
 	return dispatch => {
 		const oldLinks = parseLinks(oldText);
+		// `matchPassageName`, not an exact compare: the player follows `[[start]]` into a
+		// passage called `Start`, so creating a second room for the other spelling would
+		// make a passage nothing ever reaches.
+		const names = story.passages.map(p => p.name);
 		const toCreate = parseLinks(newText).filter(
-			l => !oldLinks.includes(l) && !story.passages.some(p => p.name === l)
+			l => !oldLinks.includes(l) && matchPassageName(names, l) === undefined
 		);
 
 		if (toCreate.length === 0) {

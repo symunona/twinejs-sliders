@@ -206,6 +206,25 @@ describe('tier 3 — story graph', () => {
 		expect(findings[0].message).toMatch(/'Nowhere'/);
 	});
 
+	// The player resolves a target case-insensitively (`matchPassageName`), so this is a
+	// working link — but a story spelling one room two ways is one rename from a dead one.
+	it('warns, not errors, about a link that matches a passage only by case', () => {
+		const body = story([
+			passage('Start', `[scene]\nid: here\nlinks:\n  go: {to: street}\n`),
+			passage('Street', `[[back->Start]]`, 'street')
+		]);
+		const findings = lintStory({body, ref: 'ep3'});
+
+		expect(findings.filter(f => /not a passage/.test(f.message))).toEqual([]);
+
+		const cased = findings.filter(f => /differs in case/.test(f.message));
+
+		expect(cased).toHaveLength(1);
+		expect(cased[0]).toMatchObject({file: 'ep3/Start', level: 'warn'});
+		// The target IS reached, so it must not also be reported as unreachable.
+		expect(findings.filter(f => /Unreachable/.test(f.message))).toEqual([]);
+	});
+
 	it('reports the spec-02 trap: the only exit is a link outside the block', () => {
 		const body = story([
 			passage(

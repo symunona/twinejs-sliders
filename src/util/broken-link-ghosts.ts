@@ -13,6 +13,7 @@
  * half-typed name costs a rerender rather than a passage and an undo entry.
  */
 
+import {foldPassageName, matchPassageName} from '@sliders/scene-types';
 import {Passage, Story} from '../store/stories';
 import {newPassagePositions} from '../store/stories/action-creators/new-passage-positions';
 import {passageDefaults} from '../store/stories/defaults';
@@ -64,7 +65,10 @@ function ghostPassage(
  * passage's text and finds the ghost by name like any other target.
  */
 export function brokenLinkGhosts(story: Story): Passage[] {
-	const existing = new Set(story.passages.map(passage => passage.name));
+	// Names, not a Set: a link resolves case-insensitively (`matchPassageName`, the same
+	// rule the player's `passageNamed()` uses), so `to: Start` against a passage called
+	// `start` is a working link and must not be drawn as a ghost of a second room.
+	const existing = story.passages.map(passage => passage.name);
 	const ghosts = new Map<string, Passage>();
 
 	// Pass 1: who links to what, in passage order, skipping names that exist.
@@ -73,7 +77,7 @@ export function brokenLinkGhosts(story: Story): Passage[] {
 
 	for (const passage of story.passages) {
 		const missing = passageLinks(passage.text, true).filter(
-			name => name !== passage.name && !existing.has(name)
+			name => matchPassageName(existing, name) === undefined
 		);
 
 		if (missing.length > 0) {
@@ -86,7 +90,9 @@ export function brokenLinkGhosts(story: Story): Passage[] {
 	let occupied = story.passages;
 
 	for (const [passage, names] of wanted) {
-		const fresh = names.filter(name => !ghosts.has(name));
+		// Keyed on the folded name for the reason the lookup above is folded: two passages
+		// linking to `Tav` and `tav` are asking for one room, not two.
+		const fresh = names.filter(name => !ghosts.has(foldPassageName(name)));
 
 		if (fresh.length === 0) {
 			continue;
@@ -101,7 +107,7 @@ export function brokenLinkGhosts(story: Story): Passage[] {
 		const placed = fresh.map((name, index) => {
 			const ghost = ghostPassage(name, positions[index]);
 
-			ghosts.set(name, ghost);
+			ghosts.set(foldPassageName(name), ghost);
 			return ghost;
 		});
 

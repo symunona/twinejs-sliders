@@ -440,6 +440,18 @@ to match the real one.
 Link props: `to`, `if`, `icon`, `transition`. `to:` is optional when the target is inline;
 the parser fills it in.
 
+**Targets match case-insensitively.** `to: start` finds the passage `Start`; an exact match
+always wins, and case is the only looseness — nothing else about a name is folded. The
+player does this in `passageNamed()` (`matchPassageName` in `@sliders/scene-types`), and
+the story map, the ghost cards, the editor's link check and `twine-cli lint` all read the
+same rule, so an arrow that is drawn is an arrow the reader can follow. Chapbook's `go()`
+THROWS on a name it cannot find, and the throw lands on the reader as "An unexpected error
+has occurred", so a link that resolves everywhere except the player ends the session.
+
+A target that only matches by case still works, and both the editor and `twine-cli lint`
+warn about it with a one-click fix: one room spelled two ways is one rename from a dead
+link.
+
 Because bubbles are DOM (D2), a link in bubble text is an `<a>` in a `<div>`. Hover, focus,
 keyboard nav, screen readers — free.
 

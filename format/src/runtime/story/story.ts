@@ -5,6 +5,7 @@
  * @packageDocumentation
  */
 
+import {matchPassageName} from '@sliders/scene-types';
 import {createLoggers} from '../logger';
 import {setDefaults} from '../state';
 import {Story} from './types';
@@ -145,9 +146,34 @@ export function startPassage() {
 
 /**
  * Returns the passage with the passed name. If none exists by this name, returns undefined.
+ *
+ * Name matching is EXACT first, then case-insensitive (`matchPassageName`). Chapbook's
+ * `go()` throws on a miss and the throw reaches `window.onerror`, so a `links:` entry
+ * saying `Back: Start` against a passage called `start` used to end the reader's session
+ * on the error screen — while the story map drew the arrow and the editor said nothing
+ * worse than a ghost card. One spelling mistake should not be fatal.
+ *
+ * This is a Sliders edit into a vendored Chapbook file; it is in the `format/README.md`
+ * table. Every name-based lookup in the player goes through here — links, `{embed
+ * passage}`, reveal links, the trail restore — so they cannot disagree.
  */
 export function passageNamed(name: string) {
-	return story.passages.find(p => p.name === name);
+	const matched = matchPassageName(
+		story.passages.map(p => p.name),
+		name
+	);
+
+	if (matched === undefined) {
+		return undefined;
+	}
+
+	if (matched !== name) {
+		logger.warn(
+			`Passage "${matched}" was found for "${name}", which differs only in case.`
+		);
+	}
+
+	return story.passages.find(p => p.name === matched);
 }
 
 /**

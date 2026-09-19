@@ -102,4 +102,23 @@ describe('brokenLinkGhosts()', () => {
 			}
 		}
 	});
+
+	// The player resolves a link target case-insensitively (`matchPassageName`, and
+	// `passageNamed()` in the format), so `on: street` IS a way into `Street`. Drawing a
+	// ghost for it would offer to create a room the story already has.
+	it('draws no ghost for a target that differs only in case', () => {
+		const start = fakePassage({name: 'Start', text: scene(['on: street'])});
+		const street = fakePassage({name: 'Street', text: 'Prose.'});
+
+		expect(brokenLinkGhosts(storyOf([start, street]))).toEqual([]);
+	});
+
+	it('draws one ghost when two passages want the same name in different cases', () => {
+		const one = fakePassage({name: 'One', text: scene(['on: Cellar'])});
+		const two = fakePassage({name: 'Two', text: scene(['on: cellar'])});
+		const ghosts = brokenLinkGhosts(storyOf([one, two]));
+
+		expect(ghosts).toHaveLength(1);
+		expect(ghosts[0].name).toBe('Cellar');
+	});
 });

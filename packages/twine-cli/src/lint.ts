@@ -29,6 +29,7 @@ import {
 	scanWikiLinks,
 	sceneEntityLinkTargets
 } from '@sliders/scene-schema';
+import {matchPassageName} from '@sliders/scene-types';
 import type {Scene, SceneError} from '@sliders/scene-types';
 import {resolveSceneAssets, unusedAssets} from './assets';
 import type {AssetCatalog} from './assets';
@@ -380,7 +381,11 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 	}
 
 	// --- 3. story graph ------------------------------------------------------
-	const names = new Set(passages.map(passage => passage.name));
+	// Names, not a Set of them: a link target resolves exactly first and then by case
+	// (`matchPassageName`), which is what the player's `passageNamed()` does. Linting by a
+	// stricter rule would call a working link dead; by a looser one, it would miss the
+	// error screen a reader actually gets.
+	const names = passages.map(passage => passage.name);
 	const startName = passages.find(
 		passage => passage.id === (body.startPassage as string | undefined)
 	)?.name;
@@ -393,16 +398,27 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 		const file = fileOf(passage);
 
 		for (const exit of exits) {
+			const target = matchPassageName(names, exit.target);
+
 			if (exit.drawn) {
-				incoming.add(exit.target);
+				// The RESOLVED name: a passage reached only by a differently-cased link
+				// would otherwise be reported unreachable further down.
+				incoming.add(target ?? exit.target);
 			}
 
-			if (!names.has(exit.target)) {
+			if (target === undefined) {
 				findings.push({
 					file,
 					level: 'error',
 					line: exit.line,
 					message: `Link target '${exit.target}' is not a passage in this story.`
+				});
+			} else if (target !== exit.target) {
+				findings.push({
+					file,
+					level: 'warn',
+					line: exit.line,
+					message: `Link target '${exit.target}' differs in case from the passage '${target}'. The player follows it; rename one of them.`
 				});
 			}
 		}

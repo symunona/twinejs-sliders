@@ -34,6 +34,34 @@ describe('passageConnections()', () => {
 		});
 	});
 
+	// The player follows a target case-insensitively (`matchPassageName`, and
+	// `passageNamed()` in the format), so the map must draw the arrow — an arrow the map
+	// refuses to draw is a link the author cannot see working.
+	it('connects a link whose target differs only in case', () => {
+		const passages = [
+			fakePassage({name: 'Start', selected: false, text: '[[start]]'}),
+			fakePassage({name: 'Cellar', selected: false, text: '[[CELLAR]]'})
+		];
+		const result = passageConnections(passages);
+
+		// Each links to itself, in the other spelling.
+		expect(result.fixed.self).toEqual(new Set(passages));
+		expect(result.fixed.broken).toEqual(new Set());
+	});
+
+	it('connects two passages whose link differs only in case', () => {
+		const passages = [
+			fakePassage({name: 'a', selected: false, text: '[[B]]'}),
+			fakePassage({name: 'b', selected: false, text: ''})
+		];
+		const result = passageConnections(passages);
+
+		expect(result.fixed.connections).toEqual(
+			new Map([[passages[0], new Set([passages[1]])]])
+		);
+		expect(result.fixed.broken).toEqual(new Set());
+	});
+
 	it('places links between a selected and an unselected passage in the draggable property', () => {
 		const passages = [
 			fakePassage({name: 'a', selected: true, text: '[[b]]'}),
@@ -317,6 +345,17 @@ describe('storyStats()', () => {
 		];
 
 		expect(storyStats(story).links).toEqual(['b']);
+	});
+
+	it('does not call a link broken when it matches a passage by case', () => {
+		const story = fakeStory(0);
+
+		story.passages = [
+			fakePassage({name: 'a', text: '[scene]\nlinks:\n  on: B'}),
+			fakePassage({name: 'b', text: ''})
+		];
+
+		expect(storyStats(story).brokenLinks).toEqual([]);
 	});
 
 	it('reports a scene link pointing at a passage that does not exist as broken', () => {
