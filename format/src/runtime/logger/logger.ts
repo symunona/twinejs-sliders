@@ -40,14 +40,20 @@ export function log(source: string, message: string) {
 
 /**
  * Logs a warning for a source. This emits a `log-warning` event on the window.
+ *
+ * Sliders edit: a warning is NOT muted. `unmuted` holds `{inserts: true}` in a production
+ * build, so every other source's warnings reached nobody — not the console, not
+ * `<warning-list>`, which spies on `console.warn`. Muting is for the chatty per-render
+ * `log()`; a warning is by definition the thing worth saying, and a player that survives a
+ * bad link (`passage-link.ts`, `sliders/stage-element.ts`) in complete silence is a player
+ * nobody can debug from a screenshot. Earlier code worked around this with a bare
+ * `console.warn` at one call site; this fixes it for all 17.
  */
 export function warn(source: string, message: string) {
-	if (unmuted[source]) {
-		console.warn(prefix(source) + message);
-		window.dispatchEvent(
-			new CustomEvent('log-warning', {detail: {message, source}})
-		);
-	}
+	console.warn(prefix(source) + message);
+	window.dispatchEvent(
+		new CustomEvent('log-warning', {detail: {message, source}})
+	);
 }
 
 /**

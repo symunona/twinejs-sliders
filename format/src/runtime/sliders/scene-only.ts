@@ -25,9 +25,10 @@ export const SCENE_MODIFIER = /^scene$/i;
  * `sliders.autoAdvance: 0` came to do nothing with no way to find out: no error, nothing on
  * screen, an empty warning list.
  *
- * `console.warn` on purpose, not the module logger: `unmuted` carries only `inserts` in a
- * production build, so a logger warning reaches nobody. `<warning-list>` spies on
- * `console.warn` and shows it while `config.testing` is on.
+ * Bare `console.warn`, not the module logger. That was once because `unmuted` carries only
+ * `inserts` in a production build, so a logger warning reached nobody; `warn()` is no longer
+ * muted (see `logger/logger.ts`), so either would work now. It stays bare because
+ * `<warning-list>` spies on `console.warn` and this message is aimed squarely at it.
  */
 function warnIfVarsSection(group: ContentBlock[]): void {
 	const text = group
