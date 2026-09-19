@@ -17,7 +17,16 @@
  * their flow maps, comments and blank lines on a rename they didn't ask to reformat.
  */
 
-import {isMap, isScalar, parseDocument, stringify, Scalar, YAMLMap} from 'yaml';
+import {
+	isMap,
+	isScalar,
+	isSeq,
+	parseDocument,
+	stringify,
+	Scalar,
+	YAMLMap,
+	YAMLSeq
+} from 'yaml';
 import {extractSceneBlock} from '@sliders/scene-index';
 
 /** A scalar to replace, as a character range within the BLOCK text. */
@@ -60,6 +69,46 @@ function collect(
 	}
 }
 
+/**
+ * `link:` inside one entity body — a `cast:`/`props:`/`entities:` entry, or a beat's.
+ *
+ * Both spellings: `link: Cellar` names the passage outright, `link: {to: Cellar, if: …}`
+ * states it. A bare name that matches a `links:` entry is NOT a passage name and must be
+ * left alone, which is why the caller passes the link names in.
+ */
+function collectEntityLink(
+	body: unknown,
+	oldName: string,
+	linkNames: Set<string>,
+	targets: Target[]
+): void {
+	if (!isMap(body)) {
+		return;
+	}
+
+	const map = body as YAMLMap;
+
+	for (const pair of map.items) {
+		if (!isScalar(pair.key) || pair.key.value !== 'link') {
+			continue;
+		}
+
+		if (isMap(pair.value)) {
+			const props = pair.value as YAMLMap;
+
+			for (const prop of props.items) {
+				if (isScalar(prop.key) && prop.key.value === 'to') {
+					collect(prop.value, oldName, !!props.flow, targets);
+				}
+			}
+		} else if (!linkNames.has(oldName)) {
+			// A scalar naming a links: entry is that entry's name, not a passage — and the
+			// entry's own `to:` is renamed by the links: branch below.
+			collect(pair.value, oldName, !!map.flow, targets);
+		}
+	}
+}
+
 /** Every place the scene block names a passage, in the order they were written. */
 function sceneTargets(blockText: string, oldName: string): Target[] {
 	// Same YAML version the scene parser uses, so this module and the preview never
@@ -81,11 +130,44 @@ function sceneTargets(blockText: string, oldName: string): Target[] {
 	}
 
 	const targets: Target[] = [];
+	// The names a scalar `link:` could be referring to instead of a passage. Collected
+	// first, because `cast:` is allowed to come before `links:`.
+	const linkNames = new Set<string>();
+
+	for (const pair of (root as YAMLMap).items) {
+		if (
+			isScalar(pair.key) &&
+			pair.key.value === 'links' &&
+			isMap(pair.value)
+		) {
+			for (const link of (pair.value as YAMLMap).items) {
+				if (isScalar(link.key) && typeof link.key.value === 'string') {
+					linkNames.add(link.key.value);
+				}
+			}
+		}
+	}
 
 	for (const pair of (root as YAMLMap).items) {
 		const key = isScalar(pair.key) ? pair.key.value : undefined;
 
-		if (key === 'from') {
+		if (key === 'cast' || key === 'props' || key === 'entities') {
+			if (isMap(pair.value)) {
+				for (const entry of (pair.value as YAMLMap).items) {
+					collectEntityLink(entry.value, oldName, linkNames, targets);
+				}
+			}
+		} else if (key === 'beats' && isSeq(pair.value)) {
+			// A beat item is one key — the speaker or a command — whose value may be the
+			// entity body that repoints the link.
+			for (const item of (pair.value as YAMLSeq).items) {
+				if (isMap(item)) {
+					for (const beatPair of (item as YAMLMap).items) {
+						collectEntityLink(beatPair.value, oldName, linkNames, targets);
+					}
+				}
+			}
+		} else if (key === 'from') {
 			collect(pair.value, oldName, false, targets);
 		} else if (key === 'links' && isMap(pair.value)) {
 			const links = pair.value as YAMLMap;

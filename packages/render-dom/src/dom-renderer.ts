@@ -55,6 +55,7 @@ import {
 	sortByZ,
 	spriteRect
 } from './coords';
+import type {LinkHandler} from './dialogue';
 import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 
@@ -88,6 +89,16 @@ export interface DomRendererOptions {
 	aspect?: number;
 	/** Injected for tests; defaults to the mount element's document. */
 	document?: Document;
+	/**
+	 * Called when the reader clicks an entity carrying a `link:`.
+	 *
+	 * Deliberately the SAME `LinkHandler` the dialogue layer takes, with the same
+	 * `(name, target, event)` arguments and the same `data-sliders-link` /
+	 * `data-sliders-target` attribute contract — a link in a speech bubble and a link on a
+	 * door are one thing to a host, and giving them two shapes would mean two ways to
+	 * navigate that could drift apart.
+	 */
+	onLink?: LinkHandler;
 }
 
 /** Everything the renderer remembers about one on-screen entity. */
@@ -173,6 +184,36 @@ function applyFrameStep(entity: StageEntity, step: FrameStep): StageEntity {
 		rot: step.rot ?? entity.rot,
 		scale: step.scale ?? entity.scale
 	};
+}
+
+/** `#rgb`, `#rrggbb`, `rgb()`, `hsl()` and friends — the spellings that cannot be a token. */
+const HIGHLIGHT_COLOUR = /^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgb|rgba|hsl|hsla)\(\s*[0-9a-z%.,\s/-]+\))$/i;
+
+/**
+ * The glow colour a `highlight:` token asks for, or undefined when it is a story token.
+ *
+ * The question is genuinely hard to answer with a regexp, because `gold` is both a CSS
+ * colour and a plausible name for a look a story paints itself — so the browser is asked.
+ * Where `CSS.supports` is missing (jsdom) only the unambiguous spellings are taken, which
+ * errs the safe way: an unrecognised token still reaches `data-highlight` and the default
+ * glow still draws, whereas writing a non-colour into the custom property would invalidate
+ * the whole `filter` and draw NOTHING.
+ */
+function highlightColour(token: string): string | undefined {
+	const value = token.trim();
+
+	if (!value) {
+		return undefined;
+	}
+
+	const supports = (globalThis as {CSS?: {supports?(p: string, v: string): boolean}})
+		.CSS?.supports;
+
+	if (typeof supports === 'function') {
+		return supports.call(globalThis.CSS, 'color', value) ? value : undefined;
+	}
+
+	return HIGHLIGHT_COLOUR.test(value) ? value : undefined;
 }
 
 /** Identity of a cycle. Changes only when the author's own list does. */
@@ -292,9 +333,70 @@ export class DomRenderer implements Renderer {
 		this.cameraEl = camera;
 		this.fxStackEl = fxStack;
 
+		// One delegated listener on the root, the way the dialogue layer has one on its own
+		// root: entities come and go on every beat, and a listener per sprite would have to
+		// be torn down in three places that can each be missed.
+		root.addEventListener('click', this.handleLinkClick);
+		root.addEventListener('keydown', this.handleLinkKey);
+
 		this.observeResize(el);
 		this.relayout();
 	}
+
+	/**
+	 * A click on an entity carrying a `link:`.
+	 *
+	 * `preventDefault` + the same `[data-sliders-link]` lookup the dialogue layer uses, so a
+	 * host binds ONE handler and gets bubble links and stage links alike. The host decides
+	 * what a click means — the player navigates, the editor opens the passage on ctrl-click
+	 * and otherwise does nothing, because following a link there would throw away the beat
+	 * being staged.
+	 */
+	private handleLinkClick = (event: MouseEvent) => {
+		if (!this.opts.onLink) {
+			return;
+		}
+
+		const el = (event.target as HTMLElement | null)?.closest?.(
+			'[data-sliders-link]'
+		) as HTMLElement | null;
+
+		if (!el) {
+			return;
+		}
+
+		event.preventDefault();
+		this.opts.onLink(
+			el.dataset.slidersLink ?? '',
+			el.dataset.slidersTarget,
+			event
+		);
+	};
+
+	/**
+	 * Enter or Space on a focused entity link.
+	 *
+	 * The handler wants a MouseEvent (a host reads its modifier keys), and a KeyboardEvent
+	 * is not one — so the key press is turned into a real click on the element, which then
+	 * arrives through `handleLinkClick` carrying the modifiers the reader actually held.
+	 * One path to navigation rather than two that can disagree.
+	 */
+	private handleLinkKey = (event: KeyboardEvent) => {
+		if (event.key !== 'Enter' && event.key !== ' ') {
+			return;
+		}
+
+		const el = (event.target as HTMLElement | null)?.closest?.(
+			'[data-sliders-link]'
+		) as HTMLElement | null;
+
+		if (!el) {
+			return;
+		}
+
+		event.preventDefault();
+		el.click();
+	};
 
 	async apply(stage: Stage, transitions: Transition[] = []): Promise<void> {
 		if (!this.mountEl || !this.doc) {
@@ -411,6 +513,8 @@ export class DomRenderer implements Renderer {
 			this.stopAnim(rec);
 		}
 
+		this.rootEl?.removeEventListener('click', this.handleLinkClick);
+		this.rootEl?.removeEventListener('keydown', this.handleLinkKey);
 		this.rootEl?.remove();
 		this.rootEl = undefined;
 		this.boxEl = undefined;
@@ -722,6 +826,21 @@ export class DomRenderer implements Renderer {
 		}
 
 		this.assignZ();
+
+		// What the stage BELIEVES is clickable, for the same reason `data-music` exists: a
+		// link is invisible until somebody hovers it, so without this "is this door a way
+		// out" is unanswerable from outside.
+		let links = 0;
+
+		for (const res of resolved.values()) {
+			if (res.entity.link?.to !== undefined || res.entity.link?.name !== undefined) {
+				links++;
+			}
+		}
+
+		if (this.rootEl) {
+			this.rootEl.dataset.linkCount = String(links);
+		}
 	}
 
 	private createEntity(
@@ -735,6 +854,7 @@ export class DomRenderer implements Renderer {
 		// Stable hooks the e2e suite selects on. Do not rename.
 		el.dataset.entityId = id;
 		el.dataset.kind = res.entity.kind;
+		this.syncLink(el, res.entity);
 
 		const rec: EntityRecord = {
 			id,
@@ -761,6 +881,64 @@ export class DomRenderer implements Renderer {
 		this.syncAnim(rec, res, duration, ease);
 	}
 
+	/**
+	 * The clickable half of an entity: `link:` and `highlight:`.
+	 *
+	 * Attribute names are the dialogue layer's, on purpose (`dialogue.ts` renderRichText) —
+	 * a bubble link and a door are one contract, so one `closest('[data-sliders-link]')`
+	 * serves both and a host cannot wire up one and forget the other.
+	 *
+	 * `data-sliders-link` carries the NAME when the author named a `links:` entry, because
+	 * that is what the player looks up in its already-`if:`-filtered map; `data-sliders-target`
+	 * carries the resolved passage, and wins where it is set. An `<a>` would be the obvious
+	 * element for this, but an entity is a positioned box holding an <img> and nesting one
+	 * would put a second element between the box and the sprite that every geometry function
+	 * here measures.
+	 */
+	private syncLink(el: HTMLElement, entity: StageEntity): void {
+		const link = entity.link;
+
+		if (link?.to === undefined && link?.name === undefined) {
+			delete el.dataset.slidersLink;
+			delete el.dataset.slidersTarget;
+			delete el.dataset.highlight;
+			el.removeAttribute('role');
+			el.removeAttribute('tabindex');
+			return;
+		}
+
+		el.dataset.slidersLink = link.name ?? link.to ?? '';
+
+		if (link.to !== undefined) {
+			el.dataset.slidersTarget = link.to;
+		} else {
+			delete el.dataset.slidersTarget;
+		}
+
+		// The token ALWAYS reaches the DOM, so a story stylesheet can paint any word it
+		// likes; a word that is also a real CSS colour additionally becomes the custom
+		// property the default glow reads, so `highlight: gold` needs no stylesheet at all.
+		if (entity.highlight) {
+			const colour = highlightColour(entity.highlight);
+
+			el.dataset.highlight = entity.highlight;
+
+			if (colour) {
+				el.style.setProperty('--sliders-highlight', colour);
+			} else {
+				el.style.removeProperty('--sliders-highlight');
+			}
+		} else {
+			delete el.dataset.highlight;
+			el.style.removeProperty('--sliders-highlight');
+		}
+
+		// Reachable by keyboard, and announced as what it is. The stage is a picture to a
+		// screen reader otherwise, and a door that only a mouse can open is a dead end.
+		el.setAttribute('role', 'link');
+		el.setAttribute('tabindex', '0');
+	}
+
 	private updateEntity(
 		rec: EntityRecord,
 		res: ResolvedEntity,
@@ -777,6 +955,10 @@ export class DomRenderer implements Renderer {
 		}
 
 		const prev = rec.entity;
+
+		// ABOVE the syncAnim bail-out below: an entity running a frame cycle takes the early
+		// return, and a link written after it would never update on a walking sprite.
+		this.syncLink(rec.el, res.entity);
 
 		rec.entity = res.entity;
 		rec.character = res.character;

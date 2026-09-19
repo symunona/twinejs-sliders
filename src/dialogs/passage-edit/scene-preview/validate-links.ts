@@ -181,7 +181,39 @@ export function linkTargetErrors(input: LinkValidationInput): LinkTargetError[] 
 		});
 	}
 
-	// 2. Prose links outside the block. A bare `[[stay]]` that links: already claims is
+	// 2. Clickable entities. A list, not a map: two props may lead to the same missing
+	//    passage and both deserve a squiggle.
+
+	for (const span of result?.entityLinkSpans ?? []) {
+		if (exists.has(span.to) || EXTERNAL_RE.test(span.to)) {
+			continue;
+		}
+
+		const suggestion = missingSuggestion(span.to, passageNames);
+		const line = span.line + blockOffset;
+		const endLine =
+			span.endLine === undefined ? undefined : span.endLine + blockOffset;
+
+		errors.push({
+			code: 'unknown-passage',
+			col: span.col,
+			fix: spanFix(suggestion.fix, {
+				col: span.col,
+				endCol: span.endCol,
+				endLine,
+				line
+			}),
+			hint: suggestion.hint,
+			line,
+			endCol: span.endCol,
+			endLine,
+			message: `This link points at a passage that doesn't exist: '${span.to}'.`,
+			missingPassage: span.to,
+			severity: 'warning'
+		});
+	}
+
+	// 3. Prose links outside the block. A bare `[[stay]]` that links: already claims is
 	//    skipped: it is a link NAME, and rule 1 has judged where it goes.
 
 	const lines = text.split('\n');

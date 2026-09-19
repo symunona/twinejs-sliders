@@ -42,7 +42,10 @@ export function cloneEntity(entity: StageEntity): StageEntity {
 	return {
 		...entity,
 		at: cloneVec(entity.at),
-		...(entity.frames ? {frames: cloneFrames(entity.frames)} : {})
+		...(entity.frames ? {frames: cloneFrames(entity.frames)} : {}),
+		// Copied for the same reason `at` is: a stage sequence is many clones of one
+		// declaration, and a shared object is a beat able to edit the beat before it.
+		...(entity.link ? {link: {...entity.link}} : {})
 	};
 }
 
@@ -133,6 +136,16 @@ export function mergePatch(
 		next.rot = patch.rot;
 	}
 
+	// Clearable, like `of` and unlike everything above: a link is state that every later
+	// beat inherits, so `link: ~` is the only way to say "this door stops being a way out".
+	if (patch.link !== undefined) {
+		next.link = patch.link ?? undefined;
+	}
+
+	if (patch.highlight !== undefined) {
+		next.highlight = patch.highlight ?? undefined;
+	}
+
 	return next;
 }
 
@@ -150,6 +163,10 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		// entity says the same thing.
 		of: patch.of ?? undefined,
 		opacity: patch.opacity ?? ENTITY_DEFAULTS.opacity,
+		// No default for either: absent means scenery, and `link: ~` on a brand-new entity
+		// says the same thing.
+		link: patch.link ?? undefined,
+		highlight: patch.highlight ?? undefined,
 		ref: patch.ref,
 		// No default: absent is 0, and 0 is the identity — so an entity that was never
 		// rotated carries no key rather than a number every renderer has to read.

@@ -122,6 +122,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			return;
 		}
 
+		// The renderer is given NO `onLink` here, deliberately: on the stage every click a
+		// link could ride on is already spoken for — plain selects, ctrl/cmd extends the
+		// selection, shift is the drag's axis lock, double click opens the asset — so a
+		// link handler would fire ON TOP of one of those rather than instead of it. The
+		// editor's affordance is the Open button in the selection row. A link in bubble
+		// TEXT has no such conflict and keeps its ctrl-click.
 		const renderer = new DomRenderer();
 		const dialogue = new DialogueLayer({
 			onLink: (name, target, event) => onLinkRef.current?.(name, target, event)

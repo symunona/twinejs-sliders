@@ -33,6 +33,8 @@ import {
 	type Camera,
 	type EntityKind,
 	type EntityPatch,
+	type EntityLink,
+	type EntityLinkSpan,
 	type EntityPatchBody,
 	type Frac2,
 	type FrameLoop,
@@ -85,16 +87,27 @@ export const ENTITY_KEYS = [
 	'layer',
 	'z',
 	'opacity',
-	'ref'
+	'ref',
+	'link',
+	'highlight'
 ] as const;
+
+/**
+ * Keys inside the long form of an entity's `link:` — `link: {to: Cellar, if: has_key}`.
+ *
+ * `to` and `if` only: an entity link borrows the `links:` block's grammar, not its
+ * presentation. `icon:` and `transition:` belong to a link the reader is shown as a row of
+ * choices, and this one is a door.
+ */
+export const LINK_ENTITY_KEYS = ['to', 'if'] as const;
 
 /**
  * Keys inside one step of a `frame:` list.
  *
  * `name` is the pose; the rest are the entity's own placement keys, meaning what they mean
- * on the entity. `of`, `z` and `ref` are deliberately NOT here: a cycle animates one sprite
- * in place, and a step that could re-parent or re-point it would be a beat wearing a
- * frame's clothes.
+ * on the entity. `of`, `z`, `ref`, `link` and `highlight` are deliberately NOT here: a cycle
+ * animates one sprite in place, and a step that could re-parent it, re-point it or change
+ * where it leads would be a beat wearing a frame's clothes.
  */
 export const FRAME_STEP_KEYS = [
 	'name',
@@ -203,6 +216,14 @@ interface Ctx {
 	linkIfNodes: Map<string, unknown>;
 	/** Where each beat was written, in `scene.beats` order. Reported as `beatSpans`. */
 	beatNodes: unknown[];
+	/**
+	 * Every entity `link:` value node, paired with the link it produced BY REFERENCE.
+	 *
+	 * By reference because the named-link post-pass runs later and fills in `to`; holding
+	 * the object means the span list reports what the link finally resolved to, with no
+	 * second lookup that could disagree with the first.
+	 */
+	entityLinkNodes: {node: unknown; link: EntityLink}[];
 	/** `mira: ~` nodes, legal only once we know whether `from:` was set. */
 	pendingRemovals: {id: string; node: unknown}[];
 	/** `of:` edges declared in THIS block, with the node to point an error at. */
@@ -433,6 +454,75 @@ function parseRot(ctx: Ctx, node: unknown): number | undefined {
 	}
 
 	return rot;
+}
+
+/**
+ * `link:` on an entity — what clicking it does.
+ *
+ * A scalar is AMBIGUOUS on purpose, and stays that way until the whole document is parsed:
+ * `link: escape` may name an entry in this scene's `links:` block, which need not have been
+ * read yet. So the scalar is stashed in `name` and `resolveEntityLinks()` decides at the
+ * end, when both halves exist. The map form states its target outright and needs no pass.
+ */
+function parseEntityLink(ctx: Ctx, node: unknown): EntityLink | undefined {
+	if (isMap(node)) {
+		const link: EntityLink = {};
+
+		for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === undefined) {
+				addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+				continue;
+			}
+
+			switch (key) {
+				case 'to': {
+					// A passage called `04` is the string "04", not the number 4.
+					const to = asSourceString(ctx, pair.value, 'link to');
+
+					if (to !== undefined) {
+						link.to = to;
+					}
+
+					break;
+				}
+
+				case 'if': {
+					const cond = asString(ctx, pair.value, 'link if');
+
+					if (cond !== undefined) {
+						link.if = cond;
+					}
+
+					break;
+				}
+
+				default:
+					addError(
+						ctx,
+						'unknown-key',
+						`Unknown key '${key}' in link.`,
+						pair.key,
+						{...keyFix(key, LINK_ENTITY_KEYS)}
+					);
+			}
+		}
+
+		if (link.to === undefined) {
+			addError(ctx, 'bad-value', 'A link needs a `to:`.', node, {
+				hint: 'link: {to: Cellar} — or write the passage name on its own, `link: Cellar`.'
+			});
+
+			return undefined;
+		}
+
+		return link;
+	}
+
+	const name = asSourceString(ctx, node, 'link');
+
+	return name === undefined ? undefined : {name};
 }
 
 function asBoolean(ctx: Ctx, node: unknown, what: string): boolean | undefined {
@@ -1458,6 +1548,41 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'link': {
+				// `link: ~` is the only way to say "stops being a way out", so an explicit
+				// null has to survive as one rather than fall through as "absent".
+				if (isNullNode(pair.value)) {
+					body.patch.link = null;
+					break;
+				}
+
+				const link = parseEntityLink(ctx, pair.value);
+
+				if (link) {
+					body.patch.link = link;
+					ctx.entityLinkNodes.push({link, node: pair.value});
+				}
+
+				break;
+			}
+
+			case 'highlight': {
+				if (isNullNode(pair.value)) {
+					body.patch.highlight = null;
+					break;
+				}
+
+				// asString, not asSourceString: this is a style token or a CSS colour, not
+				// the name of anything the story has to look up.
+				const highlight = asString(ctx, pair.value, 'highlight');
+
+				if (highlight !== undefined) {
+					body.patch.highlight = highlight;
+				}
+
+				break;
+			}
+
 			case 'say': {
 				if (!allowSay) {
 					addError(
@@ -2469,6 +2594,7 @@ function parseSceneDoc(text: string): ParseResult {
 	const lineCounter = new LineCounter();
 	const ctx: Ctx = {
 		beatNodes: [],
+		entityLinkNodes: [],
 		errors: [],
 		inlineLinks: new Map(),
 		linkIfNodes: new Map(),
@@ -2805,6 +2931,33 @@ function parseSceneDoc(text: string): ParseResult {
 		}
 	}
 
+	// Entity links, resolved now that both halves of the document exist. A scalar `link:`
+	// could not be told apart from a passage name at the moment it was read, because the
+	// `links:` block it may be naming is allowed to come after the entity that names it.
+	const entityLinkSpans: EntityLinkSpan[] = [];
+
+	for (const {link, node} of ctx.entityLinkNodes) {
+		if (link.name !== undefined) {
+			const named = scene.links[link.name];
+
+			if (named) {
+				link.to = named.to;
+
+				if (named.if !== undefined) {
+					link.if = named.if;
+				}
+			} else {
+				// Named nothing in this scene, so it was a passage name all along.
+				link.to = link.name;
+				delete link.name;
+			}
+		}
+
+		if (link.to !== undefined) {
+			entityLinkSpans.push({...spanOf(ctx, node), to: link.to});
+		}
+	}
+
 	const linkSpans: Record<string, SceneSpan> = {};
 
 	for (const [name, node] of ctx.linkTargetNodes) {
@@ -2823,6 +2976,7 @@ function parseSceneDoc(text: string): ParseResult {
 
 	return {
 		beatSpans: ctx.beatNodes.map(node => spanOf(ctx, node)),
+		entityLinkSpans,
 		errors: ctx.errors,
 		linkIfSpans,
 		linkSpans,

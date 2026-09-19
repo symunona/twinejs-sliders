@@ -73,9 +73,32 @@ export class SlidersStage extends CustomElement {
 	private cinema = false;
 
 	private handleClick = (event: MouseEvent) => {
-		// A link inside a bubble is a navigation, not an advance.
-		if (!(event.target as HTMLElement | null)?.closest('a')) {
+		// A link is a navigation, not an advance — in a bubble (an <a>) or on the stage (an
+		// entity carrying `link:`). Tapping anywhere ELSE still advances, which is what lets
+		// a clickable door coexist with tap-to-read.
+		if (
+			!(event.target as HTMLElement | null)?.closest('a, [data-sliders-link]')
+		) {
 			void this.play();
+		}
+	};
+
+	/**
+	 * Follow a link, from a bubble or from a clickable entity.
+	 *
+	 * One closure for both, handed to the dialogue layer and to the renderer, so the two
+	 * cannot resolve the same name differently. `target` is the passage the author wrote
+	 * inline; a bare name is looked up in the scene's link map, which the modifier has
+	 * already filtered by `if:` — so a gated link that failed its condition is simply not
+	 * there and the click does nothing but say so.
+	 */
+	private followLink = (name: string, target?: string) => {
+		const to = target ?? this.links[name];
+
+		if (to) {
+			go(to);
+		} else {
+			warn(`The link "${name}" has no \`to:\` in this scene's links.`);
 		}
 	};
 
@@ -122,19 +145,12 @@ export class SlidersStage extends CustomElement {
 		// walking through the line that told it to stop.
 		this.states = runBeats(entry, payload.scene.beats ?? []);
 		this.beatIndex = 0;
-		this.renderer = new DomRenderer({guides: Boolean(get('config.testing'))});
-		await this.renderer.mount(this, manifestResolver);
-		this.dialogue = new DialogueLayer({
-			onLink: (name, target) => {
-				const to = target ?? this.links[name];
-
-				if (to) {
-					go(to);
-				} else {
-					warn(`The link "${name}" has no \`to:\` in this scene's links.`);
-				}
-			}
+		this.renderer = new DomRenderer({
+			guides: Boolean(get('config.testing')),
+			onLink: this.followLink
 		});
+		await this.renderer.mount(this, manifestResolver);
+		this.dialogue = new DialogueLayer({onLink: this.followLink});
 		this.dialogue.mount(this, this.renderer);
 
 		// The scene enters FROM the stage it inherited, so a character already on stage in

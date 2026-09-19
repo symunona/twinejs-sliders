@@ -132,4 +132,48 @@ describe('renameSceneTargets', () => {
 
 		expect(renameSceneTargets(text, 'Tavern', 'Inn')).toBe(text);
 	});
+
+	// A clickable prop is a real exit from this passage, so a rename that stopped at
+	// `links:` would silently break every door in the story.
+	it('follows a rename into an entity link:, flow and block form', () => {
+		const text = scene(
+			'props:',
+			'  door: {at: 0.3, link: Tavern}',
+			'  hatch:',
+			'    link: {to: Tavern, if: has_key}',
+			'beats:',
+			'  - door: {link: Tavern}'
+		);
+
+		expect(renameSceneTargets(text, 'Tavern', 'Inn')).toBe(
+			scene(
+				'props:',
+				'  door: {at: 0.3, link: Inn}',
+				'  hatch:',
+				'    link: {to: Inn, if: has_key}',
+				'beats:',
+				'  - door: {link: Inn}'
+			)
+		);
+	});
+
+	it('leaves a link: that names a links: entry alone, and renames that entry instead', () => {
+		const text = scene(
+			'links:',
+			'  Tavern: {to: Tavern}',
+			'props:',
+			'  door: {link: Tavern}'
+		);
+
+		// The entry's own `to:` moves; the entry NAME and the reference to it do not — a
+		// link name is not a passage name, even when it happens to be spelled like one.
+		expect(renameSceneTargets(text, 'Tavern', 'Inn')).toBe(
+			scene(
+				'links:',
+				'  Tavern: {to: Inn}',
+				'props:',
+				'  door: {link: Tavern}'
+			)
+		);
+	});
 });

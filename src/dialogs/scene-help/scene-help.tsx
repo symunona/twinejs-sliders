@@ -83,7 +83,11 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	frameLoop: `How an animated frame: list ends. ${FRAME_LOOPS.join(
 		', '
 	)} — all loops forever (the default), once plays through and holds the last step.`,
+	highlight:
+		'How a clickable entity lights up under the pointer. A CSS colour (gold, #ffcc00) tints the default glow; gold, danger, cold and warm are built in. Any other word reaches the DOM as data-highlight for your stylesheet to paint.',
 	layer: `Legacy sugar for z:. ${LAYERS.join(', ')} — back is z: -1, front is z: 2, mid writes nothing. An explicit z: wins.`,
+	link:
+		'Makes this entity clickable: the reader clicks it and goes to that passage. A passage name, or the name of an entry under links: — which gives it that entry’s if: for free. link: {to: Cellar, if: has_key} spells it out. A link set on a beat holds for every beat after it; link: ~ takes it away.',
 	of: `Hang this entity off another one: at: becomes an offset from it. of: ~ detaches.`,
 	opacity: '0 to 1. 1 is the default.',
 	ref: 'The asset or character this id draws, when the id is not the asset name itself.',

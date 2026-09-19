@@ -4,6 +4,7 @@
 import {
 	parsePassageReferences,
 	scanLinkTargets,
+	sceneEntityLinkTargets,
 	sceneLinkTargets
 } from '../references';
 import {parseScene} from '../parse-scene';
@@ -174,5 +175,69 @@ describe('parsePassageReferences', () => {
 		for (const target of fromParser) {
 			expect(parsePassageReferences(PASSAGE)).toContain(target);
 		}
+	});
+});
+
+/**
+ * The second scanner: a clickable entity's `link:`.
+ *
+ * Kept apart from `sceneLinkTargets` because an entity link has no NAME to be looked up
+ * by — it is a bare list of passages this scene can be left through. Without it the story
+ * map draws no arrow for a clickable door and twine-cli calls its target unreachable.
+ */
+describe('sceneEntityLinkTargets()', () => {
+	it('reads the flow form and the block form', () => {
+		const text = [
+			'props:',
+			'  door: {at: 0.3, link: Cellar}',
+			'  hatch:',
+			'    link: Attic'
+		].join('\n');
+
+		expect(sceneEntityLinkTargets(text)).toEqual(['Cellar', 'Attic']);
+	});
+
+	it('takes the target out of the map form', () => {
+		expect(
+			sceneEntityLinkTargets('props:\n  door: {link: {to: Cellar, if: has_key}}')
+		).toEqual(['Cellar']);
+	});
+
+	it('reads a beat that repoints the link', () => {
+		const text = ['beats:', '  - door: {link: Hall, dur: 1}'].join('\n');
+
+		expect(sceneEntityLinkTargets(text)).toEqual(['Hall']);
+	});
+
+	it('skips a name that a links: entry already claims, so no arrow draws twice', () => {
+		const text = [
+			'links:',
+			'  escape: {to: Alley}',
+			'props:',
+			'  gate: {link: escape}'
+		].join('\n');
+
+		expect(sceneEntityLinkTargets(text)).toEqual([]);
+		expect([...sceneLinkTargets(text).values()]).toEqual(['Alley']);
+	});
+
+	it('ignores a cleared link and a half-typed one', () => {
+		expect(
+			sceneEntityLinkTargets('props:\n  a: {link: ~}\n  b: {link: }\n  c:\n    link:')
+		).toEqual([]);
+	});
+
+	it('is not fooled by the links: block header', () => {
+		expect(sceneEntityLinkTargets('links:\n  stay: Fight')).toEqual([]);
+	});
+
+	it('unquotes and dedupes', () => {
+		const text = [
+			'props:',
+			"  a: {link: 'Back Room'}",
+			'  b: {link: Back Room}'
+		].join('\n');
+
+		expect(sceneEntityLinkTargets(text)).toEqual(['Back Room']);
 	});
 });

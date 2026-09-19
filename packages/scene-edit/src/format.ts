@@ -7,7 +7,7 @@
  */
 
 import {stringify} from 'yaml';
-import {LAYER_BASELINE, type Vec2} from '@sliders/scene-types';
+import {LAYER_BASELINE, type EntityLink, type Vec2} from '@sliders/scene-types';
 
 const DECIMALS = 3;
 
@@ -39,6 +39,14 @@ export function formatAt(at: Vec2, baseline = LAYER_BASELINE): string {
 	}
 
 	return `[${x}, ${formatNumber(at.y)}]`;
+}
+
+function isEntityLink(value: unknown): value is EntityLink {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		('to' in (value as EntityLink) || 'name' in (value as EntityLink))
+	);
 }
 
 function isVec2(value: unknown): value is Vec2 {
@@ -95,6 +103,21 @@ export function formatValue(
 ): string {
 	if (key === 'at' && isVec2(value)) {
 		return formatAt(value, options.relative ? 0 : LAYER_BASELINE);
+	}
+
+	// A link is written back the way it was written in: the `links:` entry it named, if it
+	// named one, and otherwise the passage. The map form survives only where it carries
+	// something a scalar cannot say — a condition of its own.
+	if (key === 'link' && isEntityLink(value)) {
+		if (value.name !== undefined) {
+			return formatScalar(value.name);
+		}
+
+		if (value.if !== undefined) {
+			return `{to: ${formatScalar(value.to)}, if: ${formatScalar(value.if)}}`;
+		}
+
+		return formatScalar(value.to);
 	}
 
 	if (Array.isArray(value)) {

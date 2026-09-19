@@ -9,7 +9,11 @@
  */
 
 import {buildSceneIndex, extractSceneBlock} from '@sliders/scene-index';
-import {scanLinkTargets, scanWikiLinks} from '@sliders/scene-schema';
+import {
+	scanLinkTargets,
+	scanWikiLinks,
+	sceneEntityLinkTargets
+} from '@sliders/scene-schema';
 import {loadCatalog} from '../assets';
 import {hasErrors, lintStory} from '../lint';
 import {refFor, tokens} from './ls';
@@ -45,6 +49,10 @@ function linksOf(passage: PassageObject): string[] {
 	};
 
 	for (const target of scanLinkTargets(passage.text).values()) {
+		add(target);
+	}
+
+	for (const target of sceneEntityLinkTargets(passage.text)) {
 		add(target);
 	}
 

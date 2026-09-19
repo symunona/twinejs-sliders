@@ -443,6 +443,59 @@ the parser fills it in.
 Because bubbles are DOM (D2), a link in bubble text is an `<a>` in a `<div>`. Hover, focus,
 keyboard nav, screen readers — free.
 
+### Clickable objects: `link:`
+
+An entity key. The reader clicks the door, the door takes them somewhere.
+
+```yaml
+[scene]
+bg: cellar
+links:
+  escape: {to: Alley, if: has_key}
+props:
+  door:  {at: 0.3, link: Cellar}              # a passage name
+  gate:  {at: 0.7, link: escape}              # a links: entry — inherits its if:
+  chest: {at: -0.4, link: Vault, highlight: gold}
+cast:
+  mira: {at: -0.2}
+beats:
+  - mira: {say: "Through there.", link: Cellar}   # the SPEAKER becomes clickable
+  - door: {link: Hall}                            # same door, new destination
+  - door: {link: ~}                               # no longer a way out
+```
+
+| Form | Means |
+|---|---|
+| `link: Cellar` | go to the passage `Cellar` |
+| `link: escape` | that entry under `links:`, with its `if:` |
+| `link: {to: Cellar, if: has_key}` | a condition of its own |
+| `link: ~` | stop being clickable |
+
+**A link is stage STATE.** Every later beat inherits it, exactly like `frame:` — which is
+what makes "click the door at beat 3 for A, at beat 7 for B" an ordinary patch and not a
+construct of its own. There is no beat-level `link:` key, and none is needed.
+
+`highlight:` tunes the glow. `gold`, `danger`, `cold` and `warm` are built in, any CSS
+colour works, and any other token reaches the DOM as `data-highlight` for the story's own
+stylesheet — the same extension point `bubble: {as:}` and `bg: {fx:}` have.
+
+Hovering a clickable entity glows along the sprite's own **alpha edge**, not around its
+box: the renderer uses stacked `drop-shadow()` filters, which follow transparency. The
+entity is also a tab stop (`role="link"`, Enter or Space follows it).
+
+⚠️ **The hit area is still the box.** A transparent corner of the art is clickable even
+though the glow traces the silhouette — the same limit the visual editor's own hit testing
+has. Crop art tightly where it matters.
+
+Clicking a linked entity navigates; clicking anywhere else on the stage still advances the
+beat. In the **editor** a plain click selects the sprite as usual — following the link
+would throw away the beat being staged — and the selection row grows a button that opens
+the target passage.
+
+A clickable entity is a real exit: the story map draws an arrow for it, a passage rename
+follows it, a missing target gets a ghost card, and `twine-cli lint` counts it when
+deciding what is reachable.
+
 ## Reuse: id, from, marks
 
 Every scene compiles to a state sequence:

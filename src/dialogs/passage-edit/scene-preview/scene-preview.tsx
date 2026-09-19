@@ -1644,6 +1644,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDelete={remove}
 				onFlip={flip}
 				onFrame={setFrame}
+				onOpenLink={onOpenPassage}
 				onPreviewFrame={setFramePreview}
 				onStepZ={stepZ}
 			/>

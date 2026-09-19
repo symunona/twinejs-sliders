@@ -24,6 +24,7 @@ import {
 	IconArrowDown,
 	IconArrowUp,
 	IconFlipHorizontal,
+	IconExternalLink,
 	IconMoodSmile,
 	IconTrash
 } from '@tabler/icons';
@@ -61,6 +62,15 @@ export interface StageSelectionControlsProps {
 	onPreviewFrame: (frame: string | null) => void;
 	/** One z step. -1 sends backward, +1 brings forward — same as `[` and `]`. */
 	onStepZ: (delta: number) => void;
+	/**
+	 * Open the passage a selected entity's `link:` leads to.
+	 *
+	 * Here and not on the stage itself, because every modifier a click could carry is
+	 * already spoken for: plain selects, ctrl/cmd extends the selection, shift is the
+	 * drag's axis lock and double click opens the asset. A button in the row is also the
+	 * only one of those an author discovers without being told.
+	 */
+	onOpenLink?: (to: string) => void;
 }
 
 /** No frame chosen: the renderer falls back to `idle`, or to the manifest's first frame. */
@@ -120,6 +130,7 @@ export const StageSelectionControls: React.FC<
 		onDelete,
 		onFlip,
 		onFrame,
+		onOpenLink,
 		onPreviewFrame,
 		onStepZ
 	} = props;
@@ -135,6 +146,9 @@ export const StageSelectionControls: React.FC<
 	// for choosing, not for reporting; the scene errors already carry the complaint.
 	const current =
 		single?.frame && frames.includes(single.frame) ? single.frame : AUTO_FRAME;
+	// Single selection only: two sprites can lead two different places, and a button that
+	// silently picked one of them would be worse than no button.
+	const link = single?.link?.to;
 
 	// Nothing to offer, nothing to draw. The row floats OVER the stage rather than sitting
 	// above it, so it can come and go without moving the scene — which is what the empty
@@ -155,6 +169,16 @@ export const StageSelectionControls: React.FC<
 				>
 					{note}
 				</span>
+			)}
+			{link && onOpenLink && (
+				<IconButton
+					icon={<IconExternalLink />}
+					label={link}
+					onClick={() => onOpenLink(link)}
+					tooltipLabel={t('dialogs.passageEdit.scenePreview.openLink', {
+						passage: link
+					})}
+				/>
 			)}
 			<IconButton
 			commandId="scene.flip"

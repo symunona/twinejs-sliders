@@ -6,7 +6,8 @@
  *
  *   1 YAML          `@sliders/scene-schema`  parse errors, unknown keys, bad coordinates
  *   2 cross-passage `@sliders/scene-index`   duplicate ids, unknown `from:`/`@mark`, cycles
- *   3 story graph   `scanLinkTargets`        dead links, unreachable passages, and the
+ *   3 story graph   `scanLinkTargets` +      dead links, unreachable passages, and the
+ *                   `sceneEntityLinkTargets`
  *                                            spec-02 trap below
  *   4 assets        manifest + blobs         unknown refs, missing blobs, orphaned blobs
  *
@@ -22,7 +23,12 @@
 
 import {buildSceneIndex, extractSceneBlock, splitSceneRef} from '@sliders/scene-index';
 import type {SceneBlock} from '@sliders/scene-index';
-import {parseScene, scanLinkTargets, scanWikiLinks} from '@sliders/scene-schema';
+import {
+	parseScene,
+	scanLinkTargets,
+	scanWikiLinks,
+	sceneEntityLinkTargets
+} from '@sliders/scene-schema';
 import type {Scene, SceneError} from '@sliders/scene-types';
 import {resolveSceneAssets, unusedAssets} from './assets';
 import type {AssetCatalog} from './assets';
@@ -283,6 +289,19 @@ export function passageExits(text: string): PassageExit[] {
 			line: block ? findKeyLine(block.text, name) + block.lineOffset : 1,
 			target
 		});
+	}
+
+	// A clickable entity is an exit too, and one with no row under the stage at all — which
+	// is exactly why it has to be counted here: nothing else would stop the passage it
+	// leads to being reported as unreachable.
+	if (block) {
+		for (const target of sceneEntityLinkTargets(block.text)) {
+			out.push({
+				drawn: true,
+				line: findKeyLine(block.text, 'link') + block.lineOffset,
+				target
+			});
+		}
 	}
 
 	return out;

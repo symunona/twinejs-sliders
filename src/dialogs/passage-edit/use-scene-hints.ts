@@ -23,9 +23,11 @@ import {
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	LINK_ENTITY_KEYS,
 	SAY_KEYS,
 	TOP_LEVEL_KEYS,
-	parseScene
+	parseScene,
+	sceneLinkTargets
 } from '@sliders/scene-schema';
 import {
 	AssetMeta,
@@ -51,6 +53,15 @@ import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
  * is the whole truth.
  */
 export const FX_IDS = ['cold', 'dark', 'flash', 'rain', 'warm'];
+
+/**
+ * Glow colours `packages/render-dom/src/styles.ts` ships for `highlight:`.
+ *
+ * A SUGGESTION, not the whole truth — unlike `FX_IDS`, any CSS colour works and any other
+ * token reaches `data-highlight` for the story's own stylesheet. Offering the built-in ones
+ * is what tells an author the key takes a word at all.
+ */
+export const HIGHLIGHT_TOKENS = ['gold', 'danger', 'cold', 'warm'];
 
 /** Beat keys that are commands rather than a speaker, offered after the cast. */
 const BEAT_COMMAND_NAMES = [...BEAT_COMMAND_KEYS];
@@ -88,6 +99,14 @@ export type HintSlot =
 	| {kind: 'place'}
 	| {kind: 'bubbleAnchor'}
 	| {kind: 'sizing'}
+	/**
+	 * An entity's `link:`. The scene's own `links:` entry names lead, then every passage —
+	 * naming an entry is the spelling that inherits its `if:`, so it is the one worth
+	 * offering first.
+	 */
+	| {kind: 'linkTarget'; links: readonly string[]}
+	/** `highlight:` — a glow colour the renderer ships, or any token the story paints. */
+	| {kind: 'highlight'}
 	/**
 	 * Key position in a map whose schema is known: the scene root, an entity, a
 	 * `bubble:`, a link. `id` only names the MRU bucket.
@@ -354,6 +373,11 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 
 		case 'bg':
 			return keys('bg', BG_KEYS);
+
+		// An entity's `link:` written long: `link: {to: Cellar, if: has_key}`. Not the
+		// `links:` block's own keys — a door has no icon and no transition of its own.
+		case 'link':
+			return keys('entityLink', LINK_ENTITY_KEYS);
 
 		// An `ease:` map is keyed by WHAT is moving, not by an entity key. Its members
 		// collide with real keys elsewhere in the subset (`bg`, `fx`, `frame`, `music`),
@@ -682,6 +706,19 @@ export function sceneHintContext(
 				case 'to':
 					return found({kind: 'passage'});
 
+				// A link value is a passage OR one of this scene's own link names, and the
+				// scene is right here in the buffer — so the names are scanned rather than
+				// threaded through from the parse, which is debounced and may be stale by
+				// exactly the entry the author just typed.
+				case 'link':
+					return found({
+						kind: 'linkTarget',
+						links: [...sceneLinkTargets(lines.slice(blockStart).join('\n')).keys()]
+					});
+
+				case 'highlight':
+					return found({kind: 'highlight'});
+
 				case 'as':
 					return found({kind: 'style'});
 
@@ -813,6 +850,17 @@ function namesForSlot(
 
 		case 'passage':
 			return [...passages].sort((a, b) => a.localeCompare(b));
+
+		case 'linkTarget':
+			return [
+				...slot.links,
+				...[...passages]
+					.filter(name => !slot.links.includes(name))
+					.sort((a, b) => a.localeCompare(b))
+			];
+
+		case 'highlight':
+			return [...HIGHLIGHT_TOKENS];
 
 		case 'props':
 			return assetNames(all, ['object', 'fx']);

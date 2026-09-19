@@ -417,6 +417,7 @@
 				"beatBelongsTo": "Beat {{beat}} is {{name}}'s — a move here writes a new beat after it.",
 				"beatStagesNothing": "Beat {{beat}} stages nothing — a move here writes a new beat after it.",
 				"flip": "Flip horizontally",
+				"openLink": "Open '{{passage}}' — where clicking this leads",
 				"remove": "Remove from scene",
 				"zBack": "Send backward",
 				"zFront": "Bring forward",

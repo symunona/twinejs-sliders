@@ -10,7 +10,10 @@ second-class dashed reference rather than a real arrow.
 
 import uniq from 'lodash/uniq';
 import {extractSceneBlock} from '@sliders/scene-index';
-import {sceneLinkTargets} from '@sliders/scene-schema';
+import {
+	sceneEntityLinkTargets,
+	sceneLinkTargets
+} from '@sliders/scene-schema';
 import {parseLinks} from './parse-links';
 
 // Links _not_ starting with a protocol, e.g. abcd://. Same test parse-links.ts applies.
@@ -33,9 +36,14 @@ export function passageLinks(text: string, internalOnly?: boolean): string[] {
 		return parseLinks(text, internalOnly);
 	}
 
-	const sceneLinks = Array.from(sceneLinkTargets(block.text).values()).filter(
-		target => target !== '' && (!internalOnly || internalLink(target))
-	);
+	// Both scene spellings: the `links:` block the reader is offered as choices, and the
+	// `link:` on an entity the reader clicks. A clickable door is a real exit from this
+	// passage, so the map must draw it, a rename must follow it and a broken one must get
+	// a ghost card — none of which happens for a target nothing reports.
+	const sceneLinks = [
+		...sceneLinkTargets(block.text).values(),
+		...sceneEntityLinkTargets(block.text)
+	].filter(target => target !== '' && (!internalOnly || internalLink(target)));
 
 	return uniq([...parseLinks(text, internalOnly), ...sceneLinks]);
 }

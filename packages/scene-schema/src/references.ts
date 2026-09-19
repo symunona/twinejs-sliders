@@ -27,6 +27,15 @@ const ENTRY_LINE_RE = /^(\s*)([^\s:#][^:]*?)\s*:\s*(.*)$/;
 /** `to:` inside a flow map — `{to: Somewhere, if: x}`. */
 const TO_IN_FLOW_RE = /(?:^|[{,])\s*to\s*:\s*([^,}]*)/;
 
+/**
+ * An entity's `link:`, at the start of a line or inside a flow map.
+ *
+ * The value runs to the end of the line or to the next `,`/`}` — except for the `{…}` map
+ * form, which is taken whole so its own `to:` can be read out of it. `\blink` would also
+ * match the `s` of `links:`, hence the explicit word boundary on the other side.
+ */
+const LINK_KEY_RE = /(?:^[ \t]*|[{,][ \t]*)link[ \t]*:[ \t]*(\{[^{}]*\}|[^,}\n]*)/gm;
+
 function indentOf(line: string): number {
 	const match = /^[ \t]*/.exec(line);
 
@@ -175,6 +184,54 @@ export function sceneLinkTargets(text: string): Map<string, string> {
  * import it. Same function, not a copy — the point of this file.
  */
 export const scanLinkTargets = sceneLinkTargets;
+
+/**
+ * `link:` on an entity, wherever it appears — `props: {door: {link: Cellar}}`, a block
+ * entry, or a beat that repoints it.
+ *
+ * A second scanner rather than a branch inside {@link sceneLinkTargets}, because the two
+ * answer different questions: that one is a NAME -> target map for `[[wiki]]` text to
+ * resolve against, and an entity link has no name to be looked up by. Same line-scanner
+ * discipline though — this runs on every passage on every keystroke and must survive a
+ * half-typed scene.
+ *
+ * A value that names a `links:` entry is NOT returned: that entry's own target is already
+ * in the other map, and returning both would draw the same arrow twice.
+ */
+export function sceneEntityLinkTargets(text: string): string[] {
+	if (!text.includes('link')) {
+		return [];
+	}
+
+	const named = sceneLinkTargets(text);
+	const seen = new Set<string>();
+	const out: string[] = [];
+
+	let match: RegExpExecArray | null;
+
+	LINK_KEY_RE.lastIndex = 0;
+
+	while ((match = LINK_KEY_RE.exec(text)) !== null) {
+		const raw = match[1];
+		// `link: {to: Cellar, if: has_key}` — the map form states its target inside.
+		const inner = raw.trim().startsWith('{') ? TO_IN_FLOW_RE.exec(raw) : null;
+		const value = unquote(inner ? inner[1] : raw);
+
+		// `~` is "no longer clickable", and an empty value is a half-typed line.
+		if (value === '' || value === '~' || value === 'null') {
+			continue;
+		}
+
+		if (named.has(value) || seen.has(value)) {
+			continue;
+		}
+
+		seen.add(value);
+		out.push(value);
+	}
+
+	return out;
+}
 
 /**
  * Every passage this passage links to, in order of first appearance, deduped.

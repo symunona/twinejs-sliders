@@ -43,4 +43,26 @@ describe('passageLinks()', () => {
 		expect(passageLinks(text, true)).toEqual(['Tavern']);
 		expect(passageLinks(text)).toEqual(['http://twinery.org', 'Tavern']);
 	});
+
+	// Without this the story map draws no arrow for a clickable door, the ghost card for a
+	// missing target never appears, and twine-cli calls that passage unreachable.
+	it('counts an entity link: as a link out of this passage', () => {
+		const text = [
+			'[scene]',
+			'props:',
+			'  door: {at: 0.3, link: Cellar}',
+			'links:',
+			'  back: Street'
+		].join('\n');
+
+		expect(passageLinks(text)).toEqual(
+			expect.arrayContaining(['Street', 'Cellar'])
+		);
+	});
+
+	it('does not scan a passage with no scene block for link:', () => {
+		expect(passageLinks('Prose that mentions link: Cellar in passing.')).toEqual(
+			[]
+		);
+	});
 });

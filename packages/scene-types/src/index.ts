@@ -185,6 +185,54 @@ export interface StageEntity {
 	 * faces.
 	 */
 	rot?: number;
+	/**
+	 * Where clicking this entity takes the reader. Absent means it is scenery.
+	 *
+	 * STATE, like `frame` and unlike a beat's `sfx`: every later beat inherits it, so the
+	 * door that opened onto the hall at beat 2 still does at beat 9 unless a beat repoints
+	 * it — which is what makes "same object, different destination per beat" a patch rather
+	 * than a construct of its own. `link: ~` on a beat is how it stops being a way out.
+	 *
+	 * A struct rather than a bare passage name because a link may instead NAME an entry in
+	 * the scene's `links:` block, and then it inherits that entry's `if:`. The player is the
+	 * only thing that may evaluate that condition; the editor draws the object as clickable
+	 * either way, because an editor showing a conditional door as scenery is worse than one
+	 * showing a door the reader may not get to use.
+	 */
+	link?: EntityLink;
+	/**
+	 * How a clickable entity lights up under the pointer. Absent = the renderer's default
+	 * glow whenever `link` is set.
+	 *
+	 * A CSS colour is used as the glow colour. Any other token reaches the DOM as
+	 * `data-highlight` and is the story stylesheet's to paint, exactly like `bubble: {as:}`
+	 * and `bg: {fx:}` — the extension point that costs no format change.
+	 */
+	highlight?: string;
+}
+
+/**
+ * What an entity's `link:` resolved to.
+ *
+ * Two spellings, one key: `link: Cellar` is a passage, `link: escape` is an entry in the
+ * scene's own `links:` block. The PARSER decides which — it is the only thing holding both
+ * the entity and the links block — so nothing downstream has to guess, and a scene that
+ * spells a link both ways behaves the same both times.
+ */
+export interface EntityLink {
+	/**
+	 * The `links:` entry this named, when it named one. The player resolves it through the
+	 * already-`if:`-filtered link map, so a gated link that failed its condition simply is
+	 * not there.
+	 */
+	name?: string;
+	/** The passage to go to. Set for a direct passage name, and for a resolved named link. */
+	to?: string;
+	/**
+	 * Copied from the named `links:` entry, for a host that wants to know why a link is
+	 * inert. Evaluated by the player alone — the editor holds no story state.
+	 */
+	if?: string;
 }
 
 export interface StageFx {
@@ -371,7 +419,7 @@ export interface BeatBase {
  * hunting down three separate Pick lists that then quietly disagree.
  */
 export type EntityPatchBody = Partial<
-	Omit<StageEntity, 'id' | 'kind' | 'ref' | 'of'>
+	Omit<StageEntity, 'id' | 'kind' | 'ref' | 'of' | 'link' | 'highlight'>
 > & {
 	/**
 	 * `of` is the one key a patch can also CLEAR. Everything else is set-or-inherit, but a
@@ -380,6 +428,14 @@ export type EntityPatchBody = Partial<
 	 * `of: ~` in the YAML, and detaches.
 	 */
 	of?: EntityId | null;
+	/**
+	 * Clearable for the same reason `of` is, and needed far more often: a link is STATE that
+	 * every later beat inherits, so the beat where the door stops being a way out has to be
+	 * able to say `link: ~`. Without a null there is no spelling for "no longer clickable".
+	 */
+	link?: EntityLink | null;
+	/** Clearable beside `link`, so a beat can drop a hint's glow without dropping the link. */
+	highlight?: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -829,6 +885,20 @@ export interface ParseResult {
 	 * beat can be a nested block several lines long.
 	 */
 	beatSpans?: SceneSpan[];
+	/**
+	 * Every entity `link:` that resolved to a passage, with where it was written.
+	 *
+	 * A LIST, not a map keyed by target the way `linkSpans` is keyed by link name: two
+	 * different props may lead to the same passage, and both of them deserve a squiggle
+	 * when that passage does not exist.
+	 */
+	entityLinkSpans?: EntityLinkSpan[];
+}
+
+/** One entity `link:` and where the author wrote it. */
+export interface EntityLinkSpan extends SceneSpan {
+	/** The passage the link resolved to. */
+	to: string;
 }
 
 /** A place in the scene text. 1-indexed, same as `SceneError`. */

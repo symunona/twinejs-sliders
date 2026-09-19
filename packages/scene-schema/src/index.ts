@@ -12,6 +12,7 @@ export {
 	BOX_KEYS,
 	CAMERA_KEYS,
 	ENTITY_KEYS,
+	LINK_ENTITY_KEYS,
 	LINK_KEYS,
 	SAY_KEYS,
 	TOP_LEVEL_KEYS,
@@ -21,6 +22,7 @@ export {
 export {
 	parsePassageReferences,
 	scanLinkTargets,
+	sceneEntityLinkTargets,
 	sceneLinkTargets
 } from './references';
 export {

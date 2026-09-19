@@ -226,6 +226,11 @@ export const RENDER_DOM_CSS = `
 	.sliders-bg[data-bg-fx] {
 		animation: none;
 	}
+
+	/* The glow still appears — it is the affordance, not decoration. It just stops easing. */
+	.sliders-entity[data-sliders-link] > img {
+		transition: none;
+	}
 }
 
 .sliders-entity {
@@ -240,6 +245,52 @@ export const RENDER_DOM_CSS = `
 	will-change: transform, opacity;
 	pointer-events: none;
 }
+
+/* The ONE entity that takes the pointer. The default above is load-bearing: the visual
+   editor hit-tests by rectangle through an overlay that covers the whole stage, and a
+   sprite that swallowed events would break dragging. The overlay still sits on top, so
+   this only ever takes effect in the player, where there is no overlay. */
+.sliders-entity[data-sliders-link] {
+	pointer-events: auto;
+	cursor: pointer;
+}
+
+.sliders-entity[data-sliders-link] > img {
+	transition: filter 0.18s ease;
+}
+
+/* A glow that follows the ART, not the box.
+
+   drop-shadow() is alpha-aware where box-shadow and outline are not, so a PNG cut out with
+   transparent edges lights up along its own silhouette. Three of them at zero offset and
+   growing blur read as one faded border rather than as three rings; one shadow alone is
+   either too tight to notice or too soft to locate.
+
+   Focus is included because the element is a real tab stop: a reader on a keyboard has no
+   hover, and the glow is the only thing that says which object is about to be opened. */
+.sliders-entity[data-sliders-link]:hover > img,
+.sliders-entity[data-sliders-link]:focus > img,
+.sliders-entity[data-sliders-link]:focus-visible > img {
+	filter:
+		drop-shadow(0 0 2px var(--sliders-highlight, #ffd257))
+		drop-shadow(0 0 6px var(--sliders-highlight, #ffd257))
+		drop-shadow(0 0 14px var(--sliders-highlight, #ffd257));
+}
+
+/* The box is the tab stop, so the browser's own focus ring would draw a rectangle around a
+   sprite that is not rectangular. The glow above IS the focus indicator. */
+.sliders-entity[data-sliders-link]:focus,
+.sliders-entity[data-sliders-link]:focus-visible {
+	outline: none;
+}
+
+/* Tokens the renderer ships a colour for. Any other token still reaches the DOM as
+   data-highlight and is the story stylesheet's to paint — the same extension point
+   bubble: {as:} and bg: {fx:} have. */
+.sliders-entity[data-highlight='gold'] { --sliders-highlight: #ffd257; }
+.sliders-entity[data-highlight='danger'] { --sliders-highlight: #ff6b5e; }
+.sliders-entity[data-highlight='cold'] { --sliders-highlight: #6fd2ff; }
+.sliders-entity[data-highlight='warm'] { --sliders-highlight: #ff9a3c; }
 
 .sliders-entity > img,
 .sliders-entity > .sliders-placeholder {

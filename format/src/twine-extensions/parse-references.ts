@@ -1,4 +1,7 @@
-import {sceneLinkTargets} from './sliders/scene-links';
+import {
+	sceneEntityLinkTargets,
+	sceneLinkTargets
+} from './sliders/scene-links';
 
 export function parsePassageText(text: string) {
 	const matchers = [
@@ -26,6 +29,11 @@ export function parsePassageText(text: string) {
 	// them the story map draws a scene-driven story as unconnected cards.
 
 	for (const target of sceneLinkTargets(text).values()) {
+		results.push(target);
+	}
+
+	// And an entity the reader clicks. Just as real an exit as a choice in the row.
+	for (const target of sceneEntityLinkTargets(text)) {
 		results.push(target);
 	}
 

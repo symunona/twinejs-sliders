@@ -8,7 +8,7 @@
  */
 
 import {parseScene} from '@sliders/scene-schema';
-import type {SceneError} from '@sliders/scene-types';
+import type {EntityPatchBody, Scene, SceneError} from '@sliders/scene-types';
 import {createLoggers} from '../logger';
 import {get} from '../state';
 import type {Modifier} from '../template/modifiers';
@@ -21,6 +21,40 @@ function describe(error: SceneError): string {
 	return `[scene] line ${error.line}: ${error.message}${
 		error.hint ? ` ${error.hint}` : ''
 	}`;
+}
+
+/**
+ * Every `EntityPatchBody` in a scene: the declared entities, and the patch on each beat.
+ *
+ * The two places an entity key can be written, and the reason this is a walk rather than a
+ * lookup — a beat may repoint a door that the `cast:` block never mentioned a link for.
+ */
+function* entityPatches(scene: Scene): Generator<EntityPatchBody> {
+	for (const patch of Object.values(scene.entities ?? {})) {
+		if (patch) {
+			yield patch;
+		}
+	}
+
+	for (const beat of scene.beats ?? []) {
+		if ('patch' in beat && beat.patch) {
+			yield beat.patch as EntityPatchBody;
+		}
+	}
+}
+
+/** Drop any entity link whose `if:` is false right now. */
+function pruneEntityLinks(scene: Scene): void {
+	for (const patch of entityPatches(scene)) {
+		const cond = patch.link?.if;
+
+		if (cond && !get(cond)) {
+			// `undefined`, not `null`: null is the author's own "stop being a way out",
+			// which under `from:` CLEARS an inherited link. A condition that failed should
+			// leave whatever an earlier scene set alone.
+			patch.link = undefined;
+		}
+	}
 }
 
 export const sceneModifier: Modifier = {
@@ -41,6 +75,13 @@ export const sceneModifier: Modifier = {
 		const links = Object.values(scene.links ?? {}).filter(
 			link => !link.if || Boolean(get(link.if))
 		);
+
+		// An entity `link:` carrying a condition is pruned HERE rather than in the player,
+		// because this is the only place that can read story state — and pruning rather
+		// than disabling matters: a gated door that still glowed under the pointer would
+		// promise a way out the reader cannot take.
+		pruneEntityLinks(scene);
+
 		const payload = encodePayload({
 			errors: get('config.testing') ? messages : undefined,
 			links: Object.fromEntries(links.map(link => [link.name, link.to])),
