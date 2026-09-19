@@ -5,6 +5,7 @@ import {ErrorMessage} from '../../components/error';
 import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {
 	newPassagePositions,
+	passageMatchingName,
 	passageWithId,
 	storyWithId,
 	updatePassage
@@ -138,7 +139,9 @@ export const PassageEditContents: React.FC<
 	 */
 	const handleOpenPassage = React.useCallback(
 		(name: string) => {
-			const target = story.passages.find(passage => passage.name === name);
+			// `passageMatchingName`, not an exact compare: the reader's click follows
+			// `[[start]]` into a passage called `Start`, so the author's must too.
+			const target = passageMatchingName(story.passages, name);
 
 			if (target) {
 				dialogsDispatch(addPassageEditors(story.id, [target.id]));

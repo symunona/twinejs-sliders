@@ -76,6 +76,7 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 
 	function nameTaken(name: string) {
 		return storyWithId(stories, storyId).passages.some(
+			// eslint-disable-next-line no-restricted-syntax -- store identity, not link resolution: this asks whether a card already carries the name, and `Start` does not take `start`.
 			passage => passage.name === name
 		);
 	}

@@ -14,8 +14,36 @@
 		"react/display-name": 0,
 		"react/prop-types": 0,
 		"testing-library/no-render-in-setup": 0,
-		"testing-library/render-result-naming-convention": 0
+		"testing-library/render-result-naming-convention": 0,
+		// Tripwire against a seventh place that resolves a link target by `===`. Six of
+		// them disagreed with the player at once, and the reader paid: an unknown name
+		// throws out of `go()` and paints the error screen over the story.
+		"no-restricted-syntax": [
+			"error",
+			{
+				"selector": "BinaryExpression[operator=/^[!=]==$/]:not([left.type=\"Literal\"]):not([right.type=\"Literal\"]) > MemberExpression[property.name=\"name\"][object.name=/passage|^p$/i]",
+				"message": "Resolve a passage name with matchPassageName() from @sliders/scene-types -- exact first, then case-insensitively. That is the rule the player's passageNamed() follows, and an editor that compares names with === draws arrows, lints and navigates by a stricter rule than the reader gets. An exact compare is right only for store identity (is this name taken, which card is this); say so in an eslint-disable comment."
+			}
+		]
 	},
+	"overrides": [
+		{
+			// Store bookkeeping, not link resolution: here a passage's name IS its
+			// identity -- uniqueness guards, renames, which card an action means. Two
+			// names one case apart are two passages, and the store has to keep them apart.
+			"files": [
+				"src/store/**",
+				"src/util/twee.ts",
+				"src/util/sliders-manifest.ts"
+			],
+			"rules": {"no-restricted-syntax": 0}
+		},
+		{
+			// Tests assert over fixtures they wrote themselves.
+			"files": ["**/__tests__/**"],
+			"rules": {"no-restricted-syntax": 0}
+		}
+	],
 	"settings": {
 		"react": {
 			"version": "detect"

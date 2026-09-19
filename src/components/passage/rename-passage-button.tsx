@@ -51,6 +51,7 @@ export const EnabledRenamePassageButton: React.FC<EnabledRenamePassageButtonProp
 			};
 		}
 
+		// eslint-disable-next-line no-restricted-syntax -- store identity, not link resolution: two names one case apart are two passages, and this guard is only about the name already being on a card.
 		if (story.passages.some(p => p.id !== passage.id && p.name === name)) {
 			return {
 				message: t('components.renamePassageButton.nameAlreadyUsed'),

@@ -27,6 +27,7 @@ import {
 	Camera,
 	Character,
 	EntityId,
+	matchPassageName,
 	Vec2
 } from '@sliders/scene-types';
 import {mergeBubbleStyle, parseLinkText} from '@sliders/render-dom';
@@ -949,9 +950,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		}
 
 		// Only passages that exist can be opened. `passages` is absent in a bare preview, and
-		// then the name is taken on trust.
-		return passages
-			? [...names].filter(name => passages.some(p => p.name === name))
+		// then the name is taken on trust. `matchPassageName`, not an exact compare: a way
+		// out the reader can take must show as a way out here (`onOpenPassage` resolves the
+		// same rule, so the name stays as the author wrote it).
+		const existing = passages?.map(passage => passage.name);
+
+		return existing
+			? [...names].filter(
+					name => matchPassageName(existing, name) !== undefined
+			  )
 			: [...names];
 	}, [parse.result, passages, text]);
 

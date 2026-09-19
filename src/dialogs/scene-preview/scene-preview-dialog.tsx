@@ -4,7 +4,7 @@ import {useTranslation} from 'react-i18next';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
 import {useScenePreviewSource} from '../../routes/story-edit/scene-preview-source-context';
-import {storyWithId} from '../../store/stories';
+import {passageMatchingName, storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {addPassageEditors, useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
@@ -61,7 +61,9 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	 */
 	const handleOpenPassage = React.useCallback(
 		(name: string) => {
-			const target = story.passages.find(passage => passage.name === name);
+			// `passageMatchingName`, not an exact compare: the player follows a link into a
+			// passage whose name differs only in case, so this gesture has to as well.
+			const target = passageMatchingName(story.passages, name);
 
 			if (target) {
 				dialogsDispatch(addPassageEditors(story.id, [target.id]));

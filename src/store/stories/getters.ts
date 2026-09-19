@@ -41,6 +41,25 @@ export function passageWithName(
 }
 
 /**
+ * The passage a LINK target points at, or undefined when nothing does.
+ *
+ * `passageWithName` above is exact because it is store identity--which card is this,
+ * is this name taken. This one follows `matchPassageName`, the rule the player
+ * navigates by, so a `[[start]]` the reader can follow opens here too. Anything acting
+ * on a link target wants this one.
+ */
+export function passageMatchingName(passages: Passage[], name: string) {
+	const matched = matchPassageName(
+		passages.map(passage => passage.name),
+		name
+	);
+
+	return matched === undefined
+		? undefined
+		: passages.find(passage => passage.name === matched);
+}
+
+/**
  * Returns connections between passages in a structure optimized for rendering.
  * Connections are divided between draggable and fixed, depending on whether
  * either of their passages are selected (and could be dragged by the user).
