@@ -28,7 +28,7 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 
 	return (
 		<RouteToolbar
-			leadingControls={<SyncStatus />}
+			leadingControls={<SyncStatus story={story} />}
 			pinnedControls={
 				<>
 					<ZoomButtons story={story} />

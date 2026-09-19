@@ -1,19 +1,34 @@
-import {render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import {axe} from 'jest-axe';
 import * as React from 'react';
 import {FakeStateProvider} from '../../test-util';
 import {fakeStory} from '../../test-util/fakes';
 import {ServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {emptyPresence} from '../../store/persistence/server/presence';
+import type {SyncRecord} from '../../store/persistence/server/server.types';
 import type {SyncRecords} from '../../store/persistence/server/sync-record';
 import {Story} from '../../store/stories';
 import {SyncStatus} from '../sync-status';
+
+// The dialog itself talks to the server; the status control's whole job is opening it.
+
+jest.mock('../../dialogs/server-conflict/server-conflict', () => {
+	const react = jest.requireActual('react');
+
+	return {
+		ServerConflictDialog: (props: {storyId: string}) =>
+			react.createElement('div', {
+				'data-testid': `mock-server-conflict-dialog-${props.storyId}`
+			})
+	};
+});
 
 describe('<SyncStatus>', () => {
 	function renderComponent(
 		stories: Story[],
 		records: SyncRecords,
-		connected = true
+		connected = true,
+		story?: Story
 	) {
 		return render(
 			<FakeStateProvider stories={stories}>
@@ -35,7 +50,7 @@ describe('<SyncStatus>', () => {
 						stealPassage: () => undefined
 					}}
 				>
-					<SyncStatus />
+					<SyncStatus story={story} />
 				</ServerSyncContext.Provider>
 			</FakeStateProvider>
 		);
@@ -95,6 +110,121 @@ describe('<SyncStatus>', () => {
 		expect(
 			document.querySelector('.sync-actions-status-tick')
 		).toBeInTheDocument();
+	});
+
+	describe('when given a story', () => {
+		function syncedStory() {
+			const story = fakeStory();
+
+			story.sync = true;
+			return story;
+		}
+
+		function recordFor(
+			story: Story,
+			changes: Partial<SyncRecord>
+		): SyncRecords {
+			return {
+				[story.id]: {
+					lastPushedAt: Date.parse('2026-08-21T10:12:00Z'),
+					pushedHash: 'mock-hash',
+					rev: 1,
+					state: 'idle',
+					storyId: story.id,
+					...changes
+				}
+			};
+		}
+
+		it('says the story is in conflict instead of when it last synced', () => {
+			const story = syncedStory();
+
+			renderComponent(
+				[story],
+				recordFor(story, {conflictRev: 2, state: 'conflict'}),
+				true,
+				story
+			);
+			expect(screen.getByTestId('sync-status-trouble')).toBeInTheDocument();
+			expect(
+				screen.getByText('routeActions.app.syncConflict')
+			).toBeInTheDocument();
+			expect(
+				screen.queryByText('routeActions.app.syncStatus')
+			).not.toBeInTheDocument();
+			expect(screen.queryByTestId('sync-status-badge')).not.toBeInTheDocument();
+		});
+
+		it('opens the conflict dialog when a conflict is clicked', async () => {
+			const story = syncedStory();
+
+			renderComponent(
+				[story],
+				recordFor(story, {conflictRev: 2, state: 'conflict'}),
+				true,
+				story
+			);
+			fireEvent.click(screen.getByText('routeActions.app.syncConflict'));
+			expect(
+				await screen.findByTestId(`mock-server-conflict-dialog-${story.id}`)
+			).toBeInTheDocument();
+		});
+
+		it('offers the same dialog when pushes are failing', () => {
+			const story = syncedStory();
+
+			renderComponent(
+				[story],
+				recordFor(story, {lastError: 'kaboom', state: 'error'}),
+				true,
+				story
+			);
+			expect(
+				screen.getByText('routeActions.app.syncFailed')
+			).toBeInTheDocument();
+			expect(
+				screen.getByText('routeActions.app.syncFailed').closest('button')
+			).toBeEnabled();
+		});
+
+		it('reports a story removed from the server, with nothing to click', () => {
+			const story = syncedStory();
+
+			renderComponent([story], recordFor(story, {state: 'gone'}), true, story);
+			expect(screen.getByText('routeActions.app.syncGone')).toBeInTheDocument();
+			expect(
+				screen.getByText('routeActions.app.syncGone').closest('button')
+			).toBeDisabled();
+		});
+
+		it("shows that story's own sync time when it is idle", () => {
+			const story = syncedStory();
+			const other = syncedStory();
+
+			renderComponent(
+				[story, other],
+				{
+					...recordFor(story, {}),
+					...recordFor(other, {state: 'conflict'})
+				},
+				true,
+				story
+			);
+			expect(screen.getByTestId('sync-status-badge')).toBeInTheDocument();
+			expect(
+				document.querySelector('.sync-actions-status-tick')
+			).toBeInTheDocument();
+			expect(
+				screen.queryByTestId('sync-status-trouble')
+			).not.toBeInTheDocument();
+		});
+
+		it('shows no timestamp badge for a story that is not synced', () => {
+			const story = fakeStory();
+
+			renderComponent([story], {}, true, story);
+			expect(screen.queryByTestId('sync-status-badge')).not.toBeInTheDocument();
+		});
 	});
 
 	it('is accessible', async () => {
