@@ -63,12 +63,19 @@ export class ErrorHandler extends CustomElement {
 				: (event as ErrorEvent).error;
 
 		try {
-			let detail = '';
+			// Sliders edit (see format/README.md): the MESSAGE always shows. A bug report
+			// is a screenshot of this box, and gating the whole detail behind
+			// `config.testing` meant the box was empty for everyone playing -- the
+			// reporter had to reproduce the fault a second time under Build > Test before
+			// anyone could read what broke. The STACK stays gated: it names our own source
+			// files and says nothing a reader can act on.
+			const message: string = error?.message ?? String(error);
+			let detail = message;
 
-			if (error?.stack) {
-				detail = `${error.message}\n\nStack trace:\n${error.stack}`;
-			} else {
-				detail = `${error.message}\n\n[No stack trace available]`;
+			if (get('config.testing')) {
+				detail = error?.stack
+					? `${message}\n\nStack trace:\n${error.stack}`
+					: `${message}\n\n[No stack trace available]`;
 			}
 
 			detail = detail.replace(markedError, '');
@@ -81,7 +88,7 @@ export class ErrorHandler extends CustomElement {
 			<p>
 			An unexpected error has occurred.
 			</p>
-			<pre>${get('config.testing') ? detail : ''}</pre>
+			<pre></pre>
 			<ul>
 				<li>
 					<inline-button class="link" ${
@@ -95,6 +102,14 @@ export class ErrorHandler extends CustomElement {
 				</li>
 			</ul>
 		`;
+			// `textContent`, not interpolated into the template above: a message can carry
+			// a passage name, or anything else a story wrote, and must not be parsed as
+			// markup on the way into the box.
+			const pre = this.querySelector('pre');
+
+			if (pre) {
+				pre.textContent = detail;
+			}
 		} catch (error) {
 			// Things have gotten really screwy--at least log the error.
 
