@@ -1,11 +1,14 @@
 # DEMO text-bubble styles
 
 Six passages. Built in the editor, art generated locally (a flat SVG figure `mira/idle`
-and a gradient backdrop `bg`), story defaults in the start passage vars.
+and a gradient backdrop `bg`), story defaults in the Start passage vars.
 Kept here so the demo can be rebuilt anywhere — the story itself lives in an editor
 library, not on the store.
 
-## start
+Headings ARE the passage names. Every `links:` target spells one exactly — a case-only
+miss still plays, but the editor and `twine-cli lint` call it out as `passage-case`.
+
+## Start
 
 ```
 sliders.bubble.as: 'comic'
@@ -30,7 +33,7 @@ links:
   Detached: Detached
 ```
 
-## comic
+## Comic
 
 ```
 [scene]
@@ -48,7 +51,7 @@ links:
   Back: Start
 ```
 
-## impact
+## Impact
 
 ```
 [scene]
@@ -67,7 +70,7 @@ links:
   Back: Start
 ```
 
-## thought
+## Thought
 
 ```
 [scene]
@@ -84,7 +87,7 @@ links:
   Back: Start
 ```
 
-## fixed
+## Fixed
 
 ```
 [scene]
@@ -103,7 +106,7 @@ links:
   Back: Start
 ```
 
-## detached
+## Detached
 
 ```
 [scene]
