@@ -28,14 +28,14 @@
 	cursor: grab;
 }
 
-/* Under the background lock the ground is not a pan handle, so it must stop saying it is.
+/* With the camera locked the ground is not a pan handle, so it must stop saying it is.
    Sprites are still draggable, which is why this is not a blanket rule. */
-.stage-editor.bg-locked {
+.stage-editor.camera-locked {
 	cursor: default;
 }
 
 .stage-editor.over-entity,
-.stage-editor.bg-locked.over-entity {
+.stage-editor.camera-locked.over-entity {
 	cursor: move;
 }
 

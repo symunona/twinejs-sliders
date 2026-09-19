@@ -1,12 +1,12 @@
 import {
 	IconArrowsMinimize,
+	IconCamera,
+	IconCameraOff,
 	IconChevronLeft,
 	IconChevronRight,
 	IconGridDots,
 	IconLock,
 	IconLockOpen,
-	IconPhoto,
-	IconPhotoShield,
 	IconPlayerPause,
 	IconPlayerPlay,
 	IconTimeline,
@@ -142,14 +142,17 @@ export interface ScenePreviewProps {
 const LOCKED_KEY = 'sliders.preview.locked';
 
 /**
- * The background lock: the camera holds still and a dropped backdrop will not replace the
- * one already there. A narrower lock than the stage's, for the common case of staging
- * characters against a shot that is already framed — a pan started by grabbing empty ground
- * is easy to do by accident, and `camera:` is not somewhere an author looks afterwards.
+ * The camera tool: while it is on, empty ground pans the shot and ctrl+wheel zooms it.
  *
- * Survives the session the same way the other two do, and for the same reason.
+ * OFF by default, which is the opposite of how this started life (a background LOCK the
+ * author had to remember to switch on). Panning is a mode, not the resting state: a pan
+ * begun by grabbing empty ground while staging a cast is easy to do by accident, it
+ * rewrites `camera:`, and `camera:` is not somewhere an author looks afterwards. Framing a
+ * shot is a deliberate job, so it gets a deliberate tool.
+ *
+ * Survives the session the same way the other toggles do, and for the same reason.
  */
-const BG_LOCKED_KEY = 'sliders.preview.bgLocked';
+const CAMERA_KEY = 'sliders.preview.camera';
 
 /**
  * The grid survives the dialog too, for the same reason the lock does: an author who turned
@@ -268,13 +271,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const {t} = useTranslation();
 	const store = useAssetStore();
 	const {dispatch} = useDialogsContext();
-	// The author's own preference. What actually gates the gestures is `locked`/`bgLocked`
+	// The author's own preference. What actually gates the gestures is `locked`/`cameraLocked`
 	// below, which is this with the scene's own `locked:` laid over it.
 	const [storedLocked, setLocked] = React.useState(
 		() => window.localStorage.getItem(LOCKED_KEY) === 'true'
 	);
-	const [storedBgLocked, setBgLocked] = React.useState(
-		() => window.localStorage.getItem(BG_LOCKED_KEY) === 'true'
+	// The tool, not the lock: on means the camera may be moved. Default off.
+	const [cameraTool, setCameraTool] = React.useState(
+		() => window.localStorage.getItem(CAMERA_KEY) === 'true'
 	);
 	const [grid, setGrid] = React.useState(
 		() => window.localStorage.getItem(GRID_KEY) === 'true'
@@ -289,13 +293,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * still mean what they said, they just cannot un-pin what the file pinned. See
 	 * `scene-lock.ts` for the precedence.
 	 */
-	const {bgLocked, locked} = effectiveLocks(parse.result?.scene, {
-		bgLocked: storedBgLocked,
+	const {cameraLocked, locked} = effectiveLocks(parse.result?.scene, {
+		cameraLocked: !cameraTool,
 		locked: storedLocked
 	});
 	/** Set when the SCENE is what locked it, so the toggle would be a dead button. */
 	const stageLockedByScene = lockReason(parse.result?.scene, 'entities');
-	const bgLockedByScene = lockReason(parse.result?.scene, 'bg');
+	const cameraLockedByScene = lockReason(parse.result?.scene, 'bg');
 	const [timelineLabels, setTimelineLabels] = React.useState(
 		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) === 'true'
 	);
@@ -1151,9 +1155,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		requestAssetFocus(ref);
 	}
 
-	function toggleBgLock() {
-		setBgLocked(value => {
-			window.localStorage.setItem(BG_LOCKED_KEY, String(!value));
+	function toggleCameraTool() {
+		setCameraTool(value => {
+			window.localStorage.setItem(CAMERA_KEY, String(!value));
 
 			return !value;
 		});
@@ -1529,22 +1533,22 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={sound}
 			/>
-			{/* Beside the stage lock, because it is the same idea one notch
-			    narrower: this one pins the shot and leaves the cast free. */}
+			{/* Beside the stage lock, and the inverse of it: a MODE the author turns
+			    on to frame the shot, off the rest of the time. */}
 			<IconButton
-				disabled={!!bgLockedByScene}
-				icon={bgLocked ? <IconPhotoShield /> : <IconPhoto />}
+				disabled={!!cameraLockedByScene}
+				icon={cameraLocked ? <IconCameraOff /> : <IconCamera />}
 				iconOnly
 				label={t(
-					bgLockedByScene
+					cameraLockedByScene
 						? 'dialogs.passageEdit.scenePreview.lockedByScene'
-						: bgLocked
-						? 'dialogs.passageEdit.scenePreview.unlockBg'
-						: 'dialogs.passageEdit.scenePreview.lockBg'
+						: cameraTool
+						? 'dialogs.passageEdit.scenePreview.cameraToolOn'
+						: 'dialogs.passageEdit.scenePreview.cameraToolOff'
 				)}
-				onClick={toggleBgLock}
+				onClick={toggleCameraTool}
 				selectable
-				selected={bgLocked}
+				selected={cameraTool && !cameraLocked}
 			/>
 			{/* Always here, selection or not: the lock is how the author stops
 			    the stage editing the file, so it cannot be a control that only
@@ -1585,7 +1589,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// The stage itself--everything below the bar.
 	const stageBody = (
 		<StageEditorOverlay
-			bgLocked={bgLocked}
+			cameraLocked={cameraLocked}
 			beatNote={beatNote}
 			editable={editable}
 			grid={grid}

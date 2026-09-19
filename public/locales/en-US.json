@@ -427,8 +427,8 @@
 				"frameAuto": "Automatic",
 				"moveBubble": "Move this bubble",
 				"moveBubbleAnchor": "Move where this bubble points",
-				"lockBg": "Lock the background: no camera pan or zoom, and a dropped background will not replace it",
-				"unlockBg": "Unlock the background",
+				"cameraToolOff": "Camera tool: turn it on to pan the shot by dragging empty ground, and to zoom with ctrl+wheel",
+				"cameraToolOn": "Camera tool is on \u2014 dragging empty ground pans the shot. Click to put the camera down",
 				"openAsset": "Open in the asset manager",
 				"dropMenu": {
 					"title": "Add {{count}} image as…",

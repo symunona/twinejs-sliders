@@ -237,11 +237,11 @@ export interface StageEditorOverlayProps {
 	 */
 	beatNote?: string;
 	/**
-	 * The background is pinned: no pan, no wheel zoom, and a dropped backdrop does not
-	 * replace the one in the scene. Entities stay fully editable — this is the narrow lock,
-	 * for staging a cast against a shot that is already framed.
+	 * The camera is pinned: no pan, no wheel zoom. Entities stay fully editable — this is
+	 * the default, because an accidental pan while staging a cast rewrites `camera:`, a key
+	 * nobody looks at afterwards. The bar's camera tool is what lifts it.
 	 */
-	bgLocked?: boolean;
+	cameraLocked?: boolean;
 	/** Double click landed on this entity: show it in the asset manager. */
 	onOpenEntity?: (id: EntityId) => void;
 }
@@ -338,7 +338,7 @@ export function snapDropPoint(
 
 export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const {
-		bgLocked,
+		cameraLocked,
 		beatNote,
 		children,
 		editable,
@@ -401,7 +401,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 	// What the window-level pointer handlers need, without re-binding them mid-gesture.
 	const latest = React.useRef({
-		bgLocked,
+		cameraLocked,
 		box,
 		editable,
 		onAdvance,
@@ -413,7 +413,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	});
 
 	latest.current = {
-		bgLocked,
+		cameraLocked,
 		box,
 		editable,
 		onAdvance,
@@ -542,9 +542,9 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			}
 
 			if (gesture.kind === 'pan') {
-				// The gesture is still begun under the background lock, because a tap on empty
+				// The gesture is still begun with the camera locked, because a tap on empty
 				// stage is how the full screen player turns the page. It just moves nothing.
-				if (current.bgLocked) {
+				if (current.cameraLocked) {
 					if (commit) {
 						endGesture();
 					}
@@ -750,8 +750,8 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				!(event.ctrlKey || event.metaKey) ||
 				!current.box ||
 				!current.editable ||
-				// The background lock pins the shot: zoom is a camera write like any other.
-				current.bgLocked
+				// The camera lock pins the shot: zoom is a camera write like any other.
+				current.cameraLocked
 			) {
 				return;
 			}
@@ -854,7 +854,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		// Middle drag pans from anywhere, including from on top of a sprite — the escape
 		// hatch for a stage so full that there is no empty ground left to grab.
 		if (event.button === 1) {
-			if (!bgLocked) {
+			if (!cameraLocked) {
 				beginGesture(event, 'pan', []);
 			}
 
@@ -981,12 +981,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			: {x: 0, y: 0};
 
 		if (payload) {
-			// A locked background stays: this is exactly the accident the lock is for, and
-			// the tile is still droppable as a prop by dragging it from the Objects tab.
-			if (bgLocked && payload.target === 'bg') {
-				return;
-			}
-
 			onDropAsset?.(payload, at);
 		} else {
 			onDropFiles?.(files, at, {x: event.clientX, y: event.clientY});
@@ -1074,7 +1068,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	return (
 		<div
 			className={classNames('stage-editor', {
-				'bg-locked': bgLocked,
+				'camera-locked': cameraLocked,
 				dragging,
 				'drop-active': dropActive,
 				'over-entity': !!hover

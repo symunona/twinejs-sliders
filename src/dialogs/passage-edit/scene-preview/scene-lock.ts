@@ -1,10 +1,10 @@
 /**
  * What is locked on the stage right now: the scene's word, then the author's preference.
  *
- * Two sources with different lifetimes. `sliders.preview.locked` / `.bgLocked` are a
- * PREFERENCE — "I am writing rather than staging, leave my sprites alone" — and follow the
- * author from passage to passage. `locked:` in the scene is a PROPERTY of that shot: it is
- * framed, and nobody opening the passage should pan it by accident.
+ * Two sources with different lifetimes. `sliders.preview.locked` and the camera tool
+ * (`sliders.preview.camera`) are a PREFERENCE and follow the author from passage to
+ * passage. `locked:` in the scene is a PROPERTY of that shot: it is framed, and nobody
+ * opening the passage should pan it by accident.
  *
  * So the scene wins where it speaks, and only where it speaks. A scene with `locked: [bg]`
  * pins its camera for everyone while leaving the author's own stage-lock preference to
@@ -19,14 +19,14 @@ import type {Scene, SceneLock} from '@sliders/scene-types';
 export interface StageLocks {
 	/** No gesture may edit the scene: what `editable` is derived from. */
 	locked: boolean;
-	/** No pan, no wheel zoom, no dropped backdrop. Entities stay draggable. */
-	bgLocked: boolean;
+	/** No pan, no wheel zoom. Entities stay draggable. */
+	cameraLocked: boolean;
 }
 
 /** What the author's own toggles say, read straight off the bar buttons' state. */
 export interface StoredLocks {
 	locked: boolean;
-	bgLocked: boolean;
+	cameraLocked: boolean;
 }
 
 function pins(scene: Scene | undefined, target: SceneLock): boolean {
@@ -50,7 +50,7 @@ export function effectiveLocks(
 	const whole = scene?.locked === true || pins(scene, 'entities');
 
 	return {
-		bgLocked: whole || pins(scene, 'bg') || stored.bgLocked,
+		cameraLocked: whole || pins(scene, 'bg') || stored.cameraLocked,
 		locked: whole || stored.locked
 	};
 }

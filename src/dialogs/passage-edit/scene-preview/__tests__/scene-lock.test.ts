@@ -10,8 +10,8 @@ function scene(locked?: Scene['locked']): Scene {
 	};
 }
 
-const OPEN = {bgLocked: false, locked: false};
-const PREFERRED = {bgLocked: true, locked: true};
+const OPEN = {cameraLocked: false, locked: false};
+const PREFERRED = {cameraLocked: true, locked: true};
 
 describe('effectiveLocks()', () => {
 	it('leaves the preference alone when the scene says nothing', () => {
@@ -21,27 +21,27 @@ describe('effectiveLocks()', () => {
 
 	it('locks everything on locked: true', () => {
 		expect(effectiveLocks(scene(true), OPEN)).toEqual({
-			bgLocked: true,
+			cameraLocked: true,
 			locked: true
 		});
 	});
 
 	// A stage nobody may edit is not a stage whose camera should still swing.
 	it('implies the background lock from the whole-stage lock', () => {
-		expect(effectiveLocks(scene(true), OPEN).bgLocked).toBe(true);
+		expect(effectiveLocks(scene(true), OPEN).cameraLocked).toBe(true);
 	});
 
 	// The narrow case this key exists for: the shot is framed, the sprites are not done.
 	it('pins the background and leaves sprites to the author', () => {
 		expect(effectiveLocks(scene(['bg']), OPEN)).toEqual({
-			bgLocked: true,
+			cameraLocked: true,
 			locked: false
 		});
 	});
 
 	it('locks the stage on an entities lock', () => {
 		expect(effectiveLocks(scene(['entities']), OPEN)).toEqual({
-			bgLocked: true,
+			cameraLocked: true,
 			locked: true
 		});
 	});
