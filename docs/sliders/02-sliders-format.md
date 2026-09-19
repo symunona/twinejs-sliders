@@ -344,10 +344,11 @@ Two keys on a say beat, and the same two inside a `box:` map:
 | `as` | style token — a DRAWN shape, a CSS preset, or your own |
 | `place` | `auto` (hang off the speaker) · `top` · `bottom` · `left` · `right` · the four corners · `centre` |
 | `anchor` | `speaker` (default) · `scene` — detach from the speaker: no tail, `at:` alone places it |
-| `sizing` | `auto` (default, snap to the words) · `absolute` (box is `w` x `h` of the slide, TEXT is fitted to it) |
+| `sizing` | `auto` (default, snap to the words) · `absolute` (box is `w` x `h` of the slide, TEXT is fitted to it) · `manual` (same box, text stays normal size) |
 | `at` | `[x, y]`, the bubble's centre as fractions of the stage box. Beats `place`. |
-| `w` | width, fraction of the stage width. Wrap cap under `auto`, exact width under `absolute`. |
-| `h` | height, fraction of the stage height. `absolute` only. |
+| `tail` | `[x, y]`, where the tail points, as fractions of the stage box — instead of at the speaker. `anchor: scene` ignores it. |
+| `w` | width, fraction of the stage width. Wrap cap under `auto`, exact width under `absolute` / `manual`. |
+| `h` | height, fraction of the stage height. `absolute` / `manual` only. |
 | `bg` `accent` `color` `font` `size` | one-off overrides. `bg`/`accent` are the pair a drawn shape paints with. |
 
 ### Four layers, widest first
@@ -390,6 +391,35 @@ Every line in that scene is the same rectangle, 42% x 22% of the slide, and the 
 scaled until the words fit it. That is the opposite trade from `auto`, where the type is
 fixed and the box grows. Use it when the panel is part of the composition; use `auto` when
 the words are.
+
+`sizing: manual` is the third corner: the SAME fixed rectangle, and the type stays the size
+it is everywhere else in the scene. Words that do not fit are clipped — you stated the box,
+so the box is what you get. It is what the scene editor writes when you drag a bubble's top
+or bottom edge, carrying the width the bubble already had across:
+
+```yaml
+- mira: {say: "Fixed box, normal type.", bubble: {sizing: manual, w: 0.5, h: 0.45}}
+```
+
+| Sizing | Box | Type |
+|---|---|---|
+| `auto` | follows the words | normal |
+| `absolute` | `w` x `h` | fitted to the box |
+| `manual` | `w` x `h` | normal, clipped |
+
+### Aimed tail
+
+```yaml
+- mira: {say: "It came from in there.", bubble: {tail: [0.85, 0.6]}}
+```
+
+`tail:` points the tail at a stage point instead of at the speaker's own `bubble` anchor: a
+door, a window, somebody off the side of the frame. Stage fractions, not an offset from the
+speaker, because a sprite that walks away would drag an offset with it. It stands in for the
+speaker's anchor everywhere, so an unpinned bubble also hangs off the named point. A
+detached bubble (`anchor: scene`) grows no tail at all and ignores it.
+
+Dragging the amber cross in the scene editor writes it.
 
 ### Detached
 
