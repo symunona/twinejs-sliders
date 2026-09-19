@@ -78,6 +78,53 @@ describe('bubble: on a beat', () => {
 	});
 });
 
+describe('manual sizing and tail:', () => {
+	it('takes sizing: manual with a box', () => {
+		const {scene, errors} = parseScene(
+			BEAT('{say: "Hi.", bubble: {sizing: manual, w: 0.3, h: 0.18}}')
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({
+			style: {sizing: 'manual', w: 0.3, h: 0.18}
+		});
+	});
+
+	it('names manual in the hint when the sizing is a typo', () => {
+		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {sizing: manul}}'));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe('bad-value');
+		expect(errors[0].hint).toContain('manual');
+	});
+
+	it('takes a tail as a pair of stage fractions', () => {
+		const {scene, errors} = parseScene(
+			BEAT('{say: "Hi.", bubble: {tail: [0.8, 0.35]}}')
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({
+			style: {tail: {x: 0.8, y: 0.35}}
+		});
+	});
+
+	it('refuses a tail that is not a pair', () => {
+		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {tail: 0.8}}'));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe('bad-coordinate');
+	});
+
+	it('offers tail as a fix for a near-miss key', () => {
+		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {tial: [0, 0]}}'));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe('unknown-key');
+		expect(errors[0].fix?.text).toBe('tail');
+	});
+});
+
 describe('scene-level bubble:', () => {
 	it('is a whole style', () => {
 		const {scene, errors} = parseScene(

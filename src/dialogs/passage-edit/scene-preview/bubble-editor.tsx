@@ -2,14 +2,25 @@
  * Selecting, dragging and resizing the speech bubble on stage.
  *
  * The bubble itself is the renderer's — `DialogueLayer` builds it and decides where it
- * goes. This draws a frame around whatever it produced and turns a drag into two numbers:
- * `at`, the bubble's centre as a fraction of the stage box, and `w`, its width as a
- * fraction of the box's width. Both are written onto the BEAT, because the same character
- * can speak twice in a scene and want the bubble somewhere else each time.
+ * goes. This draws a frame around whatever it produced and turns a gesture into numbers:
+ * `at`, the bubble's centre as a fraction of the stage box; `w` and `h`, its size as
+ * fractions of the box; and `tail`, the point its tail reaches for. All are written onto
+ * the BEAT, because the same character can speak twice in a scene and want the bubble
+ * somewhere else each time.
  *
  * A gesture paints through the real renderer rather than moving a copy: the draft style
  * goes back up to the preview, down into the dialogue layer, and the bubble the author is
  * dragging is the one the reader will see, wrapping and all.
+ *
+ * TWO handles, two meanings. The eight around the frame size the box; the cross out on the
+ * stage moves what the tail points at. They are deliberately different shapes and the
+ * cross sits outside the frame, because "make this bubble wider" and "point this bubble at
+ * the door" are not neighbouring thoughts.
+ *
+ * The frame does not carry a copy of the merged style. What is on screen is the product of
+ * the story's defaults, the scene's, the character's and the beat's, and only the renderer
+ * has merged all four — so the sizing mode and the tail point are read back off the bubble
+ * element's own data attributes rather than re-derived here, where they could disagree.
  */
 
 import * as React from 'react';
@@ -41,9 +52,28 @@ interface Measured {
 	bubble: Rect;
 	/** The letterboxed stage box, in frame pixels. */
 	box: Rect;
+	/** What the renderer resolved `sizing:` to, merged from every layer. */
+	sizing: string;
+	/** True for `anchor: scene` — a detached bubble, with no tail and nothing to aim. */
+	detached: boolean;
+	/** Where the tail reaches, in frame pixels. Absent when it reaches for nothing. */
+	anchor?: {x: number; y: number};
 }
 
-type Mode = 'move' | 'west' | 'east';
+/** The eight box handles, plus the two gestures that are not a resize. */
+type Mode =
+	| 'move'
+	| 'anchor'
+	| 'n'
+	| 's'
+	| 'e'
+	| 'w'
+	| 'ne'
+	| 'nw'
+	| 'se'
+	| 'sw';
+
+const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const;
 
 interface Gesture {
 	mode: Mode;
@@ -55,6 +85,7 @@ interface Gesture {
 	/** The bubble's centre when the gesture started, in frame pixels. */
 	centre: {x: number; y: number};
 	startWidth: number;
+	startHeight: number;
 	measured: Measured;
 	moved: boolean;
 }
@@ -72,15 +103,28 @@ function draftStyle(
 	return {
 		...style,
 		...(geometry.at === undefined ? {} : {at: geometry.at ?? undefined}),
-		...(geometry.w === undefined ? {} : {w: geometry.w ?? undefined})
+		...(geometry.tail === undefined ? {} : {tail: geometry.tail ?? undefined}),
+		...(geometry.w === undefined ? {} : {w: geometry.w ?? undefined}),
+		...(geometry.h === undefined ? {} : {h: geometry.h ?? undefined}),
+		...(geometry.sizing === undefined
+			? {}
+			: {sizing: (geometry.sizing ?? undefined) as BubbleStyle['sizing']})
 	};
 }
 
 /** Below this a bubble is a sliver with one word per line. */
 const MIN_WIDTH_FRACTION = 0.08;
 
+/** Below this there is no room for a line of type, whatever the width. */
+const MIN_HEIGHT_FRACTION = 0.05;
+
 /** How far the pointer travels before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 3;
+
+/** Sizings whose box is exactly `w` x `h`, so a height is already the author's to state. */
+function fixedSize(sizing: string): boolean {
+	return sizing === 'absolute' || sizing === 'manual';
+}
 
 /** The `[[link]]` under a point, if the pointer is over one. */
 function linkAt(x: number, y: number): HTMLElement | undefined {
@@ -134,7 +178,23 @@ function measure(frameEl: HTMLElement): Measured | undefined {
 		return undefined;
 	}
 
-	return {box, bubble: rectIn(frame, bubbleEl)};
+	const bubble = rectIn(frame, bubbleEl);
+	const data = (bubbleEl as HTMLElement).dataset;
+	// Published by the dialogue layer from the bubble's own top left, so it needs no
+	// conversion out of the renderer's coordinate space — see `setAnchorData` there.
+	const ax = Number(data.anchorX);
+	const ay = Number(data.anchorY);
+	const hasAnchor = data.anchorX !== undefined && Number.isFinite(ax);
+
+	return {
+		anchor: hasAnchor
+			? {x: bubble.left + ax, y: bubble.top + ay}
+			: undefined,
+		box,
+		bubble,
+		detached: data.anchorMode === 'scene',
+		sizing: data.sizing ?? 'auto'
+	};
 }
 
 export const BubbleEditor: React.FC<BubbleEditorProps> = ({
@@ -191,6 +251,50 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 		return () => window.cancelAnimationFrame(frame);
 	}, [active]);
 
+	/**
+	 * A press anywhere else drops the selection.
+	 *
+	 * The handles are the only reason the frame is selected, and leaving them lit over a
+	 * bubble the author has moved on from makes the next click look like it will resize
+	 * something. Capture phase, because the stage editor under this stops propagation of
+	 * its own presses.
+	 */
+	React.useEffect(() => {
+		if (!selected) {
+			return;
+		}
+
+		const handleDown = (event: PointerEvent) => {
+			const root = ref.current;
+			const target = event.target as Node | null;
+
+			if (root && target && root.parentElement?.contains(target)) {
+				const frame = root.querySelector('.scene-bubble-editor');
+				const cross = root.querySelector('.scene-bubble-editor-anchor');
+
+				if (frame?.contains(target) || cross?.contains(target)) {
+					return;
+				}
+			}
+
+			setSelected(false);
+		};
+
+		const handleKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') {
+				setSelected(false);
+			}
+		};
+
+		window.addEventListener('pointerdown', handleDown, true);
+		window.addEventListener('keydown', handleKey);
+
+		return () => {
+			window.removeEventListener('pointerdown', handleDown, true);
+			window.removeEventListener('keydown', handleKey);
+		};
+	}, [selected]);
+
 	const endGesture = React.useCallback(() => {
 		gestureRef.current = undefined;
 	}, []);
@@ -220,15 +324,49 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 				};
 			}
 
-			// A side handle grows the bubble about its own centre, so the text does not slide
-			// out from under the pointer as it widens.
-			const half = Math.abs(pointer.x - gesture.centre.x);
-			const width = Math.max(
-				MIN_WIDTH_FRACTION,
-				Math.min(1, (half * 2) / box.width)
-			);
+			if (gesture.mode === 'anchor') {
+				// Where the tail reaches, not where the bubble is: the same fractions of the
+				// same box, so the two read the same way in the file.
+				return {
+					tail: {
+						x: clamp01((pointer.x - box.left) / box.width),
+						y: clamp01((pointer.y - box.top) / box.height)
+					}
+				};
+			}
 
-			return {w: width};
+			// A handle grows the box about its own CENTRE, so the text does not slide out
+			// from under the pointer as it grows, and a resize never has to rewrite `at:`.
+			const horizontal = gesture.mode.includes('e') || gesture.mode.includes('w');
+			const vertical = gesture.mode.includes('n') || gesture.mode.includes('s');
+			const geometry: BubbleGeometry = {};
+
+			if (horizontal) {
+				geometry.w = Math.max(
+					MIN_WIDTH_FRACTION,
+					Math.min(1, (Math.abs(pointer.x - gesture.centre.x) * 2) / box.width)
+				);
+			}
+
+			if (vertical) {
+				geometry.h = Math.max(
+					MIN_HEIGHT_FRACTION,
+					Math.min(1, (Math.abs(pointer.y - gesture.centre.y) * 2) / box.height)
+				);
+
+				// An auto bubble is as tall as its words, so there is no height to state
+				// until the sizing says there is one. Dragging a top or bottom edge IS the
+				// author saying they want to state it, so the gesture promotes the bubble
+				// to `manual` — and carries the width it already had across, or the box
+				// would jump to the default panel size on the first pixel of the drag.
+				if (!fixedSize(gesture.measured.sizing)) {
+					geometry.sizing = 'manual';
+					geometry.w =
+						geometry.w ?? Math.min(1, gesture.startWidth / box.width);
+				}
+			}
+
+			return geometry;
 		},
 		[]
 	);
@@ -296,7 +434,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 		// A `[[link]]` in the bubble keeps its click — ctrl-clicking one opens the passage
 		// it names, and the frame lies directly over the words. The link is under the
 		// pointer, not under the frame, so the point is what has to be asked.
-		const link = linkAt(event.clientX, event.clientY);
+		const link = mode === 'move' && linkAt(event.clientX, event.clientY);
 
 		if (link) {
 			link.dispatchEvent(
@@ -330,11 +468,17 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 			moved: false,
 			pointerId: event.pointerId,
 			start: {x: event.clientX, y: event.clientY},
+			startHeight: bubble.height,
 			startWidth: bubble.width
 		};
 	};
 
 	const bubble = measured?.bubble;
+	// Nothing to aim when the bubble is detached: `anchor: scene` is the author saying it
+	// hangs off nothing, and a cross offering to point a tail it will never grow would be
+	// a control that does nothing.
+	const anchor =
+		measured && !measured.detached ? measured.anchor : undefined;
 
 	// The root is always in the tree, even with nothing to frame: it is what holds the ref,
 	// and a ref that only attaches once something has been measured can never measure
@@ -344,6 +488,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 			{active && bubble && (
 				<div
 					className={`scene-bubble-editor${selected ? ' selected' : ''}`}
+					data-sizing={measured?.sizing}
 					data-testid="scene-bubble-editor"
 					style={{
 						height: bubble.height,
@@ -360,7 +505,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 						tabIndex={-1}
 					/>
 					{selected &&
-						(['west', 'east'] as const).map(side => (
+						RESIZE_HANDLES.map(side => (
 							<div
 								className={`scene-bubble-editor-handle ${side}`}
 								data-handle={side}
@@ -369,6 +514,18 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 							/>
 						))}
 				</div>
+			)}
+			{active && selected && anchor && (
+				<div
+					aria-label={t('dialogs.passageEdit.scenePreview.moveBubbleAnchor')}
+					className="scene-bubble-editor-anchor"
+					data-testid="scene-bubble-editor-anchor"
+					onPointerDown={event => begin(event, 'anchor')}
+					role="button"
+					style={{left: anchor.x, top: anchor.y}}
+					tabIndex={-1}
+					title={t('dialogs.passageEdit.scenePreview.moveBubbleAnchor')}
+				/>
 			)}
 		</div>
 	);

@@ -775,7 +775,8 @@ function parseBubbleStyle(
 					addError(ctx, 'bad-value', `Unknown sizing '${sizing}'.`, pair.value, {
 						hint:
 							`sizing: is one of ${BUBBLE_SIZINGS.join(', ')}. ` +
-							"'absolute' fixes the box to w x h of the stage and scales the text."
+							"'absolute' fixes the box to w x h of the stage and scales the text; " +
+							"'manual' fixes the same box and leaves the text its normal size."
 					});
 					break;
 				}
@@ -789,6 +790,16 @@ function parseBubbleStyle(
 
 				if (at) {
 					style.at = at;
+				}
+
+				break;
+			}
+
+			case 'tail': {
+				const tail = parseFrac2(ctx, pair.value, 'bubble tail');
+
+				if (tail) {
+					style.tail = tail;
 				}
 
 				break;
@@ -812,7 +823,7 @@ function parseBubbleStyle(
 							hint:
 								key === 'w'
 									? 'w: is a fraction of the stage width. 0.4 is a wide bubble.'
-									: 'h: is a fraction of the stage height, and only sizing: absolute reads it.'
+									: 'h: is a fraction of the stage height, and only sizing: absolute or manual reads it.'
 						}
 					);
 					break;

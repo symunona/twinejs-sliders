@@ -439,16 +439,25 @@ export const DIALOGUE_CSS = `
 
 .sliders-bubble[data-shape] .sliders-bubble-tail { display: none !important; }
 
-/* sizing: absolute states the rectangle and the type is fitted into it, so the width the
-   layout writes inline is the whole truth and the stylesheet's cap must not argue with it.
-   The clip is on the BODY, never on the bubble: clipping the bubble would cut off the very
+/* sizing: absolute and sizing: manual both state the rectangle, so the width the layout
+   writes inline is the whole truth and the stylesheet's cap must not argue with it. The
+   clip is on the BODY, never on the bubble: clipping the bubble would cut off the very
    drawing that reaches outside it. */
-.sliders-bubble[data-sizing='absolute'] {
+.sliders-bubble[data-sizing='absolute'],
+.sliders-bubble[data-sizing='manual'] {
 	max-width: none;
 	min-width: 0;
 }
 
-.sliders-bubble[data-sizing='absolute'] .sliders-bubble-body {
+/* The box has no inner body to clip — its text is its own children — so the clip goes on
+   the bar itself. Safe where it would not be on a bubble: nothing draws outside a box. */
+.sliders-box[data-sizing='absolute'],
+.sliders-box[data-sizing='manual'] {
+	overflow: hidden;
+}
+
+.sliders-bubble[data-sizing='absolute'] .sliders-bubble-body,
+.sliders-bubble[data-sizing='manual'] .sliders-bubble-body {
 	height: 100%;
 	overflow: hidden;
 }

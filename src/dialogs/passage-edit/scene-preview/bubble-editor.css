@@ -27,6 +27,14 @@ every line of dialogue would read as part of the scene rather than as a handle.
 	box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
 }
 
+/* A hand-sized box says so: the frame is the truth about where the bubble ends, where an
+   auto bubble's edge is only where this line of words happened to stop. */
+.scene-bubble-editor.selected[data-sizing='absolute'],
+.scene-bubble-editor.selected[data-sizing='manual'] {
+	border-style: dashed;
+	border-width: 2px;
+}
+
 /* The grab area is the whole bubble, so a drag can start on the words. */
 .scene-bubble-editor-body {
 	position: absolute;
@@ -37,21 +45,82 @@ every line of dialogue would read as part of the scene rather than as a handle.
 
 .scene-bubble-editor-handle {
 	position: absolute;
-	top: 50%;
 	width: 10px;
 	height: 10px;
-	margin-top: -5px;
 	border: 1px solid rgb(0 0 0 / 45%);
 	border-radius: 50%;
 	background: var(--bright-accent, #2f81f7);
-	cursor: ew-resize;
 	pointer-events: auto;
 }
 
-.scene-bubble-editor-handle.west {
-	left: -5px;
+/* Sides sit at the middle of their edge, corners on the corner. Both are placed by their
+   own half-size, so the dot is centred on the line it moves whatever the box measures. */
+.scene-bubble-editor-handle.n,
+.scene-bubble-editor-handle.s {
+	left: 50%;
+	margin-left: -5px;
+	cursor: ns-resize;
 }
 
-.scene-bubble-editor-handle.east {
-	right: -5px;
+.scene-bubble-editor-handle.e,
+.scene-bubble-editor-handle.w {
+	top: 50%;
+	margin-top: -5px;
+	cursor: ew-resize;
+}
+
+.scene-bubble-editor-handle.n { top: -5px; }
+.scene-bubble-editor-handle.s { bottom: -5px; }
+.scene-bubble-editor-handle.w { left: -5px; }
+.scene-bubble-editor-handle.e { right: -5px; }
+
+.scene-bubble-editor-handle.nw,
+.scene-bubble-editor-handle.ne,
+.scene-bubble-editor-handle.sw,
+.scene-bubble-editor-handle.se {
+	width: 9px;
+	height: 9px;
+	border-radius: 2px;
+}
+
+.scene-bubble-editor-handle.nw { left: -5px; top: -5px; cursor: nwse-resize; }
+.scene-bubble-editor-handle.ne { right: -5px; top: -5px; cursor: nesw-resize; }
+.scene-bubble-editor-handle.sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.scene-bubble-editor-handle.se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+
+/*
+Where the tail is reaching.
+
+A CROSS, not another dot: it is out on the stage away from the frame, it means a point
+rather than an edge, and the box handles are already dots. Amber rather than the frame's
+blue for the same reason the gesture readout is orange — one colour per kind of thing.
+*/
+.scene-bubble-editor-anchor {
+	position: absolute;
+	z-index: 7;
+	width: 18px;
+	height: 18px;
+	margin: -9px 0 0 -9px;
+	cursor: move;
+	pointer-events: auto;
+	background-image: linear-gradient(
+			var(--sliders-bubble-anchor, #ffb020),
+			var(--sliders-bubble-anchor, #ffb020)
+		),
+		linear-gradient(
+			var(--sliders-bubble-anchor, #ffb020),
+			var(--sliders-bubble-anchor, #ffb020)
+		);
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: 18px 2px, 2px 18px;
+	filter: drop-shadow(0 0 1px rgb(0 0 0 / 80%));
+}
+
+.scene-bubble-editor-anchor::after {
+	content: '';
+	position: absolute;
+	inset: 4px;
+	border: 2px solid var(--sliders-bubble-anchor, #ffb020);
+	border-radius: 50%;
 }

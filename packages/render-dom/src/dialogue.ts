@@ -291,9 +291,14 @@ export class DialogueLayer {
 		// A detached bubble belongs to the stage: it never asks where its speaker is, so it
 		// keeps its place when they walk off, and it grows no tail back to them.
 		const detached = style?.anchor === 'scene';
+		// `tail:` names the point the tail reaches for, in stage fractions — a door, a
+		// window, somebody off the side of the frame. It stands in for the speaker's own
+		// anchor everywhere the anchor is used, so an un-pinned bubble also hangs off it.
 		const anchor = detached
 			? null
-			: this.renderer?.measure(rec.spec.who, anchorName) ?? null;
+			: tailPoint(style, box) ??
+			  this.renderer?.measure(rec.spec.who, anchorName) ??
+			  null;
 		const el = rec.el;
 		const margin = this.opts.margin ?? 12;
 		const gap = this.opts.tailGap ?? 12;
@@ -311,6 +316,8 @@ export class DialogueLayer {
 			el.style.transform = `translate(${pinned.left}px, ${pinned.top}px)`;
 
 			const tail = anchor ? tailToward(anchor, pinned, w, h) : undefined;
+
+			setAnchorData(el, anchor ? localPoint(anchor, pinned) : null);
 
 			if (!tail) {
 				el.dataset.side = 'above';
@@ -339,6 +346,7 @@ export class DialogueLayer {
 			el.dataset.anchored = 'false';
 			el.dataset.side = 'above';
 			rec.tail.style.display = 'none';
+			setAnchorData(el, null);
 			el.style.transform = `translate(${box.left + (box.width - w) / 2}px, ${
 				box.top + margin
 			}px)`;
@@ -358,6 +366,7 @@ export class DialogueLayer {
 
 		el.dataset.side = place.side;
 		el.style.transform = `translate(${place.left}px, ${place.top}px)`;
+		setAnchorData(el, localPoint(anchor, place));
 		this.placeTail(rec, place.side, place.tail);
 		this.paintShape(rec, {
 			w,
@@ -388,15 +397,24 @@ export class DialogueLayer {
 		const style = rec.spec.style;
 		const el = rec.el;
 		const absolute = style?.sizing === 'absolute';
+		// Both fixed sizings state the same rectangle; they differ only in what the words
+		// do inside it. `absolute` fits the type to the box, `manual` leaves the type alone
+		// and lets the box clip — the author dragged that edge, so it is the edge they meant.
+		const fixed = absolute || style?.sizing === 'manual';
 
-		if (absolute) {
+		if (fixed) {
 			const w = (style?.w ?? ABSOLUTE_W) * box.width;
 			const h = (style?.h ?? ABSOLUTE_H) * box.height;
 
 			el.style.width = `${w}px`;
 			el.style.height = `${h}px`;
 			this.applyPadding(rec, w, h);
-			this.fitText(rec, box, w, h);
+
+			if (absolute) {
+				this.fitText(rec, box, w, h);
+			} else {
+				rec.body.style.fontSize = '';
+			}
 
 			return {w, h};
 		}
@@ -606,6 +624,14 @@ export class DialogueLayer {
 		const margin = this.opts.margin ?? 12;
 
 		el.style.width = `${(style?.w ?? 1) * box.width}px`;
+		// A narration box is a full-width bar by default, so `w` alone has always been
+		// enough for it. A fixed sizing states the other side as well — which is what the
+		// editor writes the moment an author drags the bar's top or bottom edge, and
+		// without this the handle would move and nothing would happen.
+		el.style.height =
+			style?.sizing === 'absolute' || style?.sizing === 'manual'
+				? `${(style.h ?? ABSOLUTE_H) * box.height}px`
+				: '';
 
 		const w = el.offsetWidth;
 		const h = el.offsetHeight;
@@ -852,9 +878,52 @@ export function pinnedRect(
 	return {left: clamp(left, minLeft, maxLeft), top: clamp(top, minTop, maxTop)};
 }
 
+/**
+ * The point an authored `tail:` names, in mount px — or nothing when the author named none.
+ *
+ * Unclamped, unlike `pinnedRect`: a tail is allowed to reach for something off the side of
+ * the frame, and that is most of what naming one is for. The bubble itself still gets
+ * clamped into the box, so the worst an out-of-range tail can do is lean hard.
+ */
+export function tailPoint(
+	style: BubbleStyle | undefined,
+	box: StageBox
+): Vec2 | undefined {
+	if (!style?.tail) {
+		return undefined;
+	}
+
+	return {
+		x: box.left + style.tail.x * box.width,
+		y: box.top + style.tail.y * box.height
+	};
+}
+
 /** A point in mount px, expressed from a bubble's own top left. */
 function localPoint(point: Vec2, rect: {left: number; top: number}): Vec2 {
 	return {x: point.x - rect.left, y: point.y - rect.top};
+}
+
+/**
+ * Publish where the tail is reaching, from the bubble's own top left, as data attributes.
+ *
+ * The editor needs this point to draw a draggable anchor cross, and it is the only place
+ * that knows it: it may come from the speaker's manifest anchor, from an authored `tail:`,
+ * or from nowhere at all. Expressed from the bubble rather than from the stage so a reader
+ * of it needs no way to convert mount pixels into its own — the bubble's rectangle is
+ * something anyone can measure. Rounded, because it is re-written on every reposition and
+ * a sub-pixel churn would invalidate the editor's own change check sixty times a second.
+ */
+function setAnchorData(el: HTMLElement, point: Vec2 | null): void {
+	if (!point) {
+		delete el.dataset.anchorX;
+		delete el.dataset.anchorY;
+
+		return;
+	}
+
+	el.dataset.anchorX = String(Math.round(point.x));
+	el.dataset.anchorY = String(Math.round(point.y));
 }
 
 /**

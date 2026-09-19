@@ -490,8 +490,16 @@ export type BubbleShapeName = (typeof BUBBLE_SHAPES)[number];
  * The word is `absolute` rather than `fixed` because it says what the size is measured
  * against — the slide — not that it never changes: an absolute bubble still grows with the
  * stage, which is the point of it being a fraction.
+ *
+ * `manual` is the third corner of that triangle and the one the editor writes when a
+ * bubble is resized by its top or bottom edge: the box is EXACTLY `w` x `h`, like
+ * `absolute`, and the type stays the size it would be anywhere else in the scene. So it is
+ * a hand-composed panel whose words are set like every other line, where `absolute` is a
+ * hand-composed panel whose words are set to fill it. A `manual` box whose text does not
+ * fit clips rather than shrinking — the author stated the rectangle, so the rectangle is
+ * what they get, and the editor draws its edges while they drag them.
  */
-export const BUBBLE_SIZINGS = ['auto', 'absolute'] as const;
+export const BUBBLE_SIZINGS = ['auto', 'absolute', 'manual'] as const;
 
 export type BubbleSizing = (typeof BUBBLE_SIZINGS)[number];
 
@@ -540,6 +548,7 @@ export const BUBBLE_KEYS = [
 	'anchor',
 	'sizing',
 	'at',
+	'tail',
 	'w',
 	'h',
 	'bg',
@@ -578,15 +587,29 @@ export interface BubbleStyle {
 	 */
 	at?: Frac2;
 	/**
+	 * Where the tail points, in fractions of the stage box — instead of at the speaker's
+	 * own `bubble` anchor.
+	 *
+	 * Stage fractions rather than an offset from the speaker, because the point of naming
+	 * it is usually something that is NOT the speaker: a door, a window, someone off the
+	 * side of the frame. A sprite that walks away would drag an offset along with it.
+	 *
+	 * Ignored by `anchor: scene`, which is the author saying the bubble hangs off nothing
+	 * and grows no tail at all. Dragging the anchor cross in the scene editor is what
+	 * writes this.
+	 */
+	tail?: Frac2;
+	/**
 	 * Width as a fraction of the stage box's width.
 	 *
 	 * The maximum the text may wrap to under `sizing: auto`, the exact width under
-	 * `sizing: absolute`.
+	 * `sizing: absolute` and `sizing: manual`.
 	 */
 	w?: number;
 	/**
-	 * Height as a fraction of the stage box's height. Only `sizing: absolute` reads it —
-	 * an auto bubble is as tall as its words, which is what auto means.
+	 * Height as a fraction of the stage box's height. Only `sizing: absolute` and
+	 * `sizing: manual` read it — an auto bubble is as tall as its words, which is what
+	 * auto means.
 	 */
 	h?: number;
 	/** Background colour. Any CSS colour. A drawn shape fills itself with it. */

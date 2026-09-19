@@ -172,12 +172,14 @@ const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
 	place: `Where the bubble sits: ${BUBBLE_PLACES.join(
 		', '
 	)}. auto hangs it off the speaker.`,
-	h: 'Height, as a fraction of the stage height. Only sizing: absolute reads it \u2014 an auto bubble is as tall as its words.',
+	h: 'Height, as a fraction of the stage height. Only sizing: absolute and sizing: manual read it — an auto bubble is as tall as its words. Dragging a bubble’s top or bottom edge in the preview writes this.',
+	tail:
+		'[x, y] — where the tail points, as fractions of the stage box, instead of at the speaker. Good for a door, a window or somebody off the side of the frame. anchor: scene ignores it, having no tail at all. Dragging the anchor cross in the preview writes this.',
 	size: 'Text size multiplier. 1 is the stage default.',
 	sizing: `How the box is decided: ${BUBBLE_SIZINGS.join(
 		', '
-	)}. auto snaps to the words and w: only caps the width. absolute fixes the box to w: x h: of the STAGE and scales the text to fit it, so every panel is composed at the same size whatever it says.`,
-	w: 'Width, as a fraction of the stage width. The wrap cap under sizing: auto, the exact width under sizing: absolute. Resizing a bubble in the preview writes this.'
+	)}. auto snaps to the words and w: only caps the width. absolute fixes the box to w: x h: of the STAGE and scales the text to fit it, so every panel is composed at the same size whatever it says. manual fixes the same box and leaves the text its normal size — what resizing a bubble by its top or bottom edge writes.`,
+	w: 'Width, as a fraction of the stage width. The wrap cap under sizing: auto, the exact width under sizing: absolute and sizing: manual. Resizing a bubble in the preview writes this.'
 };
 
 const LINK_HELP: KeyHelp<typeof LINK_KEYS> = {

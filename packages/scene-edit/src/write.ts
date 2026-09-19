@@ -775,6 +775,8 @@ const BUBBLE_KEY_ORDER = [
  */
 export interface BubbleGeometry {
 	at?: {x: number; y: number} | null;
+	/** Where the tail points, in stage fractions. `null` sends it back to the speaker. */
+	tail?: {x: number; y: number} | null;
 	w?: number | null;
 	h?: number | null;
 	as?: string | null;
@@ -785,9 +787,9 @@ export interface BubbleGeometry {
 	sizing?: string | null;
 }
 
-/** `[0.7, 0.25]` — fractions of the stage box, so never the bare-number `at:` form. */
+/** `[0.7, 0.25]` — fractions of the stage box, so never the bare-number `at:`/`tail:` form. */
 function formatBubbleValue(key: string, value: unknown): string {
-	if (key === 'at' && value && typeof value === 'object') {
+	if ((key === 'at' || key === 'tail') && value && typeof value === 'object') {
 		const at = value as {x: number; y: number};
 
 		return `[${formatNumber(at.x)}, ${formatNumber(at.y)}]`;
