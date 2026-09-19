@@ -21,6 +21,7 @@ import type {Beat, Scene, SceneError, Stage} from '@sliders/scene-types';
 import {go} from '../actions';
 import {createLoggers} from '../logger';
 import {get, set} from '../state';
+import {passageNamed} from '../story';
 import {CustomElement} from '../util/custom-element';
 import {manifestResolver} from './assets';
 import {enterCinema, leaveCinema} from './cinema';
@@ -92,14 +93,31 @@ export class SlidersStage extends CustomElement {
 	 * already filtered by `if:` — so a gated link that failed its condition is simply not
 	 * there and the click does nothing but say so.
 	 */
+	/**
+	 * A reader's click on a scene `links:` entry, an entity `link:` or a bubble link.
+	 *
+	 * A link that goes nowhere is a dead click and a warning, never an error screen.
+	 * `go()` THROWS on an unknown passage, the throw reaches `window.onerror`, and
+	 * `<error-handler>` then paints "An unexpected error has occurred" over the story —
+	 * so one typo in one link used to end the reader's session, with everything they had
+	 * already read replaced by a box. The passage is checked HERE rather than catching
+	 * around `go()`, so only this one miss is survivable: `go()`'s other throw (a `trail`
+	 * that is not an array) is a broken engine and still deserves the screen.
+	 */
 	private followLink = (name: string, target?: string) => {
 		const to = target ?? this.links[name];
 
-		if (to) {
-			go(to);
-		} else {
+		if (!to) {
 			warn(`The link "${name}" has no \`to:\` in this scene's links.`);
+			return;
 		}
+
+		if (!passageNamed(to)) {
+			warn(`The link "${name}" points at "${to}", which is not a passage.`);
+			return;
+		}
+
+		go(to);
 	};
 
 	/**
