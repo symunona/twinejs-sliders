@@ -28,8 +28,13 @@ const USAGE =
  * The default the editor ships with (`src/store/prefs/defaults.ts`). Prefs live in a
  * browser and the CLI cannot read them, so the default is repeated rather than guessed —
  * and `--format` is there for the story that wants another one.
+ *
+ * KEEP THIS IN STEP WITH THE SHIPPED FORMAT. It said `0.1.0` after that version was
+ * deleted, and a story created here then opened the editor on a format it does not have —
+ * which is a CRASH, not a repair, because `repairStory` only runs over stories the editor
+ * already holds and a freshly checked-out one reaches the route first.
  */
-const DEFAULT_FORMAT = {name: 'Sliders', version: '0.1.0'};
+const DEFAULT_FORMAT = {name: 'Sliders', version: '0.2.0'};
 
 /** What the editor calls the passage it creates for an empty story. */
 const FIRST_PASSAGE_NAME = 'Untitled Passage';
