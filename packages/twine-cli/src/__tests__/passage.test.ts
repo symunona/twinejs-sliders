@@ -1,6 +1,15 @@
 /** @jest-environment node */
 
-import {hashText, parse, removePassage, splice, stamp, threeWay} from '../passage';
+import {
+	hashText,
+	parse,
+	readEdits,
+	removePassage,
+	splice,
+	splitFrontMatter,
+	stamp,
+	threeWay
+} from '../passage';
 import {CliError} from '../types';
 import type {PassageObject, StoryBody} from '../types';
 
@@ -81,6 +90,45 @@ describe('stamp and parse', () => {
 
 	it('refuses front matter that never closes', () => {
 		expect(() => parse('---\nstory: x\n')).toThrow(CliError);
+	});
+});
+
+describe('splitFrontMatter', () => {
+	// The whole reason it exists: `put --new` reads a file nothing was handed out for, so
+	// its front matter legitimately carries only name/tags/at. Asking `parse` and catching
+	// the throw made "not a receipt" look identical to "no front matter", and the fence was
+	// written into the passage body — where Chapbook read `name: Take The Key` as a
+	// variable and threw before a word rendered.
+	it('splits front matter that is not a receipt', () => {
+		const split = splitFrontMatter(
+			'---\nname: Take The Key\nat: [800, 300]\n---\nhas_key: true\n--\n[scene]\n'
+		);
+
+		expect(split?.text).toBe('has_key: true\n--\n[scene]\n');
+		expect(readEdits(split!.front)).toEqual({at: [800, 300], name: 'Take The Key'});
+	});
+
+	it('splits a real receipt too, so parse() and it cannot disagree', () => {
+		const file =
+			'---\nstory: ep3\npassage: P\nrev: 4\nhash: abc\n---\nBody.\n';
+
+		expect(splitFrontMatter(file)?.text).toBe(parse(file).text);
+	});
+
+	it('is undefined for a passage that merely OPENS with a Markdown rule', () => {
+		// `---` under prose is an <hr>, and treating it as a broken header would refuse a
+		// perfectly good passage. Body, not front matter.
+		expect(splitFrontMatter('---\nJust prose, no closing fence.\n')).toBeUndefined();
+		expect(splitFrontMatter('Ordinary text.\n')).toBeUndefined();
+	});
+
+	it('is undefined when the front matter is not a map', () => {
+		expect(splitFrontMatter('---\njust a string\n---\nBody.\n')).toBeUndefined();
+		expect(splitFrontMatter('---\n- a\n- b\n---\nBody.\n')).toBeUndefined();
+	});
+
+	it('is undefined when the front matter is not valid YAML', () => {
+		expect(splitFrontMatter('---\na: [1,\n---\nBody.\n')).toBeUndefined();
 	});
 });
 

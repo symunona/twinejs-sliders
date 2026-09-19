@@ -18,7 +18,15 @@
 import {createHash} from 'node:crypto';
 import {readFile, readdir} from 'node:fs/promises';
 import {extname, join} from 'node:path';
-import {addPassage, parse, removePassage, splice, threeWay} from '../passage';
+import {
+	addPassage,
+	parse,
+	readEdits,
+	removePassage,
+	splice,
+	splitFrontMatter,
+	threeWay
+} from '../passage';
 import type {PassageEdits} from '../passage';
 import {parseRef, pickAsset, resolveStory} from '../ref';
 import {HttpError} from '../source/http';
@@ -268,20 +276,14 @@ async function createPassage(ctx: Ctx, spec: string, file: string): Promise<numb
 	const body = await ctx.source.body(meta.id);
 	const raw = await readFile(file, 'utf8');
 
-	// Front matter is optional here, so a parse failure means "plain text", not an error.
-	let text = raw;
-	let edits: PassageEdits | undefined;
-
-	if (raw.startsWith('---\n')) {
-		try {
-			const parsed = parse(raw);
-
-			text = parsed.text;
-			edits = {name: parsed.receipt.name, tags: parsed.receipt.tags, at: parsed.receipt.at};
-		} catch {
-			text = raw;
-		}
-	}
+	// Front matter is optional here and is NOT a receipt — nothing was handed out — so it is
+	// split with `splitFrontMatter` rather than `parse`. Asking `parse` and swallowing the
+	// throw is what used to write the fence and the `name:` line into the passage BODY,
+	// where Chapbook compiled them as variables and took the whole passage down with a
+	// SyntaxError the reader saw as "an unexpected error has occurred".
+	const split = splitFrontMatter(raw);
+	const text = split ? split.text : raw;
+	const edits = split ? readEdits(split.front) : undefined;
 
 	const name = edits?.name ?? ref.passage;
 	const written = await ctx.write.putStory(

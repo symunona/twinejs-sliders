@@ -1,4 +1,9 @@
-import {VARS_SEPARATOR_SPLIT_RE} from '@sliders/scene-schema';
+import {
+	VARS_SEPARATOR_SPLIT_RE,
+	scanVarsLines,
+	varsConditionSource,
+	varsValueSource
+} from '@sliders/scene-schema';
 import {createLoggers} from '../logger';
 import {ParseResult, VarDeclaration} from './types';
 
@@ -57,50 +62,41 @@ export function parse(src: string, opts = defaultOpts) {
 		log('Detected vars section');
 		[vars, text] = varsBits;
 
-		vars.split(/\r?\n/).forEach(line => {
-			if (line.trim() === '') {
-				return;
-			}
+		// The GRAMMAR is Sliders'; the ACTION is ours. `scanVarsLines` says what each line
+		// declares, and this loop is the only thing that turns a value into a function --
+		// through `varsValueSource`, the same text the lint compiles to check it. A checker
+		// that builds its own string is a checker that can disagree with the runtime, which
+		// is exactly how `---` was once accepted by the editor and ignored here.
+		const scan = scanVarsLines(vars);
 
-			const firstColon = line.indexOf(':');
+		for (const declaration of scan.declarations) {
+			const {condition, name, value} = declaration;
+			const thisVar: VarDeclaration = {
+				name,
+				value: new Function(varsValueSource(value)) as () => unknown
+			};
 
-			if (firstColon !== -1) {
-				const name = line.substring(0, firstColon).trim();
-				const value = line.substring(firstColon + 1).trim();
-				const thisVar: VarDeclaration = {
-					name,
-					value: new Function(`return (${value})`) as () => unknown
-				};
-
-				// Look for a `(condition)` in the name.
-
-				const condMatch = name.match(/\(.+\)/);
-
-				if (condMatch) {
-					if (!condMatch.index) {
-						throw new Error(
-							`A condition was found in "${name}", but no index was present in the regular expression match.`
-						);
-					}
-
-					thisVar.condition = new Function(
-						`return !!(${condMatch[0]})`
-					) as () => boolean;
-					thisVar.name = thisVar.name.substring(0, condMatch.index).trim();
-					log(
-						`Setting variable "${thisVar.name}" to "${value}" with condition (${condMatch[0]})`
-					);
-				} else {
-					log(`Setting variable "${name}" to "${value}" without condition`);
-				}
-
-				result.vars.push(thisVar);
-			} else {
-				warn(
-					`The line "${line}" in the vars section is missing a colon. It was ignored.`
+			if (condition !== undefined) {
+				thisVar.condition = new Function(
+					varsConditionSource(condition)
+				) as () => boolean;
+				log(
+					`Setting variable "${name}" to "${value}" with condition ${condition}`
 				);
+			} else {
+				log(`Setting variable "${name}" to "${value}" without condition`);
 			}
-		});
+
+			result.vars.push(thisVar);
+		}
+
+		for (const skipped of scan.ignored) {
+			warn(
+				skipped.reason === 'no-colon'
+					? `The line "${skipped.text}" in the vars section is missing a colon. It was ignored.`
+					: `The line "${skipped.text}" in the vars section names no variable. It was ignored.`
+			);
+		}
 	} else {
 		log('No vars section detected');
 		text = varsBits[0];

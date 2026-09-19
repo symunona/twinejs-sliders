@@ -842,6 +842,8 @@ export type SceneErrorCode =
 	| 'unknown-from'
 	| 'from-cycle'
 	| 'vars-separator'
+	/** A vars line whose VALUE is not a JavaScript expression. See `varsValueError`. */
+	| 'vars-value'
 	| 'missing-id';
 
 export interface SceneError {

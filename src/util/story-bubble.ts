@@ -13,10 +13,10 @@
 
 import {
 	STORY_BUBBLE_KEYS,
-	VARS_LINE_RE,
 	VARS_SEPARATOR,
 	isVarsSeparator,
-	looksLikeVarsLine,
+	scanVarsLines,
+	splitVarsSection,
 	storyBubbleStyle,
 	storyBubbleVar
 } from '@sliders/scene-schema';
@@ -40,30 +40,22 @@ export function scanVars(passages: VarsPassage[]): Record<string, string> {
 	const out: Record<string, string> = {};
 
 	for (const passage of passages) {
-		for (const line of varsLines(passage.text)) {
-			const name = VARS_LINE_RE.exec(line)?.[1];
+		const split = splitVarsSection(passage.text);
 
-			if (!name) {
-				continue;
-			}
+		if (!split) {
+			continue;
+		}
 
-			out[name] = line.slice(line.indexOf(':', name.length) + 1).trim();
+		// The RUNTIME rule, not the editor heuristic: this reads what the player will
+		// actually have set, and the two do not agree on every line (the player takes any
+		// text before the first colon as a name). Reading the story with the stricter rule
+		// would show a default the reader never gets.
+		for (const {name, value} of scanVarsLines(split.vars).declarations) {
+			out[name] = value;
 		}
 	}
 
 	return out;
-}
-
-/** The lines above the separator, or none when the passage has no vars section. */
-function varsLines(text: string): string[] {
-	const lines = text.split(/\r?\n/);
-	const end = lines.findIndex(isVarsSeparator);
-
-	if (end < 0) {
-		return [];
-	}
-
-	return lines.slice(0, end).filter(looksLikeVarsLine);
 }
 
 /**
@@ -126,11 +118,14 @@ export function writeStoryBubbleVars(
 	const hasSection = end >= 0;
 	const head = hasSection ? lines.slice(0, end) : [];
 	const body = hasSection ? lines.slice(end + 1) : lines;
-	const kept = head.filter(line => {
-		const name = VARS_LINE_RE.exec(line)?.[1];
-
-		return !name || !managed.has(name);
-	});
+	// Which lines are MINE to rewrite is the same question the player answers when it reads
+	// them, so it is asked the same way.
+	const mine = new Set(
+		scanVarsLines(head.join('\n'))
+			.declarations.filter(declaration => managed.has(declaration.name))
+			.map(declaration => declaration.line)
+	);
+	const kept = head.filter((_line, index) => !mine.has(index + 1));
 	const written = STORY_BUBBLE_KEYS.flatMap(key => {
 		const value = style?.[key as keyof BubbleStyle];
 

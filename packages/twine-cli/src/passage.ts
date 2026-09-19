@@ -94,12 +94,33 @@ function asAt(value: unknown): [number, number] | undefined {
 	return Number.isFinite(left) && Number.isFinite(top) ? [left, top] : undefined;
 }
 
-/** Split a stamped file back into its receipt and the untouched passage text. */
-export function parse(fileText: string): {receipt: Receipt; text: string} {
+/** Front matter and body, with no opinion yet about what the front matter has to contain. */
+export interface SplitFile {
+	front: Record<string, unknown>;
+	text: string;
+}
+
+/**
+ * Split a file into front matter and body, or undefined when it has none.
+ *
+ * Separate from {@link parse} because the two answer different questions, and conflating
+ * them wrote broken passages for months: `parse` demands a RECEIPT (story/passage/rev/hash)
+ * because it is reading something the store handed out, while `put --new` reads a file
+ * nothing was handed out for, whose front matter legitimately carries only `name:`/`at:`.
+ * Asking `parse` and catching the throw made "this front matter is not a receipt"
+ * indistinguishable from "there is no front matter" — so the fence and the `name:` line
+ * were written into the passage body, where Chapbook read them as VARIABLES.
+ *
+ * Deliberately lenient in one direction: a file whose front matter never closes, or whose
+ * front matter is not a YAML map, is BODY. A Chapbook passage may legitimately open with
+ * `---`, which is a Markdown horizontal rule, and treating that as a broken header would
+ * refuse a perfectly good passage.
+ */
+export function splitFrontMatter(fileText: string): SplitFile | undefined {
 	const lines = fileText.split('\n');
 
 	if (lines[0]?.trimEnd() !== FENCE) {
-		throw new CliError('not a `cat` receipt: file does not start with `---`', EXIT.usage);
+		return undefined;
 	}
 
 	let end = -1;
@@ -112,21 +133,68 @@ export function parse(fileText: string): {receipt: Receipt; text: string} {
 	}
 
 	if (end === -1) {
-		throw new CliError('not a `cat` receipt: front matter is never closed', EXIT.usage);
+		return undefined;
 	}
 
 	// Rebuild the split rather than joining the tail: the file may end without a newline, and
 	// join() would not be able to tell that from a file that ends with one.
 	const headerLength = lines.slice(0, end + 1).reduce((sum, line) => sum + line.length + 1, 0);
-	const text = fileText.slice(headerLength);
 
-	let front: Record<string, unknown>;
+	let front: unknown;
 
 	try {
-		front = (parseYaml(lines.slice(1, end).join('\n')) ?? {}) as Record<string, unknown>;
-	} catch (error) {
-		throw new CliError(`front matter is not valid YAML: ${(error as Error).message}`, EXIT.usage);
+		front = parseYaml(lines.slice(1, end).join('\n')) ?? {};
+	} catch {
+		return undefined;
 	}
+
+	if (typeof front !== 'object' || front === null || Array.isArray(front)) {
+		return undefined;
+	}
+
+	return {front: front as Record<string, unknown>, text: fileText.slice(headerLength)};
+}
+
+/** The `name:`/`tags:`/`at:` a front matter may carry, whether or not it is a receipt. */
+export function readEdits(front: Record<string, unknown>): PassageEdits {
+	const edits: PassageEdits = {};
+	const name = front.name === undefined ? undefined : String(front.name);
+	const tags = asTags(front.tags);
+	const at = asAt(front.at);
+
+	if (name !== undefined) {
+		edits.name = name;
+	}
+
+	if (tags !== undefined) {
+		edits.tags = tags;
+	}
+
+	if (at !== undefined) {
+		edits.at = at;
+	}
+
+	return edits;
+}
+
+/** Split a stamped file back into its receipt and the untouched passage text. */
+export function parse(fileText: string): {receipt: Receipt; text: string} {
+	const lines = fileText.split('\n');
+
+	if (lines[0]?.trimEnd() !== FENCE) {
+		throw new CliError('not a `cat` receipt: file does not start with `---`', EXIT.usage);
+	}
+
+	const split = splitFrontMatter(fileText);
+
+	if (!split) {
+		throw new CliError(
+			'not a `cat` receipt: front matter is never closed, or is not valid YAML',
+			EXIT.usage
+		);
+	}
+
+	const {front, text} = split;
 
 	const story = front.story === undefined ? '' : String(front.story);
 	const passage = front.passage === undefined ? '' : String(front.passage);
@@ -140,24 +208,7 @@ export function parse(fileText: string): {receipt: Receipt; text: string} {
 		);
 	}
 
-	const receipt: Receipt = {hash, passage, rev, story};
-	const name = front.name === undefined ? undefined : String(front.name);
-	const tags = asTags(front.tags);
-	const at = asAt(front.at);
-
-	if (name !== undefined) {
-		receipt.name = name;
-	}
-
-	if (tags !== undefined) {
-		receipt.tags = tags;
-	}
-
-	if (at !== undefined) {
-		receipt.at = at;
-	}
-
-	return {receipt, text};
+	return {receipt: {hash, passage, rev, story, ...readEdits(front)}, text};
 }
 
 /** The editable half of a receipt: change these and `put` renames, retags or moves. */

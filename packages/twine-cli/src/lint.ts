@@ -4,7 +4,8 @@
  * Every tier already exists in a package; this file is the thing that knows how to point at
  * them all at once and where each complaint belongs. That is the whole job:
  *
- *   1 YAML          `@sliders/scene-schema`  parse errors, unknown keys, bad coordinates
+ *   1 YAML          `@sliders/scene-schema`  parse errors, unknown keys, bad coordinates,
+ *                                            and vars values the player cannot compile
  *   2 cross-passage `@sliders/scene-index`   duplicate ids, unknown `from:`/`@mark`, cycles
  *   3 story graph   `scanLinkTargets` +      dead links, unreachable passages, and the
  *                   `sceneEntityLinkTargets`
@@ -27,7 +28,8 @@ import {
 	parseScene,
 	scanLinkTargets,
 	scanWikiLinks,
-	sceneEntityLinkTargets
+	sceneEntityLinkTargets,
+	varsValueErrors
 } from '@sliders/scene-schema';
 import {matchPassageName} from '@sliders/scene-types';
 import type {Scene, SceneError} from '@sliders/scene-types';
@@ -121,21 +123,35 @@ export function lintPassageText(
 	file: string,
 	options: PassageLintOptions = {}
 ): LintFinding[] {
+	const base = (options.lineBase ?? 1) - 1;
+
+	// Before the block check, and NOT offset by it: a vars section opens the passage, and a
+	// passage with no scene at all can still hold a value the player cannot compile — which
+	// is a broken passage either way. The rule and its wording come from the package, so
+	// this cannot disagree with the editor's squiggle.
+	const findings: LintFinding[] = varsValueErrors(text).map(error => ({
+		file,
+		level: levelOf(error),
+		line: error.line + base,
+		message: textOf(error)
+	}));
 	const block = extractSceneBlock(text);
 
 	if (!block) {
-		return [];
+		return findings;
 	}
 
-	const base = (options.lineBase ?? 1) - 1;
 	const result = parseScene(block.text);
 
-	return result.errors.map(error => ({
-		file,
-		level: levelOf(error),
-		line: error.line + block.lineOffset + base,
-		message: textOf(error)
-	}));
+	return [
+		...findings,
+		...result.errors.map(error => ({
+			file,
+			level: levelOf(error),
+			line: error.line + block.lineOffset + base,
+			message: textOf(error)
+		}))
+	];
 }
 
 // ---------------------------------------------------------------------------

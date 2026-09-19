@@ -94,6 +94,53 @@ describe('tier 1 — YAML', () => {
 		expect(findings[0].line).toBe(3);
 	});
 
+	// The exact text `put --new` used to write into the store: the receipt fence landed in
+	// the passage BODY, above the vars separator, so Chapbook compiled `name: Take The Key`
+	// as a variable and threw before a word rendered. Lint saw nothing, the player said
+	// "an unexpected error has occurred", and the stale previous passage stayed on screen.
+	it('reports a vars value the player cannot compile', () => {
+		const text = [
+			'---',
+			'name: Take The Key',
+			'at: [800, 300]',
+			'---',
+			'has_key: true',
+			'--',
+			'[scene]',
+			'bg: alley-night'
+		].join('\n');
+		const findings = lintPassageText(text, 'tmp/p.md');
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].level).toBe('error');
+		expect(findings[0].line).toBe(2);
+		expect(findings[0].message).toMatch(/Take The Key/);
+	});
+
+	it('reports a bad vars value in a passage with no scene at all', () => {
+		const findings = lintPassageText('mood: one two\n--\nJust prose.', 'tmp/p.md');
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].message).toMatch(/mood/);
+	});
+
+	it('leaves a legitimate vars section alone', () => {
+		const text =
+			"has_weapon: true\nmood: 'tense'\nsliders.autoAdvance: 0\nwhen: '12:30'\n--\n[scene]\nid: x\n";
+
+		expect(lintPassageText(text, 'tmp/p.md')).toEqual([]);
+	});
+
+	it('flags an unquoted value with a colon in it, which really is broken', () => {
+		// `when: 12:30` reads as the value `12:30`, and `return (12:30)` does not compile.
+		// Surfacing this is the rule earning its keep, not a false positive — the passage
+		// is dead in the player either way.
+		const findings = lintPassageText('when: 12:30\n--\nprose', 'tmp/p.md');
+
+		expect(findings).toHaveLength(1);
+		expect(findings[0].message).toMatch(/when/);
+	});
+
 	it('offsets lines past a cat receipt', () => {
 		const receipt = `---\nstory: ep3\npassage: Tavern Night\nrev: 42\nhash: 9f31c8a2\n---\n`;
 		const text = `[scene]\nid: tavern-night\nchar: {}\n`;

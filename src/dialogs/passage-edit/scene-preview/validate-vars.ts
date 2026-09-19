@@ -306,3 +306,12 @@ export function varsSeparatorErrors(text: string): SceneError[] {
 		}
 	];
 }
+
+/**
+ * Re-exported, not reimplemented.
+ *
+ * Unlike everything else in this file, the check needs no story around it — one passage is
+ * the whole question — so it lives in `@sliders/scene-schema` where `twine-cli lint` can
+ * reach it too. One rule, one message, one place for it to be wrong.
+ */
+export {varsValueErrors} from '@sliders/scene-schema';

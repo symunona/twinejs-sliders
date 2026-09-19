@@ -45,6 +45,19 @@ export {
 	looksLikeVarsLine,
 	looksLikeVarsSection,
 	nearMissSeparator,
-	varsLineName
+	scanVarsLines,
+	splitVarsSection,
+	varsConditionError,
+	varsConditionSource,
+	varsLineName,
+	varsValueError,
+	varsValueErrors,
+	varsValueSource
 } from './vars-section';
-export type {NearMissSeparator} from './vars-section';
+export type {
+	NearMissSeparator,
+	SplitVarsSection,
+	VarsDeclaration,
+	VarsIgnoredLine,
+	VarsScan
+} from './vars-section';
