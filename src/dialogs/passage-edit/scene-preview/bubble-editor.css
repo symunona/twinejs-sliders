@@ -6,23 +6,31 @@
 }
 
 /*
-The bubble's own frame. Transparent until the author touches it: a permanent box around
-every line of dialogue would read as part of the scene rather than as a handle.
+The bubble's own frame.
+
+Faint but always drawn, on the same reasoning the stage grid's entity boxes follow: a
+bubble is the one thing on stage that does not look like a handle, so with nothing around
+it there is no way to learn it can be moved at all. Dashed and low contrast so it reads as
+a guide rather than as part of the scene, with the dark halo every 1px line on this stage
+needs to survive light artwork. Hover firms it up, selection turns it blue.
 */
 
 .scene-bubble-editor {
 	position: absolute;
 	z-index: 6;
-	border: 1px solid transparent;
+	border: 1px dashed rgb(255 255 255 / 30%);
 	border-radius: 6px;
+	box-shadow: 0 0 0 1px rgb(0 0 0 / 25%);
 	pointer-events: none;
 }
 
 .scene-bubble-editor:hover {
-	border-color: rgb(255 255 255 / 45%);
+	border-style: solid;
+	border-color: rgb(255 255 255 / 60%);
 }
 
 .scene-bubble-editor.selected {
+	border-style: solid;
 	border-color: var(--bright-accent, #2f81f7);
 	box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
 }

@@ -18,8 +18,22 @@
 	outline-offset: -2px;
 }
 
+/*
+The renderer's own layers are a stacking world of their own, and the editor's chrome sits
+on top of all of it.
+
+Without this they share one context and the numbers collide: the renderer counts up to 50
+for the dialogue layer, the editor counts to 7 for its handles, so the speech bubble
+painted OVER the selection row, the beat nav and its own frame — and because a bubble is
+`pointer-events: auto` (a `[[link]]` inside one has to be clickable in the player) it
+swallowed the press that was meant to select it. `isolation` rather than a stack of larger
+numbers on this side: the two scales are not meant to be compared at all, and the next
+renderer layer would start the argument again.
+*/
 .stage-editor > .scene-stage {
 	flex-grow: 1;
+	isolation: isolate;
+	z-index: 0;
 }
 
 /* Empty ground pans the camera, so the ground advertises itself as grabbable. Over a
