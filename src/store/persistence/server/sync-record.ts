@@ -13,6 +13,7 @@
 
 import type {Story} from '../../stories';
 import {newSyncRecord, type SyncRecord} from './server.types';
+import {logSync} from './sync-log';
 
 export const SYNC_RECORDS_KEY = 'twine-server-sync';
 
@@ -83,16 +84,53 @@ export function setSyncRecord(record: SyncRecord): void {
 	persist({...load(), [record.storyId]: record});
 }
 
+/**
+ * A rev only ever goes UP.
+ *
+ * `rev` is the server's write counter, and several paths write it — a push receipt, a
+ * pull, a socket message, publish, checkout, resolve. They do not take turns: `applyPull`
+ * (`use-server-sync.ts`) writes the rev it fetched unconditionally, so a pull that was in
+ * flight when a push landed puts the OLDER number back and the next push goes out with a
+ * stale `If-Match`. That is the same one-behind signature as the keepalive bug in
+ * `docs/sliders/bugs/rev-lag.md`, arrived at a different way.
+ *
+ * Applied in `merge()` below, so every writer gets it — the module functions, the
+ * `localStorage` store and the memory store alike.
+ *
+ * THE ESCAPE IS `remove()` THEN WRITE, never a silent exception. Two callers legitimately
+ * throw this browser's bookkeeping away, and both say so out loud: `publish()`, which
+ * claims `rev: 0` before a PUT carrying no `If-Match`, and `checkoutStory()`, which takes
+ * the server's copy wholesale and may be looking at a different backend's rev sequence.
+ * Anything ELSE lowering a rev is the bug this guard exists to catch, which is why a
+ * refused write is logged rather than passed over.
+ */
+function merge(
+	previous: SyncRecord,
+	changes: Partial<SyncRecord>
+): SyncRecord {
+	const merged: SyncRecord = {
+		...previous,
+		...changes,
+		storyId: previous.storyId
+	};
+
+	if (changes.rev !== undefined && changes.rev < previous.rev) {
+		logSync('record', 'rev not lowered', previous.storyId, () => ({
+			kept: previous.rev,
+			refused: changes.rev
+		}));
+		merged.rev = previous.rev;
+	}
+
+	return merged;
+}
+
 /** Merge into the existing record, minting one first if there is none. */
 export function updateSyncRecord(
 	storyId: string,
 	changes: Partial<SyncRecord>
 ): SyncRecord {
-	const updated: SyncRecord = {
-		...syncRecordOrNew(storyId),
-		...changes,
-		storyId
-	};
+	const updated = merge(syncRecordOrNew(storyId), changes);
 
 	setSyncRecord(updated);
 
@@ -169,11 +207,10 @@ export function memorySyncRecordStore(
 			records = next;
 		},
 		update(storyId, changes) {
-			const updated: SyncRecord = {
-				...(records[storyId] ?? newSyncRecord(storyId)),
-				...changes,
-				storyId
-			};
+			const updated = merge(
+				records[storyId] ?? newSyncRecord(storyId),
+				changes
+			);
 
 			records = {...records, [storyId]: updated};
 

@@ -11,6 +11,7 @@
 
 import type {Story} from '../../stories';
 import {isServerError, type ServerClient} from './client';
+import {verifyConflict} from './reconcile';
 import {logSync} from './sync-log';
 import {
 	localSyncRecordStore,
@@ -281,7 +282,7 @@ export class SyncQueue {
 				});
 				this.options.onPushed?.(story);
 			} catch (error) {
-				this.fail(storyId, entry, error, options);
+				await this.fail(storyId, entry, error, options, story, hash);
 			} finally {
 				entry.inFlight = undefined;
 			}
@@ -291,17 +292,53 @@ export class SyncQueue {
 		await entry.inFlight;
 	}
 
-	private fail(
+	/**
+	 * `story` and `hash` are what was actually SENT, which is not always `entry.story` —
+	 * an edit can arrive mid-flight. A 412 has to be checked against the body the server
+	 * refused, not against whatever the author has typed since.
+	 */
+	private async fail(
 		storyId: string,
 		entry: Pending,
 		error: unknown,
-		options: {keepalive?: boolean}
-	): void {
+		options: {keepalive?: boolean},
+		story: Story,
+		hash: string
+	): Promise<void> {
 		this.options.onError?.(storyId, error);
 
 		const message = error instanceof Error ? error.message : String(error);
 
 		if (isServerError(error) && error.conflict) {
+			// A 412 says our `If-Match` was stale. That is a fact about this browser's
+			// bookkeeping, not yet evidence of a disagreement: a push whose receipt was
+			// lost — the tab-hide `keepalive` flush, a dropped response — leaves us
+			// behind our OWN write, and the body we just sent may be the body already
+			// stored. Ask before parking an author in a dialog with nothing in it.
+			const verdict = await verifyConflict({
+				client: this.options.client,
+				hash,
+				local: story,
+				records: this.store
+			});
+
+			if (verdict === 'resolved') {
+				const latest = entry.story;
+
+				clearTimers(entry);
+				this.pending.delete(storyId);
+				this.emit();
+
+				// Whatever was typed while that push was in flight lost its debounce
+				// timer along with the entry. The record is `idle` again, so this queues
+				// normally — and is a no-op when nothing moved.
+				if (latest !== story) {
+					this.push(latest);
+				}
+
+				return;
+			}
+
 			// Park this story and only this story. The author's text is still in
 			// localStorage and the server's version is still on the server; nothing has
 			// been lost, and nothing more can be decided without a person.

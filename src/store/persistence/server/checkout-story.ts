@@ -21,7 +21,7 @@ import {unusedName} from '../../../util/unused-name';
 import type {StoriesDispatch, Story} from '../../stories';
 import type {ServerClient} from './client';
 import type {AssetManifest} from './server.types';
-import {storyHash, updateSyncRecord} from './sync-record';
+import {deleteSyncRecord, storyHash, updateSyncRecord} from './sync-record';
 
 export interface CheckoutProgress {
 	phase: 'story' | 'assets';
@@ -106,6 +106,12 @@ export async function checkoutStory(
 		dispatch({props: local, type: 'createStory'});
 	}
 
+	// A checkout takes the server's copy wholesale, so whatever this browser thought it
+	// knew about the story is void — including a rev left over from a different backend,
+	// whose counter has nothing to do with this one's. Records are monotonic in `rev`
+	// (`sync-record.ts`); dropping the record first is the explicit escape from that, the
+	// same one `publish()` uses.
+	deleteSyncRecord(story.id);
 	updateSyncRecord(story.id, {
 		conflictClient: undefined,
 		conflictRev: undefined,

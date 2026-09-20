@@ -55,10 +55,13 @@ import type {
 	ServerMessage,
 	StoryIndexEntry
 } from './server.types';
+import {reconcileVerified} from './reconcile';
+import {installSyncLogDebugHook, logSync} from './sync-log';
 import {SyncQueue} from './sync-queue';
 import {
 	allSyncRecords,
 	deleteSyncRecord,
+	localSyncRecordStore,
 	storyHash,
 	syncRecordOrNew,
 	updateSyncRecord,
@@ -96,49 +99,13 @@ function notifyStoryPulled(storyId: string): void {
 // The connect / refresh decision table
 // ---------------------------------------------------------------------------
 
-export type ReconcileAction =
-	'ghost' | 'none' | 'pull' | 'conflict' | 'gone' | 'push';
-
-export interface ReconcileInput {
-	/** Absent when this browser has no copy of the story. */
-	local?: {sync: boolean; dirty: boolean; rev: number};
-	/** Absent when the server has never heard of it. */
-	server?: {rev: number; deleted: boolean};
-}
-
 /**
- * One row of spec 11's "Connect / refresh" table, as a pure function.
- *
- * | local | server | result |
- * |---|---|---|
- * | — | present | `ghost` |
- * | `sync: false` | present | `none` — the card just notes "also on server" |
- * | `sync: true`, clean, behind | present | `pull` |
- * | `sync: true`, dirty, behind | present | `conflict` |
- * | `sync: true` | tombstone / absent | `gone` |
- * | `sync: true`, dirty, current | present | `push` |
+ * Moved to `reconcile.ts`, where the verification step that corrects a suspected
+ * `conflict` can sit beside it without this hook and `sync-queue.ts` importing each
+ * other. Re-exported so every existing reader keeps its import.
  */
-export function reconcileDecision(input: ReconcileInput): ReconcileAction {
-	const {local, server} = input;
-
-	if (!local) {
-		return server && !server.deleted ? 'ghost' : 'none';
-	}
-
-	if (!local.sync) {
-		return 'none';
-	}
-
-	if (!server || server.deleted) {
-		return 'gone';
-	}
-
-	if (server.rev > local.rev) {
-		return local.dirty ? 'conflict' : 'pull';
-	}
-
-	return local.dirty ? 'push' : 'none';
-}
+export {reconcileDecision} from './reconcile';
+export type {ReconcileAction, ReconcileInput} from './reconcile';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -407,6 +374,22 @@ export function useServerSync(): ServerSyncContextProps {
 
 	storiesRef.current = stories;
 	dispatchRef.current = dispatch;
+
+	/**
+	 * The side table as a seam, so the hook and the queue it builds read and write the one
+	 * store. Memoised because `reconcileStory` depends on it and a fresh object each
+	 * render would rebuild every callback hanging off it.
+	 */
+	const recordStore = React.useMemo(() => localSyncRecordStore(), []);
+
+	// `window.__slidersSyncLog.enable()`. Inert until someone calls that, so this costs
+	// one property — and it is the difference between reconstructing a sync bug from
+	// symptoms hours later and reading the decisions off a live session.
+	React.useEffect(() => {
+		if (typeof window !== 'undefined') {
+			installSyncLogDebugHook(window as unknown as Record<string, unknown>);
+		}
+	}, []);
 
 	const {backendAutosave, backendClientId, backendToken, backendUrl} = prefs;
 	const backendUsername = prefs.backendUsername;
@@ -737,23 +720,26 @@ export function useServerSync(): ServerSyncContextProps {
 	 * and the websocket, which learns it from a `story` / `deleted` / `revived` message. A
 	 * second copy of this for the socket is exactly how the two paths would come to
 	 * disagree about what a stale-and-dirty story means.
+	 *
+	 * `reconcileVerified`, not the bare table: a `conflict` out of the table is a
+	 * SUSPICION taken on this browser's own bookkeeping, and one browser can be behind its
+	 * own landed write (`docs/sliders/bugs/rev-lag.md`). The verification fetches and
+	 * compares content, so what arrives here is an answer. This is the "next page load"
+	 * path — the poll on mount is what repairs a tab-hide push whose receipt died.
 	 */
 	const reconcileStory = React.useCallback(
 		async (
 			story: Story,
 			server: {rev: number; deleted: boolean; lastClient?: string} | undefined
 		) => {
-			if (!queue) {
+			if (!queue || !client) {
 				return;
 			}
 
-			const record = syncRecordOrNew(story.id);
-			const decision = reconcileDecision({
-				local: {
-					dirty: storyHash(story) !== record.pushedHash,
-					rev: record.rev,
-					sync: story.sync === true
-				},
+			const decision = await reconcileVerified({
+				client,
+				local: story,
+				records: recordStore,
 				server: server ? {deleted: server.deleted, rev: server.rev} : undefined
 			});
 
@@ -769,6 +755,12 @@ export function useServerSync(): ServerSyncContextProps {
 					break;
 
 				case 'conflict':
+					// Verified: the server really is holding something this browser did
+					// not write. Only a person can say which copy wins.
+					logSync('reconcile', 'conflict', story.id, () => ({
+						conflictClient: server?.lastClient,
+						conflictRev: server?.rev
+					}));
 					updateSyncRecord(story.id, {
 						conflictClient: server?.lastClient,
 						conflictRev: server?.rev,
@@ -798,7 +790,7 @@ export function useServerSync(): ServerSyncContextProps {
 					break;
 			}
 		},
-		[backendAutosave, pull, queue]
+		[backendAutosave, client, pull, queue, recordStore]
 	);
 
 	const refresh = React.useCallback(async () => {
@@ -1210,6 +1202,13 @@ export function useServerSync(): ServerSyncContextProps {
 			// the store, so the watcher is about to see a change and queue a push. With a
 			// blank hash that push would send this very body a second time — a wasted rev,
 			// a burnt slot of the keep-N history, and a second row in the history dialog.
+			//
+			// `deleteSyncRecord` first, because this lowers a rev on purpose: the PUT
+			// below carries no `If-Match` and overwrites whatever is on the server, so
+			// anything this browser thought it knew is void. Records are monotonic in
+			// `rev` (`sync-record.ts`), so a reset has to be said out loud — dropping the
+			// record and minting it is that escape, and `checkoutStory` uses the same one.
+			deleteSyncRecord(target.id);
 			updateSyncRecord(target.id, {
 				pushedHash: storyHash(target),
 				rev: 0,

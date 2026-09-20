@@ -10,8 +10,9 @@
  * with itself here the same way it does in the wild.
  */
 
+import type {ServerClient} from '../client';
 import {fakeServer, type FakeServer} from '../fake-server';
-import {reconcileDecision} from '../use-server-sync';
+import {reconcileVerified, verifyConflict} from '../reconcile';
 import {
 	isStoryDirty,
 	memorySyncRecordStore,
@@ -49,8 +50,10 @@ function browser(name: string) {
 /**
  * What `reconcileStory` would decide, without the React hook around it.
  *
- * The hook's copy reads the same two inputs from the same two places; this spells them
- * out so a scenario can state the situation rather than arrange a render.
+ * It calls the same `reconcileVerified` the hook does — the whole answer, table plus the
+ * verification of a suspected conflict — so a scenario can state the situation rather
+ * than arrange a render, and cannot drift into being a second opinion. All this adds is
+ * reading the index row the hook reads from its poll.
  */
 async function decisionFor(
 	who: {client: ReturnType<FakeServer['client']>; records: SyncRecordStore},
@@ -58,14 +61,11 @@ async function decisionFor(
 ) {
 	const index = await who.client.listStories();
 	const entry = index.find(row => row.id === story.id);
-	const record = who.records.get(story.id);
 
-	return reconcileDecision({
-		local: {
-			dirty: storyHash(story) !== record.pushedHash,
-			rev: record.rev,
-			sync: story.sync === true
-		},
+	return reconcileVerified({
+		client: who.client,
+		local: story,
+		records: who.records,
 		server: entry ? {deleted: entry.deleted, rev: entry.rev} : undefined
 	});
 }
@@ -158,25 +158,88 @@ describe('rev lag — a client conflicting with itself', () => {
 	});
 
 	/**
-	 * FAILING ON PURPOSE — this is the fix, not the bug.
-	 *
-	 * `it.failing` passes only while the assertion below does NOT hold, so this documents
-	 * the defect today and turns RED the moment someone fixes it. When that happens the
-	 * answer is to flip it to `it`, never to soften the assertion.
+	 * FIXED. Was `it.failing` while the bug was live; flipped when the verification step
+	 * landed, which is what that marker is for.
 	 *
 	 * `reconcileDecision` cannot get this right on its own — it sees two hashes and a rev,
-	 * and by those this story IS dirty and behind. The fix is a verification step around
-	 * it: on a suspected conflict, fetch and compare CONTENT, and only park if the two
-	 * copies genuinely diverged. See the fix section of the bug doc.
+	 * and by those this story IS dirty and behind. `reconcileVerified` wraps it: on a
+	 * suspected conflict, fetch and compare CONTENT, and only park if the two copies
+	 * genuinely diverged. See the fix section of the bug doc.
 	 */
-	it.failing(
-		'does not call it a conflict when one browser agrees with itself',
-		async () => {
-			const {a, edited} = await lagged();
+	it('does not call it a conflict when one browser agrees with itself', async () => {
+		const {a, edited} = await lagged();
 
-			expect(await decisionFor(a, edited)).not.toBe('conflict');
-		}
-	);
+		expect(await decisionFor(a, edited)).not.toBe('conflict');
+	});
+
+	it('repairs the record instead, so the next edit pushes normally', async () => {
+		const {a, edited} = await lagged();
+
+		expect(await decisionFor(a, edited)).toBe('none');
+
+		// The receipt it never got, written down late.
+		expect(a.records.get('s1')).toMatchObject({
+			pushedHash: storyHash(edited),
+			rev: 2,
+			state: 'idle'
+		});
+		expect(syncLogNotes({event: 'record'})).toContain(
+			'conflict: resolved, same content'
+		);
+
+		// And it is a plain push from here, not a parked story.
+		await push(a, storyWithText('s1', 'three'));
+
+		expect(server.revOf('s1')).toBe(3);
+		expect(a.records.get('s1').rev).toBe(3);
+	});
+
+	it('still parks when the fetch that would clear it fails', async () => {
+		const {a, edited} = await lagged();
+
+		// Straight to `reconcileVerified` with the index row spelled out, so the only
+		// request left to fail is the GET that does the verifying.
+		server.failNext(1);
+
+		expect(
+			await reconcileVerified({
+				client: a.client,
+				local: edited,
+				records: a.records,
+				server: {deleted: false, rev: server.revOf('s1')}
+			})
+		).toBe('conflict');
+		expect(syncLogNotes({event: 'reconcile'})).toContain(
+			'conflict: unverified'
+		);
+
+		// Nothing was written on a guess.
+		expect(a.records.get('s1').rev).toBe(1);
+
+		// And it clears itself the moment the network comes back.
+		expect(await decisionFor(a, edited)).toBe('none');
+	});
+
+	it('resolves the same lag on the 412 path, when the next edit hits it first', async () => {
+		const a = browser('a');
+
+		await push(a, storyWithText('s1', 'one'));
+
+		// The keepalive push lands and loses its receipt, as above.
+		const edited = storyWithText('s1', 'two');
+
+		await a.client.putStory(edited, 1);
+
+		// This tab never reloaded, so nothing reconciled. The queue re-sends the same
+		// body — the store's copy is still `edited` — with the stale `If-Match: 1`.
+		await push(a, edited);
+
+		expect(a.records.get('s1').state).toBe('idle');
+		expect(a.records.get('s1').rev).toBe(2);
+		expect(a.records.get('s1').pushedHash).toBe(storyHash(edited));
+		// Verified, not overwritten: the server was never written to a third time.
+		expect(server.revOf('s1')).toBe(2);
+	});
 
 	it('is not a conflict once the record catches up', async () => {
 		const a = browser('a');
@@ -241,6 +304,68 @@ describe('two browsers', () => {
 		expect(await decisionFor(b, storyWithText('s1', 'mine'))).toBe('conflict');
 	});
 
+	/**
+	 * THE REGRESSION THAT MATTERS. Verifying a conflict must never talk one away.
+	 *
+	 * Same 412 as the rev-lag case above and the opposite answer, because the evidence is
+	 * the opposite: the server is holding text this browser did not write.
+	 */
+	it('parks B in conflict when the 412 really was somebody else', async () => {
+		const a = browser('a');
+		const b = browser('b');
+		const story = storyWithText('s1', 'one');
+
+		await push(a, story);
+		b.records.update('s1', {pushedHash: storyHash(story), rev: 1});
+
+		await push(a, storyWithText('s1', 'theirs'));
+		await push(b, storyWithText('s1', 'mine'));
+
+		expect(b.records.get('s1')).toMatchObject({
+			conflictRev: 2,
+			state: 'conflict'
+		});
+		expect(syncLogNotes({event: 'reconcile', storyId: 's1'})).toContain(
+			'conflict: confirmed'
+		);
+
+		// B's text stayed B's, and A's stayed on the server. Nothing was overwritten.
+		expect(storyHash(server.stored('s1') as Story)).toBe(
+			storyHash(storyWithText('s1', 'theirs'))
+		);
+	});
+
+	it('parks on a 412 it could not check, rather than guessing', async () => {
+		const a = browser('a');
+		const b = browser('b');
+		const story = storyWithText('s1', 'one');
+
+		await push(a, story);
+		b.records.update('s1', {pushedHash: storyHash(story), rev: 1});
+		await push(a, storyWithText('s1', 'theirs'));
+
+		// B's PUT must still get its real 412, so `failNext` is no good here — it would
+		// take the PUT first. Only the verifying GET is broken.
+		const halfOffline: ServerClient = {
+			...b.client,
+			getStory: () => Promise.reject(new Error('Failed to fetch'))
+		};
+		const queue = new SyncQueue({
+			client: halfOffline,
+			debounceMs: 0,
+			records: b.records
+		});
+
+		queue.push(storyWithText('s1', 'mine'));
+		await queue.flush('s1');
+		await settle();
+
+		expect(b.records.get('s1').state).toBe('conflict');
+		expect(syncLogNotes({event: 'reconcile', storyId: 's1'})).toContain(
+			'conflict: unverified'
+		);
+	});
+
 	it('refuses the second writer with 412 and its own rev', async () => {
 		const a = browser('a');
 		const b = browser('b');
@@ -298,5 +423,121 @@ describe('the asset manifest', () => {
 
 		expect(server.revOf('s1')).toBe(2);
 		expect(server.assetRevOf('s1')).toBe(1);
+	});
+});
+
+describe('verifying a suspected conflict', () => {
+	it('is resolved when the server is holding our own bytes', async () => {
+		const a = browser('a');
+		const story = storyWithText('s1', 'one');
+
+		await a.client.putStory(story);
+		a.records.update('s1', {pushedHash: 'stale', rev: 0, state: 'conflict'});
+
+		expect(
+			await verifyConflict({
+				client: a.client,
+				local: story,
+				records: a.records
+			})
+		).toBe('resolved');
+		expect(a.records.get('s1')).toMatchObject({
+			conflictClient: undefined,
+			conflictRev: undefined,
+			pushedHash: storyHash(story),
+			rev: 1,
+			state: 'idle'
+		});
+	});
+
+	it('is a conflict when the bytes differ, and writes nothing', async () => {
+		const a = browser('a');
+
+		await a.client.putStory(storyWithText('s1', 'theirs'));
+		a.records.update('s1', {pushedHash: 'stale', rev: 0});
+
+		expect(
+			await verifyConflict({
+				client: a.client,
+				local: storyWithText('s1', 'mine'),
+				records: a.records
+			})
+		).toBe('conflict');
+		expect(a.records.get('s1')).toMatchObject({pushedHash: 'stale', rev: 0});
+	});
+
+	it('is a conflict when the story is not there at all', async () => {
+		const a = browser('a');
+
+		expect(
+			await verifyConflict({
+				client: a.client,
+				local: storyWithText('s1', 'mine'),
+				records: a.records
+			})
+		).toBe('conflict');
+	});
+
+	it('takes the caller\'s hash rather than computing it twice', async () => {
+		const a = browser('a');
+		const story = storyWithText('s1', 'one');
+
+		await a.client.putStory(story);
+
+		// A hash that is not this story's must not resolve, however the record reads.
+		expect(
+			await verifyConflict({
+				client: a.client,
+				hash: 'not-this-story',
+				local: story,
+				records: a.records
+			})
+		).toBe('conflict');
+	});
+});
+
+describe('the rev only goes up', () => {
+	it('refuses a pull that would put an older rev back', async () => {
+		const a = browser('a');
+
+		await push(a, storyWithText('s1', 'one'));
+		await push(a, storyWithText('s1', 'two'));
+		expect(a.records.get('s1').rev).toBe(2);
+
+		// A pull that was already in flight when that second push landed.
+		a.records.update('s1', {rev: 1});
+
+		expect(a.records.get('s1').rev).toBe(2);
+		expect(syncLogNotes({event: 'record', storyId: 's1'})).toContain(
+			'rev not lowered'
+		);
+	});
+
+	it('leaves a write that does not mention the rev alone', async () => {
+		const a = browser('a');
+
+		await push(a, storyWithText('s1', 'one'));
+		a.records.update('s1', {state: 'pulling'});
+
+		expect(a.records.get('s1')).toMatchObject({rev: 1, state: 'pulling'});
+	});
+
+	it('takes a higher rev, and takes it on a record it has never seen', async () => {
+		const a = browser('a');
+
+		a.records.update('s1', {rev: 7});
+		a.records.update('s1', {rev: 9});
+
+		expect(a.records.get('s1').rev).toBe(9);
+	});
+
+	it('lets a record be dropped and re-minted at zero — the publish escape', async () => {
+		const a = browser('a');
+
+		await push(a, storyWithText('s1', 'one'));
+		a.records.remove('s1');
+		a.records.update('s1', {rev: 0, state: 'pushing'});
+
+		expect(a.records.get('s1').rev).toBe(0);
 	});
 });
