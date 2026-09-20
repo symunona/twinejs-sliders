@@ -4,6 +4,7 @@ export * from './client';
 export * from './events';
 export * from './presence';
 export * from './pull-assets';
+export * from './server-message';
 export * from './server.types';
 export * from './sync-queue';
 export * from './sync-record';

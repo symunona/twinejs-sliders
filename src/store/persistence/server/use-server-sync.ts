@@ -57,6 +57,7 @@ import type {
 	StoryIndexEntry
 } from './server.types';
 import {reconcileVerified} from './reconcile';
+import {handleServerMessage} from './server-message';
 import {installSyncLogDebugHook, logSync} from './sync-log';
 import {SyncQueue} from './sync-queue';
 import {
@@ -64,7 +65,6 @@ import {
 	deleteSyncRecord,
 	localSyncRecordStore,
 	storyHash,
-	syncRecordOrNew,
 	updateSyncRecord,
 	type SyncRecords
 } from './sync-record';
@@ -975,96 +975,40 @@ export function useServerSync(): ServerSyncContextProps {
 	/**
 	 * One message off the bus.
 	 *
-	 * A `story` for something we have locally goes straight through the same decision
-	 * table the poll uses — the message carries the rev, which is the only thing the index
-	 * row would have told us. A message about a story we do not have is a different
-	 * matter: the ghost list is built from the index, so that one needs the round trip.
+	 * Two folds of the same message, one line apart and deliberately not combined.
+	 * `presenceReducer` says who is here; `handleServerMessage` (`server-message.ts`) says
+	 * what our stories should do about it. Both are pure of React and tested without one —
+	 * everything below is the wiring that makes hook state look like an env.
 	 */
 	const handleServerEvent = React.useCallback(
 		(message: ServerMessage) => {
 			setPresence(current => presenceReducer(current, message));
 
-			const localStory = (id: string) =>
-				storiesRef.current.find(story => story.id === id);
-			const finish = (work: Promise<void>) =>
-				void work.then(() => setRecords({...allSyncRecords()}));
-
-			switch (message.t) {
-				case 'story':
-				case 'revived': {
-					const story = localStory(message.id);
-
-					setIndex(current =>
-						current.map(entry =>
-							entry.id === message.id
-								? {
-										...entry,
-										deleted: false,
-										lastClient: message.by,
-										rev: message.rev
-									}
-								: entry
-						)
-					);
-
-					if (!story) {
-						void refresh();
-						return;
-					}
-
-					finish(
-						reconcileStory(story, {
-							deleted: false,
-							lastClient: message.by,
-							rev: message.rev
-						})
-					);
-					break;
-				}
-
-				case 'deleted': {
-					const story = localStory(message.id);
-
-					setIndex(current =>
-						current.map(entry =>
-							entry.id === message.id ? {...entry, deleted: true} : entry
-						)
-					);
-
-					if (!story) {
-						void refresh();
-						return;
-					}
-
-					// A tombstone carries no rev, and none is needed: the decision table
-					// only looks at `deleted` once it is set.
-					finish(
-						reconcileStory(story, {
-							deleted: true,
-							lastClient: message.by,
-							rev: syncRecordOrNew(message.id).rev
-						})
-					);
-					break;
-				}
-
-				case 'assets':
-					// Asset bytes are not part of the story document, so there is nothing
-					// to reconcile — what changed is the index row's counts. Ask for it,
-					// and fetch whatever art we are now missing.
-					void refresh();
-					pullAssetsRef.current(message.story);
-					break;
-
-				default:
-					break;
-			}
+			handleServerMessage(message, {
+				onReconciled: () => setRecords({...allSyncRecords()}),
+				pullAssets: storyId => pullAssetsRef.current(storyId),
+				reconcile: reconcileStory,
+				records: recordStore,
+				refresh: () => void refresh(),
+				setIndex,
+				// A function, not `stories`: a message can land at any moment between
+				// renders, and an array captured at render time answers for a browser that
+				// no longer exists.
+				stories: () => storiesRef.current
+			});
 		},
-		[reconcileStory, refresh]
+		[reconcileStory, recordStore, refresh]
 	);
 
 	// A ref so the socket's listener never has to be torn down and rebuilt: reconnecting
 	// on every keystroke-driven re-render of the handler would be worse than useless.
+	//
+	// The indirection survives the move of the body into `server-message.ts` and has to.
+	// `handleServerEvent` still changes identity whenever `reconcileStory` or `refresh`
+	// does, and those follow `client`, `queue` and `backendAutosave`; the `socket.onMessage`
+	// subscription below is made once per CONNECTION, so anything it captured directly
+	// would freeze at whatever the first render handed it. Reading through the ref is what
+	// lets the callback keep being replaced while the socket is left alone.
 	const handlerRef = React.useRef(handleServerEvent);
 
 	handlerRef.current = handleServerEvent;
