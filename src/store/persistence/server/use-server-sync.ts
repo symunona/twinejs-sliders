@@ -31,6 +31,7 @@ import {
 	isPersistablePassageChange,
 	isPersistableStoryChange
 } from '../persistable-changes';
+import {applyPulledStory, pullAllowed} from './apply-pull';
 import {syncStoryAssets, type AssetSyncProgress} from './asset-sync';
 import {checkoutStory, type CheckoutProgress} from './checkout-story';
 import {pullStoryAssets, type AssetPullProgress} from './pull-assets';
@@ -482,31 +483,42 @@ export function useServerSync(): ServerSyncContextProps {
 		[]
 	);
 
-	/** Replaces a local story with the server's copy and drops its undo history. */
-	const applyPull = React.useCallback((story: Story, rev: number) => {
-		const local: Story = {...story, sync: true};
+	/**
+	 * Replaces a local story with the server's copy and drops its undo history.
+	 *
+	 * The whole decision lives in `apply-pull.ts`, which checks that the store will take
+	 * the update before recording that it did. This used to record success
+	 * unconditionally, and the stories reducer refuses a duplicate name in silence — see
+	 * the note at the top of that file.
+	 */
+	const applyPull = React.useCallback(
+		(story: Story, rev: number) => {
+			const outcome = applyPulledStory({
+				dispatch: dispatchRef.current,
+				onPulled: notifyStoryPulled,
+				records: recordStore,
+				rev,
+				// A ref, read fresh: the store may have moved on while the fetch was out.
+				stories: () => storiesRef.current,
+				story
+			});
 
-		dispatchRef.current({
-			props: {...local},
-			storyId: story.id,
-			type: 'updateStory'
-		});
-		updateSyncRecord(story.id, {
-			conflictClient: undefined,
-			conflictRev: undefined,
-			lastError: undefined,
-			lastPulledAt: Date.now(),
-			pushedHash: storyHash(local),
-			rev,
-			state: 'idle'
-		});
-		previousRef.current.set(story.id, local);
-		notifyStoryPulled(story.id);
-		setRecords({...allSyncRecords()});
+			setRecords({...allSyncRecords()});
 
-		// Text that arrived from somebody else usually names art that did too.
-		pullAssetsRef.current(story.id);
-	}, []);
+			if (!outcome.landed) {
+				return;
+			}
+
+			// The story the store actually holds, which may carry a name the collision
+			// forced. Anything else here and the autosave watcher reads the difference as
+			// an edit and pushes it straight back.
+			previousRef.current.set(story.id, outcome.story);
+
+			// Text that arrived from somebody else usually names art that did too.
+			pullAssetsRef.current(story.id);
+		},
+		[recordStore]
+	);
 
 	const pull = React.useCallback(
 		async (storyId: string, ifNoneMatch?: number) => {
@@ -745,6 +757,21 @@ export function useServerSync(): ServerSyncContextProps {
 
 			switch (decision) {
 				case 'pull':
+					// A pull the store already refused at this rev is not worth asking for
+					// again: landing one clears the story's undo stack, so a poll that
+					// keeps trying would wipe the author's history on a timer. `Checkout`
+					// is the way past this; the block lifts on its own the moment the
+					// server's rev moves.
+					if (
+						server &&
+						!pullAllowed(recordStore.get(story.id), server.rev)
+					) {
+						logSync('pull', 'skipped: refused at this rev', story.id, () => ({
+							rev: server.rev
+						}));
+						break;
+					}
+
 					try {
 						await pull(story.id);
 					} catch (error) {

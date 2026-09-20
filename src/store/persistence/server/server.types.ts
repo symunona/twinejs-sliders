@@ -215,6 +215,14 @@ export interface SyncRecord {
 	/** Rev on the server when a conflict was detected. */
 	conflictRev?: number;
 	conflictClient?: string;
+	/**
+	 * Server rev whose text the local store refused to take (`apply-pull.ts`).
+	 *
+	 * Set only by a refused pull, and cleared by a pull that lands. Its whole job is to
+	 * stop the automatic path asking again for the same rev: a pull clears the story's
+	 * undo stack, so retrying one that cannot land destroys undo history on a timer.
+	 */
+	pullBlockedRev?: number;
 }
 
 export function newSyncRecord(storyId: string): SyncRecord {
