@@ -6,6 +6,10 @@ rewritten.
 
 Read-mostly audit. One test changed (`cd2f3b7a`), committed separately from this report.
 
+**Two defects found, both live.** §3.1 a test pinning silent data loss in the shipped
+player — fixed. §3.2 an "Unused" badge telling authors their art is **not** backed up when
+it is — reported, not edited, because the fix is a product call on user-facing copy.
+
 ---
 
 ## 1. Where the tests are
@@ -58,8 +62,12 @@ Priority = (likelihood it breaks silently) x (how far the breakage travels).
 
 ## 3. Suspect tests — assertions that pin a defect
 
-**Result: one found.** The fork's test discipline is good — fixes land with tests that
-assert the *fixed* behaviour, not the defect.
+**Result: two found**, of different shapes. §3.1 is the classic — a test pinning a defect,
+fixed. §3.2 is nastier and greps cannot find it: the test is *correct about its function*
+while the premise under it went stale, so a **user-facing tooltip now states a falsehood**.
+
+Otherwise the fork's test discipline is good — fixes land with tests that assert the
+*fixed* behaviour, not the defect.
 
 Swept, so the negative result is checkable:
 
@@ -67,14 +75,20 @@ Swept, so the negative result is checkable:
 |---|---|---|---|
 | defect-ish test **names** | `it\('…(silently\|currently\|for now\|still \|does not\|drops\|loses\|ignores\|falls back\|gives up\|parks\|never)…'` over every fork `__tests__` | ~75 | **0** |
 | defect **comments** near an `expect` | `TODO\|FIXME\|XXX\|HACK\|known issue\|should be\|ideally\|for now\|not ideal\|the bug\|defect\|pre-existing\|not yet` | 4 | **0** |
-| `.skip` / `.todo` / `xit` / `it.failing` | all fork areas | 13 | **0** (all upstream, §3.3) |
+| `.skip` / `.todo` / `xit` / `it.failing` | all fork areas | 13 | **0** (all upstream, §3.4) |
 | empty-result assertions | `toEqual([])`, `toBeUndefined()`, `toBeNull()` with defect language nearby | 0 | **0** |
 | snapshots | `__snapshots__` dirs | 0 | — |
 | the one that hit | manual read of `vars-section.ts` against its test | 1 | **1** (§3.1) |
+| **grep could not find** | reading the push and the badge side by side | — | **1** (§3.2) |
 
 The ~75 name hits are all *intended* negative behaviour — "never mutates either stage",
 "drops a self-reference", "never injects markup from scene text". Defensive, not pinned
 defects. Do not mistake them for this bug class.
+
+**Lesson from §3.2: greps find bad assertions, not stale premises.** Both §3.2 tests pass,
+read well, and name their behaviour honestly. Only reading the two halves against each other
+exposed them. Where two modules must agree, the audit question is not "does this test look
+wrong" but "what asserts that these two still agree" — usually nothing.
 
 ### 3.1 CONFIRMED bug-asserting — FIXED in `cd2f3b7a`
 
@@ -103,7 +117,49 @@ it('DISCARDS everything after a second separator', () => {
 - **Source left unchanged** — the real fix needs `parse.ts` in the same commit, out of
   audit scope. Fix is ~5 lines: `exec` the separator, `slice` either side.
 
-### 3.2 Deliberate and correct — leave alone (verdict A)
+### 3.2 CONFIRMED stale premise — the "Unused" badge tells authors a falsehood
+
+Not the same shape as §3.1. The tests are *accurate about their function*; what rotted is
+the premise the function and its badge are built on. Reported, **not edited** — the fix is
+a product decision about user-facing copy.
+
+**The contradiction**, both sides verified by reading:
+
+| | says | file |
+|---|---|---|
+| the push | *"The MANIFEST IS THE LIBRARY, not the subset the scenes happen to name today"* — uploads `store.list({includeFrames: true})` + `listCharacters()` | `src/store/persistence/server/asset-sync.ts:111-118` |
+| the badge | *"A push uploads what the story **references**, not what the library holds"* — computes `resolveBundleRefs(store, collectAssetRefs(story))` | `src/dialogs/sliders-assets/use-synced-refs.ts:1-15, 52` |
+
+The push changed on **2026-09-17** ("Asset sync now runs on AUTOSAVE"), precisely because a
+`collectAssetRefs` manifest *"drops exactly that art"*. `use-synced-refs.ts` was never moved
+with it, and its doc comment still claims it *"calls the same two functions the push does"*.
+It no longer does.
+
+**What the author sees** — `en-US.json:487-488`, shown whenever
+`synced.ready && !synced.assetIds.has(id)` (`sliders-assets.tsx:336,353`), with **no gate on
+whether the story is even synced**:
+
+> "No scene names this asset, so it stays on this machine and is **not backed up to the sync
+> server**. Use it in a scene to have it uploaded."
+
+On a synced story that is **false** — the asset was uploaded with the rest of the library.
+The badge sends the author to do busywork against a problem that does not exist.
+
+The bitter part: the hook's own doc comment names this exact failure mode and guards the
+wrong direction — *"it would drift by telling the author their art is safe when it is not."*
+It drifted the other way.
+
+**Verdict:** the two tests at `use-synced-refs.test.ts:93` (`'leaves out an asset no scene
+names'`) and `:154` (`'leaves out a character no scene casts'`) pin the stale contract. They
+are **B by contract, A by mechanics** — correct about `resolveSyncedRefs`, wrong about what
+the file says it is for. Fixing this most likely **deletes** the hook rather than turning
+them red, which is why no `it.failing` was added.
+
+**No test guards the agreement.** One assertion that the badge's rule and `syncStoryAssets`'s
+manifest rule are the same rule would have caught this the day the push changed. That is the
+test to write — see §4.6.
+
+### 3.3 Deliberate and correct — leave alone (verdict A)
 
 | file:line | asserts | why it is fine |
 |---|---|---|
@@ -111,7 +167,7 @@ it('DISCARDS everything after a second separator', () => {
 | `packages/asset-store/__tests__/characters.test.ts:30` | frames get separate anchor objects | States the bug being *prevented*, not pinned. |
 | `vars-lines.test.ts` header | "characterization, not wishes" | Correct framing for the rest of the file — narrowing there breaks published stories. |
 
-### 3.3 `.skip` / `.todo` / `xit`
+### 3.4 `.skip` / `.todo` / `xit`
 
 All 13 hits are **upstream-origin and benign** — mock fidelity or a jsdom gap, never a
 hidden failure:
@@ -123,7 +179,7 @@ hidden failure:
 **Zero** `.skip`/`.todo`/`xit`/`it.failing` under `packages/`, `format/src/`, `e2e/`, or
 `scene-preview/`. The fork's own suite hides nothing this way. Good.
 
-### 3.4 Not found
+### 3.5 Not found
 
 - No snapshot files capturing unverified output.
 - No test mocking its own unit under test.
@@ -133,7 +189,7 @@ hidden failure:
 
 ---
 
-## 4. Top 5 untested things most likely to bite
+## 4. Untested things most likely to bite
 
 ### 4.1 The player runtime — `format/src/runtime/sliders/` (908 LOC, 0 tests)
 
@@ -199,6 +255,24 @@ Cheap win: a jsdom test asserting a portalled press does **not** clear stage sel
 
 See §3.1. `it.failing` documents it and turns red on fix. Nothing yet fixes it.
 Both copies must change together: `vars-section.ts` and `format/.../parse.ts:58`.
+
+---
+
+### 4.6 Nothing asserts that the badge and the push agree
+
+The §3.2 defect is one line of test away from impossible. `syncStoryAssets` decides what
+goes to the server; `useSyncedRefs` decides what the author is told will go. Two rules, one
+question, **no assertion that they match** — so when the push changed on 2026-09-17, nothing
+went red and the badge quietly started lying.
+
+Write the agreement test: build a story naming some of a library, and assert the set
+`syncStoryAssets` uploads equals the set the badge treats as safe. It fails today, which is
+the point.
+
+Same shape as the tripwires the fork already gets right (`ENTITY_KEY_ORDER ⊇ ENTITY_KEYS`,
+`KeyHelp<typeof KEYS>`). **Look for other pairs like it**: editor-side rule vs player-side
+rule is this codebase's most common defect source — `matchPassageName`, the vars separator
+and `sceneLinkTargets` were all one rule that had to be taught twice.
 
 ---
 
