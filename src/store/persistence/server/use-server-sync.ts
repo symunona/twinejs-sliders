@@ -417,6 +417,14 @@ export function useServerSync(): ServerSyncContextProps {
 		new Map<string, ReturnType<typeof setTimeout>>()
 	);
 	const assetSyncRef = React.useRef<(story: Story) => void>(() => {});
+	/**
+	 * Land a story the queue merged. Through a ref for the same reason `assetSyncRef` is:
+	 * the queue is memoised on `client`, and this closes over `dispatch` and the story
+	 * list, both of which move on every render.
+	 */
+	const applyPulledStoryRef = React.useRef<
+		(story: Story, rev: number) => boolean
+	>(() => false);
 	/** Story id -> manifest rev this browser has already taken art from. */
 	const assetPullRevs = React.useRef(new Map<string, number>());
 	/** Stories with a pull in flight. The rev guard makes a skipped retry nearly free. */
@@ -458,6 +466,21 @@ export function useServerSync(): ServerSyncContextProps {
 					setConnected(false);
 				}
 			},
+			/**
+			 * A merge the queue wrote to the server, on its way into the store.
+			 *
+			 * Returns `true` only when the store really took it, because that is what
+			 * the queue records a new rev on. `applyPulledStory` is the honest answer —
+			 * it dry-runs the real reducer — and it is the same landing check a pull
+			 * goes through, which is the point: a merge arrives carrying somebody
+			 * else's passages, so it is a pull with extra steps and must clear undo the
+			 * same way.
+			 *
+			 * A `true` returned on faith is how a passage gets dropped: the next patch
+			 * would diff against a base the store never reached.
+			 */
+			onMerged: (merged, rev) =>
+				applyPulledStoryRef.current(merged, rev),
 			// Through a ref: the queue is memoised on `client` alone, and rebuilding it
 			// whenever a callback identity changed would drop every pending debounce
 			// timer with it — the author's last sentence among them.
@@ -492,7 +515,7 @@ export function useServerSync(): ServerSyncContextProps {
 	 * the note at the top of that file.
 	 */
 	const applyPull = React.useCallback(
-		(story: Story, rev: number) => {
+		(story: Story, rev: number): boolean => {
 			const outcome = applyPulledStory({
 				dispatch: dispatchRef.current,
 				onPulled: notifyStoryPulled,
@@ -506,7 +529,7 @@ export function useServerSync(): ServerSyncContextProps {
 			setRecords({...allSyncRecords()});
 
 			if (!outcome.landed) {
-				return;
+				return false;
 			}
 
 			// The story the store actually holds, which may carry a name the collision
@@ -522,9 +545,16 @@ export function useServerSync(): ServerSyncContextProps {
 
 			// Text that arrived from somebody else usually names art that did too.
 			pullAssetsRef.current(story.id);
+
+			return true;
 		},
 		[recordStore]
 	);
+
+	// The queue reaches this through a ref, so it can be memoised on `client` alone.
+	React.useEffect(() => {
+		applyPulledStoryRef.current = applyPull;
+	}, [applyPull]);
 
 	const pull = React.useCallback(
 		async (storyId: string, ifNoneMatch?: number) => {

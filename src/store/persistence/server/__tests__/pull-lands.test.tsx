@@ -593,3 +593,50 @@ describe('pullAllowed', () => {
 		).toBe(false);
 	});
 });
+
+/**
+ * The queue's `onMerged` is wired to this same landing check, and it records a new rev on
+ * whatever it returns. So the boolean is not a convenience — a `true` handed back for a
+ * story the store refused is how the next patch diffs against a base that never existed
+ * and removes the other person's passage.
+ */
+describe('what applyPulledStory reports back', () => {
+	it('says it landed when the store took the story', () => {
+		const records = memorySyncRecordStore();
+		const mine = testStory({id: 'story-1', name: 'Lighthouse'});
+		const served = testStory({
+			id: 'story-1',
+			name: 'Lighthouse',
+			passages: [testPassage('story-1', {text: 'merged'})]
+		});
+
+		const outcome = applyPulledStory({
+			dispatch: jest.fn(),
+			records,
+			rev: 7,
+			stories: () => [mine],
+			story: served
+		});
+
+		expect(outcome.landed).toBe(true);
+		expect(records.get('story-1').rev).toBe(7);
+	});
+
+	it('says it did not when the store refused', () => {
+		const records = memorySyncRecordStore();
+		const mine = testStory({id: 'story-1', name: 'Lighthouse'});
+		// Nothing for the reducer to update: the story is not in the library at all.
+		const outcome = applyPulledStory({
+			dispatch: jest.fn(),
+			records,
+			rev: 7,
+			stories: () => [],
+			story: mine
+		});
+
+		expect(outcome.landed).toBe(false);
+		// And nothing was recorded, so no later patch can diff against it.
+		expect(records.get('story-1').rev).toBe(0);
+		expect(records.get('story-1').pushedHash).toBe('');
+	});
+});
