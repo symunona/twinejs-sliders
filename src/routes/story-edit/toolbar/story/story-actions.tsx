@@ -2,6 +2,7 @@ import * as React from 'react';
 import {ButtonBar} from '../../../../components/container/button-bar';
 import {RenameStoryButton} from '../../../../components/story/rename-story-button';
 import {Story, updateStory, useStoriesContext} from '../../../../store/stories';
+import {DefaultsButton} from './defaults-button';
 import {DetailsButton} from './details-button';
 import {FindReplaceButton} from './find-replace-button';
 import {HistoryButton} from './history-button';
@@ -31,6 +32,7 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 				story={story}
 			/>
 			<DetailsButton story={story} />
+			<DefaultsButton story={story} />
 			<PassageTagsButton story={story} />
 			<HistoryButton story={story} />
 			<ScenePreviewButton story={story} />

@@ -1245,3 +1245,4 @@ export interface Renderer {
 // ---------------------------------------------------------------------------
 
 export * from './passage-name';
+export * from './bubble-fonts';

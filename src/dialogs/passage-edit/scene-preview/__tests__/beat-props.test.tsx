@@ -1,6 +1,6 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import * as React from 'react';
-import type {Beat} from '@sliders/scene-types';
+import type {Beat, BubbleStyle, SayBeat} from '@sliders/scene-types';
 import {AUTO_ADVANCE_MS} from '../beat-hold';
 import {BeatProps} from '../beat-props';
 
@@ -14,10 +14,24 @@ function say(dur?: number): Beat {
 	};
 }
 
+/**
+ * A speaking beat that carries a bubble style.
+ *
+ * Its own helper rather than spreading over `say()`: that returns the `Beat` UNION, and
+ * spreading a `style` onto it asks TypeScript to put the key on `WaitBeat` too.
+ */
+function sayStyled(style: BubbleStyle): SayBeat {
+	return {index: 0, kind: 'say', style, text: 'hi', who: 'mira'};
+}
+
 function renderProps(
 	beat: Beat | undefined,
 	editable = true,
-	options: {beatCount?: number; beatNumber?: number} = {}
+	options: {
+		beatCount?: number;
+		beatNumber?: number;
+		inherited?: BubbleStyle;
+	} = {}
 ) {
 	const onSetBubble = jest.fn();
 	const onSetKey = jest.fn();
@@ -30,6 +44,7 @@ function renderProps(
 			beatCount={options.beatCount ?? 1}
 			beatNumber={options.beatNumber ?? 1}
 			editable={editable}
+			inherited={options.inherited}
 			onSetBubble={onSetBubble}
 			onSetKey={onSetKey}
 		/>
@@ -240,5 +255,161 @@ describe('<BeatProps> ease', () => {
 
 		expect(screen.getAllByRole('combobox')).toHaveLength(1);
 		expect(easeSelect().value).toBe('');
+	});
+});
+
+
+/*
+ * Style and Font are `PreviewSelect`s, not native selects, so they are BUTTONS rather than
+ * comboboxes -- the whole point of them is that an option can hold a drawing. They are
+ * found by position within the row for the reason the ease select is: i18n is not
+ * initialised under jest, so `t()` returns its own key and no control has a readable name.
+ *
+ * Order in the row: Auto (checkbox), Ease (combobox), Hold (spinbutton), then Style, Font,
+ * Fill, Stroke, Place, Sizing, Anchor.
+ */
+function previewButtons(): HTMLButtonElement[] {
+	// queryAll, not getAll: a stage-only beat offers none, and that is a thing to assert
+	// rather than an error to throw.
+	return screen
+		.queryAllByRole('button')
+		.filter(el => el.classList.contains('preview-select-button')) as
+		HTMLButtonElement[];
+}
+
+const styleButton = () => previewButtons()[0];
+const fontButton = () => previewButtons()[1];
+
+/**
+ * The options of the dropdown that is currently open.
+ *
+ * Scoped to the listbox, never `screen`: the row also holds four native selects, and a
+ * native `<option>` carries role `option` too — an unscoped query returned all 38 of them
+ * and `[0]` was the Ease select's inherit row.
+ */
+function openOptions(): HTMLElement[] {
+	return within(screen.getByRole('listbox')).getAllByRole('option');
+}
+
+/** The two colour wells, in row order: fill then stroke. */
+function colorWells(): HTMLInputElement[] {
+	return screen
+		.getAllByDisplayValue(/^#/)
+		.filter(el => (el as HTMLInputElement).type === 'color') as
+		HTMLInputElement[];
+}
+
+describe('<BeatProps> bubble style', () => {
+	it('shows the token the beat names', () => {
+		renderProps(sayStyled({as: 'shard'}));
+		expect(styleButton()).toHaveTextContent('shard');
+	});
+
+	it('writes the picked token onto the beat', () => {
+		const {onSetBubble} = renderProps(say(0.6));
+
+		fireEvent.click(styleButton());
+		fireEvent.pointerDown(
+			within(screen.getByRole('listbox')).getByRole('option', {name: /comic/})
+		);
+		expect(onSetBubble).toHaveBeenCalledWith('as', 'comic');
+	});
+
+	// Clearing means "whatever the layer above says", which is a removal, not an empty
+	// string -- the same rule Ease and Hold follow.
+	it('removes the key when the inherit option is picked', () => {
+		const {onSetBubble} = renderProps(sayStyled({as: 'shard'}));
+
+		fireEvent.click(styleButton());
+		fireEvent.pointerDown(openOptions()[0]);
+		expect(onSetBubble).toHaveBeenCalledWith('as', null);
+	});
+
+	/*
+	 * A dash cannot tell a story that sets `comic` from a story that sets nothing, and that
+	 * is the one question a preview dropdown must not leave open.
+	 */
+	it('names what the inherit option would inherit', () => {
+		renderProps(say(0.6), true, {inherited: {as: 'comic'}});
+		fireEvent.click(styleButton());
+		expect(openOptions()[0]).toHaveTextContent('comic');
+	});
+
+	it('offers no bubble keys on a stage-only beat', () => {
+		renderProps({index: 0, kind: 'set', patch: {}, who: 'mira'});
+		expect(previewButtons()).toHaveLength(0);
+	});
+});
+
+describe('<BeatProps> bubble font', () => {
+	it('shows the face the beat names', () => {
+		renderProps(sayStyled({font: 'bangers'}));
+		expect(fontButton()).toHaveTextContent('Bangers');
+	});
+
+	it('writes the picked catalogue token, not the family name', () => {
+		const {onSetBubble} = renderProps(say(0.6));
+
+		fireEvent.click(fontButton());
+		fireEvent.pointerDown(
+			within(screen.getByRole('listbox')).getByRole('option', {
+				name: /Patrick Hand/
+			})
+		);
+		expect(onSetBubble).toHaveBeenCalledWith('font', 'patrick-hand');
+	});
+
+	/*
+	 * `font:` took a raw CSS stack long before the catalogue existed. A dropdown that could
+	 * not show the value already in the passage would clear it the first time it was opened.
+	 */
+	it('keeps a hand-written stack as an option of its own', () => {
+		renderProps(sayStyled({font: 'Georgia, serif'}));
+		expect(fontButton()).toHaveTextContent('Georgia, serif');
+	});
+});
+
+describe('<BeatProps> bubble colours', () => {
+	it('offers a fill and a stroke well on a beat that speaks', () => {
+		renderProps(say(0.6));
+		expect(colorWells()).toHaveLength(2);
+	});
+
+	it('writes the fill the author picks', () => {
+		const {onSetBubble} = renderProps(say(0.6));
+
+		fireEvent.change(colorWells()[0], {target: {value: '#ff0000'}});
+		expect(onSetBubble).toHaveBeenCalledWith('bg', '#ff0000');
+	});
+
+	it('writes the stroke the author picks', () => {
+		const {onSetBubble} = renderProps(say(0.6));
+
+		fireEvent.change(colorWells()[1], {target: {value: '#101010'}});
+		expect(onSetBubble).toHaveBeenCalledWith('accent', '#101010');
+	});
+
+	/*
+	 * A colour input has no "no colour" state, so without a clear button an author who set
+	 * a bubble red could never get back to inheriting.
+	 */
+	it('removes the key when the colour is cleared', () => {
+		const {onSetBubble} = renderProps(sayStyled({bg: '#ff0000'}));
+		const clear = screen
+			.getAllByRole('button')
+			.filter(el => el.classList.contains('bubble-color-control-clear'));
+
+		fireEvent.click(clear[0]);
+		expect(onSetBubble).toHaveBeenCalledWith('bg', null);
+	});
+
+	it('leaves the clear button dead while nothing is set', () => {
+		renderProps(say(0.6));
+
+		const clear = screen
+			.getAllByRole('button')
+			.filter(el => el.classList.contains('bubble-color-control-clear'));
+
+		expect(clear[0]).toBeDisabled();
 	});
 });

@@ -16,6 +16,7 @@
   ],
   "source": [
     {"feature": "The <sliders-stage> element", "find": "sliders-stage"},
-    {"feature": "The [scene] modifier", "find": "scene"}
+    {"feature": "The [scene] modifier", "find": "scene"},
+    {"feature": "Comic bubble webfonts fetched by the player", "find": "fonts.googleapis.com/css2"}
   ]
 }

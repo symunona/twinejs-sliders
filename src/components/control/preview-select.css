@@ -1,0 +1,237 @@
+@import '../../styles/colors.css';
+@import '../../styles/depth.css';
+@import '../../styles/metrics.css';
+@import '../../styles/typography.css';
+
+/*
+ * Deliberately built out of the same tokens as `text-select.css`.
+ *
+ * These two controls stand next to each other in the beat row and in the Defaults dialog,
+ * and a hand-rolled listbox that is a shade off the native select beside it reads as
+ * broken rather than as different. Same height, same radius, same border, same fill.
+ */
+
+.preview-select {
+	align-items: center;
+	display: inline-flex;
+	/* Flex item that may truncate: without this it refuses to shrink past its content and
+	   the beat row overflows instead of ellipsing. */
+	min-width: 0;
+}
+
+.preview-select-label {
+	white-space: nowrap;
+}
+
+.preview-select-button {
+	align-items: center;
+	background: var(--white-translucent);
+	border-radius: var(--corner-round);
+	border: 1px solid var(--light-gray-translucent);
+	color: var(--dark-gray);
+	cursor: pointer;
+	display: inline-flex;
+	font: 100% var(--font-system);
+	gap: calc(var(--grid-size) / 2);
+	height: var(--control-height);
+	margin-left: var(--grid-size);
+	max-width: 16em;
+	min-width: 0;
+	padding: 0 calc(var(--grid-size) / 2) 0 var(--grid-size);
+	text-align: left;
+}
+
+.preview-select-button:focus-visible {
+	box-shadow: inset 0 0 0px 2px var(--blue);
+	outline: none;
+}
+
+.preview-select-button:disabled {
+	color: var(--gray);
+	cursor: not-allowed;
+}
+
+/* The caret, matching the one `text-select.css` paints from the same icon. */
+.preview-select-caret {
+	background: url('@tabler/icons/chevron-down.svg');
+	background-position: center;
+	background-repeat: no-repeat;
+	flex: none;
+	height: 20px;
+	margin-left: auto;
+	opacity: 0.25;
+	width: 20px;
+}
+
+[data-app-theme='dark'] .preview-select-caret {
+	filter: invert();
+}
+
+.preview-select-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.preview-select-preview {
+	align-items: center;
+	display: flex;
+	flex: none;
+	justify-content: center;
+}
+
+/*
+ * Portalled to the body, so this element is where the z-index finally bites.
+ *
+ * 3000, above `.menu-button-menu`'s 2000: a dropdown inside a panel a menu opened has to
+ * clear that menu, and the full-screen scene editor under both sits at 1000.
+ */
+.preview-select-list {
+	background: var(--white);
+	border-radius: var(--corner-round);
+	box-shadow: var(--shadow-large);
+	display: flex;
+	flex-direction: column;
+	max-height: 60vh;
+	min-width: 14em;
+	overflow: hidden;
+	z-index: 3000;
+}
+
+.preview-select-search {
+	background: var(--white-translucent);
+	border-radius: var(--corner-round);
+	border: 1px solid var(--light-gray-translucent);
+	color: var(--dark-gray);
+	flex: none;
+	font: 100% var(--font-system);
+	margin: calc(var(--grid-size) / 2);
+	padding: calc(var(--grid-size) / 2);
+}
+
+.preview-select-search:focus {
+	box-shadow: inset 0 0 0px 2px var(--blue);
+	outline: none;
+}
+
+.preview-select-options {
+	overflow-y: auto;
+	padding: calc(var(--grid-size) / 4);
+}
+
+.preview-select-option {
+	align-items: center;
+	border-radius: var(--corner-round);
+	color: var(--black);
+	cursor: pointer;
+	display: flex;
+	gap: var(--grid-size);
+	padding: calc(var(--grid-size) / 2);
+}
+
+.preview-select-option.active {
+	background: var(--light-gray-translucent);
+}
+
+.preview-select-option.selected .preview-select-option-label {
+	font-weight: 700;
+}
+
+.preview-select-option-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.preview-select-option-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.preview-select-option-detail {
+	color: var(--dark-gray);
+	font-size: 85%;
+}
+
+.preview-select-empty {
+	color: var(--dark-gray);
+	margin: 0;
+	padding: var(--grid-size);
+}
+
+/* -------------------------------------------------------------------------
+   The two preview kinds this control was built for.
+   ------------------------------------------------------------------------- */
+
+/*
+ * A bubble shape or preset, at thumbnail size.
+ *
+ * Fixed box so the list does not stagger as the shapes change height, and DARK, because
+ * that is what a bubble is drawn on: a white bubble on a white menu is an empty rectangle.
+ * The colour is the renderer's own letterbox fill, not a theme token — the swatch is a
+ * picture of the stage, and it must not invert with the editor's theme.
+ */
+.bubble-style-preview {
+	background: #11151f;
+	border-radius: 3px;
+	flex: none;
+	height: 30px;
+	overflow: hidden;
+	position: relative;
+	width: 56px;
+}
+
+.bubble-style-preview-inner {
+	align-items: center;
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	position: absolute;
+}
+
+/* The drawing reaches outside its own box by the shape's margin, so it is the SVG that is
+   capped to the swatch, not the box inside it. */
+.bubble-style-preview svg {
+	display: block;
+	max-height: 100%;
+	max-width: 100%;
+	position: static;
+}
+
+/* The CSS presets paint `.sliders-bubble`, so the swatch has to BE one — same class, same
+   data-style, only small. That is the point: the preview is the real rule, not a drawing
+   of it, so a preset that changes changes here too. */
+.bubble-style-preview .sliders-bubble {
+	box-shadow: none;
+	font-size: 9px;
+	line-height: 1.1;
+	max-width: none;
+	min-width: 0;
+	padding: 3px 6px;
+	position: static;
+	transition: none;
+}
+
+/* Yell's burst is a pseudo-element inset by 14/18px, which at swatch scale swallows the
+   swatch whole. Scaled down with the rest of it. */
+.bubble-style-preview .sliders-bubble[data-style='yell'] {
+	padding: 7px 10px;
+}
+
+.bubble-style-preview .sliders-bubble[data-style='yell']:before {
+	filter: none;
+	inset: -5px -7px;
+}
+
+/* A font swatch: the face's own name, set in the face. */
+.bubble-font-preview {
+	flex: none;
+	font-size: 15px;
+	line-height: 1.2;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	width: 6em;
+}

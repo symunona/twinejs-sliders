@@ -80,6 +80,22 @@ function formatScalar(value: unknown): string {
 			return JSON.stringify(value);
 		}
 
+		/*
+		 * Every caller writes into a FLOW map -- `{say: "…", bubble: {as: yell}}` -- and
+		 * `stringify` does not know that. It quotes for BLOCK context, where a comma, a
+		 * brace and a bracket are all ordinary characters in a plain scalar, so it hands
+		 * back `rgba(0, 0, 0, 0.6)` and `Georgia, serif` bare. Dropped into `{bg: …}` the
+		 * commas split the map and the value becomes three more keys: a bubble colour of
+		 * `rgba(0` and a parse error on the duplicate `0`.
+		 *
+		 * Reachable from the beat toolbar's colour and font controls, and from any hand
+		 * edit the editor later rewrites. Quoting here rather than at each call site
+		 * because flow is the only context this module is ever used in.
+		 */
+		if (/[,[\]{}]/.test(value)) {
+			return JSON.stringify(value);
+		}
+
 		// Otherwise let yaml decide about quoting: it knows that `yes`, `1.5` and `~`
 		// re-parse as non-strings and need quotes, and that `idle` does not.
 		return stringify(value, {lineWidth: 0}).replace(/\n$/, '');

@@ -55,6 +55,7 @@
 		"undo": "Undo",
 		"undoChange": "Undo {{change}}",
 		"unmaximize": "Restore Size",
+		"defaults": "Defaults",
 		"view": "View"
 	},
 	"components": {
@@ -184,6 +185,10 @@
 			"invalidName": "Please enter a valid tag name.",
 			"tagNameLabel": "Tag Name",
 			"tagsWithCount_plural": "Tags ({{count}})"
+		},
+		"previewSelect": {
+			"noMatches": "Nothing matches.",
+			"search": "Search"
 		},
 		"tagEditor": {
 			"alreadyExists": "A tag with this name already exists."
@@ -380,6 +385,12 @@
 				"noneWait": "A wait beat is already a duration \u2014 set it in the passage text.",
 				"place": "Place",
 				"anchor": "Anchor",
+				"accent": "Stroke",
+				"bg": "Fill",
+				"clearColor": "Clear",
+				"font": "Font",
+				"fontCustom": "Written by hand in the passage",
+				"fontSample": "Abc",
 				"sizing": "Sizing"
 			},
 			"scenePreview": {
@@ -559,6 +570,26 @@
 			"showFrame": "Show “{{name}}” behind this frame",
 			"title": "Characters",
 			"width": "Width"
+		},
+		"storyDefaults": {
+			"accent": "Bubble stroke",
+			"accentPlaceholder": "#14161c",
+			"bg": "Bubble fill",
+			"bgPlaceholder": "#fdfdfb",
+			"bubbleSizing": "Bubble sizing",
+			"bubbleStyle": "Bubble style",
+			"bubbleStyleNoneDetail": "A plain rounded bubble.",
+			"clearColor": "Clear",
+			"explanation": "How every line in this story is painted, unless a scene, a character or a single beat says otherwise. Written as sliders.bubble.* variables at the top of \u201c{{passage}}\u201d.",
+			"font": "Font",
+			"fontCustom": "Written by hand in the passage",
+			"fontNoneDetail": "The reader's own text face.",
+			"fontSample": "Abc",
+			"noStart": "Set a start passage to give this story defaults \u2014 they are written as variables at the top of it.",
+			"none": "\u2014",
+			"sample": "Every line looks like",
+			"sampleLine": "The lamps go out.",
+			"title": "Defaults: {{story}}"
 		},
 		"storyDetails": {
 			"bubbleExplanation": "Speech bubble defaults for the whole story. Written as sliders.bubble.* variables at the top of \u201c{{passage}}\u201d, so a scene or a single line can still override any of them.",
@@ -1045,6 +1076,7 @@
 				"redo": "Redo",
 				"findReplace": "Find and Replace",
 				"details": "Story Details",
+				"defaults": "Story Defaults",
 				"passageTags": "Passage Tags",
 				"javascript": "Story JavaScript",
 				"stylesheet": "Story Stylesheet"

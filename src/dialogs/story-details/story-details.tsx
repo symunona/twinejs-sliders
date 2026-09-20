@@ -13,7 +13,6 @@ import {
 } from '../../store/story-formats';
 import {FormatLoader} from '../../store/format-loader';
 import {DialogComponentProps} from '../dialogs.types';
-import {StoryBubblePrefs} from './story-bubble-prefs';
 import {StoryDetailsDialogStats} from './story-stats';
 
 export interface StoryDetailsDialogProps extends DialogComponentProps {
@@ -75,7 +74,6 @@ export const StoryDetailsDialog: React.FC<StoryDetailsDialogProps> = props => {
 					value={story.snapToGrid}
 				/>
 			</ButtonBar>
-			{!other.collapsed && <StoryBubblePrefs story={story} />}
 			<CardContent>
 				{!other.collapsed && <StoryDetailsDialogStats story={story} />}
 			</CardContent>

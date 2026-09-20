@@ -14,6 +14,7 @@ export {formatAt, formatNumber, formatValue} from './format';
 export {removeSceneKey, setSceneKey} from './scene-key';
 export {entityAtLine, entityLines} from './select';
 export {
+	BUBBLE_KEY_ORDER,
 	addEntity,
 	entityHasParent,
 	insertBeatEntity,

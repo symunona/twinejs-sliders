@@ -26,16 +26,23 @@ import {useTranslation} from 'react-i18next';
 import {
 	BUBBLE_ANCHORS,
 	BUBBLE_PLACES,
-	BUBBLE_PRESETS,
-	BUBBLE_SHAPES,
 	BUBBLE_SIZINGS,
-	EASE_NAMES
+	EASE_NAMES,
+	bubbleFontStack
 } from '@sliders/scene-types';
 import type {Beat, BubbleStyle} from '@sliders/scene-types';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
 import {TextInput} from '../../../components/control/text-input';
 import {TextSelect} from '../../../components/control/text-select';
+import {PreviewSelect} from '../../../components/control/preview-select';
+import {BubbleColorControl} from '../../bubble-style/bubble-color-control';
+import {
+	BubbleFontSwatch,
+	BubbleStyleSwatch,
+	bubbleFontOptions,
+	bubbleStyleOptions
+} from '../../bubble-style/bubble-previews';
 import './beat-props.css';
 
 export interface BeatPropsProps {
@@ -56,6 +63,21 @@ export interface BeatPropsProps {
 	onSetKey: (key: string, value: unknown) => void;
 	/** One key of the beat's `bubble:` map. `null` removes it. */
 	onSetBubble: (key: keyof BubbleStyle, value: unknown) => void;
+	/**
+	 * What this beat's bubble looks like before it states anything: the story's
+	 * `sliders.bubble.*` defaults with the scene's own `bubble:` over them.
+	 *
+	 * Only so the inherit option can SHOW what inheriting means. An author looking at a
+	 * dash in the Style box cannot tell a story that sets `comic` from a story that sets
+	 * nothing, and that is the one question a preview dropdown should never leave open.
+	 *
+	 * Two of the four layers, not four. The speaking character's own `bubble:` sits between
+	 * the scene and the beat, and it is not here: the renderer reads it off the stage, and
+	 * for a speaker who is not on stage it arrives a tick later from the asset store
+	 * (`scene-stage.tsx`). A preview that flickered a beat behind the author's scrubbing
+	 * would be worse than one that is honestly about the scene.
+	 */
+	inherited?: BubbleStyle;
 	/**
 	 * The pace this beat runs at when it carries no `dur:`, in ms — the scene's own
 	 * `autoAdvance:` if it has one, and the standard beat otherwise.
@@ -128,6 +150,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	beatCount,
 	beatNumber,
 	editable,
+	inherited,
 	onSetKey,
 	onSetBubble
 }) => {
@@ -169,6 +192,16 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 			: beat?.ease
 			? PER_KIND
 			: INHERIT;
+	/**
+	 * What this beat is actually drawn in: the inherited look with the beat's own keys over
+	 * it, merged the way `mergeBubbleStyle` merges them — key by key, narrower winning.
+	 *
+	 * Spread rather than a call to the renderer's own merge, because both sides here are
+	 * plain optional objects and importing a renderer helper to spread two of them would be
+	 * the more confusing of the two. The RULE it has to match — narrower wins per key, not
+	 * whole-object — is the same one.
+	 */
+	const merged = {...inherited, ...style};
 	const emptyKey = emptyReasonKey(beat, beatNumber);
 	// The one genuinely disabled control here. Its reason lives on the field itself as well
 	// as on the checkbox that causes it: an author who notices the grey box looks at the
@@ -297,31 +330,84 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 					</span>
 					{speaks(beat) && (
 						<>
-							<TextSelect
-								onChange={event =>
-									onSetBubble('as', event.target.value || null)
-								}
-								options={[
-									{
-										label: t('dialogs.passageEdit.beatProps.inherit'),
-										value: INHERIT
+							{/*
+								A PreviewSelect, not a TextSelect: `as:` names a PICTURE, and
+								seven lowercase words is a list an author has to try rather
+								than read. Shapes lead the list — see `bubbleStyleOptions`.
+
+								Its colours are the ones this beat will actually be drawn in,
+								merged the same way the renderer merges them, so the shapes
+								are previewed against the fill and stroke in force here and
+								not against the factory white.
+							*/}
+							<PreviewSelect
+								onChange={value => onSetBubble('as', value || null)}
+								options={bubbleStyleOptions({
+									colors: {
+										accent: merged.accent,
+										bg: merged.bg,
+										color: merged.color,
+										font: merged.font
 									},
-									// Drawn shapes lead: they are what most authors come to
-									// this dropdown for, and they change the bubble rather
-									// than restyling its text.
-									...BUBBLE_SHAPES.map(shape => ({
-										label: shape,
-										value: shape
-									})),
-									...BUBBLE_PRESETS.map(preset => ({
-										label: preset,
-										value: preset
-									}))
-								]}
+									emptyDetail: inherited?.as,
+									emptyLabel: t('dialogs.passageEdit.beatProps.inherit'),
+									// What the dash actually means here, drawn.
+									emptyPreview: (
+										// The colour keys only. `inherited` is a whole
+										// BubbleStyle and spreading it would hand the swatch
+										// an `at:` and a `w:` it has no box to apply them to.
+										<BubbleStyleSwatch
+											accent={inherited?.accent}
+											bg={inherited?.bg}
+											color={inherited?.color}
+											font={inherited?.font}
+											token={inherited?.as ?? ''}
+										/>
+									)
+								})}
 								value={style?.as ?? INHERIT}
 							>
 								{t('dialogs.passageEdit.beatProps.as')}
-							</TextSelect>
+							</PreviewSelect>
+							<PreviewSelect
+								onChange={value => onSetBubble('font', value || null)}
+								options={bubbleFontOptions({
+									current: style?.font,
+									customLabel: t('dialogs.passageEdit.beatProps.fontCustom'),
+									emptyLabel: t('dialogs.passageEdit.beatProps.inherit'),
+									emptyPreview: (
+										<BubbleFontSwatch
+											label={t('dialogs.passageEdit.beatProps.fontSample')}
+											stack={bubbleFontStack(inherited?.font)}
+										/>
+									)
+								})}
+								searchable
+								value={style?.font ?? INHERIT}
+							>
+								{t('dialogs.passageEdit.beatProps.font')}
+							</PreviewSelect>
+							{/*
+								No text field on these two, unlike the Defaults dialog: the
+								beat row is already the widest thing in the panel, and a
+								hand-written `rgba(…)` is a story-wide decision far more often
+								than a one-line one. An author who needs one on a single beat
+								writes it in the YAML, where every other exotic value lives.
+							*/}
+							<BubbleColorControl
+								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
+								onChange={value => onSetBubble('bg', value ?? null)}
+								value={style?.bg}
+							>
+								{t('dialogs.passageEdit.beatProps.bg')}
+							</BubbleColorControl>
+							<BubbleColorControl
+								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
+								onChange={value => onSetBubble('accent', value ?? null)}
+								value={style?.accent}
+							>
+								{t('dialogs.passageEdit.beatProps.accent')}
+							</BubbleColorControl>
 							<TextSelect
 								onChange={event =>
 									onSetBubble('place', event.target.value || null)

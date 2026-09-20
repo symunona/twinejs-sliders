@@ -358,7 +358,7 @@ about:
 
 | Layer | Written as |
 |---|---|
-| story | `sliders.bubble.as`, `.font`, `.sizing`, … in a vars section (the editor's Story ▸ Details writes them into the start passage) |
+| story | `sliders.bubble.as`, `.font`, `.bg`, `.accent`, `.sizing`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
 | scene | `bubble: {…}` at the top of the scene |
 | character | the character's own `bubble:` in the library |
 | beat | `as:` / `bubble:` on the line |
@@ -380,6 +380,37 @@ without moving the text inside it.
 | `thought` | scalloped cloud, a trail of shrinking puffs instead of a tail |
 
 A shape and a CSS preset cannot be combined — one token, and a shape replaces the box.
+
+### Comic fonts
+
+`font:` takes either a CATALOGUE TOKEN or a raw CSS font stack.
+
+| Token | Face |
+|---|---|
+| `bangers` | Bangers |
+| `luckiest-guy` | Luckiest Guy |
+| `bowlby-one` | Bowlby One SC |
+| `comic-neue` | Comic Neue |
+| `patrick-hand` | Patrick Hand |
+| `gloria-hallelujah` | Gloria Hallelujah |
+| `shadows-into-light` | Shadows Into Light |
+| `architects-daughter` | Architects Daughter |
+
+A token expands to a stack and the face is FETCHED, so the reader sees it whether they own
+it or not. `packages/scene-types/src/bubble-fonts.ts` is the list; the editor's dropdown,
+the preview and the player all read it, so a face added there reaches all three.
+
+```yaml
+bubble: {font: bangers}          # catalogue token — fetched
+bubble: {font: "Georgia, serif"} # raw stack — whatever the reader owns
+```
+
+Anything that is not a token is passed to CSS untouched, which is what every story written
+before the catalogue already does.
+
+One stylesheet fetches all eight, from Google Fonts, on the first scene. Every stack ends
+in `'Comic Sans MS', cursive`, so a reader offline, behind a blocked CDN, or opening the
+story from a `file://` URL still gets comic lettering — just not the exact face.
 
 ### Fixed size
 

@@ -17,6 +17,7 @@ export * from './sliders-assets';
 export * from './sliders-characters';
 export * from './story-import';
 export * from './story-javascript';
+export * from './story-defaults';
 export * from './story-details';
 export * from './story-history';
 export * from './story-search';

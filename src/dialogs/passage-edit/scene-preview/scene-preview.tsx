@@ -1735,6 +1735,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				beatCount={beats.length}
 				beatNumber={beat}
 				editable={editable}
+				inherited={bubbleDefaults}
 				onSetBubble={handleBeatBubble}
 				onSetKey={handleBeatKey}
 			/>

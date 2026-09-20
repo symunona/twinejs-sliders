@@ -62,6 +62,23 @@ describe('formatValue', () => {
 		expect(formatValue('frame', 'yes')).toBe('yes');
 	});
 
+	/*
+	 * Every value this module writes lands inside a flow map, where a comma ENDS the entry.
+	 * `stringify` quotes for block context and leaves these bare, which turned a bubble
+	 * colour of `rgba(0, 0, 0, 0.6)` into three more keys and a duplicate-key parse error.
+	 */
+	it('quotes strings a flow map would split on', () => {
+		expect(formatValue('bg', 'rgba(0, 0, 0, 0.6)')).toBe('"rgba(0, 0, 0, 0.6)"');
+		expect(formatValue('font', 'Georgia, serif')).toBe('"Georgia, serif"');
+		expect(formatValue('font', '{weird}')).toBe('"{weird}"');
+		expect(formatValue('frame', '[odd]')).toBe('"[odd]"');
+	});
+
+	it('leaves a colour with no comma to yaml, which quotes it for the hash', () => {
+		expect(formatValue('bg', '#ff0000')).toBe('"#ff0000"');
+		expect(formatValue('font', 'bangers')).toBe('bangers');
+	});
+
 	it('keeps multi-line strings inline as double quotes, never a block scalar', () => {
 		const written = formatValue('say', 'one\ntwo');
 

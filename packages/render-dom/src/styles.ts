@@ -5,7 +5,11 @@
  * jest and a plain <script type="module"> harness with no bundler plugin in the way.
  */
 
+import {bubbleFontHref} from '@sliders/scene-types';
+
 const STYLE_ID = 'sliders-render-dom-styles';
+
+const FONT_LINK_ID = 'sliders-bubble-fonts';
 
 export const RENDER_DOM_CSS = `
 .sliders-root {
@@ -645,8 +649,45 @@ export const DIALOGUE_CSS = `
 }
 `;
 
+/**
+ * Fetch the comic faces `font:` can name, once per document.
+ *
+ * A `<link>` rather than an `@import` inside the style tag: an `@import` blocks the
+ * stylesheet that contains it, which here is the one that positions the whole stage.
+ *
+ * Failure is silent and harmless by construction — every stack in the catalogue ends in a
+ * fallback (`bubble-fonts.ts`), so an offline reader, a blocked CDN or a story opened from
+ * a `file://` URL all still get comic lettering, just not the exact face. That is why this
+ * is fire-and-forget with no load handler: there is nothing a failure would change.
+ */
+export function injectBubbleFonts(
+	doc: Document | undefined = globalThis.document
+): void {
+	if (!doc || doc.getElementById(FONT_LINK_ID)) {
+		return;
+	}
+
+	const head = doc.head ?? doc.documentElement;
+
+	if (!head) {
+		return;
+	}
+
+	const link = doc.createElement('link');
+
+	link.id = FONT_LINK_ID;
+	link.rel = 'stylesheet';
+	link.href = bubbleFontHref();
+	head.appendChild(link);
+}
+
 /** Idempotent. Safe to call from every mount. */
 export function injectStyles(doc: Document | undefined = globalThis.document): void {
+	// Before the early return: the fonts are their own element with their own id, and a
+	// second renderer on a page whose styles are already in is exactly the case where the
+	// link may still be missing.
+	injectBubbleFonts(doc);
+
 	if (!doc || doc.getElementById(STYLE_ID)) {
 		return;
 	}

@@ -3,10 +3,12 @@
  */
 import {parse} from 'yaml';
 import {LAYER_BASELINE, type EntityPatch} from '@sliders/scene-types';
+import {BUBBLE_KEYS} from '@sliders/scene-types';
 import {ENTITY_KEYS} from '@sliders/scene-schema';
 import {FIXTURE, PATCH_FIXTURE} from '../__fixtures__/fixture';
 import {ENTITY_KEY_ORDER} from '../locate';
 import {
+	BUBBLE_KEY_ORDER,
 	addEntity,
 	applyEdit,
 	removeEntities,
@@ -650,6 +652,34 @@ describe('setBeatBubble() style keys', () => {
 	it('adds place beside an existing token', () => {
 		expect(applied(1, {place: 'top'})).toContain(
 			'bubble: {as: yell, place: top}'
+		);
+	});
+
+	// The colour and font keys the beat toolbar gained. Appended to the map the author
+	// already has, in the order they were passed -- an existing `bubble:` is theirs, and
+	// only a map this code CREATES is sorted into BUBBLE_KEY_ORDER.
+	it('writes the colour and font keys the beat toolbar sets', () => {
+		expect(
+			applied(1, {accent: '#101010', bg: '#ff0000', font: 'bangers'})
+		).toContain(
+			'bubble: {as: yell, accent: "#101010", bg: "#ff0000", font: bangers}'
+		);
+	});
+
+	it('sorts a map it creates from scratch into the canonical order', () => {
+		expect(applied(0, {accent: '#101010', bg: '#ff0000', as: 'comic'})).toContain(
+			'bubble: {as: comic, bg: "#ff0000", accent: "#101010"}'
+		);
+	});
+
+	/*
+	 * A key BUBBLE_KEY_ORDER omits is not an error anywhere -- `indexOf` returns -1 and it
+	 * sorts ahead of `as:`, so a newly written map puts `accent:` above the style it is the
+	 * accent of. Silent and wrong rather than loud and wrong, which is what this catches.
+	 */
+	it('orders every key the schema accepts, so none can sort ahead of as:', () => {
+		expect([...BUBBLE_KEY_ORDER].sort()).toEqual(
+			expect.arrayContaining([...BUBBLE_KEYS].sort())
 		);
 	});
 });

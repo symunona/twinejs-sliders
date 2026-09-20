@@ -1,0 +1,58 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+
+/*
+ * One control per row rather than a flowing bar.
+ *
+ * Each of these carries a preview, and previews are different widths — a shape swatch, a
+ * font specimen, a colour well. Left to wrap, they staggered into a ragged block where no
+ * two labels lined up and the eye could not find the control it wanted.
+ */
+.story-defaults {
+	align-items: flex-start;
+	display: flex;
+	flex-direction: column;
+	gap: var(--grid-size);
+}
+
+/*
+ * The labels are aligned by giving them all one width, not by a grid.
+ *
+ * A grid would be the obvious answer and cannot reach: each control owns its own label and
+ * lays it out itself, and the three of them do not agree on how many children they have —
+ * the colour control alone is a label, a well, a field and a clear button. Subgrid would
+ * have to wrap those four into two columns. A shared label width needs nothing from the
+ * controls and degrades to "slightly ragged" rather than to "scrambled".
+ */
+.story-defaults .preview-select-label,
+.story-defaults .bubble-color-control-label,
+.story-defaults .text-select-label {
+	display: inline-block;
+	min-width: 8em;
+}
+
+.story-defaults-sample {
+	align-items: center;
+	border-top: 1px solid var(--light-gray-translucent);
+	display: flex;
+	gap: var(--grid-size);
+	margin-top: var(--ui-gap);
+	padding-top: var(--ui-gap);
+}
+
+.story-defaults-sample-label {
+	color: var(--dark-gray);
+	white-space: nowrap;
+}
+
+.story-defaults-sample-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.story-defaults-note {
+	color: var(--dark-gray);
+	margin-bottom: 0;
+}

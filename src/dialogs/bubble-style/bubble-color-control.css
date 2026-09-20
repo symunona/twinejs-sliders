@@ -1,0 +1,125 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+@import '../../styles/typography.css';
+
+.bubble-color-control {
+	align-items: center;
+	display: inline-flex;
+	gap: calc(var(--grid-size) / 2);
+	min-width: 0;
+}
+
+.bubble-color-control-label {
+	white-space: nowrap;
+}
+
+/*
+ * The native colour input, sized to the swatch and made invisible over it.
+ *
+ * `opacity: 0` rather than `display: none` or `visibility: hidden`: a hidden input cannot
+ * be clicked, and the whole arrangement exists so that clicking the swatch opens the
+ * platform picker. It keeps its own focus ring by being the real focus target — the swatch
+ * underneath grows the outline via `:focus-within`.
+ */
+.bubble-color-control-well {
+	display: inline-block;
+	height: 22px;
+	margin-left: calc(var(--grid-size) / 2);
+	position: relative;
+	width: 22px;
+}
+
+.bubble-color-control-well input {
+	cursor: pointer;
+	height: 100%;
+	inset: 0;
+	opacity: 0;
+	position: absolute;
+	width: 100%;
+}
+
+.bubble-color-control-well input:disabled {
+	cursor: not-allowed;
+}
+
+.bubble-color-control-well:focus-within .bubble-color-preview {
+	box-shadow: 0 0 0 2px var(--blue);
+}
+
+.bubble-color-control-text {
+	background: var(--white-translucent);
+	border-radius: var(--corner-round);
+	border: 1px solid var(--light-gray-translucent);
+	color: var(--dark-gray);
+	font: 100% var(--font-system);
+	height: var(--control-height);
+	min-width: 0;
+	padding: 0 calc(var(--grid-size) / 2);
+	width: 9em;
+}
+
+.bubble-color-control-text:focus {
+	box-shadow: inset 0 0 0px 2px var(--blue);
+	outline: none;
+}
+
+.bubble-color-control-clear {
+	background: none;
+	border-radius: var(--corner-round);
+	border: none;
+	color: var(--dark-gray);
+	cursor: pointer;
+	font: 130% var(--font-system);
+	line-height: 1;
+	padding: 2px 6px;
+}
+
+.bubble-color-control-clear:hover:not(:disabled) {
+	background: var(--light-gray-translucent);
+}
+
+.bubble-color-control-clear:disabled {
+	cursor: default;
+	opacity: 0.35;
+}
+
+/* Named for a screen reader, drawn as the × for everyone else. */
+.bubble-color-control-clear-label {
+	clip-path: inset(50%);
+	height: 1px;
+	overflow: hidden;
+	position: absolute;
+	white-space: nowrap;
+	width: 1px;
+}
+
+/*
+ * The swatch itself: a colour over a chequer.
+ *
+ * The chequer is what makes "no default" legible. An unset colour and an opaque white
+ * would otherwise be the same empty square, and these controls are exactly where an author
+ * needs to see which of the two they are looking at.
+ */
+.bubble-color-preview {
+	background-image: linear-gradient(45deg, var(--gray) 25%, transparent 25%),
+		linear-gradient(-45deg, var(--gray) 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, var(--gray) 75%),
+		linear-gradient(-45deg, transparent 75%, var(--gray) 75%);
+	background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+	background-size: 8px 8px;
+	border-radius: 3px;
+	border: 1px solid var(--light-gray-translucent);
+	display: block;
+	height: 22px;
+	overflow: hidden;
+	pointer-events: none;
+	width: 22px;
+}
+
+.bubble-color-preview::after {
+	background: var(--swatch, transparent);
+	content: '';
+	display: block;
+	height: 100%;
+	width: 100%;
+}

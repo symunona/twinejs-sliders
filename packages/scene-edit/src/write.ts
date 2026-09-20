@@ -754,13 +754,30 @@ export function removeEntity(
 // setBeatBubble
 // ---------------------------------------------------------------------------
 
-/** Written in this order, so a hand-edited map and a dragged one look the same. */
-const BUBBLE_KEY_ORDER = [
+/**
+ * Written in this order, so a hand-edited map and a dragged one look the same.
+ *
+ * Orders a map this code CREATES. A `bubble:` the author already has is theirs, and a new
+ * key is appended to it where they can see it arrive — see `writeBubbleKeys`.
+ *
+ * Must COVER `BUBBLE_KEYS`, and `write.test.ts` asserts that it does — the same tripwire
+ * `ENTITY_KEY_ORDER` carries, for the same reason. `formatBubbleMap` sorts by `indexOf`,
+ * so an unlisted key comes back as -1 and sorts ahead of `as:`: a key added to the schema
+ * and forgotten here does not fail loudly, it quietly writes `accent:` above the style it
+ * is the accent of. Which is what this list did before `accent`, `anchor`, `sizing`, `tail`
+ * and `h` were added to it.
+ */
+export const BUBBLE_KEY_ORDER = [
 	'as',
 	'place',
+	'anchor',
+	'sizing',
 	'at',
+	'tail',
 	'w',
+	'h',
 	'bg',
+	'accent',
 	'color',
 	'font',
 	'size'
@@ -785,6 +802,16 @@ export interface BubbleGeometry {
 	anchor?: string | null;
 	/** `absolute` fixes the box and fits the text to it. */
 	sizing?: string | null;
+	/** Fill. Any CSS colour — a drawn shape fills itself with it. */
+	bg?: string | null;
+	/** A drawn shape's outline, slab or highlight. Meaningless to the CSS presets. */
+	accent?: string | null;
+	/** Text colour. */
+	color?: string | null;
+	/** A `BUBBLE_FONTS` token, or a raw CSS font stack. */
+	font?: string | null;
+	/** Text size multiplier, 1 being the stage's normal size. */
+	size?: number | null;
 }
 
 /** `[0.7, 0.25]` — fractions of the stage box, so never the bare-number `at:`/`tail:` form. */

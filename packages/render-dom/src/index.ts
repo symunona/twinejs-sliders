@@ -87,6 +87,11 @@ export {
 } from './coords';
 export type {Rect, SpriteMetrics, StageBox} from './coords';
 
-export {DIALOGUE_CSS, RENDER_DOM_CSS, injectStyles} from './styles';
+export {
+	DIALOGUE_CSS,
+	RENDER_DOM_CSS,
+	injectBubbleFonts,
+	injectStyles
+} from './styles';
 export {SoundDeck} from './sound-deck';
 export type {SoundDeckOptions} from './sound-deck';

@@ -11,6 +11,7 @@
  */
 
 import type {BubblePlace, BubbleStyle, EntityId, Vec2} from '@sliders/scene-types';
+import {bubbleFontStack} from '@sliders/scene-types';
 import type {BubblePadding, BubbleSide} from './bubble-shapes';
 import {bubbleShape, hashSeed, isBubbleShape} from './bubble-shapes';
 import type {StageBox} from './coords';
@@ -812,7 +813,10 @@ export function applyStyleAttributes(
 
 	setVar(el, '--sliders-bubble-bg', style?.bg);
 	setVar(el, '--sliders-bubble-color', style?.color);
-	setVar(el, '--sliders-bubble-font', style?.font);
+	// Expanded, not passed through: `font: bangers` is a catalogue TOKEN and CSS has never
+	// heard of it, while `font: 'Georgia, serif'` is already a stack and comes back as
+	// itself. One call so the two spellings cannot diverge (`bubble-fonts.ts`).
+	setVar(el, '--sliders-bubble-font', bubbleFontStack(style?.font));
 	setVar(el, '--sliders-bubble-size', style?.size ? `${style.size}em` : undefined);
 }
 
