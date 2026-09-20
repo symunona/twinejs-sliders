@@ -112,24 +112,79 @@ export function resetSyncRecordsForTests(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Dirtiness
+// The record store as a seam
 // ---------------------------------------------------------------------------
 
 /**
- * Props that move without the author changing anything worth pushing.
+ * Where sync bookkeeping lives, as an interface rather than a module singleton.
  *
- * `lastUpdate` is in here for the reason spec 11 gives: it advances on trivial actions and
- * cannot survive two machines whose clocks disagree, so hashing it would mark a story
- * dirty forever. `selected` and `highlighted` are chrome.
+ * The functions above ARE the app's store, and they read `localStorage` through a
+ * process-wide cache. That is right for the app and wrong for a test: two simulated
+ * clients in one jest process would share one set of records and quietly agree about a
+ * rev they should be arguing over. Every unit that keeps bookkeeping takes one of these
+ * instead, so a test can hand each client its own.
+ *
+ * Deliberately the narrow four operations the sync path actually performs. A wider
+ * interface would be a second copy of the module surface, which is the thing this exists
+ * to stop needing.
  */
-const ignoredStoryProps: string[] = [
-	'highlighted',
-	'lastUpdate',
-	'selected',
-	'sync'
-];
+export interface SyncRecordStore {
+	/** Every record, keyed by story id. Treat as read-only. */
+	all(): SyncRecords;
+	/** The record for a story, minted at defaults when there is none. */
+	get(storyId: string): SyncRecord;
+	/** Merge into the existing record, minting one first if there is none. */
+	update(storyId: string, changes: Partial<SyncRecord>): SyncRecord;
+	remove(storyId: string): void;
+}
 
-const ignoredPassageProps: string[] = ['highlighted', 'selected'];
+/** The app's store: one JSON blob in `localStorage`, cached. */
+export function localSyncRecordStore(): SyncRecordStore {
+	return {
+		all: allSyncRecords,
+		get: syncRecordOrNew,
+		remove: deleteSyncRecord,
+		update: updateSyncRecord
+	};
+}
+
+/**
+ * An isolated store with no `localStorage` behind it.
+ *
+ * For tests, and for any future second client in one process. `seed` is taken by value,
+ * so a caller cannot mutate the store's contents from the outside afterwards.
+ */
+export function memorySyncRecordStore(
+	seed: SyncRecords = {}
+): SyncRecordStore {
+	let records: SyncRecords = {...seed};
+
+	return {
+		all: () => ({...records}),
+		get: storyId => records[storyId] ?? newSyncRecord(storyId),
+		remove(storyId) {
+			const next = {...records};
+
+			delete next[storyId];
+			records = next;
+		},
+		update(storyId, changes) {
+			const updated: SyncRecord = {
+				...(records[storyId] ?? newSyncRecord(storyId)),
+				...changes,
+				storyId
+			};
+
+			records = {...records, [storyId]: updated};
+
+			return updated;
+		}
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Dirtiness
+// ---------------------------------------------------------------------------
 
 /**
  * JSON with the keys in a fixed order, so two structurally equal stories hash the same
@@ -153,23 +208,76 @@ function stableStringify(value: unknown): string {
 		.join(',')}}`;
 }
 
-function hashable(story: Story): Record<string, unknown> {
-	const copy: Record<string, unknown> = {...story};
+/**
+ * What "changed" means, as an ALLOWLIST.
+ *
+ * This was a denylist — everything hashed unless named — and that is the wrong default
+ * for a type the editor keeps adding fields to. Two view-only props had already slipped
+ * in: `zoom` and `snapToGrid` are how THIS browser looks at the map, and hashing them
+ * meant that scrolling a story marked it dirty. An author who only ever zoomed then
+ * counted as having edited, so an incoming change from somebody else came out of
+ * `reconcileDecision` as `conflict` rather than `pull` — a conflict dialog over a story
+ * they had not typed a word into.
+ *
+ * Inverted, a new `Story` field is view state until someone lists it here, and the
+ * failure mode of forgetting is "my edit did not sync" — loud, reported in minutes —
+ * rather than "everything conflicts", which is silent and blames the other person.
+ *
+ * Passage geometry IS content: the map layout is authored and shared. `selected` and
+ * `highlighted` are not.
+ *
+ * Changing this set changes every stored `pushedHash`, so every synced story reads dirty
+ * exactly once after this ships and pushes once. Self-healing, and cheaper than leaving
+ * false conflicts in.
+ */
+const hashedStoryProps = [
+	'ifid',
+	'name',
+	'script',
+	'startPassage',
+	'storyFormat',
+	'storyFormatVersion',
+	'stylesheet',
+	'tagColors',
+	'tags'
+] as const;
 
-	for (const prop of ignoredStoryProps) {
-		delete copy[prop];
+const hashedPassageProps = [
+	'height',
+	'id',
+	'left',
+	'name',
+	'tags',
+	'text',
+	'top',
+	'width'
+] as const;
+
+function pick(
+	source: Record<string, unknown>,
+	keys: readonly string[]
+): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+
+	for (const key of keys) {
+		if (source[key] !== undefined) {
+			out[key] = source[key];
+		}
 	}
 
+	return out;
+}
+
+function hashable(story: Story): Record<string, unknown> {
+	const copy = pick(
+		story as unknown as Record<string, unknown>,
+		hashedStoryProps
+	);
+
 	copy.passages = [...story.passages]
-		.map(passage => {
-			const item: Record<string, unknown> = {...passage};
-
-			for (const prop of ignoredPassageProps) {
-				delete item[prop];
-			}
-
-			return item;
-		})
+		.map(passage =>
+			pick(passage as unknown as Record<string, unknown>, hashedPassageProps)
+		)
 		// Passage order in the array is not meaningful — a rename can reshuffle it — so
 		// sorting keeps a no-op reorder from reading as an edit.
 		.sort((a, b) => String(a.id).localeCompare(String(b.id)));

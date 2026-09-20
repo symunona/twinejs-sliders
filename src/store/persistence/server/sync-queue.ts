@@ -11,11 +11,11 @@
 
 import type {Story} from '../../stories';
 import {isServerError, type ServerClient} from './client';
+import {logSync} from './sync-log';
 import {
-	allSyncRecords,
+	localSyncRecordStore,
 	storyHash,
-	syncRecordOrNew,
-	updateSyncRecord,
+	type SyncRecordStore,
 	type SyncRecords
 } from './sync-record';
 import type {SyncRecord} from './server.types';
@@ -40,6 +40,14 @@ export interface SyncQueueOptions {
 	 * be the first thing that names a picture, and art has no queue of its own.
 	 */
 	onPushed?: (story: Story) => void;
+	/**
+	 * Where the side table lives. Defaults to the app's `localStorage` one.
+	 *
+	 * Injected so a test can give each simulated client its own bookkeeping: the module
+	 * store is a process-wide cache, so two queues in one jest process would otherwise
+	 * share a rev they are supposed to be arguing over.
+	 */
+	records?: SyncRecordStore;
 }
 
 interface Pending {
@@ -72,15 +80,17 @@ export class SyncQueue {
 	private readonly options: SyncQueueOptions;
 	private readonly pending = new Map<string, Pending>();
 	private readonly listeners = new Set<(records: SyncRecords) => void>();
+	private readonly store: SyncRecordStore;
 	private disposed = false;
 
 	constructor(options: SyncQueueOptions) {
 		this.options = options;
+		this.store = options.records ?? localSyncRecordStore();
 	}
 
 	/** Current side table. Same object the module-level readers see. */
 	get records(): SyncRecords {
-		return allSyncRecords();
+		return this.store.all();
 	}
 
 	onChange(listener: (records: SyncRecords) => void): () => void {
@@ -108,13 +118,19 @@ export class SyncQueue {
 			return;
 		}
 
-		const record = syncRecordOrNew(story.id);
+		const record = this.store.get(story.id);
 
 		if (record.state === 'conflict' || record.state === 'gone') {
+			logSync('push', `not queued: ${record.state}`, story.id, () => ({
+				rev: record.rev
+			}));
 			return;
 		}
 
 		if (storyHash(story) === record.pushedHash) {
+			logSync('push', 'skipped: same hash', story.id, () => ({
+				rev: record.rev
+			}));
 			return;
 		}
 
@@ -213,7 +229,7 @@ export class SyncQueue {
 		clearTimers(entry);
 
 		const story = entry.story;
-		const record = syncRecordOrNew(storyId);
+		const record = this.store.get(storyId);
 		const hash = storyHash(story);
 
 		// `push()` checks this too, but a queued entry can go stale between scheduling and
@@ -221,6 +237,9 @@ export class SyncQueue {
 		// Sending it again costs a rev, burns a slot of the keep-N history and credits the
 		// version to whoever merely received it.
 		if (hash === record.pushedHash) {
+			logSync('push', 'skipped: stale entry', storyId, () => ({
+				rev: record.rev
+			}));
 			this.pending.delete(storyId);
 			this.write(storyId, {state: 'idle'});
 			return;
@@ -245,6 +264,12 @@ export class SyncQueue {
 					this.pending.delete(storyId);
 				}
 
+				logSync('push', 'landed', storyId, () => ({
+					keepalive: options.keepalive === true,
+					sentIfMatch: record.rev || undefined,
+					rev: result.rev,
+					superseded
+				}));
 				this.write(storyId, {
 					conflictClient: undefined,
 					conflictRev: undefined,
@@ -333,7 +358,7 @@ export class SyncQueue {
 	}
 
 	private write(storyId: string, changes: Partial<SyncRecord>): SyncRecord {
-		const record = updateSyncRecord(storyId, changes);
+		const record = this.store.update(storyId, changes);
 
 		this.emit();
 
@@ -341,7 +366,7 @@ export class SyncQueue {
 	}
 
 	private emit(): void {
-		const records = allSyncRecords();
+		const records = this.store.all();
 
 		for (const listener of this.listeners) {
 			listener(records);
