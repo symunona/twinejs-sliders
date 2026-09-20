@@ -139,7 +139,19 @@ export function applyPulledStory(
 		story.name,
 		stories.filter(local => local.id !== story.id).map(local => local.name)
 	);
-	const local: Story = {...story, name, sync: true};
+	// How THIS browser is looking at the map survives a pull. `incomingStory` already
+	// refuses whatever the wire said and substitutes defaults; those defaults are right
+	// for a checkout, which has no local story, and wrong here, where taking them would
+	// reset the author's zoom every time somebody else saved.
+	const here = stories.find(item => item.id === story.id);
+	const local: Story = {
+		...story,
+		name,
+		sync: true,
+		...(here
+			? {snapToGrid: here.snapToGrid, zoom: here.zoom}
+			: {})
+	};
 	const action: UpdateStoryAction = {
 		props: {...local},
 		storyId: story.id,

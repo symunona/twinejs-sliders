@@ -11,6 +11,8 @@ import {
 	updateSyncRecord
 } from '../sync-record';
 import type {Story} from '../../../stories';
+import {storyDefaults} from '../../../stories/defaults';
+import {incomingStory, outgoingStory} from '../client';
 import {storyWithText, testPassage, testStory} from '../test-fixtures';
 
 beforeEach(() => {
@@ -226,5 +228,32 @@ describe('what counts as a change worth pushing', () => {
 		for (const change of changes) {
 			expect(storyHash({...story, ...change})).not.toBe(storyHash(story));
 		}
+	});
+});
+
+describe('view state never travels', () => {
+	it('strips how this browser is looking at the map', () => {
+		const sent = outgoingStory(
+			testStory({selected: true, snapToGrid: true, sync: true, zoom: 0.25})
+		) as Partial<Story>;
+
+		expect(sent.zoom).toBeUndefined();
+		expect(sent.snapToGrid).toBeUndefined();
+		expect(sent.selected).toBeUndefined();
+		expect(sent.sync).toBeUndefined();
+		// The story itself is untouched.
+		expect(sent.name).toBe('Lighthouse');
+		expect(sent.passages).toHaveLength(1);
+	});
+
+	it('ignores the view props a server still holds from before the strip', () => {
+		const story = testStory({snapToGrid: true, zoom: 0.25});
+		const arrived = incomingStory({
+			...story,
+			lastUpdate: story.lastUpdate.toISOString()
+		});
+
+		expect(arrived.zoom).toBe(storyDefaults().zoom);
+		expect(arrived.snapToGrid).toBe(storyDefaults().snapToGrid);
 	});
 });

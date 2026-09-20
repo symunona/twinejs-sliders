@@ -7,6 +7,7 @@
  */
 
 import type {Story} from '../../stories';
+import {storyDefaults} from '../../stories/defaults';
 import type {
 	AssetDiffResponse,
 	AssetManifest,
@@ -122,23 +123,50 @@ export function apiBase(url: string): string {
 	return trimmed.endsWith(API_PATH) ? trimmed : `${trimmed}${API_PATH}`;
 }
 
-/** Local-only props. Whether a story syncs is each editor's own business (spec 11). */
+/**
+ * Local-only props, stripped on the way out.
+ *
+ * `selected` and `sync` are this editor's business (spec 11): whether a story is
+ * highlighted in a list, and whether this browser syncs it at all.
+ *
+ * `zoom` and `snapToGrid` are the same kind of thing and were travelling anyway — how one
+ * person is looking at the map is not part of the story. Sending them meant an author's
+ * zoom level was pushed onto everybody else on their next pull, which reads as the editor
+ * moving under them for no reason. They are also out of the dirty hash (`sync-record.ts`,
+ * `hashedStoryProps`) for the matching reason: scrolling the map is not an edit.
+ *
+ * The server keeps whatever it already stored until the next write overwrites it. That is
+ * harmless, because `incomingStory` ignores what comes back.
+ */
 export function outgoingStory(story: Story): Story {
 	const rest: Partial<Story> = {...story};
 
 	delete rest.selected;
 	delete rest.sync;
+	delete rest.zoom;
+	delete rest.snapToGrid;
 
 	return rest as Story;
 }
 
-/** `lastUpdate` travels as an ISO string; everything else is verbatim. */
+/**
+ * `lastUpdate` travels as an ISO string; everything else is verbatim.
+ *
+ * The view props are filled from `storyDefaults()` rather than trusted: a story written
+ * by a client that still sends them would otherwise reach in and set this browser's zoom,
+ * and one written by a client that does not would arrive with them undefined. A CHECKOUT
+ * lands on these defaults; a PULL into a story this browser already holds keeps the
+ * values it already had — see `applyPulledStory`.
+ */
 export function incomingStory(raw: unknown): Story {
 	const story = raw as Story;
+	const defaults = storyDefaults();
 
 	return {
 		...story,
-		lastUpdate: new Date(story.lastUpdate as unknown as string)
+		lastUpdate: new Date(story.lastUpdate as unknown as string),
+		snapToGrid: defaults.snapToGrid,
+		zoom: defaults.zoom
 	};
 }
 

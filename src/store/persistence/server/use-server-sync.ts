@@ -510,8 +510,14 @@ export function useServerSync(): ServerSyncContextProps {
 			}
 
 			// The story the store actually holds, which may carry a name the collision
-			// forced. Anything else here and the autosave watcher reads the difference as
-			// an edit and pushes it straight back.
+			// forced. The watcher diffs against this map to decide whether the AUTHOR
+			// changed something, so the copy that landed is the honest answer.
+			//
+			// Not load-bearing on its own: `previousRef` is a fast path, and a wrong
+			// entry here only costs a `queue.push` that the hash check then drops (see
+			// the watcher below, and `SyncQueue.push`). What actually stopped the old
+			// bug pushing stale text back over somebody else's work is that a REFUSED
+			// pull now writes no `pushedHash` at all.
 			previousRef.current.set(story.id, outcome.story);
 
 			// Text that arrived from somebody else usually names art that did too.
