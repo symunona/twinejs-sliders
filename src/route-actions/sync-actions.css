@@ -20,6 +20,18 @@ svg.sync-actions-alert {
 	gap: var(--grid-size);
 }
 
+/*
+The download label ("Getting artwork… 3 of 9") is twice the width of "Synced 10:12" and
+lives in the toolbar's top row, which is a fixed-height nowrap flex box. Let it be
+squeezed narrow, never wrapped: a second line there spills up over the tab row, which is
+how the 2026-09-08 toolbar bug made Find and Replace click the Passage tab.
+*/
+.sync-actions-status-time {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .sync-actions-status-tick {
 	color: var(--dark-green);
 	height: 14px;
