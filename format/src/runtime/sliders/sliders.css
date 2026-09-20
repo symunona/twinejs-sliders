@@ -25,6 +25,26 @@ sliders-stage[data-waiting='beat']:after {
 	z-index: 100;
 }
 
+/*
+ * The link list a stage is holding back until its beats are done.
+ *
+ * Both hooks are written by `<sliders-stage>` and by nothing else, so a browser that never
+ * upgrades the element draws the list as usual and the reader is never stranded. The
+ * transition lives on `.sliders-fork` rather than on `.fork`, so ordinary Chapbook forks
+ * in prose passages are untouched.
+ *
+ * `visibility`, not `display`: the list keeps its space, so the reveal moves nothing on
+ * the page, and it stays out of the tab order and the accessibility tree while it waits.
+ */
+.fork.sliders-fork {
+	transition: opacity 320ms ease, visibility 320ms;
+}
+
+.fork.sliders-fork[data-pending] {
+	opacity: 0;
+	visibility: hidden;
+}
+
 .sliders-stage__error {
 	background: rgb(120 20 20 / 92%);
 	color: #fff;

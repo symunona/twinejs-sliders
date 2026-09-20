@@ -32,6 +32,7 @@ import {
 	muted,
 	storyBubbleDefaults
 } from './config';
+import {holdLinkList, releaseLinkList} from './link-list';
 import {stageFrom} from './scene-graph';
 
 const {warn} = createLoggers('scene');
@@ -70,6 +71,7 @@ export class SlidersStage extends CustomElement {
 	private scene?: Scene;
 	private links: Record<string, string> = {};
 	private beatIndex = 0;
+	private linkList?: HTMLElement;
 	private timer?: number;
 	private cinema = false;
 
@@ -153,6 +155,15 @@ export class SlidersStage extends CustomElement {
 		this.scene = payload.scene;
 		this.links = payload.links ?? {};
 
+		// The list under the stage waits for the beats to finish. A scene with NO beats is
+		// never held: there is nothing to spoil and nothing to wait for, so it keeps drawing
+		// the list the moment the passage renders. Done before the first `await`, and
+		// custom element reactions run after the whole passage has been inserted, so the
+		// list is never painted in its shown state first.
+		if ((payload.scene.beats?.length ?? 0) > 0) {
+			this.linkList = holdLinkList(this);
+		}
+
 		const base = stageFrom(payload.scene.from);
 		const entry = applyScene(base, payload.scene);
 
@@ -213,6 +224,9 @@ export class SlidersStage extends CustomElement {
 			leaveCinema();
 		}
 
+		// A stage that leaves must never leave an invisible link list behind it.
+		releaseLinkList(this.linkList);
+		this.linkList = undefined;
 		this.removeEventListener('click', this.handleClick);
 		// `once` removes it on the way in, never on the way out — a stage that left before
 		// the reader touched anything would otherwise unmute the NEXT stage's renderer
@@ -317,6 +331,11 @@ export class SlidersStage extends CustomElement {
 		}
 
 		this.removeAttribute('data-waiting');
+		// The beats are done, so the choices have stopped being a spoiler. That is one click
+		// later than the final line appearing: the last beat always waits for the reader
+		// (see `waitForReader`), and the click that used to do nothing but clear the beat
+		// marker now brings the list up.
+		releaseLinkList(this.linkList);
 	}
 
 	/** The story's variables with this scene's own `bubble:` over them. */
@@ -367,8 +386,10 @@ export class SlidersStage extends CustomElement {
 
 	/**
 	 * Auto advance is a convenience, never the only way forward: the last beat always waits
-	 * for the reader, or the links under the stage would appear while the final line was
-	 * still being read.
+	 * for the reader, and that wait is now load-bearing. The click that ends it is what
+	 * reveals the links under the stage (`link-list.ts`), so a timer running past the last
+	 * beat would pop the choices up while the final line was still being read — the exact
+	 * spoiler the reveal exists to prevent, and worse, because the reader never asked.
 	 *
 	 * A beat's own `dur:` beats the scene's `autoAdvance:` and the READER's
 	 * `sliders.autoAdvance` alike — the author timed this line, and neither a scene default

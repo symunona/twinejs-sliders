@@ -57,12 +57,44 @@ still needs it, or there is no way out at all.
 
 The rule is `beatsOfferLinks` in `@sliders/scene-schema`, asked after `if:` filtering.
 
+#### When it appears
+
+**Scene has beats → list appears only once the beats are done.** Not from beat 1.
+
+| Scene | List |
+|---|---|
+| no beats | drawn at once, as before |
+| beats, still running | held back |
+| beats, last one on screen | still held back |
+| beats done — reader clicked past the last one | revealed, 320ms fade |
+
+The last beat always waits for the reader (never auto-advances). That click used to do
+nothing but clear the `▸` marker; now it ends the scene and brings the list up. So the
+final line is read before the choices exist.
+
+`sliders.showLinks: true` decides **whether**, not **when** — a forced list is still held
+until the beats are done. Same spoiler either way, and a second variable for a case nobody
+asked for is worse than the rule. A story that truly wants a way out visible from beat 1
+writes those links in the passage, outside the `[scene]` block, with
+`sliders.sceneOnly: false`. `sliders.showLinks: false` never draws the list at all, so
+timing does not apply.
+
+The hold is **script**, not CSS alone: `<sliders-stage>` finds its own fork (the element's
+paragraph's next sibling — `~` would grab the wrong one when a passage holds several
+scenes) and puts `sliders-fork` + `data-pending` on it. Nothing else writes those. So a
+browser that never upgrades the custom element, or a scene whose payload fails to decode,
+draws the list immediately — a reader stranded in a scene is worse than a spoiled choice.
+`visibility`, not `display`: the list keeps its space, so the reveal moves nothing.
+
+`src/runtime/sliders/link-list.ts`, held in `connectedCallback`, released where `play()`
+runs out of beats.
+
 Variables, so a passage or a story can opt out:
 
 ```
 sliders.sceneOnly: false     # draw the text around the scene too
 sliders.fullScreen: false    # stage stays a 16:9 box inside the page
-sliders.showLinks: true      # always draw the list, clickable beats or not
+sliders.showLinks: true      # always draw the list, clickable beats or not (still after the beats)
 sliders.showLinks: false     # never draw it
 ```
 
