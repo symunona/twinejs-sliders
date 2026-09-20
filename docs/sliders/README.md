@@ -20,6 +20,12 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 12 | [story-cli.md](12-story-cli.md) | `twine-cli` — check a story out as files, edit, lint, push. Local-mode reads. |
 | 13 | [sound.md](13-sound.md) | `music:` and `sfx:`. Sound assets, the deck, muting, autoplay. |
 
+## Open bugs
+
+| File | Covers |
+|---|---|
+| [bugs/rev-lag.md](bugs/rev-lag.md) | A client conflicts with ITSELF: stored `rev` one behind after a good push. |
+
 Origin notes with the full Q&A history: [`../2026-08-14-twine-languages.md`](../2026-08-14-twine-languages.md).
 
 ## Two repos

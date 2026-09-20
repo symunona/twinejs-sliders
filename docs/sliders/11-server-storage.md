@@ -590,6 +590,10 @@ Everything above shipped except where noted here.
 - **The legacy shared asset library is gone**, along with `migrate-legacy-assets.ts` and the
   asset manager's shared-pile row. Assets are per story, full stop.
 
+**Open: rev lag.** A client can conflict with itself — the stored `rev` ends up one behind
+after a successful push, and every later edit stops syncing. Write-up and where to look:
+[`bugs/rev-lag.md`](bugs/rev-lag.md).
+
 Not deployed to taskbot yet: `server/README.md` carries the systemd unit and Caddyfile, and
 the box needs the binary, an `AUTH_TOKEN` and a DNS record before any of this reaches
 `https://twine-story-store.tmpx.space`.
