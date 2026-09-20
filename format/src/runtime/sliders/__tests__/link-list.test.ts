@@ -120,3 +120,39 @@ describe('holdLinkList / releaseLinkList', () => {
 		).toBe(false);
 	});
 });
+
+/**
+ * The timing the whole feature rests on.
+ *
+ * `<sliders-stage>` holds its list in `connectedCallback`, and Chapbook inserts a whole
+ * passage in one `innerHTML` write (`page-transition.ts`). Custom element reactions are
+ * queued and run after that write, so the fork is already a sibling by the time the
+ * element wakes up. If it were not, the stage would find nothing and the list would stay
+ * visible from beat 1 — the bug this module exists to fix, silently back.
+ */
+describe('inside connectedCallback', () => {
+	it('sees the fork the same passage write put after it', () => {
+		const found: (HTMLElement | undefined)[] = [];
+
+		customElements.define(
+			'link-list-probe',
+			class extends HTMLElement {
+				connectedCallback() {
+					found.push(holdLinkList(this));
+				}
+			}
+		);
+
+		document.body.innerHTML = '<article></article>';
+		(document.querySelector('article') as HTMLElement).innerHTML =
+			'<div><p><link-list-probe></link-list-probe></p>' +
+			'<div class="fork" id="first"></div>' +
+			'<p><link-list-probe></link-list-probe></p>' +
+			'<div class="fork" id="second"></div></div>';
+
+		expect(found).toHaveLength(2);
+		expect(found[0]?.id).toBe('first');
+		expect(found[1]?.id).toBe('second');
+		expect(found[0]?.hasAttribute('data-pending')).toBe(true);
+	});
+});
