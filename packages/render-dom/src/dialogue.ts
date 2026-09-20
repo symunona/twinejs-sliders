@@ -93,6 +93,14 @@ const ABSOLUTE_TEXT = 0.055;
 const FIT_MIN = 0.25;
 const FIT_MAX = 2.4;
 
+/**
+ * A fixed bubble's inset, as a fraction of the STAGE height, for the same reason the type
+ * is. The numbers are the stylesheet's 10px and 14px at a 900px stage, so nothing composed
+ * at that size moves.
+ */
+const PAD_Y = 10 / 900;
+const PAD_X = 14 / 900;
+
 interface BubbleRecord {
 	el: HTMLDivElement;
 	body: HTMLDivElement;
@@ -408,6 +416,11 @@ export class DialogueLayer {
 
 			el.style.width = `${w}px`;
 			el.style.height = `${h}px`;
+			// A fixed rectangle is stated against the stage and so is its type, so its inset
+			// has to be as well. A flat 10px is a tenth of a caption panel on a 1600-wide
+			// stage and a third of one on a phone.
+			el.style.setProperty('--sliders-bubble-pad-y', `${box.height * PAD_Y}px`);
+			el.style.setProperty('--sliders-bubble-pad-x', `${box.height * PAD_X}px`);
 			this.applyPadding(rec, w, h);
 
 			if (absolute) {
@@ -503,9 +516,13 @@ export class DialogueLayer {
 		w: number,
 		h: number
 	): void {
-		const pad = rec.padding;
-		const innerW = w - (pad ? pad.left + pad.right : 0);
-		const innerH = h - (pad ? pad.top + pad.bottom : 0);
+		// The computed padding, not `rec.padding`: that one is only ever set by a DRAWN
+		// shape, and a bubble without one still has the stylesheet's `padding: 10px 14px`.
+		// Fitting to the outer box left the last line under the padding, where the body's
+		// own `overflow: hidden` cut it in half.
+		const pad = elementPadding(rec.el, rec.padding);
+		const innerW = w - (pad.left + pad.right);
+		const innerH = h - (pad.top + pad.bottom);
 		const base = box.height * ABSOLUTE_TEXT * (rec.spec.style?.size ?? 1);
 		const body = rec.body;
 		const fits = (size: number) => {
@@ -822,6 +839,35 @@ function setVar(el: HTMLElement, name: string, value: string | undefined): void 
 	} else {
 		el.style.removeProperty(name);
 	}
+}
+
+/**
+ * The room a bubble's own box leaves its words.
+ *
+ * Read off the element rather than off the shape, because a bubble has padding either way:
+ * a drawn shape writes its own inline, everything else keeps the stylesheet's. `known` is
+ * the shape's figure, used only where there is no view to compute a style in.
+ */
+function elementPadding(el: HTMLElement, known?: BubblePadding): BubblePadding {
+	const zero = known ?? {top: 0, right: 0, bottom: 0, left: 0};
+	const computed = el.ownerDocument?.defaultView?.getComputedStyle?.(el);
+
+	if (!computed) {
+		return zero;
+	}
+
+	const px = (value: string, fallback: number) => {
+		const n = parseFloat(value);
+
+		return Number.isFinite(n) ? n : fallback;
+	};
+
+	return {
+		top: px(computed.paddingTop, zero.top),
+		right: px(computed.paddingRight, zero.right),
+		bottom: px(computed.paddingBottom, zero.bottom),
+		left: px(computed.paddingLeft, zero.left)
+	};
 }
 
 // ---------------------------------------------------------------------------

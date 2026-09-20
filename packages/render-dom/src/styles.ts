@@ -447,6 +447,9 @@ export const DIALOGUE_CSS = `
 .sliders-bubble[data-sizing='manual'] {
 	max-width: none;
 	min-width: 0;
+	/* Written by the layout, in stage fractions — see PAD_Y/PAD_X. A drawn shape's own
+	   inline padding still wins over this. */
+	padding: var(--sliders-bubble-pad-y, 10px) var(--sliders-bubble-pad-x, 14px);
 }
 
 /* The box has no inner body to clip — its text is its own children — so the clip goes on
