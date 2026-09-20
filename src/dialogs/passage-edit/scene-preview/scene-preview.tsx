@@ -68,6 +68,7 @@ import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
 import {useActiveBeatMark} from './use-active-beat-mark';
+import {useFirstBeat} from './use-first-beat';
 import {useStageSelection} from './use-stage-selection';
 import {
 	applyCameraPatch,
@@ -123,6 +124,12 @@ export interface ScenePreviewProps {
 	 * Absent means the preview shows links but cannot open them.
 	 */
 	onOpenPassage?: (name: string) => void;
+	/**
+	 * Which passage the scene on screen came from. Only identity matters: it is how the
+	 * preview tells "the author moved to another passage" from "the author is typing",
+	 * and the first tells the scrubber to go back to the scene's opening beat.
+	 */
+	passageId?: string;
 	/**
 	 * Covering the whole window, toolbar included. The one state the dialog system does
 	 * not provide, so it is the one state that is still ours: normal and maximized are
@@ -265,6 +272,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	onFullScreenChange,
 	onOpenPassage,
 	parse,
+	passageId,
 	passages,
 	stylesheet,
 	text
@@ -1220,6 +1228,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 		setPlaying(p => !p);
 	}
+
+	// Arriving at a passage stands on its first beat, not on the stage before any beat ran.
+	useFirstBeat(passageId, parse, setBeat);
 
 	// Keep the scrubber in range when the author edits beats out from under it.
 	React.useEffect(() => {
