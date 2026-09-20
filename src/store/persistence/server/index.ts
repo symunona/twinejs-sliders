@@ -6,6 +6,8 @@ export * from './presence';
 export * from './pull-assets';
 export * from './server-message';
 export * from './server.types';
+export * from './story-diff';
+export * from './story-merge';
 export * from './sync-queue';
 export * from './sync-record';
 export * from './use-server-sync';

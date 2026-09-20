@@ -15,6 +15,7 @@ import {settle, storyWithText} from '../test-fixtures';
 import type {Story} from '../../../stories';
 
 let putStory: jest.Mock;
+let patchStory: jest.Mock;
 let client: ServerClient;
 let queue: SyncQueue;
 let rev = 0;
@@ -35,9 +36,25 @@ beforeEach(() => {
 		rev: ++rev,
 		updatedAt: '2026-08-21T10:12:00.000Z'
 	}));
-	client = {putStory} as unknown as ServerClient;
+	// Both verbs, because the queue picks between them: the first push of a story has
+	// no base to diff against and goes as a whole PUT, and every push after it is a
+	// PATCH of the passages that moved. Which one carried a given edit is not what this
+	// file is about — it is about timing, preconditions and parking — so the tests below
+	// count writes rather than PUTs.
+	patchStory = jest.fn(async (id: string) => ({
+		bytes: 20,
+		id,
+		rev: ++rev,
+		updatedAt: '2026-08-21T10:12:00.000Z'
+	}));
+	client = {patchStory, putStory} as unknown as ServerClient;
 	queue = new SyncQueue({client});
 });
+
+/** How many writes of any kind went out. */
+function writeCount(): number {
+	return putStory.mock.calls.length + patchStory.mock.calls.length;
+}
 
 afterEach(() => {
 	queue.dispose();
@@ -59,16 +76,20 @@ describe('debouncing', () => {
 		expect(putStory.mock.calls[0][0].passages[0].text).toBe('text 4');
 	});
 
-	it('sends no If-Match on the first push, and the known rev after', async () => {
+	it('states no precondition on the first push, and the known rev after', async () => {
 		queue.push(storyWithText('s1', 'one'));
 		await tick(DEFAULT_DEBOUNCE_MS);
 
+		// A PUT states the whole story, so it may state no rev — that is how a story
+		// gets created.
 		expect(putStory.mock.calls[0][1]).toBeUndefined();
 
 		queue.push(storyWithText('s1', 'two'));
 		await tick(DEFAULT_DEBOUNCE_MS);
 
-		expect(putStory.mock.calls[1][1]).toBe(1);
+		// A PATCH is only meaningful against the base it was computed from, so it always
+		// states one. `patchStory(id, patch, ifMatch)`.
+		expect(patchStory.mock.calls[0][2]).toBe(1);
 	});
 
 	it('fires on the max wait during continuous typing', async () => {
@@ -222,12 +243,12 @@ describe('parking', () => {
 		// s1 stops trying until someone resolves it...
 		queue.push(storyWithText('s1', 'mine again'));
 		await tick(DEFAULT_MAX_WAIT_MS);
-		expect(putStory).toHaveBeenCalledTimes(2);
+		expect(writeCount()).toBe(2);
 
 		// ...while s2 goes on as if nothing happened.
 		queue.push(storyWithText('s2', 'other again'));
 		await tick(DEFAULT_DEBOUNCE_MS);
-		expect(putStory).toHaveBeenCalledTimes(3);
+		expect(writeCount()).toBe(3);
 		expect(syncRecord('s2')?.state).toBe('idle');
 	});
 

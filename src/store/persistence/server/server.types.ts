@@ -115,6 +115,40 @@ export interface StoryPatch {
 	story?: Partial<Omit<Story, 'passages'>>;
 }
 
+/**
+ * What the server is holding for one story, small enough to keep beside a `SyncRecord`.
+ *
+ * A patch is only meaningful against the base it was computed from, so this browser has
+ * to remember what it last agreed with the server about. Keeping the last-pushed BODY
+ * would mean a second copy of every story in `localStorage`; a hash per passage is ~60
+ * bytes a passage and answers the only question a diff asks. It also survives a reload,
+ * which an in-memory copy would not — and the reload case is exactly the one the
+ * `keepalive` size cap bites in.
+ *
+ * Passages are hashed WHOLE — every property, not the `hashedPassageProps` subset
+ * `storyHash` uses. The two answer different questions: `storyHash` asks "did the author
+ * change anything worth pushing", this asks "are the bytes the server holds for this
+ * passage the bytes I have". A patch sends whole passage objects, so the base has to
+ * describe whole passage objects or the two drift apart one `selected` flag at a time.
+ *
+ * Built and read in `story-diff.ts`.
+ */
+export interface StorySnapshot {
+	/**
+	 * `storyHash` of the story this describes.
+	 *
+	 * A snapshot is usable only while this equals the record's `pushedHash`, so every
+	 * path that writes a `pushedHash` WITHOUT a snapshot — a pull, a checkout, a publish
+	 * — invalidates it for free. The cost of that is one whole PUT, which mints a fresh
+	 * one; the benefit is that no other file had to learn snapshots exist.
+	 */
+	hash: string;
+	/** Passage id -> hash of the whole passage. */
+	passages: Record<string, string>;
+	/** Top-level key -> hash of its value. `passages` is never in here. */
+	story: Record<string, string>;
+}
+
 export interface PatchStoryRequest {
 	client: string;
 	patch: StoryPatch;
@@ -223,6 +257,13 @@ export interface SyncRecord {
 	 * undo stack, so retrying one that cannot land destroys undo history on a timer.
 	 */
 	pullBlockedRev?: number;
+	/**
+	 * What the server holds at `rev`, so the next push can be a PATCH of the difference
+	 * rather than the whole story.
+	 *
+	 * Usable only while `snapshot.hash === pushedHash`. See `StorySnapshot`.
+	 */
+	snapshot?: StorySnapshot;
 }
 
 export function newSyncRecord(storyId: string): SyncRecord {

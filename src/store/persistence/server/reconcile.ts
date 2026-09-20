@@ -34,6 +34,8 @@
 import {NOT_MODIFIED, type FetchedStory, type ServerClient} from './client';
 import {logSync} from './sync-log';
 import {storyHash, type SyncRecordStore} from './sync-record';
+import {usableSnapshot} from './story-diff';
+import {mergeStories} from './story-merge';
 import type {Story} from '../../stories';
 
 // ---------------------------------------------------------------------------
@@ -110,6 +112,28 @@ export interface VerifyConflictOptions {
 	records: SyncRecordStore;
 	/** `storyHash(local)`, when the caller already computed it. */
 	hash?: string;
+	/**
+	 * Try a per-passage merge before parking. OFF by default, and deliberately: the
+	 * merged story has to reach the local store, and a caller that cannot land it would
+	 * push a copy this browser never shows. See `SyncQueueOptions.onMerged`.
+	 */
+	merge?: boolean;
+}
+
+/**
+ * What a suspected conflict turned out to be.
+ *
+ * `resolved` — the two copies say the same thing, and the record has been repaired.
+ * `merged` — they differ but in different passages; `story` is theirs plus mine, based
+ *   on `rev`. NOTHING HAS BEEN WRITTEN: the caller owns pushing it and landing it, in
+ *   that order, because only the caller knows whether the store took it.
+ * `conflict` — they genuinely differ, or we could not find out. `reason` says which.
+ */
+export interface ConflictOutcome {
+	verdict: 'resolved' | 'merged' | 'conflict';
+	story?: Story;
+	rev?: number;
+	reason?: string;
 }
 
 /**
@@ -124,9 +148,9 @@ export interface VerifyConflictOptions {
  * of agreement, and swallowing a real conflict because the wifi died would lose an
  * author's work — the one thing no sync path here is allowed to do.
  */
-export async function verifyConflict(
+export async function examineConflict(
 	options: VerifyConflictOptions
-): Promise<ConflictVerdict> {
+): Promise<ConflictOutcome> {
 	const {client, local, records} = options;
 	const storyId = local.id;
 	const mine = options.hash ?? storyHash(local);
@@ -144,7 +168,7 @@ export async function verifyConflict(
 				reason: 'not-modified'
 			}));
 
-			return 'conflict';
+			return {reason: 'not-modified', verdict: 'conflict'};
 		}
 
 		current = fetched;
@@ -158,18 +182,42 @@ export async function verifyConflict(
 			rev: records.get(storyId).rev
 		}));
 
-		return 'conflict';
+		return {reason: 'unverified', verdict: 'conflict'};
 	}
 
 	if (theirs !== mine) {
+		// The two copies really do differ. Before calling that a conflict, ask whether
+		// they differ in the SAME passages: two people working on one story normally
+		// each have their own rooms open, and `If-Match` is on the story rev, so today
+		// that reads as a conflict every few minutes.
+		const merge = options.merge
+			? mergeStories({
+					base: usableSnapshot(
+						records.get(storyId).snapshot,
+						records.get(storyId).pushedHash
+					),
+					mine: local,
+					theirs: current.story
+			  })
+			: {merged: false as const, reason: 'merging not offered'};
+
+		if (merge.merged) {
+			logSync('reconcile', 'conflict: mergeable', storyId, () => ({
+				rev: current.rev
+			}));
+
+			return {rev: current.rev, story: merge.story, verdict: 'merged'};
+		}
+
 		logSync('reconcile', 'conflict: confirmed', storyId, () => ({
 			mine,
+			reason: merge.reason,
 			rev: records.get(storyId).rev,
 			serverRev: current.rev,
 			theirs
 		}));
 
-		return 'conflict';
+		return {reason: merge.reason, verdict: 'conflict'};
 	}
 
 	// Deliberately NOT keyed on the server's `lastClient` being us. `backendClientId` is
@@ -188,7 +236,22 @@ export async function verifyConflict(
 		rev: current.rev
 	}));
 
-	return 'resolved';
+	return {verdict: 'resolved'};
+}
+
+/**
+ * The yes/no form, for callers with no way to land a merged story.
+ *
+ * Kept as the narrow answer rather than folded into `examineConflict`'s three, so a
+ * caller that cannot merge cannot accidentally be handed one: `merge` is not passed
+ * through, so a `merged` verdict is not reachable from here.
+ */
+export async function verifyConflict(
+	options: VerifyConflictOptions
+): Promise<ConflictVerdict> {
+	const {verdict} = await examineConflict({...options, merge: false});
+
+	return verdict === 'resolved' ? 'resolved' : 'conflict';
 }
 
 export interface ReconcileVerifiedInput {
@@ -198,6 +261,21 @@ export interface ReconcileVerifiedInput {
 	records: SyncRecordStore;
 	/** The index row or socket message, or absent when the server has no such story. */
 	server: {rev: number; deleted: boolean} | undefined;
+}
+
+/**
+ * `reconcileMerging`'s answer.
+ *
+ * `action` widens `ReconcileAction` with `merge` rather than adding a member to it:
+ * `ReconcileAction` is switched on in the hook, and a new member there would be a
+ * compile error in a file this change deliberately does not touch.
+ */
+export interface ReconcileOutcome {
+	action: ReconcileAction | 'merge';
+	/** Only when `action` is `merge`: theirs plus mine, to land and then push. */
+	story?: Story;
+	/** Only when `action` is `merge`: the server rev it is based on. */
+	rev?: number;
 }
 
 /**
@@ -233,4 +311,52 @@ export async function reconcileVerified(
 	const verdict = await verifyConflict({client, hash, local, records});
 
 	return verdict === 'resolved' ? 'none' : 'conflict';
+}
+
+/**
+ * The table, with a suspected conflict checked AND, where it can be, merged.
+ *
+ * The merging sibling of `reconcileVerified`, for the poll and socket path. It is
+ * separate rather than a flag because the two have different obligations: a caller of
+ * this one must be able to land `story` in the local store and push it, in that order,
+ * and a caller that cannot must keep using `reconcileVerified`. See the wiring note in
+ * `SyncQueueOptions.onMerged`.
+ *
+ * Nothing is written here. `merge` is a proposal.
+ */
+export async function reconcileMerging(
+	input: ReconcileVerifiedInput
+): Promise<ReconcileOutcome> {
+	const {client, local, records, server} = input;
+	const record = records.get(local.id);
+	const hash = storyHash(local);
+	const decision = reconcileDecision({
+		local: {
+			dirty: hash !== record.pushedHash,
+			rev: record.rev,
+			sync: local.sync === true
+		},
+		server
+	});
+
+	if (decision !== 'conflict') {
+		return {action: decision};
+	}
+
+	const outcome = await examineConflict({
+		client,
+		hash,
+		local,
+		merge: true,
+		records
+	});
+
+	switch (outcome.verdict) {
+		case 'resolved':
+			return {action: 'none'};
+		case 'merged':
+			return {action: 'merge', rev: outcome.rev, story: outcome.story};
+		default:
+			return {action: 'conflict'};
+	}
 }

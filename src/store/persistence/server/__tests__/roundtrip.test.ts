@@ -10,7 +10,7 @@
  * with itself here the same way it does in the wild.
  */
 
-import type {ServerClient} from '../client';
+import {ServerError, type ServerClient} from '../client';
 import {fakeServer, type FakeServer} from '../fake-server';
 import {reconcileVerified, verifyConflict} from '../reconcile';
 import {
@@ -21,8 +21,9 @@ import {
 } from '../sync-record';
 import {clearSyncLog, setSyncLogEnabled, syncLogNotes} from '../sync-log';
 import {SyncQueue} from '../sync-queue';
-import {settle, storyWithText, testStory} from '../test-fixtures';
-import type {Story} from '../../../stories';
+import {snapshotStory} from '../story-diff';
+import {settle, storyWithText, testPassage, testStory} from '../test-fixtures';
+import type {Passage, Story} from '../../../stories';
 
 let server: FakeServer;
 
@@ -38,13 +39,48 @@ afterEach(() => {
 	setSyncLogEnabled(false);
 });
 
-/** One simulated browser: its own client identity and its own side table. */
-function browser(name: string) {
+/**
+ * One simulated browser: its own client identity and its own side table.
+ *
+ * `merges` wires `onMerged` to a stand-in for the local store, which is what the hook
+ * does with `applyPulledStory`. Off by default, because it is off by default in the app:
+ * a queue that cannot land a merge must not push one.
+ */
+function browser(name: string, options: {merges?: boolean} = {}) {
 	const records: SyncRecordStore = memorySyncRecordStore();
 	const client = server.client({id: name, name});
-	const queue = new SyncQueue({client, debounceMs: 0, records});
+	/** What this browser's store holds after a merge landed in it. */
+	const landed: Story[] = [];
+	const queue = new SyncQueue({
+		client,
+		debounceMs: 0,
+		records,
+		...(options.merges
+			? {
+					onMerged: (story: Story) => {
+						landed.push(story);
 
-	return {client, queue, records};
+						return true;
+					}
+			  }
+			: {})
+	});
+
+	return {client, landed, queue, records};
+}
+
+/** A story of several named rooms, so a patch has something to leave alone. */
+function rooms(id: string, texts: Record<string, string>): Story {
+	const passages: Passage[] = Object.entries(texts).map(([key, text]) =>
+		testPassage(id, {id: key, name: key.toUpperCase(), text})
+	);
+
+	return testStory({id, passages});
+}
+
+/** Passages of a story as `id: text` — what "did anybody get dropped" means. */
+function textOf(story: Story): Record<string, string> {
+	return Object.fromEntries(story.passages.map(p => [p.id, p.text]));
 }
 
 /**
@@ -539,5 +575,461 @@ describe('the rev only goes up', () => {
 		a.records.update('s1', {rev: 0, state: 'pushing'});
 
 		expect(a.records.get('s1').rev).toBe(0);
+	});
+});
+
+describe('uploading only what changed', () => {
+	/**
+	 * `keepalive` caps a request body at 64 KB, and a PUT of an 89 KB story measured
+	 * 90,550 B — so the save fired on tab-hide silently did not happen at all. The same
+	 * edit as a patch was 1,219 B. That is what this section is about; the size
+	 * assertion below is the actual claim.
+	 */
+	it('sends the whole story the first time, having no base to diff against', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		expect(server.calls.map(c => c.method)).toEqual(['putStory']);
+		expect(a.records.get('s1').snapshot?.hash).toBe(
+			storyHash(rooms('s1', {p1: 'one', p2: 'two'}))
+		);
+	});
+
+	it('sends one passage the second time', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+		await push(a, rooms('s1', {p1: 'one', p2: 'REWRITTEN'}));
+
+		expect(server.calls.map(c => c.method)).toEqual([
+			'putStory',
+			'patchStory'
+		]);
+		expect(server.patches).toHaveLength(1);
+		expect(server.patches[0].patch.passages?.changed?.map(p => p.id)).toEqual([
+			'p2'
+		]);
+		expect(server.patches[0].patch.passages?.removed).toBeUndefined();
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'one',
+			p2: 'REWRITTEN'
+		});
+	});
+
+	it('is a fraction of the PUT it replaces', async () => {
+		const a = browser('a');
+		const big = (text: string) =>
+			rooms('s1', {
+				p1: 'x'.repeat(30000),
+				p2: 'y'.repeat(30000),
+				p3: 'z'.repeat(30000),
+				p4: text
+			});
+
+		await push(a, big('four'));
+		await push(a, big('four, edited'));
+
+		const whole = JSON.stringify(server.stored('s1')).length;
+
+		expect(whole).toBeGreaterThan(64 * 1024);
+		expect(server.patches[0].bytes).toBeLessThan(64 * 1024);
+		expect(server.patches[0].bytes).toBeLessThan(whole / 20);
+	});
+
+	it('carries a deletion, and the server keeps the rest', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two', p3: 'three'}));
+		await push(a, rooms('s1', {p1: 'one', p3: 'three'}));
+
+		expect(server.patches[0].patch.passages?.removed).toEqual(['p2']);
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'one',
+			p3: 'three'
+		});
+	});
+
+	it('keeps the rev in step, so the next patch has a base', async () => {
+		const a = browser('a');
+
+		for (const text of ['one', 'two', 'three', 'four']) {
+			await push(a, rooms('s1', {p1: text, p2: 'steady'}));
+		}
+
+		expect(server.revOf('s1')).toBe(4);
+		expect(a.records.get('s1').rev).toBe(4);
+		expect(await decisionFor(a, rooms('s1', {p1: 'four', p2: 'steady'}))).toBe(
+			'none'
+		);
+	});
+
+	/**
+	 * A snapshot is usable only while it describes what the record says was pushed. A
+	 * pull, a checkout and a publish all write `pushedHash` and know nothing about
+	 * snapshots — so they invalidate the base for free, and the cost is one whole PUT
+	 * that mints a fresh one.
+	 */
+	it('falls back to a whole PUT when something else wrote the record', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		// What a pull leaves behind: a new hash, no snapshot.
+		const pulled = rooms('s1', {p1: 'pulled', p2: 'two'});
+
+		a.records.update('s1', {pushedHash: storyHash(pulled)});
+
+		await push(a, rooms('s1', {p1: 'pulled', p2: 'EDITED'}));
+
+		expect(server.calls.map(c => c.method)).toEqual(['putStory', 'putStory']);
+		expect(a.records.get('s1').snapshot?.hash).toBe(
+			storyHash(rooms('s1', {p1: 'pulled', p2: 'EDITED'}))
+		);
+	});
+
+	it('does not patch when the queue was told not to', async () => {
+		const records: SyncRecordStore = memorySyncRecordStore();
+		const client = server.client({id: 'a', name: 'a'});
+		const queue = new SyncQueue({client, debounceMs: 0, patch: false, records});
+
+		for (const text of ['one', 'two']) {
+			const story = rooms('s1', {p1: text, p2: 'steady'});
+
+			queue.push(story);
+			await queue.flush('s1');
+			await settle();
+		}
+
+		expect(server.calls.map(c => c.method)).toEqual(['putStory', 'putStory']);
+	});
+});
+
+describe('a server that does not do PATCH', () => {
+	/** An older build answers 405; a proxy or a refused CORS preflight looks the same. */
+	function noPatch(client: ServerClient): ServerClient {
+		return {
+			...client,
+			patchStory: () =>
+				Promise.reject(
+					new ServerError('method not allowed', {
+						code: 'bad_request',
+						status: 405
+					})
+				)
+		};
+	}
+
+	it('falls back to a PUT and the edit still lands', async () => {
+		const a = browser('a');
+		const queue = new SyncQueue({
+			client: noPatch(a.client),
+			debounceMs: 0,
+			records: a.records
+		});
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		queue.push(rooms('s1', {p1: 'one', p2: 'REWRITTEN'}));
+		await queue.flush('s1');
+		await settle();
+
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'one',
+			p2: 'REWRITTEN'
+		});
+		expect(a.records.get('s1')).toMatchObject({rev: 2, state: 'idle'});
+		expect(syncLogNotes({event: 'push'})).toContain(
+			'patch refused, put instead'
+		);
+	});
+
+	it('stops trying for the rest of the session', async () => {
+		const a = browser('a');
+		const client = noPatch(a.client);
+		const queue = new SyncQueue({client, debounceMs: 0, records: a.records});
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		for (const text of ['two', 'three', 'four']) {
+			queue.push(rooms('s1', {p1: 'one', p2: text}));
+			await queue.flush('s1');
+			await settle();
+		}
+
+		// One refused patch, then it never asks again.
+		expect(server.calls.filter(c => c.method === 'patchStory')).toHaveLength(0);
+		expect(
+			syncLogNotes({event: 'push'}).filter(
+				note => note === 'patch refused, put instead'
+			)
+		).toHaveLength(1);
+	});
+
+	/**
+	 * A 412 is an answer ABOUT THE STORY — the server understood the request perfectly.
+	 * Retrying it as a PUT spends a second request to be told the same thing, and does
+	 * it with a body that would OVERWRITE if the rev were somehow accepted.
+	 */
+	it('does not retry a refused precondition as a whole PUT', async () => {
+		const b = browser('b');
+		const a = browser('a');
+		const base = rooms('s1', {p1: 'one', p2: 'two'});
+
+		await push(b, base);
+		a.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'A WAS HERE', p2: 'two'}));
+
+		const before = server.calls.length;
+
+		await push(b, rooms('s1', {p1: 'B WAS HERE TOO', p2: 'two'}));
+
+		// The refused PATCH, and the GET that checks whether the 412 was real. No PUT.
+		expect(server.calls.slice(before).map(c => c.method)).toEqual([
+			'patchStory',
+			'getStory'
+		]);
+		expect(b.records.get('s1').state).toBe('conflict');
+	});
+
+	/**
+	 * A dead connection fails the patch AND the PUT, so it says nothing about the
+	 * method. Switching PATCH off on a blip would throw away the size win exactly when
+	 * the network is bad, which is when it matters.
+	 */
+	it('keeps patching after a network failure that also killed the PUT', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		server.failNext(2);
+		a.queue.push(rooms('s1', {p1: 'one', p2: 'REWRITTEN'}));
+		await a.queue.flush('s1');
+		await settle();
+
+		expect(a.records.get('s1').rev).toBe(1);
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'REWRITTEN'}));
+
+		expect(server.calls.filter(c => c.method === 'patchStory')).toHaveLength(2);
+		expect(server.revOf('s1')).toBe(2);
+	});
+});
+
+describe('two people, different passages', () => {
+	/**
+	 * THE NORMAL CASE FOR TWO PEOPLE ON ONE STORY, and until now it parked one of them.
+	 *
+	 * `If-Match` is on the STORY rev even though uploads are per-passage, so B's push
+	 * gets a 412 the moment A saves anything at all. B then sat in `conflict` — a dialog
+	 * every few minutes for a disagreement that does not exist.
+	 */
+	async function twoEditors() {
+		const b = browser('b', {merges: true});
+		const a = browser('a');
+		const base = rooms('s1', {p1: 'one', p2: 'two'});
+
+		// B made the story, so B has a base to diff against.
+		await push(b, base);
+
+		// A holds the same rev and edits the FIRST room.
+		a.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'A WAS HERE', p2: 'two'}));
+
+		return {a, b, base};
+	}
+
+	it('lands both edits and parks nobody', async () => {
+		const {b} = await twoEditors();
+
+		// B edits the SECOND room, still thinking the story is at rev 1.
+		await push(b, rooms('s1', {p1: 'one', p2: 'B WAS HERE'}));
+
+		expect(b.records.get('s1').state).toBe('idle');
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'B WAS HERE'
+		});
+	});
+
+	it('puts the merged story into B\u2019s own store, not just on the server', async () => {
+		const {b} = await twoEditors();
+
+		await push(b, rooms('s1', {p1: 'one', p2: 'B WAS HERE'}));
+
+		expect(b.landed).toHaveLength(1);
+		expect(textOf(b.landed[0])).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'B WAS HERE'
+		});
+	});
+
+	it('leaves B in step, so the next edit is an ordinary patch', async () => {
+		const {b} = await twoEditors();
+
+		await push(b, rooms('s1', {p1: 'one', p2: 'B WAS HERE'}));
+
+		const merged = b.landed[0];
+
+		expect(b.records.get('s1')).toMatchObject({
+			pushedHash: storyHash(merged),
+			rev: server.revOf('s1'),
+			state: 'idle'
+		});
+
+		await push(b, {
+			...merged,
+			passages: merged.passages.map(p =>
+				p.id === 'p2' ? {...p, text: 'B AGAIN'} : p
+			)
+		});
+
+		expect(server.patches.at(-1)?.patch.passages?.changed?.map(p => p.id)).toEqual(
+			['p2']
+		);
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'B AGAIN'
+		});
+	});
+
+	it('keeps a passage each of them added', async () => {
+		const b = browser('b', {merges: true});
+		const a = browser('a');
+		const base = rooms('s1', {p1: 'one'});
+
+		await push(b, base);
+		a.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'one', p3: 'A added this'}));
+		await push(b, rooms('s1', {p1: 'one', p2: 'B added this'}));
+
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'one',
+			p2: 'B added this',
+			p3: 'A added this'
+		});
+		expect(b.records.get('s1').state).toBe('idle');
+	});
+
+	/**
+	 * THE REGRESSION THAT MATTERS, in the direction that loses work. Merging must never
+	 * talk a real conflict away: both of them typed in p1, and only they can settle it.
+	 */
+	it('still parks when they really did edit the same passage', async () => {
+		const {b} = await twoEditors();
+
+		await push(b, rooms('s1', {p1: 'B WAS HERE TOO', p2: 'two'}));
+
+		expect(b.records.get('s1')).toMatchObject({
+			conflictRev: 2,
+			state: 'conflict'
+		});
+		expect(b.landed).toHaveLength(0);
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'two'
+		});
+	});
+
+	/**
+	 * A queue with nowhere to put the result must not push one. Pushing a merge this
+	 * browser cannot show would leave the author looking at a story missing the other
+	 * person's room under a green badge — the failure this directory keeps re-learning.
+	 */
+	it('does not merge at all when nothing can land the result', async () => {
+		const b = browser('b');
+		const a = browser('a');
+		const base = rooms('s1', {p1: 'one', p2: 'two'});
+
+		await push(b, base);
+		a.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'A WAS HERE', p2: 'two'}));
+
+		await push(b, rooms('s1', {p1: 'one', p2: 'B WAS HERE'}));
+
+		expect(b.records.get('s1').state).toBe('conflict');
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'two'
+		});
+	});
+
+	/**
+	 * Without a base there is no way to tell "I added this room" from "they deleted it",
+	 * and the two want opposite answers. So: park, exactly as before merging existed.
+	 */
+	it('does not merge without a base to merge against', async () => {
+		const b = browser('b', {merges: true});
+		const a = browser('a');
+		const base = rooms('s1', {p1: 'one', p2: 'two'});
+
+		await push(a, base);
+		// B knows the rev but has no snapshot — a checkout, or a fresh browser.
+		b.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'A WAS HERE', p2: 'two'}));
+
+		await push(b, rooms('s1', {p1: 'one', p2: 'B WAS HERE'}));
+
+		expect(b.records.get('s1').state).toBe('conflict');
+		expect(b.landed).toHaveLength(0);
+	});
+
+	/**
+	 * The server is written FIRST, so it holds both sides' work whatever happens next.
+	 * When the store then refuses the result this browser is merely BEHIND — old rev,
+	 * old hash, parked — and Take Theirs hands the author the merged copy. Recording the
+	 * new rev on faith is the `applyPull` bug with extra steps: the next patch would diff
+	 * against a base the store never reached and remove the other person's passage.
+	 */
+	it('parks, holding nothing back from the server, when the store refuses the merge', async () => {
+		const b = browser('b');
+		const a = browser('a');
+		const base = rooms('s1', {p1: 'one', p2: 'two'});
+		const queue = new SyncQueue({
+			client: b.client,
+			debounceMs: 0,
+			onMerged: () => false,
+			records: b.records
+		});
+
+		await push(b, base);
+		a.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'A WAS HERE', p2: 'two'}));
+
+		queue.push(rooms('s1', {p1: 'one', p2: 'B WAS HERE'}));
+		await queue.flush('s1');
+		await settle();
+
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'B WAS HERE'
+		});
+		expect(b.records.get('s1')).toMatchObject({rev: 1, state: 'conflict'});
+		expect(syncLogNotes({event: 'push'})).toContain(
+			'merge: pushed but did not land'
+		);
+	});
+});
+
+describe('the base a patch is computed from', () => {
+	it('describes the story that was pushed, not the one being edited', async () => {
+		const a = browser('a');
+		const first = rooms('s1', {p1: 'one', p2: 'two'});
+
+		await push(a, first);
+
+		expect(snapshotStory(first)).toEqual(a.records.get('s1').snapshot);
+	});
+
+	it('moves on with every push', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		const second = rooms('s1', {p1: 'one', p2: 'REWRITTEN'});
+
+		await push(a, second);
+
+		expect(a.records.get('s1').snapshot).toEqual(snapshotStory(second));
 	});
 });

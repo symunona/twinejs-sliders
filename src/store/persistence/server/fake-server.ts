@@ -28,6 +28,8 @@
  *   - `If-None-Match` on a current rev is a 304.
  *   - DELETE tombstones WITHOUT bumping the rev, so an old client can still republish —
  *     the one rule most likely to be "simplified" away by a mock.
+ *   - PATCH requires `If-Match` where PUT does not, and goes through the same write
+ *     path — same rev bump, same notification — as `Store.PatchStory` does in Go.
  *   - The asset manifest has its own rev, independent of the story's.
  *   - Writes are announced to a notifier the way the HTTP handlers call `api.Notifier`,
  *     with the writer's own id, so a test can reproduce echo suppression.
@@ -42,16 +44,19 @@
 import {ServerError, NOT_MODIFIED, type ServerClient} from './client';
 import type {AssetManifestBody, FetchedStory} from './client';
 import type {Story} from '../../stories';
+import {applyPassageDiff} from './story-diff';
 import type {
 	AssetDiffResponse,
 	AssetManifest,
 	HealthResponse,
+	PatchStoryResponse,
 	PingResponse,
 	PutStoryResponse,
 	RestoreResponse,
 	RevisionsResponse,
 	ServerMessage,
-	StoryIndexEntry
+	StoryIndexEntry,
+	StoryPatch
 } from './server.types';
 
 /** Who made a write. `api.Origin` in Go. */
@@ -114,6 +119,13 @@ export interface FakeServer {
 	deleted(id: string): boolean;
 	/** Every request any client has made, in order. For asserting what was NOT sent. */
 	readonly calls: {method: string; id?: string; by: string}[];
+	/**
+	 * Every patch body that landed, in order, with the bytes it took on the wire.
+	 *
+	 * The size is the whole reason the route exists, so a test can assert it rather than
+	 * assert that a PATCH merely happened.
+	 */
+	readonly patches: {id: string; by: string; patch: StoryPatch; bytes: number}[];
 	/** Make the next `count` requests fail as a network error. */
 	failNext(count: number, error?: ServerError): void;
 	/** Drop everything. */
@@ -124,6 +136,12 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 	const now = options.now ?? (() => DEFAULT_NOW);
 	let stories = new Map<string, StoredStory>();
 	const calls: {method: string; id?: string; by: string}[] = [];
+	const patches: {
+		id: string;
+		by: string;
+		patch: StoryPatch;
+		bytes: number;
+	}[] = [];
 	let failures = 0;
 	let failureError: ServerError | undefined;
 
@@ -308,6 +326,56 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 				return write(story, ifMatch, by, false);
 			},
 
+			async patchStory(
+				id: string,
+				patch: StoryPatch,
+				ifMatch: number
+			): Promise<PatchStoryResponse> {
+				record('patchStory', id);
+				maybeFail();
+
+				const entry = require(id);
+
+				// If-Match is required here and optional on PUT. A patch against an
+				// unknown base would silently resurrect whatever the other editor just
+				// removed, so there is no "no precondition" branch to write.
+				if (ifMatch !== entry.rev) {
+					throw new ServerError('rev mismatch', {
+						code: 'conflict',
+						lastClient: entry.lastClient,
+						rev: entry.rev,
+						status: 412,
+						updatedAt: entry.updatedAt
+					});
+				}
+
+				// The patch is JSON on the wire like any other body, so a `Date` reaches
+				// the server as a string. Cloning first is what stops a test passing on
+				// an object the real server could never receive.
+				const body = JSON.stringify(patch);
+				const wire = JSON.parse(body) as StoryPatch;
+
+				if ((wire.story as Record<string, unknown> | undefined)?.passages) {
+					throw new ServerError(
+						'patch.story may not carry `passages` — use patch.passages',
+						{code: 'bad_request', status: 400}
+					);
+				}
+
+				for (const passage of wire.passages?.changed ?? []) {
+					if (!passage.id) {
+						throw new ServerError(
+							'every patch.passages.changed entry needs a non-empty `id`',
+							{code: 'bad_request', status: 400}
+						);
+					}
+				}
+
+				patches.push({bytes: body.length, by: by.id, id, patch: wire});
+
+				return write(applyPassageDiff(entry.body, wire), ifMatch, by, false);
+			},
+
 			async reviveStory(story: Story): Promise<PutStoryResponse> {
 				record('reviveStory', story.id);
 				maybeFail();
@@ -472,9 +540,11 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 			failures = count;
 			failureError = error;
 		},
+		patches,
 		reset() {
 			stories = new Map();
 			calls.length = 0;
+			patches.length = 0;
 			failures = 0;
 			failureError = undefined;
 		},

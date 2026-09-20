@@ -11,7 +11,7 @@
 
 import type {Story} from '../../stories';
 import {isServerError, type ServerClient} from './client';
-import {verifyConflict} from './reconcile';
+import {examineConflict} from './reconcile';
 import {logSync} from './sync-log';
 import {
 	localSyncRecordStore,
@@ -19,12 +19,22 @@ import {
 	type SyncRecordStore,
 	type SyncRecords
 } from './sync-record';
-import type {SyncRecord} from './server.types';
+import type {PutStoryResponse, StoryPatch, SyncRecord} from './server.types';
+import {diffFromSnapshot, snapshotStory, usableSnapshot} from './story-diff';
 
 /** Spec 11: debounce 5 s, max wait 30 s, backoff 5 → 15 → 60. */
 export const DEFAULT_DEBOUNCE_MS = 5000;
 export const DEFAULT_MAX_WAIT_MS = 30000;
 export const DEFAULT_BACKOFF_MS = [5000, 15000, 60000];
+
+/**
+ * How many times a merge may be thrown away because the author typed during it.
+ *
+ * Each attempt is one GET and one refused push, and the text is never at risk — past the
+ * cap the story parks in `conflict`, which is exactly what happened before merging
+ * existed.
+ */
+export const MAX_MERGE_ATTEMPTS = 3;
 
 /** E2E sets this to 50 so the suite does not sit through a five second debounce. */
 export const DEBOUNCE_PREF_KEY = 'sliders.sync.debounceMs';
@@ -42,6 +52,28 @@ export interface SyncQueueOptions {
 	 */
 	onPushed?: (story: Story) => void;
 	/**
+	 * Land a merged story in the local store, and say whether it actually landed.
+	 *
+	 * Two people editing DIFFERENT passages of one story conflict today, because
+	 * `If-Match` is on the story rev. `story-merge.ts` can resolve that without asking
+	 * anybody — but the result has to reach this browser's store, and only the hook can
+	 * dispatch. So the merge is OFF unless a caller supplies this: a queue that could
+	 * push a merge it cannot land would leave the author looking at a story missing the
+	 * other person's passage under a green "synced" badge, which is the failure this
+	 * whole directory keeps re-learning.
+	 *
+	 * MUST return `true` only when the store really took the update. `applyPulledStory`
+	 * answers that question properly, by running the real reducer as a dry run; a `true`
+	 * returned on faith is how a passage gets dropped.
+	 */
+	onMerged?: (story: Story, rev: number) => boolean;
+	/**
+	 * Send changed passages instead of the whole story. On by default; tests turn it off
+	 * to exercise the PUT path. A server that answers a PATCH with anything other than a
+	 * conflict turns it off for the session by itself — see `patchMayBeUnsupported`.
+	 */
+	patch?: boolean;
+	/**
 	 * Where the side table lives. Defaults to the app's `localStorage` one.
 	 *
 	 * Injected so a test can give each simulated client its own bookkeeping: the module
@@ -58,6 +90,8 @@ interface Pending {
 	retryTimer?: ReturnType<typeof setTimeout>;
 	/** How many pushes have already failed with something retryable. */
 	attempt: number;
+	/** How many merges were thrown away because the author typed mid-round-trip. */
+	mergeAttempts?: number;
 	inFlight?: Promise<void>;
 }
 
@@ -83,10 +117,13 @@ export class SyncQueue {
 	private readonly listeners = new Set<(records: SyncRecords) => void>();
 	private readonly store: SyncRecordStore;
 	private disposed = false;
+	/** Cleared for the session the first time a PUT works where a PATCH did not. */
+	private patchEnabled: boolean;
 
 	constructor(options: SyncQueueOptions) {
 		this.options = options;
 		this.store = options.records ?? localSyncRecordStore();
+		this.patchEnabled = options.patch !== false;
 	}
 
 	/** Current side table. Same object the module-level readers see. */
@@ -248,13 +285,10 @@ export class SyncQueue {
 
 		this.write(storyId, {state: 'pushing'});
 
+		const patch = this.patchFor(record, story);
 		const run = async () => {
 			try {
-				const result = await this.options.client.putStory(
-					story,
-					record.rev || undefined,
-					{keepalive: options.keepalive}
-				);
+				const result = await this.send(story, record, patch, options);
 
 				// An edit that arrived mid-flight left its own debounce timer on this
 				// entry. Dropping the entry would drop that timer with it, and the
@@ -265,11 +299,17 @@ export class SyncQueue {
 					this.pending.delete(storyId);
 				}
 
-				logSync('push', 'landed', storyId, () => ({
+				logSync('push', patch ? 'landed: patch' : 'landed', storyId, () => ({
 					keepalive: options.keepalive === true,
 					sentIfMatch: record.rev || undefined,
 					rev: result.rev,
-					superseded
+					superseded,
+					...(patch
+						? {
+								changed: patch.passages?.changed?.length ?? 0,
+								removed: patch.passages?.removed?.length ?? 0
+						  }
+						: {})
 				}));
 				this.write(storyId, {
 					conflictClient: undefined,
@@ -278,6 +318,12 @@ export class SyncQueue {
 					lastPushedAt: Date.now(),
 					pushedHash: hash,
 					rev: result.rev,
+					// The base the NEXT patch is computed from. Written here and nowhere
+					// else: a path that writes `pushedHash` without one — a pull, a
+					// checkout, a publish — leaves a snapshot whose `hash` no longer
+					// matches, which `usableSnapshot` refuses, which costs one whole PUT
+					// and mints a fresh one. That is the whole invalidation scheme.
+					snapshot: snapshotStory(story),
 					state: superseded ? 'dirty' : 'idle'
 				});
 				this.options.onPushed?.(story);
@@ -290,6 +336,151 @@ export class SyncQueue {
 
 		entry.inFlight = run();
 		await entry.inFlight;
+	}
+
+	/**
+	 * The patch to send instead of the whole story, or `undefined` for a PUT.
+	 *
+	 * Three ways to end up with a PUT, all of them fine: PATCH is switched off, this
+	 * browser has never pushed this story, or the snapshot describes a state the record
+	 * no longer claims. The last one is how a pull, a checkout or a publish invalidates a
+	 * base without knowing snapshots exist.
+	 */
+	private patchFor(record: SyncRecord, story: Story): StoryPatch | undefined {
+		if (!this.patchEnabled || !record.rev) {
+			return undefined;
+		}
+
+		const base = usableSnapshot(record.snapshot, record.pushedHash);
+
+		return base ? diffFromSnapshot(base, story) : undefined;
+	}
+
+	/**
+	 * One write, as a PATCH when there is a base and a PUT otherwise.
+	 *
+	 * A PATCH that fails with anything but a conflict is retried ONCE as a whole PUT. If
+	 * that works where the patch did not, this server — or a proxy, or a CORS preflight
+	 * that refuses the method — does not do PATCH, and the queue stops trying for the
+	 * session. A network outage fails both, so the flag survives a flaky connection:
+	 * only a PUT that SUCCEEDS is evidence about the method rather than about the wire.
+	 *
+	 * A 412 is never retried as a PUT. It is a real precondition failure and a PUT with
+	 * the same stale rev gets the same answer, but louder — it would overwrite if the
+	 * rev were somehow accepted.
+	 */
+	private async send(
+		story: Story,
+		record: SyncRecord,
+		patch: StoryPatch | undefined,
+		options: {keepalive?: boolean}
+	): Promise<PutStoryResponse> {
+		const {client} = this.options;
+
+		if (!patch) {
+			return client.putStory(story, record.rev || undefined, {
+				keepalive: options.keepalive
+			});
+		}
+
+		try {
+			return await client.patchStory(story.id, patch, record.rev, {
+				keepalive: options.keepalive
+			});
+		} catch (error) {
+			if (!patchMayBeUnsupported(error)) {
+				throw error;
+			}
+
+			const result = await client.putStory(story, record.rev || undefined, {
+				keepalive: options.keepalive
+			});
+
+			this.patchEnabled = false;
+			logSync('push', 'patch refused, put instead', story.id, () => ({
+				error: error instanceof Error ? error.message : String(error)
+			}));
+
+			return result;
+		}
+	}
+
+	/**
+	 * Push a merged story and, only if that lands on the server, put it in the store.
+	 *
+	 * A whole PUT on purpose. This is the rare path — a real 412 that turned out to be
+	 * two people in different passages — and a patch here would need a second base (the
+	 * server's copy) threaded out of the conflict check for no saving worth the surface.
+	 *
+	 * ORDER IS THE SAFETY. The server is written FIRST, so after this line the store
+	 * holds both sides' work whatever happens next. If the local landing then fails, this
+	 * browser is merely behind: the record keeps its old rev and hash, the story parks,
+	 * and the author's existing Take Theirs hands them the merged copy. Recording the new
+	 * rev before knowing the store took it is the `applyPull` bug with extra steps — the
+	 * next patch would diff against a base the store never reached and remove the other
+	 * person's passage.
+	 */
+	private async landMerge(
+		storyId: string,
+		entry: Pending,
+		merged: Story,
+		theirRev: number
+	): Promise<void> {
+		let rev: number;
+
+		try {
+			const result = await this.options.client.putStory(merged, theirRev);
+
+			rev = result.rev;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+
+			logSync('push', 'merge: push failed', storyId, () => ({
+				error: message,
+				theirRev
+			}));
+			clearTimers(entry);
+			this.pending.delete(storyId);
+			this.write(storyId, {
+				conflictRev: isServerError(error) ? error.rev : theirRev,
+				lastError: message,
+				state: 'conflict'
+			});
+
+			return;
+		}
+
+		if (!this.options.onMerged?.(merged, rev)) {
+			logSync('push', 'merge: pushed but did not land', storyId, () => ({rev}));
+			clearTimers(entry);
+			this.pending.delete(storyId);
+			// No rev, no hash, no snapshot: this browser is behind the server, which is
+			// the truth. Take Theirs now yields the merged copy, holding both sides.
+			this.write(storyId, {
+				conflictRev: rev,
+				lastError:
+					'Merged both copies on the server, but this editor could not take the result.',
+				state: 'conflict'
+			});
+
+			return;
+		}
+
+		logSync('push', 'merge: landed', storyId, () => ({rev}));
+		clearTimers(entry);
+		this.pending.delete(storyId);
+		this.write(storyId, {
+			conflictClient: undefined,
+			conflictRev: undefined,
+			lastError: undefined,
+			lastPushedAt: Date.now(),
+			pullBlockedRev: undefined,
+			pushedHash: storyHash(merged),
+			rev,
+			snapshot: snapshotStory(merged),
+			state: 'idle'
+		});
+		this.options.onPushed?.(merged);
 	}
 
 	/**
@@ -315,14 +506,46 @@ export class SyncQueue {
 			// lost — the tab-hide `keepalive` flush, a dropped response — leaves us
 			// behind our OWN write, and the body we just sent may be the body already
 			// stored. Ask before parking an author in a dialog with nothing in it.
-			const verdict = await verifyConflict({
+			const outcome = await examineConflict({
 				client: this.options.client,
 				hash,
 				local: story,
+				// Merging is off unless somebody can land the result. See `onMerged`.
+				merge: this.options.onMerged !== undefined,
 				records: this.store
 			});
 
-			if (verdict === 'resolved') {
+			if (outcome.verdict === 'merged' && outcome.story && outcome.rev) {
+				// The merge was computed from `story`. If the author typed while the
+				// check was in flight, it describes text that is already out of date, so
+				// it is thrown away rather than landed — landing it would overwrite the
+				// keystrokes it does not contain. Retrying with the newer text hits the
+				// same 412 and merges again; the cap is there so a fast typist ends up
+				// parked rather than in a loop.
+				if (entry.story !== story) {
+					entry.mergeAttempts = (entry.mergeAttempts ?? 0) + 1;
+
+					if (entry.mergeAttempts <= MAX_MERGE_ATTEMPTS) {
+						const latest = entry.story;
+
+						logSync('push', 'merge: superseded, retrying', storyId, () => ({
+							attempt: entry.mergeAttempts
+						}));
+						clearTimers(entry);
+						this.pending.delete(storyId);
+						this.write(storyId, {state: 'dirty'});
+						this.push(latest);
+
+						return;
+					}
+				} else {
+					await this.landMerge(storyId, entry, outcome.story, outcome.rev);
+
+					return;
+				}
+			}
+
+			if (outcome.verdict === 'resolved') {
 				const latest = entry.story;
 
 				clearTimers(entry);
@@ -409,6 +632,37 @@ export class SyncQueue {
 			listener(records);
 		}
 	}
+}
+
+/**
+ * Could this failure be the route not being there, rather than the patch being wrong?
+ *
+ * A conflict, a tombstone and a rejected token are all answers ABOUT THE STORY: the
+ * server understood the request. Everything else — a 405 from an older build, a 400 from
+ * a proxy that mangled the body, a browser refusing a CORS preflight for the method, a
+ * dead connection — is indistinguishable from here, so the caller tries a plain PUT and
+ * lets the RESULT decide.
+ *
+ * A 400 is also what a bug in the diff would produce. That also ends with PATCH switched
+ * off and a log line, which is the right outcome for it too.
+ */
+function patchMayBeUnsupported(error: unknown): boolean {
+	if (!isServerError(error)) {
+		return false;
+	}
+
+	if (error.conflict || error.gone || error.unauthorized) {
+		return false;
+	}
+
+	return (
+		error.network ||
+		error.status === 0 ||
+		error.status === 400 ||
+		error.status === 405 ||
+		error.status === 415 ||
+		error.status === 501
+	);
 }
 
 function clearTimers(entry: Pending): void {

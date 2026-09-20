@@ -12,6 +12,7 @@ import type {
 	AssetDiffResponse,
 	AssetManifest,
 	HealthResponse,
+	PatchStoryResponse,
 	PingResponse,
 	PutStoryResponse,
 	RestoreResponse,
@@ -19,7 +20,8 @@ import type {
 	ServerErrorBody,
 	ServerErrorCode,
 	StoryIndexEntry,
-	StoryIndexResponse
+	StoryIndexResponse,
+	StoryPatch
 } from './server.types';
 
 /** What `PUT /stories/{id}/assets` takes. The server owns `rev` and `missing`. */
@@ -203,6 +205,21 @@ export interface ServerClient {
 		ifMatch?: number,
 		options?: {revive?: boolean; keepalive?: boolean}
 	): Promise<PutStoryResponse>;
+	/**
+	 * Upload only what changed. `ifMatch` is REQUIRED, unlike `putStory`.
+	 *
+	 * A PUT states the whole story, so last-write-wins is a coherent answer to a stale
+	 * precondition. A patch is only meaningful against the base it was computed from, and
+	 * applying one to an unknown base is how a passage the other editor just wrote gets
+	 * silently resurrected. `server/store/patch.go` refuses a missing header with the same
+	 * 412 a stale one gets, so the caller has one branch: re-read, re-diff, retry.
+	 */
+	patchStory(
+		id: string,
+		patch: StoryPatch,
+		ifMatch: number,
+		options?: {keepalive?: boolean}
+	): Promise<PatchStoryResponse>;
 	deleteStory(id: string, purge?: boolean): Promise<void>;
 	reviveStory(story: Story): Promise<PutStoryResponse>;
 	getManifest(id: string): Promise<AssetManifest>;
@@ -377,6 +394,28 @@ class FetchServerClient implements ServerClient {
 		);
 
 		return (await response.json()) as PutStoryResponse;
+	}
+
+	async patchStory(
+		id: string,
+		patch: StoryPatch,
+		ifMatch: number,
+		options: {keepalive?: boolean} = {}
+	): Promise<PatchStoryResponse> {
+		const response = await this.send(`/stories/${encodeURIComponent(id)}`, {
+			body: JSON.stringify({
+				client: this.options.appVersion ?? 'twine-sliders',
+				patch
+			}),
+			headers: {
+				'Content-Type': 'application/json',
+				'If-Match': quoted(ifMatch)
+			},
+			keepalive: options.keepalive,
+			method: 'PATCH'
+		});
+
+		return (await response.json()) as PatchStoryResponse;
 	}
 
 	async deleteStory(id: string, purge = false): Promise<void> {
