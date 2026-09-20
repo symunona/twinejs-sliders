@@ -6,19 +6,18 @@ Short list. Full backlog: [2026-09-20-sync-backlog.md](2026-09-20-sync-backlog.m
 
 | # | what | size | why |
 |---|---|---|---|
-| 1 | **`split(re, 2)` data loss** | ~5 lines | SHIPPED TO READERS. Passage prose with a bare `--` line loses everything after it. Fix `vars-section.ts` AND `format/src/runtime/template/parse.ts:58` in ONE commit. `it.failing` in `vars-lines.test.ts` turns red when done — flip to `it` |
-| 2 | **Merge in a real browser** | half a day | Merging went live today with unit tests only. Two browsers, one story, different passages. Nothing UI-facing changed, so no browser check was done |
-| 3 | **`.then(f)` has no reject arm** | 1 line | `use-server-sync.ts`, reconcile. A throwing reconcile leaves the badge stale 300s and escapes unhandled. `.then(f, f)` |
+| 1 | **Merge in a real browser** | half a day | Merging went live 2026-09-20 with unit tests only. Two browsers, one story, different passages. Nothing UI-facing changed, so no browser check was done |
+| 2 | **`.then(f)` has no reject arm** | 1 line | `use-server-sync.ts`, reconcile. A throwing reconcile leaves the badge stale 300s and escapes unhandled. `.then(f, f)` |
 
 ## Then
 
 | # | what | note |
 |---|---|---|
-| 4 | **"Unused" badge lies** | On a synced story the art WAS uploaded. Product call: widen `resolveSyncedRefs` to the whole library, or delete the badge. `en-US.json:487-488` moves either way |
-| 5 | **Surface `manifest.missing`** | Server knows which asset bytes it lacks. Nothing tells the author. A 4MB background that failed to upload is invisible |
-| 6 | **`GET ?since=rev`** | Download half. `diffPassages` is ready. Server keeps gzipped snapshots per rev, `REV_KEEP=20`. Fall back to full body when the base rev is pruned |
-| 7 | **`format/src/runtime` into jest roots** | 908 LOC, 0 tests, unreachable. Needs `jest.config.js` — peer's, dirty. COORDINATE |
-| 8 | **Repair 6 failing e2e specs** | Character editor + asset-editor background removal have no live coverage in any form |
+| 3 | **"Unused" badge lies** | On a synced story the art WAS uploaded. Product call: widen `resolveSyncedRefs` to the whole library, or delete the badge. `en-US.json:487-488` moves either way |
+| 4 | **Surface `manifest.missing`** | Server knows which asset bytes it lacks. Nothing tells the author. A 4MB background that failed to upload is invisible |
+| 5 | **`GET ?since=rev`** | Download half. `diffPassages` is ready. Server keeps gzipped snapshots per rev, `REV_KEEP=20`. Fall back to full body when the base rev is pruned |
+| 6 | **Rest of `format/src/runtime` under test** | Root is in `jest.config.js` now (added with the split fix); only `template/parse.ts` has a spec. The barrel `../logger` needs `jest.mock` in any new spec — `logger/init.ts` only typechecks under the format's OWN tsconfig |
+| 7 | **Repair 6 failing e2e specs** | Character editor + asset-editor background removal have no live coverage in any form |
 
 ## State as of this commit
 
@@ -26,9 +25,9 @@ Short list. Full backlog: [2026-09-20-sync-backlog.md](2026-09-20-sync-backlog.m
 - 418 tests green in `src/store/persistence`. Go green. `tsc` clean.
 - All four sync seams stubbable: save (`SyncRecordStore`), server (`fake-server.ts`), messages (`server-message.ts`), conflict (`reconcile.ts`).
 
-### Shipped today
+### Shipped 2026-09-20
 
-rev-lag fix · `applyPull` landing check · gzip + PATCH server · PATCH client · per-passage merge · dirty-hash allowlist · view-state strip · socket handler extracted · sync log · `fake-server` harness · artwork progress in toolbar.
+`split(re, 2)` data loss (editor + player, one commit) · rev-lag fix · `applyPull` landing check · gzip + PATCH server · PATCH client · per-passage merge · dirty-hash allowlist · view-state strip · socket handler extracted · sync log · `fake-server` harness · artwork progress in toolbar.
 
 ## Known hazards — documented, not fixed
 

@@ -451,13 +451,20 @@ export const DIALOGUE_CSS = `
 .sliders-bubble[data-sizing='manual'] {
 	max-width: none;
 	min-width: 0;
+	/* Written by the layout, in stage fractions — see PAD_Y/PAD_X. A drawn shape's own
+	   inline padding still wins over this. */
+	padding: var(--sliders-bubble-pad-y, 10px) var(--sliders-bubble-pad-x, 14px);
 }
 
-/* The box has no inner body to clip — its text is its own children — so the clip goes on
-   the bar itself. Safe where it would not be on a bubble: nothing draws outside a box. */
+/* The clip goes on the bar itself, where it would not on a bubble: nothing draws outside a
+   box, so there is no outline to cut off. The body inside is only there to be measured —
+   under absolute the fitter shrinks its type until it stops needing this clip, under
+   manual the clip is the point. Padding written by the layout in stage fractions, see
+   BOX_PAD_Y/BOX_PAD_X. */
 .sliders-box[data-sizing='absolute'],
 .sliders-box[data-sizing='manual'] {
 	overflow: hidden;
+	padding: var(--sliders-box-pad-y, 16px) var(--sliders-box-pad-x, 22px);
 }
 
 .sliders-bubble[data-sizing='absolute'] .sliders-bubble-body,

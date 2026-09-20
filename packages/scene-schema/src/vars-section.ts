@@ -144,16 +144,45 @@ export interface SplitVarsSection {
 /**
  * Split a passage into its vars section and its body, or undefined when it has none.
  *
- * `String.split` with a limit of 2 is what the player does, and it matters — though not in
- * the way it reads. The limit keeps the first two pieces of a FULL split, so a passage with
- * a SECOND `--` line silently loses everything after it. That is the runtime's behaviour
- * today and stories are published against it, so it is reproduced rather than repaired;
- * `vars-lines.test.ts` pins it so nobody "tidies" it by accident in either direction.
+ * The obvious spelling, `text.split(sep, 2)`, is a data-loss bug and shipped as one: the
+ * limit does not stop the split, it runs the FULL split and then throws away every piece
+ * past the second. So a passage whose PROSE contains a bare `--` line lost everything
+ * below it, in the player as well as the editor. The vars half was never the problem —
+ * the split point does not move — so nothing an author wrote can depend on the loss, and
+ * repairing it can only make text reappear.
+ *
+ * Hence `exec` + `slice`: find the FIRST separator, keep the remainder whole.
  */
 export function splitVarsSection(text: string): SplitVarsSection | undefined {
-	const parts = text.split(VARS_SEPARATOR_SPLIT_RE, 2);
+	return splitVarsSectionAt(text, VARS_SEPARATOR_SPLIT_RE);
+}
 
-	return parts.length === 2 ? {body: parts[1], vars: parts[0]} : undefined;
+/**
+ * `splitVarsSection` with the separator passed in, for the player's parser.
+ *
+ * `parse()` takes its separator through an options object, so it cannot call the plain
+ * version — and it held the second copy of the `split(sep, 2)` bug above. One
+ * implementation, so there is no second copy to forget again.
+ */
+export function splitVarsSectionAt(
+	text: string,
+	separator: RegExp
+): SplitVarsSection | undefined {
+	// A fresh regexp, never the caller's: `exec` on a /g/ pattern carries `lastIndex`
+	// between calls, and a separator handed in from module scope is shared state.
+	const match = new RegExp(
+		separator.source,
+		separator.flags.replace('g', '')
+	).exec(text);
+
+	if (!match) {
+		return undefined;
+	}
+
+	return {
+		body: text.slice(match.index + match[0].length),
+		vars: text.slice(0, match.index)
+	};
 }
 
 /** One `name: value` line, as the runtime reads it. */

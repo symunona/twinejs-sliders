@@ -32,6 +32,7 @@ export {
 	storyBubbleVar
 } from './story-bubble';
 export type {StoryBubbleKey} from './story-bubble';
+export {beatsOfferLinks} from './beat-links';
 export {scanWikiLinks} from './links';
 export type {WikiLink} from './links';
 export {keyFix, keyHint, levenshtein, nearestKey} from './levenshtein';
@@ -47,6 +48,7 @@ export {
 	nearMissSeparator,
 	scanVarsLines,
 	splitVarsSection,
+	splitVarsSectionAt,
 	varsConditionError,
 	varsConditionSource,
 	varsLineName,

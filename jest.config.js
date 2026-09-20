@@ -18,7 +18,10 @@ module.exports = {
 	roots: [
 		'<rootDir>/src',
 		'<rootDir>/packages',
-		'<rootDir>/format/src/twine-extensions'
+		'<rootDir>/format/src/twine-extensions',
+		// The player. Mostly untested still, but the vars split shipped data loss to
+		// readers because nothing here could be run at all.
+		'<rootDir>/format/src/runtime'
 	],
 	setupFilesAfterEnv: ['<rootDir>/src/setupTests.ts'],
 	// The format keeps its Playwright specs beside its unit tests.

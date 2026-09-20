@@ -94,6 +94,22 @@ const ABSOLUTE_TEXT = 0.055;
 const FIT_MIN = 0.25;
 const FIT_MAX = 2.4;
 
+/**
+ * A fixed bubble's inset, as a fraction of the STAGE height, for the same reason the type
+ * is. The numbers are the stylesheet's 10px and 14px at a 900px stage, so nothing composed
+ * at that size moves.
+ */
+const PAD_Y = 10 / 900;
+const PAD_X = 14 / 900;
+
+/**
+ * The narration box's inset, in the same stage fractions, from its own `padding: 16px 22px`
+ * at a 900px stage. Wider than a bubble's because the bar spans the stage: the two only
+ * read as the same margin when each keeps its own number.
+ */
+const BOX_PAD_Y = 16 / 900;
+const BOX_PAD_X = 22 / 900;
+
 interface BubbleRecord {
 	el: HTMLDivElement;
 	body: HTMLDivElement;
@@ -117,6 +133,8 @@ export class DialogueLayer {
 	private mountEl?: HTMLElement;
 	private rootEl?: HTMLDivElement;
 	private boxEl?: HTMLDivElement;
+	/** The box's words, so the fitter has something to measure. See `setBox`. */
+	private boxBody?: HTMLDivElement;
 	private boxStyle?: BubbleStyle;
 	private renderer?: MeasuringRenderer;
 
@@ -212,6 +230,7 @@ export class DialogueLayer {
 		if (text === null || text === undefined) {
 			this.boxEl?.remove();
 			this.boxEl = undefined;
+			this.boxBody = undefined;
 			this.boxStyle = undefined;
 
 			return;
@@ -220,6 +239,12 @@ export class DialogueLayer {
 		if (!this.boxEl) {
 			this.boxEl = this.doc.createElement('div');
 			this.boxEl.className = 'sliders-box';
+			// The words go in an inner element for the same reason a bubble's do: the fitter
+			// asks how tall the text WANTS to be, and an element that is itself the fixed
+			// rectangle can only ever answer with the rectangle.
+			this.boxBody = this.doc.createElement('div');
+			this.boxBody.className = 'sliders-box-body';
+			this.boxEl.appendChild(this.boxBody);
 			this.rootEl.appendChild(this.boxEl);
 			this.fadeIn(this.boxEl);
 		}
@@ -229,7 +254,7 @@ export class DialogueLayer {
 
 		if (this.boxEl.dataset.text !== text) {
 			this.boxEl.dataset.text = text;
-			this.renderRichText(this.boxEl, text);
+			this.renderRichText(this.boxBody!, text);
 		}
 
 		this.positionBox();
@@ -259,6 +284,7 @@ export class DialogueLayer {
 		this.rootEl?.remove();
 		this.rootEl = undefined;
 		this.boxEl = undefined;
+		this.boxBody = undefined;
 		this.bubbles.clear();
 		this.renderer = undefined;
 		this.mountEl = undefined;
@@ -409,10 +435,15 @@ export class DialogueLayer {
 
 			el.style.width = `${w}px`;
 			el.style.height = `${h}px`;
+			// A fixed rectangle is stated against the stage and so is its type, so its inset
+			// has to be as well. A flat 10px is a tenth of a caption panel on a 1600-wide
+			// stage and a third of one on a phone.
+			el.style.setProperty('--sliders-bubble-pad-y', `${box.height * PAD_Y}px`);
+			el.style.setProperty('--sliders-bubble-pad-x', `${box.height * PAD_X}px`);
 			this.applyPadding(rec, w, h);
 
 			if (absolute) {
-				this.fitText(rec, box, w, h);
+				this.fitText(rec.el, rec.body, box, w, h, style, rec.padding);
 			} else {
 				rec.body.style.fontSize = '';
 			}
@@ -499,16 +530,22 @@ export class DialogueLayer {
 	 * small element.
 	 */
 	private fitText(
-		rec: BubbleRecord,
+		el: HTMLElement,
+		body: HTMLElement,
 		box: StageBox,
 		w: number,
-		h: number
+		h: number,
+		style: BubbleStyle | undefined,
+		known?: BubblePadding
 	): void {
-		const pad = rec.padding;
-		const innerW = w - (pad ? pad.left + pad.right : 0);
-		const innerH = h - (pad ? pad.top + pad.bottom : 0);
-		const base = box.height * ABSOLUTE_TEXT * (rec.spec.style?.size ?? 1);
-		const body = rec.body;
+		// The computed padding, not the drawn shape's `known` figure: that one is only ever
+		// set by a DRAWN shape, and a bubble without one still has the stylesheet's
+		// `padding: 10px 14px`. Fitting to the outer box left the last line under the
+		// padding, where the clip cut it in half.
+		const pad = elementPadding(el, known);
+		const innerW = w - (pad.left + pad.right);
+		const innerH = h - (pad.top + pad.bottom);
+		const base = box.height * ABSOLUTE_TEXT * (style?.size ?? 1);
 		const fits = (size: number) => {
 			body.style.fontSize = `${size}px`;
 
@@ -624,15 +661,42 @@ export class DialogueLayer {
 		const el = this.boxEl;
 		const margin = this.opts.margin ?? 12;
 
-		el.style.width = `${(style?.w ?? 1) * box.width}px`;
+		const absolute = style?.sizing === 'absolute';
+		// Both fixed sizings state the rectangle, exactly as on a bubble; they differ only in
+		// what the words do inside it. `absolute` fits the type to the bar, `manual` leaves
+		// the type alone and lets the bar clip — the author dragged that edge on purpose.
+		const fixed = absolute || style?.sizing === 'manual';
+		const width = (style?.w ?? 1) * box.width;
+		const height = (style?.h ?? ABSOLUTE_H) * box.height;
+		const body = this.boxBody;
+
+		el.style.width = `${width}px`;
 		// A narration box is a full-width bar by default, so `w` alone has always been
 		// enough for it. A fixed sizing states the other side as well — which is what the
 		// editor writes the moment an author drags the bar's top or bottom edge, and
 		// without this the handle would move and nothing would happen.
-		el.style.height =
-			style?.sizing === 'absolute' || style?.sizing === 'manual'
-				? `${(style.h ?? ABSOLUTE_H) * box.height}px`
-				: '';
+		el.style.height = fixed ? `${height}px` : '';
+
+		if (fixed) {
+			// The rectangle is stated against the stage and so is the type inside it, so the
+			// inset has to be too. A flat 16px is a margin on a 1600-wide stage and a third of
+			// the bar on a phone.
+			el.style.setProperty('--sliders-box-pad-y', `${box.height * BOX_PAD_Y}px`);
+			el.style.setProperty('--sliders-box-pad-x', `${box.height * BOX_PAD_X}px`);
+		} else {
+			el.style.removeProperty('--sliders-box-pad-y');
+			el.style.removeProperty('--sliders-box-pad-x');
+		}
+
+		if (body) {
+			// Cleared first either way: a beat that drops `sizing:` must not keep the last
+			// fitted size, and the fitter needs the base size to search from.
+			body.style.fontSize = '';
+
+			if (absolute) {
+				this.fitText(el, body, box, width, height, style);
+			}
+		}
 
 		const w = el.offsetWidth;
 		const h = el.offsetHeight;
@@ -826,6 +890,35 @@ function setVar(el: HTMLElement, name: string, value: string | undefined): void 
 	} else {
 		el.style.removeProperty(name);
 	}
+}
+
+/**
+ * The room a bubble's own box leaves its words.
+ *
+ * Read off the element rather than off the shape, because a bubble has padding either way:
+ * a drawn shape writes its own inline, everything else keeps the stylesheet's. `known` is
+ * the shape's figure, used only where there is no view to compute a style in.
+ */
+function elementPadding(el: HTMLElement, known?: BubblePadding): BubblePadding {
+	const zero = known ?? {top: 0, right: 0, bottom: 0, left: 0};
+	const computed = el.ownerDocument?.defaultView?.getComputedStyle?.(el);
+
+	if (!computed) {
+		return zero;
+	}
+
+	const px = (value: string, fallback: number) => {
+		const n = parseFloat(value);
+
+		return Number.isFinite(n) ? n : fallback;
+	};
+
+	return {
+		top: px(computed.paddingTop, zero.top),
+		right: px(computed.paddingRight, zero.right),
+		bottom: px(computed.paddingBottom, zero.bottom),
+		left: px(computed.paddingLeft, zero.left)
+	};
 }
 
 // ---------------------------------------------------------------------------

@@ -120,6 +120,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					onFullScreenChange={setFullScreen}
 					onOpenPassage={source?.onOpenPassage ?? handleOpenPassage}
 					parse={parse}
+					passageId={source?.passageId ?? fallback?.id}
 					passages={story.passages}
 					stylesheet={story.stylesheet}
 					text={source?.text ?? fallback?.text ?? ''}

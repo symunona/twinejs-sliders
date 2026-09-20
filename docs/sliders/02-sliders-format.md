@@ -37,11 +37,65 @@ Director: she should feel cornered. Not rendered.
 Consequence worth stating out loud: **every way out of a scene passage must be in
 its `links:`.** A `[[link]]` written under the block is not drawn.
 
-Both are variables, so a passage or a story can opt out:
+### The link list under the stage
+
+The `links:` map is drawn a second time, as ordinary Chapbook links under the stage (over
+the bottom of it in full screen). **Only when the beats offer the reader nothing to
+click.**
+
+| The beats hold | Bottom list |
+|---|---|
+| nothing clickable | drawn |
+| a `[[…]]` in a `say:`/`box:` line | not drawn |
+| a `link:` on an entity, set by a beat | not drawn |
+| only a dead link — a `[[name]]` no `links:` entry claims, or a `link:` whose entry lost its `if:` | drawn |
+| a `link:` declared in `cast:`/`props:` but never in a beat | drawn |
+
+Why: the list would show the same two choices twice, and show them from beat 1 — the
+answer visible before the line that asks the question. A scene with no clickable beats
+still needs it, or there is no way out at all.
+
+The rule is `beatsOfferLinks` in `@sliders/scene-schema`, asked after `if:` filtering.
+
+#### When it appears
+
+**Scene has beats → list appears only once the beats are done.** Not from beat 1.
+
+| Scene | List |
+|---|---|
+| no beats | drawn at once, as before |
+| beats, still running | held back |
+| beats, last one on screen | still held back |
+| beats done — reader clicked past the last one | revealed, 320ms fade |
+
+The last beat always waits for the reader (never auto-advances). That click used to do
+nothing but clear the `▸` marker; now it ends the scene and brings the list up. So the
+final line is read before the choices exist.
+
+`sliders.showLinks: true` decides **whether**, not **when** — a forced list is still held
+until the beats are done. Same spoiler either way, and a second variable for a case nobody
+asked for is worse than the rule. A story that truly wants a way out visible from beat 1
+writes those links in the passage, outside the `[scene]` block, with
+`sliders.sceneOnly: false`. `sliders.showLinks: false` never draws the list at all, so
+timing does not apply.
+
+The hold is **script**, not CSS alone: `<sliders-stage>` finds its own fork (the element's
+paragraph's next sibling — `~` would grab the wrong one when a passage holds several
+scenes) and puts `sliders-fork` + `data-pending` on it. Nothing else writes those. So a
+browser that never upgrades the custom element, or a scene whose payload fails to decode,
+draws the list immediately — a reader stranded in a scene is worse than a spoiled choice.
+`visibility`, not `display`: the list keeps its space, so the reveal moves nothing.
+
+`src/runtime/sliders/link-list.ts`, held in `connectedCallback`, released where `play()`
+runs out of beats.
+
+Variables, so a passage or a story can opt out:
 
 ```
 sliders.sceneOnly: false     # draw the text around the scene too
 sliders.fullScreen: false    # stage stays a 16:9 box inside the page
+sliders.showLinks: true      # always draw the list, clickable beats or not (still after the beats)
+sliders.showLinks: false     # never draw it
 ```
 
 A passage with no `[scene]` in it is untouched — still an ordinary Chapbook passage.

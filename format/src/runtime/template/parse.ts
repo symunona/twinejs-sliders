@@ -1,6 +1,7 @@
 import {
 	VARS_SEPARATOR_SPLIT_RE,
 	scanVarsLines,
+	splitVarsSectionAt,
 	varsConditionSource,
 	varsValueSource
 } from '@sliders/scene-schema';
@@ -55,12 +56,17 @@ export function parse(src: string, opts = defaultOpts) {
 
 	// Does the source start with a vars section?
 
-	const varsBits = src.split(opts.varsSep, 2);
+	// NOT `src.split(opts.varsSep, 2)`. That ran a full split and dropped everything past
+	// the second piece, so a passage with a bare `--` line anywhere in its PROSE lost the
+	// rest of itself -- live, in the reader's browser. `splitVarsSectionAt` is the same
+	// split point with the remainder kept whole, and it is shared with the editor so there
+	// is only one copy of this to get wrong.
+	const varsSplit = splitVarsSectionAt(src, opts.varsSep);
 	let vars, text;
 
-	if (varsBits.length === 2) {
+	if (varsSplit) {
 		log('Detected vars section');
-		[vars, text] = varsBits;
+		({body: text, vars} = varsSplit);
 
 		// The GRAMMAR is Sliders'; the ACTION is ours. `scanVarsLines` says what each line
 		// declares, and this loop is the only thing that turns a value into a function --
@@ -99,7 +105,7 @@ export function parse(src: string, opts = defaultOpts) {
 		}
 	} else {
 		log('No vars section detected');
-		text = varsBits[0];
+		text = src;
 	}
 
 	// Scan the text for modifiers. They always begin immediately with a bracket.
