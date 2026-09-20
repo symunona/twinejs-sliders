@@ -370,22 +370,30 @@ describe('<BeatProps> bubble font', () => {
 });
 
 describe('<BeatProps> bubble colours', () => {
-	it('offers a fill and a stroke well on a beat that speaks', () => {
+	// Row order: text, then fill, then stroke.
+	it('offers a text, fill and stroke well on a beat that speaks', () => {
 		renderProps(say(0.6));
-		expect(colorWells()).toHaveLength(2);
+		expect(colorWells()).toHaveLength(3);
+	});
+
+	it('writes the text colour the author picks', () => {
+		const {onSetBubble} = renderProps(say(0.6));
+
+		fireEvent.change(colorWells()[0], {target: {value: '#ffffff'}});
+		expect(onSetBubble).toHaveBeenCalledWith('color', '#ffffff');
 	});
 
 	it('writes the fill the author picks', () => {
 		const {onSetBubble} = renderProps(say(0.6));
 
-		fireEvent.change(colorWells()[0], {target: {value: '#ff0000'}});
+		fireEvent.change(colorWells()[1], {target: {value: '#ff0000'}});
 		expect(onSetBubble).toHaveBeenCalledWith('bg', '#ff0000');
 	});
 
 	it('writes the stroke the author picks', () => {
 		const {onSetBubble} = renderProps(say(0.6));
 
-		fireEvent.change(colorWells()[1], {target: {value: '#101010'}});
+		fireEvent.change(colorWells()[2], {target: {value: '#101010'}});
 		expect(onSetBubble).toHaveBeenCalledWith('accent', '#101010');
 	});
 
@@ -399,7 +407,8 @@ describe('<BeatProps> bubble colours', () => {
 			.getAllByRole('button')
 			.filter(el => el.classList.contains('bubble-color-control-clear'));
 
-		fireEvent.click(clear[0]);
+		// [1] is Fill: text comes first in the row.
+		fireEvent.click(clear[1]);
 		expect(onSetBubble).toHaveBeenCalledWith('bg', null);
 	});
 

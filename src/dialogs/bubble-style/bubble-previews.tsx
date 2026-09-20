@@ -53,6 +53,21 @@ const SHAPE_ANCHOR = {x: SHAPE_BOX.width * 0.3, y: SHAPE_BOX.height + 8};
 /** A fixed seed, so a swatch does not re-wobble every time the list opens. */
 const SHAPE_SEED = 0x5e1d;
 
+/**
+ * The word every swatch is lettered with.
+ *
+ * Three letters with an ascender, a round and a descender-free baseline: enough to tell
+ * Bangers from Patrick Hand at 9px, short enough to fit the smallest shape's interior.
+ * Deliberately not localised — it is a type specimen, not a sentence.
+ */
+const SAMPLE = 'Abc';
+
+/** The demo bubble's box, in px. Roughly a line of dialogue on a small stage. */
+const DEMO_BOX = {width: 232, height: 62};
+
+/** Below and left, where a tail goes when the speaker stands under their own line. */
+const DEMO_ANCHOR = {x: DEMO_BOX.width * 0.28, y: DEMO_BOX.height + 26};
+
 export interface BubbleSwatchColors {
 	/** Fill. Falls back to the renderer's own default. */
 	bg?: string;
@@ -106,8 +121,27 @@ export const BubbleStyleSwatch: React.FC<
 					 * dialogue layer, which positions it absolutely — here they are inert,
 					 * and a wrapper sized to the box alone would crop the margin the drawing
 					 * needs.
+					 *
+					 * The word sits OVER it, absolutely, rather than inside the drawing. A
+					 * shape emits no text — it is a picture of a container — so without this
+					 * the font and the text colour had nowhere to show, and picking `comic`
+					 * told the author nothing about what their words would look like in it.
+					 * Centred rather than laid out against the shape's own `padding`: at
+					 * swatch scale the padding is a pixel or two and the word is three
+					 * letters, so honouring it would only push the sample off centre.
 					 */
-					<span dangerouslySetInnerHTML={{__html: drawn.svg}} />
+					<>
+						<span dangerouslySetInnerHTML={{__html: drawn.svg}} />
+						<span
+							className="bubble-style-preview-word"
+							style={{
+								color: color || undefined,
+								fontFamily: bubbleFontStack(font)
+							}}
+						>
+							{SAMPLE}
+						</span>
+					</>
 				) : (
 					<span
 						className="sliders-bubble"
@@ -118,7 +152,7 @@ export const BubbleStyleSwatch: React.FC<
 							['--sliders-bubble-font' as string]: bubbleFontStack(font)
 						}}
 					>
-						Abc
+						{SAMPLE}
 					</span>
 				)}
 			</span>
@@ -217,3 +251,85 @@ export function bubbleFontOptions(options: {
 			: [])
 	];
 }
+
+/**
+ * The demo bubble: a whole line, at a size you can actually read.
+ *
+ * The dropdown swatches are 56x30 and answer "which one is this?". They cannot answer the
+ * question an author asks after picking — "is this readable?" — because at thumbnail size
+ * everything is. A yellow fill under a white text colour, a face whose lowercase is too
+ * loose at body size, a shape whose padding eats a long line: all three look fine as a
+ * swatch and wrong as a line of dialogue.
+ *
+ * So this draws one line the way the renderer would, at the size the renderer would:
+ *
+ *   - the SAME `bubbleShape()` call, so the outline is the real one;
+ *   - the shape's OWN `padding`, honoured, which is the thing the swatches drop — a cloud
+ *     keeps its words far further inside than a panel does, and that is most of why a line
+ *     fits one shape and not another;
+ *   - stub text rather than the author's, because there is no "current line" at story
+ *     level and a made-up sentence of ordinary length is what a default is chosen against.
+ *
+ * On the letterbox fill, not on the dialog's own background: a bubble is always read
+ * against art, and judging a pale fill against a white panel is judging it against the one
+ * background it will never appear on.
+ */
+export const BubbleStyleDemo: React.FC<
+	{text: string} & BubbleSwatchColors & {token?: string}
+> = ({accent, bg, color, font, text, token}) => {
+	React.useEffect(() => injectStyles(), []);
+
+	const drawn = React.useMemo(
+		() =>
+			bubbleShape(token, {
+				...DEMO_BOX,
+				anchor: DEMO_ANCHOR,
+				side: 'above',
+				color: bg ?? '',
+				accent: accent ?? '',
+				seed: SHAPE_SEED
+			}),
+		[accent, bg, token]
+	);
+	const type = {
+		color: color || undefined,
+		fontFamily: bubbleFontStack(font)
+	};
+
+	return (
+		<div className="bubble-style-demo">
+			{drawn ? (
+				<div
+					className="bubble-style-demo-shape"
+					style={{height: DEMO_BOX.height, width: DEMO_BOX.width}}
+				>
+					<span dangerouslySetInnerHTML={{__html: drawn.svg}} />
+					<span
+						className="bubble-style-demo-text"
+						style={{
+							...type,
+							// The shape's own statement of where words are safe. Only the
+							// shape knows: a cloud needs far more than a panel.
+							padding: `${drawn.padding.top}px ${drawn.padding.right}px ${drawn.padding.bottom}px ${drawn.padding.left}px`
+						}}
+					>
+						{text}
+					</span>
+				</div>
+			) : (
+				<span
+					className="sliders-bubble"
+					data-style={token || undefined}
+					style={{
+						['--sliders-bubble-bg' as string]: bg || undefined,
+						['--sliders-bubble-color' as string]: color || undefined,
+						['--sliders-bubble-font' as string]: bubbleFontStack(font),
+						maxWidth: DEMO_BOX.width
+					}}
+				>
+					{text}
+				</span>
+			)}
+		</div>
+	);
+};

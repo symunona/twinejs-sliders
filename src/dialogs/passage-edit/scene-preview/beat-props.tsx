@@ -388,12 +388,23 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 								{t('dialogs.passageEdit.beatProps.font')}
 							</PreviewSelect>
 							{/*
-								No text field on these two, unlike the Defaults dialog: the
-								beat row is already the widest thing in the panel, and a
-								hand-written `rgba(…)` is a story-wide decision far more often
-								than a one-line one. An author who needs one on a single beat
-								writes it in the YAML, where every other exotic value lives.
+								Text, fill, stroke — in that order, because a fill and a
+								stroke are only right or wrong relative to the words on them.
+
+								No free-text field on any of the three, unlike the Defaults
+								dialog: the beat row is already the widest thing in the panel,
+								and a hand-written `rgba(…)` is a story-wide decision far more
+								often than a one-line one. An author who needs one on a single
+								beat writes it in the YAML, where every other exotic value
+								lives.
 							*/}
+							<BubbleColorControl
+								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
+								onChange={value => onSetBubble('color', value ?? null)}
+								value={style?.color}
+							>
+								{t('dialogs.passageEdit.beatProps.color')}
+							</BubbleColorControl>
 							<BubbleColorControl
 								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
 								onChange={value => onSetBubble('bg', value ?? null)}

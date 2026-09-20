@@ -123,3 +123,58 @@
 	height: 100%;
 	width: 100%;
 }
+
+/* -------------------------------------------------------------------------
+   The demo bubble — one line at readable size. See `bubble-previews.tsx`.
+   ------------------------------------------------------------------------- */
+
+/*
+ * On the letterbox fill, not the dialog's background.
+ *
+ * A bubble is always read against art. Judging a pale fill against a white panel judges it
+ * against the one background it will never appear on. This colour is the renderer's own
+ * (`.sliders-root`), hard-coded rather than themed for the same reason the swatches are:
+ * it is a picture of the stage and must not invert with the editor.
+ */
+.bubble-style-demo {
+	align-items: center;
+	background: #05070c;
+	border-radius: var(--corner-round);
+	display: flex;
+	justify-content: center;
+	min-height: 96px;
+	overflow: hidden;
+	padding: var(--grid-size);
+}
+
+.bubble-style-demo-shape {
+	position: relative;
+}
+
+.bubble-style-demo-shape > span:first-child {
+	display: block;
+	left: 0;
+	position: absolute;
+	top: 0;
+}
+
+/* Sized to the bubble BOX, inset by the shape's own padding, which is written inline
+   because only the shape knows how much of its rectangle is outline, scallop or slab. */
+.bubble-style-demo-text {
+	align-items: center;
+	box-sizing: border-box;
+	color: #14161c;
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	line-height: 1.25;
+	overflow: hidden;
+	position: absolute;
+	text-align: center;
+}
+
+/* The CSS presets paint `.sliders-bubble`, so the demo has to BE one. */
+.bubble-style-demo .sliders-bubble {
+	position: static;
+	transition: none;
+}

@@ -358,7 +358,7 @@ about:
 
 | Layer | Written as |
 |---|---|
-| story | `sliders.bubble.as`, `.font`, `.bg`, `.accent`, `.sizing`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
+| story | `sliders.bubble.as`, `.font`, `.color`, `.bg`, `.accent`, `.sizing`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
 | scene | `bubble: {…}` at the top of the scene |
 | character | the character's own `bubble:` in the library |
 | beat | `as:` / `bubble:` on the line |

@@ -31,24 +31,24 @@
 	min-width: 8em;
 }
 
+/*
+ * The demo, stacked under its own caption rather than beside it.
+ *
+ * It is a picture of a whole line at readable size, so it wants the panel's full width —
+ * put next to a label it would be squeezed to about the width of a swatch, which is the
+ * thing it exists not to be.
+ */
 .story-defaults-sample {
-	align-items: center;
 	border-top: 1px solid var(--light-gray-translucent);
 	display: flex;
-	gap: var(--grid-size);
+	flex-direction: column;
+	gap: calc(var(--grid-size) / 2);
 	margin-top: var(--ui-gap);
 	padding-top: var(--ui-gap);
 }
 
 .story-defaults-sample-label {
 	color: var(--dark-gray);
-	white-space: nowrap;
-}
-
-.story-defaults-sample-text {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 

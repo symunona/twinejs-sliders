@@ -22,7 +22,7 @@
 
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {BUBBLE_SIZINGS, bubbleFontStack} from '@sliders/scene-types';
+import {BUBBLE_SIZINGS} from '@sliders/scene-types';
 import type {BubbleStyle} from '@sliders/scene-types';
 import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
@@ -40,7 +40,7 @@ import {DialogComponentProps} from '../dialogs.types';
 import {BubbleColorControl} from '../bubble-style/bubble-color-control';
 import {
 	BubbleFontSwatch,
-	BubbleStyleSwatch,
+	BubbleStyleDemo,
 	bubbleFontOptions,
 	bubbleStyleOptions
 } from '../bubble-style/bubble-previews';
@@ -159,6 +159,20 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 				>
 					{t('dialogs.storyDefaults.font')}
 				</PreviewSelect>
+				{/*
+					Text colour first of the three, because it is the one the other two are
+					judged against: a fill is only wrong relative to the words on it.
+				*/}
+				<BubbleColorControl
+					clearLabel={t('dialogs.storyDefaults.clearColor')}
+					disabled={disabled}
+					editable
+					onChange={value => set('color', value)}
+					placeholder={t('dialogs.storyDefaults.colorPlaceholder')}
+					value={style.color}
+				>
+					{t('dialogs.storyDefaults.color')}
+				</BubbleColorControl>
 				<BubbleColorControl
 					clearLabel={t('dialogs.storyDefaults.clearColor')}
 					disabled={disabled}
@@ -206,13 +220,11 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 				<span className="story-defaults-sample-label">
 					{t('dialogs.storyDefaults.sample')}
 				</span>
-				<BubbleStyleSwatch token={style.as ?? ''} {...colors} />
-				<span
-					className="story-defaults-sample-text"
-					style={{fontFamily: bubbleFontStack(style.font)}}
-				>
-					{t('dialogs.storyDefaults.sampleLine')}
-				</span>
+				<BubbleStyleDemo
+					{...colors}
+					text={t('dialogs.storyDefaults.sampleLine')}
+					token={style.as}
+				/>
 			</div>
 			<p className="story-defaults-note">
 				{start
