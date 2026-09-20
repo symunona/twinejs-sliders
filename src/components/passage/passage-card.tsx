@@ -102,9 +102,11 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 			);
 		}
 
-		// A card that draws the scene shows what the passage SAYS above it, not the YAML
-		// that stages it--that is the picture underneath.
-		const text = showsScene ? passageProse(passage.text) : passage.text;
+		// What the passage SAYS, never the machinery: the vars section that sets it up and
+		// the `[scene]` block that stages it are both cut. One is front matter the author
+		// wrote deliberately and knows is there; the other is already on screen as a
+		// picture on a card that draws one.
+		const text = passageProse(passage.text);
 
 		if (text.length > 0) {
 			return text.substring(0, excerptLength);
@@ -113,6 +115,12 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 		if (showsScene) {
 			// Nothing but a scene in this passage. The stage below is the excerpt.
 			return null;
+		}
+
+		if (passage.text.trim().length > 0) {
+			// All machinery and no prose, and no stage to show it off either. The raw text
+			// is a poor excerpt, but the card is not empty and must not claim to be.
+			return passage.text.substring(0, excerptLength);
 		}
 
 		return (

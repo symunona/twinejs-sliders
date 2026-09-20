@@ -34,6 +34,10 @@
 	color: var(--gray);
 	padding: 0;
 	overflow: ellipsis;
+	/* The excerpt is prose the author laid out by hand: a stanza, a line per beat, a blank
+	   line between paragraphs. Collapsing it ran the whole passage into one grey block and
+	   made every card look alike. `pre-wrap`, so long lines still wrap to the card. */
+	white-space: pre-wrap;
 }
 
 .passage-card .tag-badges {
