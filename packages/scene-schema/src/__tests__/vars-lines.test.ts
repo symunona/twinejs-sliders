@@ -32,16 +32,43 @@ describe('splitVarsSection', () => {
 		expect(splitVarsSection('a: 1\n---\nHello.')).toBeUndefined();
 	});
 
-	it('DISCARDS everything after a second separator', () => {
-		// Not a wish — `String.split(re, 2)` keeps the first two pieces of a FULL split, so
-		// the third is dropped on the floor. A passage whose prose contains a bare `--`
-		// line silently loses the rest of itself. Recorded here because centralizing the
-		// rule is what made it visible; changing it would change published stories.
+	/**
+	 * The one case in this file that is a DEFECT rather than a grammar quirk.
+	 *
+	 * Everywhere else here, narrowing the rule would stop setting a variable in a story
+	 * already published — so the ugly answer is the right one to pin. Not here. `String
+	 * .split(re, 2)` runs a FULL split and then throws away every piece past the second,
+	 * so a passage whose prose contains a bare `--` line silently loses the rest of
+	 * itself. `format/src/runtime/template/parse.ts:58` does the same thing, so this is
+	 * live in the player, not only in the editor.
+	 *
+	 * Fixing it can only ever make text appear that the author wrote and expected. No
+	 * story can depend on the loss, which is why this one gets an `it.failing` and the
+	 * rest of the file does not.
+	 */
+	it('takes the vars half from the FIRST separator', () => {
+		// True whichever way the tail is handled — the split point does not move.
 		const split = splitVarsSection('a: 1\n--\nfirst\n--\nsecond');
 
 		expect(split?.vars).toBe('a: 1\n');
-		expect(split?.body).toBe('\nfirst\n');
-		expect(split?.body).not.toContain('second');
+		expect(split?.body?.startsWith('\nfirst')).toBe(true);
+	});
+
+	/**
+	 * FAILING ON PURPOSE — this states the fix, not the bug.
+	 *
+	 * `it.failing` passes only while the assertion below does NOT hold, so it documents
+	 * the data loss today and turns RED the moment someone fixes it. When that happens
+	 * the answer is to flip it to `it`, never to soften the assertion.
+	 *
+	 * The fix is one line in `splitVarsSection`: split on the first separator only and
+	 * keep the remainder whole (`indexOf` + `slice`, or rejoin parts 1..n). The player's
+	 * `parse.ts` must change in the same commit — it holds a second copy of the call.
+	 */
+	it.failing('keeps the whole body when the prose contains another `--` line', () => {
+		const split = splitVarsSection('a: 1\n--\nfirst\n--\nsecond');
+
+		expect(split?.body).toBe('\nfirst\n--\nsecond');
 	});
 });
 
