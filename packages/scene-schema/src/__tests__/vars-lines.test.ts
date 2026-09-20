@@ -11,6 +11,7 @@
 import {
 	scanVarsLines,
 	splitVarsSection,
+	splitVarsSectionAt,
 	varsConditionError,
 	varsConditionSource,
 	varsValueError,
@@ -32,20 +33,6 @@ describe('splitVarsSection', () => {
 		expect(splitVarsSection('a: 1\n---\nHello.')).toBeUndefined();
 	});
 
-	/**
-	 * The one case in this file that is a DEFECT rather than a grammar quirk.
-	 *
-	 * Everywhere else here, narrowing the rule would stop setting a variable in a story
-	 * already published — so the ugly answer is the right one to pin. Not here. `String
-	 * .split(re, 2)` runs a FULL split and then throws away every piece past the second,
-	 * so a passage whose prose contains a bare `--` line silently loses the rest of
-	 * itself. `format/src/runtime/template/parse.ts:58` does the same thing, so this is
-	 * live in the player, not only in the editor.
-	 *
-	 * Fixing it can only ever make text appear that the author wrote and expected. No
-	 * story can depend on the loss, which is why this one gets an `it.failing` and the
-	 * rest of the file does not.
-	 */
 	it('takes the vars half from the FIRST separator', () => {
 		// True whichever way the tail is handled — the split point does not move.
 		const split = splitVarsSection('a: 1\n--\nfirst\n--\nsecond');
@@ -55,20 +42,64 @@ describe('splitVarsSection', () => {
 	});
 
 	/**
-	 * FAILING ON PURPOSE — this states the fix, not the bug.
+	 * The data-loss regression. Was `it.failing`; the fix turned it red, so it is `it`.
 	 *
-	 * `it.failing` passes only while the assertion below does NOT hold, so it documents
-	 * the data loss today and turns RED the moment someone fixes it. When that happens
-	 * the answer is to flip it to `it`, never to soften the assertion.
+	 * `text.split(sep, 2)` reads as "stop after two", but it runs the FULL split and
+	 * discards every piece past the second — so a passage whose PROSE contains a bare
+	 * `--` line silently lost everything below it. This shipped to readers: the player's
+	 * `format/src/runtime/template/parse.ts` held a second copy of the same call, guarded
+	 * by `parse.test.ts` there.
 	 *
-	 * The fix is one line in `splitVarsSection`: split on the first separator only and
-	 * keep the remainder whole (`indexOf` + `slice`, or rejoin parts 1..n). The player's
-	 * `parse.ts` must change in the same commit — it holds a second copy of the call.
+	 * Never soften this assertion. Every character after the first separator belongs to
+	 * the author, separators included.
 	 */
-	it.failing('keeps the whole body when the prose contains another `--` line', () => {
+	it('keeps the whole body when the prose contains another `--` line', () => {
 		const split = splitVarsSection('a: 1\n--\nfirst\n--\nsecond');
 
 		expect(split?.body).toBe('\nfirst\n--\nsecond');
+	});
+
+	it('keeps every separator past the first, however many', () => {
+		expect(splitVarsSection('a: 1\n--\n--\n--\n')?.body).toBe('\n--\n--\n');
+	});
+
+	it('keeps a trailing separator line in the body', () => {
+		// The body is one blank line and a separator — not an empty body.
+		expect(splitVarsSection('a: 1\n--\n\n--')?.body).toBe('\n\n--');
+	});
+
+	it('allows the invisible trailing space the separator rule forgives', () => {
+		expect(splitVarsSection('a: 1\n--  \t\nbody')).toEqual({
+			body: '\nbody',
+			vars: 'a: 1\n'
+		});
+	});
+
+	it('is undefined when only a near miss follows the vars', () => {
+		// `---` is an hr. Still never a separator, and the body must not be cut at one.
+		expect(splitVarsSection('a: 1\n---\nbody')).toBeUndefined();
+	});
+});
+
+describe('splitVarsSectionAt', () => {
+	it('is splitVarsSection with the separator handed in', () => {
+		expect(splitVarsSectionAt('a: 1\n--\nfirst\n--\nsecond', /^--[ \t]*$/m)).toEqual(
+			splitVarsSection('a: 1\n--\nfirst\n--\nsecond')
+		);
+	});
+
+	/**
+	 * The player passes its separator from module scope. A /g/ regexp carries `lastIndex`
+	 * across `exec` calls, so sharing one would make the SECOND passage parsed in a
+	 * session split at a different place than the first — or not at all.
+	 */
+	it('does not carry lastIndex between calls on a /g/ separator', () => {
+		const shared = /^--[ \t]*$/gm;
+		const text = 'a: 1\n--\nbody\n--\ntail';
+		const first = splitVarsSectionAt(text, shared);
+
+		expect(splitVarsSectionAt(text, shared)).toEqual(first);
+		expect(shared.lastIndex).toBe(0);
 	});
 });
 

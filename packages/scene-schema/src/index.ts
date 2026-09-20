@@ -48,6 +48,7 @@ export {
 	nearMissSeparator,
 	scanVarsLines,
 	splitVarsSection,
+	splitVarsSectionAt,
 	varsConditionError,
 	varsConditionSource,
 	varsLineName,
