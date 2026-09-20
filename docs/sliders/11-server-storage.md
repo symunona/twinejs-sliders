@@ -190,6 +190,7 @@ server down"), `/health` ok + `/ping` 401 ("server is there, token rejected"), b
 | `GET` | `/stories` | index, no passage text |
 | `GET` | `/stories/{id}` | the `Story`. `ETag: "<rev>"`, honours `If-None-Match` → `304`. `?format=html` publishes |
 | `PUT` | `/stories/{id}` | write; `?revive=1` to undelete |
+| `PATCH` | `/stories/{id}` | write only what changed; `If-Match` **required** |
 | `DELETE` | `/stories/{id}` | tombstone: drop current body and asset bytes, keep `meta.json` and `revs/`. `?purge=1` erases the directory |
 
 Index entry — enough to draw a card without downloading anything:
@@ -211,6 +212,23 @@ whether a story syncs is each editor's local decision.
 written, body carries `{"rev":44,"updatedAt":"…","lastClient":"mira"}`. PUT to a tombstone
 without `?revive=1` → `409 deleted`; with it, the tombstone clears and the rev chain
 *continues* — a monotonic rev per story id is what makes every other rule work.
+
+`PATCH` body is `{"patch": {"passages": {"changed":[…], "removed":[…]}, "story": {…}},
+"client": "…"}` → the same response `PUT` gives. It exists because autosave PUTs the whole
+story every 5 s, and at the 20-100 KB of passage text this is heading for, one typed
+sentence costs 100 KB of upload; the tab-close save is worse, since it uses `keepalive`,
+which the Fetch spec caps at 64 KB of request body and therefore silently drops at that
+size. Passages are whole objects matched on `id` — never text-diffed. `If-Match` is
+**required** here: a patch against an unknown base is meaningless, so missing, `*` and
+stale all answer the same `412`. The patch is applied in memory and the result goes through
+the **same** `writeStoryLocked` a `PUT` uses, so the rev bump, the `revs/` snapshot and the
+keep-N prune behave identically — a patch that skipped the snapshot would leave holes in
+the history exactly where the ordinary autosaves were. No `?revive=1`: a tombstone has no
+body to patch.
+
+**Responses are gzipped** when the client asks for it, by content type (`application/json`
+and nothing else — asset blobs are already compressed and `Range` would break). Real
+bodies measured at 2.9-4.5x. Details in `server/README.md`.
 
 ### Assets
 
@@ -589,6 +607,11 @@ Everything above shipped except where noted here.
   PUT and the queue re-checks it when it fires.
 - **The legacy shared asset library is gone**, along with `migrate-legacy-assets.ts` and the
   asset manager's shared-pile row. Assets are per story, full stop.
+- **`PATCH` and response gzip were added after the fact**, for 20-100 KB stories on a bad
+  mobile network. Server side only so far: `server/api/gzip.go`, `server/store/patch.go`,
+  and the `StoryPatch` / `PatchStoryRequest` types in `server.types.ts`. The client still
+  PUTs whole stories — wiring `client.ts` and `sync-queue.ts` onto `PATCH` is the next
+  step, and until it lands the win is download-only.
 
 **Open: rev lag.** A client can conflict with itself — the stored `rev` ends up one behind
 after a successful push, and every later edit stops syncing. Write-up and where to look:

@@ -56,6 +56,7 @@ Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` excep
 | `GET` | `/stories` | index; tombstones included and flagged |
 | `GET` | `/stories/{id}` | `ETag: "<rev>"`, honours `If-None-Match`; `?format=html` → 501 |
 | `PUT` | `/stories/{id}` | `{"story":{…},"client":"…"}`; `If-Match`; `?revive=1` |
+| `PATCH` | `/stories/{id}` | `{"patch":{…},"client":"…"}`; **`If-Match` required** |
 | `DELETE` | `/stories/{id}` | tombstone; `?purge=1` erases the directory |
 | `GET` | `/stories/{id}/revisions` | newest first, plus `current` |
 | `GET` | `/stories/{id}/revisions/{rev}` | that body |
@@ -68,6 +69,91 @@ Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` excep
 
 Every request may carry `X-Client-Id` and `X-Client-Name`; the name is recorded as
 `lastClient` and against every revision. Missing name is stored as `unknown`.
+
+### `PATCH /stories/{id}` — per-passage upload
+
+Autosave PUTs the whole story every 5 s. Stories are 1-14 KB today and heading for
+20-100 KB of passage text, so one typed sentence costs 100 KB of upload on whatever the
+phone has. `PATCH` sends what changed instead.
+
+```json
+{
+  "client": "twine-sliders 2.10.0-sliders",
+  "patch": {
+    "passages": {
+      "changed": [ {"id": "p7", "name": "Cellar", "text": "…"} ],
+      "removed": ["p3"]
+    },
+    "story": {"name": "Lighthouse", "startPassage": "p1"}
+  }
+}
+```
+
+Answers the same `{"id","rev","updatedAt","bytes"}` a `PUT` answers, with the same
+`ETag`. Shapes are `StoryPatch` / `PatchStoryRequest` in
+`src/store/persistence/server/server.types.ts`.
+
+- **`If-Match` is required**, unlike on `PUT`. A `PUT` states the whole story, so
+  last-write-wins is a coherent answer; a patch is only meaningful against the base it was
+  computed from. Missing, `*`, or stale → `412` with the same body a stale `PUT` gets, so
+  the client has one recovery branch: re-read, re-diff, retry.
+- **Passages are whole objects, matched on `id`.** Present → replaced where it stands;
+  absent → appended. Never text-diffed: sending one 8 KB passage instead of a 100 KB story
+  is already the win, and a text diff would mean client and server agreeing on a diff
+  algorithm forever.
+- **Removing a passage that is already gone is not an error.** Two clients deleting the
+  same passage is an ordinary race, and the end state both asked for is the one that
+  happens.
+- **`patch.story` is top-level scalars only.** `passages` there is a `400`: it has its own
+  half of the request, and accepting both would be two answers to one question.
+- **Same write path as `PUT`** — `writeStoryLocked`, so the rev bump, the `revs/` snapshot,
+  the keep-N prune, `normalizeStory` and the `meta.json` ordering are not reimplemented. A
+  patch that skipped the snapshot would leave holes in the history exactly where the
+  ordinary autosaves were.
+- **No `?revive=1`.** A tombstone has no body to patch; reviving means stating the whole
+  story, which is a `PUT`. → `409 deleted`, as `PUT` gives.
+- **It also unsticks the tab-close save.** That one goes out with `fetch(…, {keepalive:
+  true})`, which the Fetch spec caps at 64 KB of request body. Measured: an 89 KB story is
+  a 90,550-byte `PUT` — over the cap, so it silently does not happen — against a
+  1,219-byte `PATCH`.
+
+### Compression
+
+Responses are gzipped when the client sends `Accept-Encoding: gzip`. `server/api/gzip.go`,
+hand-rolled — the stdlib ships no gzip middleware and `gorilla/websocket` is meant to stay
+the only dependency.
+
+Policy is **by content type, decided at `WriteHeader`, not by route**: `application/json`
+and nothing else. Asset blobs are webp/mp3/png, already compressed, and gzipping them would
+burn CPU on both ends, throw away `Content-Length` and break the `Range` requests
+`http.ServeContent` serves them with.
+
+Measured on real bodies from the live store, through the real handler:
+
+| Body | plain | gzip | |
+|---|---|---|---|
+| story GET, "Sliders Feature Lab" | 14,217 | 4,866 | 2.92x |
+| story GET, "Trip to my Desert" | 8,388 | 1,873 | 4.48x |
+| story index | 547 | 321 | 1.70x |
+
+- Bodies under 512 bytes are left alone: the gzip header and trailer are 18 of them, and a
+  `PutStoryResponse` is barely more. Writes are buffered until the threshold or until the
+  handler finishes, so the decision is made on the real size rather than a
+  `Content-Length` nobody sets.
+- `304` and `204` never grow a `Content-Encoding`.
+- `Vary: Accept-Encoding` is always added, whatever this particular body did — a shared
+  cache has to know the body depends on the header.
+- `ETag` is the rev, so it does not change with the encoding, and must not.
+- The wrapper forwards `Hijack` and `Flush`. Without `Hijack`, `GET /api/v1/events` — the
+  websocket — would be a 500.
+- **Caddy already does `encode zstd gzip` in front of this in production** (see the
+  Caddyfile below), and it skips a response that already declares a `Content-Encoding`, so
+  the two do not stack. This is for everything that is not behind Caddy: the local dev
+  store on `127.0.0.1:27100`, the Playwright fixture, curl, and any future deployment
+  without a compressing proxy.
+- Request bodies are **not** decompressed. Uploads go through
+  `http.MaxBytesReader`, and a cap that a client could dodge by gzipping its body is not a
+  cap. `PATCH` is the answer to upload size.
 
 ### The websocket
 

@@ -105,6 +105,54 @@ func (s *server) putStory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// patchStoryRequest is PatchStoryRequest in server.types.ts. Same `client` build string
+// PUT carries; who wrote it still comes from X-Client-Name.
+type patchStoryRequest struct {
+	Client string           `json:"client"`
+	Patch  store.StoryPatch `json:"patch"`
+}
+
+// patchStory is the upload half of sync on a bad network: autosave sends the passages that
+// changed instead of the whole story. Everything after the patch is applied is the PUT
+// path, byte for byte — same lock, same rev bump, same revs/ snapshot, same response.
+func (s *server) patchStory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req patchStoryRequest
+	if err := decodeJSON(w, r, s.opts.MaxStoryBytes, &req); err != nil {
+		fail(w, err)
+		return
+	}
+
+	ifMatch, err := parseIfMatch(r)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// `*` is "as long as it exists", which is not a base rev. PatchStory refuses a nil
+	// If-Match with the 412 the client already knows how to recover from, so both spellings
+	// of "no precondition" land in one place.
+
+	client := clientOf(r)
+	res, err := s.st.PatchStory(id, req.Patch, client, ifMatch)
+	if err != nil {
+		// Same 409-not-410 rule PUT uses: a write to a tombstone is a choice for the
+		// client to make, not a resource that is merely gone.
+		var deleted *store.DeletedError
+		if errors.As(err, &deleted) {
+			writeError(w, http.StatusConflict, codeDeleted, deleted.Error())
+			return
+		}
+		fail(w, err)
+		return
+	}
+
+	s.hub.StoryChanged(id, res.Rev, originOf(client))
+
+	w.Header().Set("ETag", etag(res.Rev))
+	writeJSON(w, http.StatusOK, res)
+}
+
 type deleteResponse struct {
 	ID      string `json:"id"`
 	Deleted bool   `json:"deleted"`

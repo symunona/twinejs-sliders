@@ -6,7 +6,7 @@
  */
 
 import type {AssetMeta, Character} from '@sliders/scene-types';
-import type {Story} from '../../stories';
+import type {Passage, Story} from '../../stories';
 
 export const API_VERSION = 1;
 
@@ -82,6 +82,46 @@ export interface PutStoryResponse {
 	updatedAt: string;
 	bytes: number;
 }
+
+// ---------------------------------------------------------------------------
+// PATCH /stories/{id} — per-passage upload
+// ---------------------------------------------------------------------------
+
+/**
+ * What changed since the rev named in `If-Match`.
+ *
+ * Autosave PUTs the whole story every 5s. At the 20-100KB of passage text this is
+ * heading for, one typed sentence costs 100KB of upload on whatever the phone has —
+ * and the tab-close save goes out with `keepalive`, which the Fetch spec caps at 64KB
+ * of request body, so at that size the last save before a tab closes silently does not
+ * happen at all.
+ *
+ * Passages are sent whole, never text-diffed: sending one 8KB passage instead of a
+ * 100KB story is already the win, and a text diff would mean client and server agreeing
+ * on a diff algorithm forever.
+ */
+export interface StoryPatch {
+	passages?: {
+		/** Whole passage objects. Matched by `id`: present replaces, absent appends. */
+		changed?: Passage[];
+		/** Passage ids to drop. Naming one that is already gone is not an error. */
+		removed?: string[];
+	};
+	/**
+	 * Changed top-level scalars only — name, script, stylesheet, startPassage,
+	 * tagColors, zoom… `passages` is refused here (400): it has its own half above, and
+	 * accepting both would be two answers to one question.
+	 */
+	story?: Partial<Omit<Story, 'passages'>>;
+}
+
+export interface PatchStoryRequest {
+	client: string;
+	patch: StoryPatch;
+}
+
+/** Same shape a PUT answers with: PATCH goes through the same write path. */
+export type PatchStoryResponse = PutStoryResponse;
 
 export interface AssetManifest {
 	version: number;

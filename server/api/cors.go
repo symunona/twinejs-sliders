@@ -10,7 +10,9 @@ import (
 // that reason and kept in sync with client.ts.
 const allowedHeaders = "authorization, content-type, if-match, if-none-match, x-asset-hash, x-client-id, x-client-name"
 
-const allowedMethods = "GET, HEAD, POST, PUT, DELETE, OPTIONS"
+// PATCH is here for the per-passage story upload. Preflight fails closed, so a method
+// missing from this list breaks its route in a browser and nowhere else.
+const allowedMethods = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS"
 
 // corsMiddleware answers preflights and stamps the actual responses.
 //

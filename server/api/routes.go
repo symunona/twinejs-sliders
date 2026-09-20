@@ -69,6 +69,7 @@ func NewHandler(opts Options) http.Handler {
 	mux.HandleFunc("GET /api/v1/stories", s.listStories)
 	mux.HandleFunc("GET /api/v1/stories/{id}", s.getStory)
 	mux.HandleFunc("PUT /api/v1/stories/{id}", s.putStory)
+	mux.HandleFunc("PATCH /api/v1/stories/{id}", s.patchStory)
 	mux.HandleFunc("DELETE /api/v1/stories/{id}", s.deleteStory)
 
 	mux.HandleFunc("GET /api/v1/stories/{id}/revisions", s.listRevisions)
@@ -86,5 +87,8 @@ func NewHandler(opts Options) http.Handler {
 	mux.HandleFunc("PUT /api/v1/stories/{id}/assets/{assetId}", s.putAsset)
 	mux.HandleFunc("DELETE /api/v1/stories/{id}/assets/{assetId}", s.deleteAsset)
 
-	return corsMiddleware(opts.Origins, authMiddleware(opts.Token, mux))
+	// gzip is innermost so it only ever sees a handler's own body, and so a hijacked
+	// websocket upgrade passes through auth and CORS before it reaches the wrapper that
+	// has to forward Hijack.
+	return corsMiddleware(opts.Origins, authMiddleware(opts.Token, gzipMiddleware(mux)))
 }
