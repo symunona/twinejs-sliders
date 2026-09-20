@@ -18,6 +18,15 @@ export const SCENE_ONLY = 'sliders.sceneOnly';
 /** Let a scene take over the whole window rather than sit in the page column. */
 export const FULL_SCREEN = 'sliders.fullScreen';
 
+/**
+ * Draw the scene's `links:` as a list under the stage.
+ *
+ * Three-valued, unlike the flags above, because the default is neither on nor off: absent
+ * means "decide per scene" — see `showSceneLinks`. Set it to `true` for a story that wants
+ * the list under every scene, `false` for one that never wants it.
+ */
+export const SHOW_LINKS = 'sliders.showLinks';
+
 /** Where the current stage is published for other code to read. */
 export const STAGE_VAR = 'sliders.stage';
 
@@ -56,6 +65,20 @@ export function flagOn(name: string): boolean {
 
 export function fullScreenScenes(): boolean {
 	return flagOn(FULL_SCREEN);
+}
+
+/**
+ * Should this scene draw its `links:` under the stage?
+ *
+ * Unset (the default) is per scene: the list is drawn only when the beats offer the reader
+ * nothing to click, because a scene that ends on `[[stay]] or [[go]]` would otherwise show
+ * the same two choices twice, the second copy visible from the first beat on. A story that
+ * disagrees says so with `sliders.showLinks`, which wins either way.
+ */
+export function showSceneLinks(beatsOfferLinks: boolean): boolean {
+	const flag = get(SHOW_LINKS);
+
+	return typeof flag === 'boolean' ? flag : !beatsOfferLinks;
 }
 
 /** Opt-IN to silence, unlike the flags above: absent means a scene may be heard. */

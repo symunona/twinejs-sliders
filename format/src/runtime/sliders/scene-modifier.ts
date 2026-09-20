@@ -3,15 +3,17 @@
  *
  * `processRaw`, because the body must reach the parser exactly as written — Markdown would
  * turn `*` bullets into emphasis and smart-quote the dialogue. The modifier emits a
- * `<sliders-stage>` element plus the scene's links as ordinary Chapbook links, so a reader
- * with JavaScript disabled still sees somewhere to go, and link styling stays the story's.
+ * `<sliders-stage>` element plus — when the beats leave the reader nowhere to click — the
+ * scene's links as ordinary Chapbook links, so there is always somewhere to go even if the
+ * custom element never upgrades, and link styling stays the story's.
  */
 
-import {parseScene} from '@sliders/scene-schema';
+import {beatsOfferLinks, parseScene} from '@sliders/scene-schema';
 import type {EntityPatchBody, Scene, SceneError} from '@sliders/scene-types';
 import {createLoggers} from '../logger';
 import {get} from '../state';
 import type {Modifier} from '../template/modifiers';
+import {showSceneLinks} from './config';
 import {encodePayload} from './stage-element';
 import {SCENE_MODIFIER} from './scene-only';
 
@@ -90,7 +92,12 @@ export const sceneModifier: Modifier = {
 
 		let html = `<sliders-stage data-index="${count}" scene="${payload}"></sliders-stage>`;
 
-		if (links.length > 0) {
+		// Asked with the links that survived `if:`, and after `pruneEntityLinks`, so a beat
+		// whose only link is gated off this time round does not count as a way out and the
+		// list is drawn after all.
+		const offered = beatsOfferLinks(scene, new Set(links.map(link => link.name)));
+
+		if (links.length > 0 && showSceneLinks(offered)) {
 			html +=
 				'\n\n' + links.map(link => `> [[${link.name}->${link.to}]]`).join('\n') + '\n';
 		}

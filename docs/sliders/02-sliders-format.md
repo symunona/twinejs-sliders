@@ -37,11 +37,33 @@ Director: she should feel cornered. Not rendered.
 Consequence worth stating out loud: **every way out of a scene passage must be in
 its `links:`.** A `[[link]]` written under the block is not drawn.
 
-Both are variables, so a passage or a story can opt out:
+### The link list under the stage
+
+The `links:` map is drawn a second time, as ordinary Chapbook links under the stage (over
+the bottom of it in full screen). **Only when the beats offer the reader nothing to
+click.**
+
+| The beats hold | Bottom list |
+|---|---|
+| nothing clickable | drawn |
+| a `[[…]]` in a `say:`/`box:` line | not drawn |
+| a `link:` on an entity, set by a beat | not drawn |
+| only a dead link — a `[[name]]` no `links:` entry claims, or a `link:` whose entry lost its `if:` | drawn |
+| a `link:` declared in `cast:`/`props:` but never in a beat | drawn |
+
+Why: the list would show the same two choices twice, and show them from beat 1 — the
+answer visible before the line that asks the question. A scene with no clickable beats
+still needs it, or there is no way out at all.
+
+The rule is `beatsOfferLinks` in `@sliders/scene-schema`, asked after `if:` filtering.
+
+Variables, so a passage or a story can opt out:
 
 ```
 sliders.sceneOnly: false     # draw the text around the scene too
 sliders.fullScreen: false    # stage stays a 16:9 box inside the page
+sliders.showLinks: true      # always draw the list, clickable beats or not
+sliders.showLinks: false     # never draw it
 ```
 
 A passage with no `[scene]` in it is untouched — still an ordinary Chapbook passage.
