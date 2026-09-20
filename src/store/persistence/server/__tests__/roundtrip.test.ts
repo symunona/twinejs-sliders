@@ -121,17 +121,19 @@ describe('one browser, one story', () => {
 
 describe('rev lag — a client conflicting with itself', () => {
 	/**
-	 * The `docs/sliders/bugs/rev-lag.md` repro, at last.
+	 * `docs/sliders/bugs/rev-lag.md`, reproduced.
 	 *
 	 * `visibilitychange → hidden` pushes with `keepalive`, which lets the REQUEST outlive
 	 * the document. The `.then` that records the result does not. So the server writes,
 	 * the receipt is lost, and `rev` AND `pushedHash` both stay behind by exactly one.
+	 *
+	 * Sets up the situation and leaves it in `lagged`; the two tests after it say what is
+	 * TRUE about it and what OUGHT to be true.
 	 */
-	it('parks in conflict when a keepalive push loses its receipt', async () => {
+	async function lagged() {
 		const a = browser('a');
-		const story = storyWithText('s1', 'one');
 
-		await push(a, story);
+		await push(a, storyWithText('s1', 'one'));
 		expect(a.records.get('s1').rev).toBe(1);
 
 		// The tab is hidden. The edit goes out and lands; the page is gone before the
@@ -140,12 +142,41 @@ describe('rev lag — a client conflicting with itself', () => {
 
 		await a.client.putStory(edited, a.records.get('s1').rev);
 
-		expect(server.revOf('s1')).toBe(2);
-		expect(a.records.get('s1').rev).toBe(1); // the lag
+		return {a, edited};
+	}
 
-		// Next session. One browser, no second client, and yet:
-		expect(await decisionFor(a, edited)).toBe('conflict');
+	it('leaves the record one rev behind, with nothing to conflict about', async () => {
+		const {a, edited} = await lagged();
+
+		expect(server.revOf('s1')).toBe(2);
+		expect(a.records.get('s1').rev).toBe(1);
+
+		// The point. This browser's copy and the server's copy are the SAME TEXT — it is
+		// the text this browser sent. Whatever the bookkeeping says, there is no
+		// disagreement here for anybody to resolve.
+		expect(storyHash(edited)).toBe(storyHash(server.stored('s1') as Story));
 	});
+
+	/**
+	 * FAILING ON PURPOSE — this is the fix, not the bug.
+	 *
+	 * `it.failing` passes only while the assertion below does NOT hold, so this documents
+	 * the defect today and turns RED the moment someone fixes it. When that happens the
+	 * answer is to flip it to `it`, never to soften the assertion.
+	 *
+	 * `reconcileDecision` cannot get this right on its own — it sees two hashes and a rev,
+	 * and by those this story IS dirty and behind. The fix is a verification step around
+	 * it: on a suspected conflict, fetch and compare CONTENT, and only park if the two
+	 * copies genuinely diverged. See the fix section of the bug doc.
+	 */
+	it.failing(
+		'does not call it a conflict when one browser agrees with itself',
+		async () => {
+			const {a, edited} = await lagged();
+
+			expect(await decisionFor(a, edited)).not.toBe('conflict');
+		}
+	);
 
 	it('is not a conflict once the record catches up', async () => {
 		const a = browser('a');
