@@ -1,6 +1,7 @@
 # Bug: a client conflicts with itself (rev lag)
 
-OPEN. Found 2026-09-07, written up 2026-09-20. Feature: [11-server-storage](../11-server-storage.md).
+DIAGNOSED 2026-09-20, repro in a test, fix not landed. Found 2026-09-07, written up
+2026-09-20. Feature: [11-server-storage](../11-server-storage.md).
 
 ## Symptom
 
@@ -24,26 +25,74 @@ known one as `If-Match`. ONE number, SEVERAL writers:
 | socket `story` event — `use-server-sync.ts:979-1020` | the message rev; one branch KEEPS the old one |
 | publish / checkout / resolve — `use-server-sync.ts:1227,1269,1350` | their own results |
 
-Out-of-order landing leaves the record behind by exactly one — e.g. the socket echo of
-your own push arriving after its response, or a pull writing a stale value.
+## Verdict (2026-09-20)
 
-## Status
+**Not a race between writers. A write that lands and loses its receipt.**
 
-- Push path reads CORRECT today: it stores `result.rev`.
-- So the lag most likely comes from one of the other writers racing it. **Suspicion, not
-  verified.**
-- Ruled out: asset writes. The manifest has its own rev (`server/store/assets_test.go`),
-  so an asset push cannot move the story's.
+### RULED OUT: the socket echo
 
-## To pin it
+The earlier suspicion — "the socket echo of your own push arriving after its response" —
+**cannot happen**. `hub.broadcast(msg, exceptID)` (`server/hub/hub.go:193,251`) skips the
+writer, and the id matches on both transports: `backendClientId` feeds the HTTP
+`X-Client-Id` header (`client.ts:231`, read at `server/api/http.go:109`) AND the socket
+`hello.client` (`use-server-sync.ts:456` vs `:1063`). One pref, one value. A client never
+receives its own `story` event.
 
-Race a push against the socket echo — two writes in flight, assert the stored rev equals
-the server's after both settle. No e2e covers this; `e2e/server-sync.spec.ts` is the place.
+### CAUSE: the keepalive flush on tab hide
 
-## Fix shapes, if it reproduces
+`visibilitychange → hidden` fires `queue.flushAll({keepalive: true})`
+(`use-server-sync.ts:927-938`). `keepalive` lets the REQUEST outlive the document —
+that is the point. The `.then` that records the result does not:
 
-1. One writer. Every path routes its rev through the sync queue rather than writing the
-   record directly.
-2. Monotonic guard. Never write a rev lower than the stored one — cheap, hides the cause.
-3. Trust the server on 412: refetch the rev and retry once before parking in `conflict`.
-   A self-conflict is not a conflict.
+```
+sync-queue.ts:250-262
+  result = await putStory(...)     ← server already wrote, rev 3→4
+  this.write(storyId, {rev: result.rev, pushedHash: hash, ...})   ← never runs
+```
+
+Page hidden, discarded or bfcached → `rev` AND `pushedHash` both stay stale. Next load:
+
+| | value | |
+|---|---|---|
+| `record.rev` | 3 | never updated |
+| `record.pushedHash` | old | never updated → **dirty = true** |
+| `server.rev` | 4 | the write that landed |
+
+`reconcileDecision(dirty, behind)` → **conflict**. One browser, no second client, exactly
+one behind, and nobody watching a hidden tab.
+
+Repro pinned: `__tests__/roundtrip.test.ts`, "parks in conflict when a keepalive push
+loses its receipt".
+
+### SECOND, smaller cause
+
+`applyPull` (`use-server-sync.ts:503`) writes `fetched.rev` unconditionally. A pull in
+flight when a push lands overwrites the newer rev with the older. Same one-behind
+signature, needs two operations racing. Not yet reproduced.
+
+### Ruled out earlier, still ruled out
+
+Asset writes. The manifest has its own rev (`server/store/assets_test.go`, and
+`fake-server.ts` models it), so an asset push cannot move the story's.
+
+## Fix
+
+Shape **3** from the list below, plus **2** as a cheap backstop. NOT shape 1 — the writers
+never disagreed, so routing them through one place fixes nothing here.
+
+1. ~~One writer.~~ Real refactor, fixes none of the above.
+2. Monotonic guard. Never write a rev lower than the stored one. One line, hides the
+   cause, worth having anyway for the `applyPull` race.
+3. **Trust the server on 412: refetch, compare CONTENT, and only park if it genuinely
+   diverged. A self-conflict is not a conflict.**
+
+Shape 3 is the same change as the false-conflict fix for view state and for a cleared
+`localStorage`: stop deciding `conflict` on a proxy (my hash ≠ my last push) and decide it
+on evidence (my content ≠ the server's content). It also gives per-passage merge for free,
+since verifying means holding both sides.
+
+## Related
+
+The dirty-hash allowlist (`7e389cc8`) removes a DIFFERENT false conflict — `zoom` and
+`snapToGrid` were hashed, so scrolling the map counted as an edit. Same symptom, different
+cause; it does not touch this one.
