@@ -51,6 +51,7 @@ function renderAsset(unreferenced?: boolean) {
 				onChangeTags={jest.fn()}
 				onDelete={jest.fn()}
 				onEdit={jest.fn()}
+				onRename={jest.fn()}
 				unreferenced={unreferenced}
 			/>
 		</FakeStateProvider>

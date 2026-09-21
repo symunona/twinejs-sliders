@@ -52,6 +52,8 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const usage = useAssetUsage();
 	const [focus, setFocus] = React.useState<AssetFocusRequest>();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
+	/** A rename the store refused. Nothing else here can fail in a way the author chose. */
+	const [renameError, setRenameError] = React.useState<string>();
 	const [newCharacterOpen, setNewCharacterOpen] = React.useState(false);
 	const [search, setSearch] = React.useState('');
 	const [tabIndex, setTabIndex] = React.useState(0);
@@ -209,6 +211,38 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		library.refresh();
 	}
 
+	/**
+	 * Names and character ids are ONE namespace (spec 03), so a rename is checked against
+	 * both. Frames count too: they are addressable from a scene, and `store.update` throws
+	 * on a clash rather than numbering--the prompt has to catch it before that.
+	 */
+	function nameTaken(name: string, exceptId?: string): boolean {
+		const lowered = name.toLowerCase();
+
+		return (
+			library.all.some(
+				asset =>
+					asset.id !== exceptId && asset.name.toLowerCase() === lowered
+			) ||
+			library.characters.some(
+				character => character.id.toLowerCase() === lowered
+			)
+		);
+	}
+
+	async function handleRenameAsset(id: string, name: string) {
+		setRenameError(undefined);
+
+		try {
+			await library.store.update(id, {name});
+		} catch (error) {
+			console.error(`Could not rename ${id} to ${name}`, error);
+			setRenameError(t('dialogs.slidersAssets.renameError', {name}));
+		}
+
+		library.refresh();
+	}
+
 	async function handleChangeTags(id: string, tags: string[]) {
 		await library.store.update(id, {tags});
 		library.refresh();
@@ -289,6 +323,13 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 					/>
 				)}
 			</ButtonBar>
+			{renameError && (
+				<div className="sliders-note">
+					<p className="sliders-upload-report" role="alert">
+						{renameError}
+					</p>
+				</div>
+			)}
 			{hasReport && (
 				<div className="sliders-note">
 					<p className="sliders-upload-report" role="status">
@@ -330,9 +371,11 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 								focused={focusedAsset?.id === asset.id}
 								key={asset.id}
 								meta={asset}
+								nameTaken={name => nameTaken(name, asset.id)}
 								onChangeTags={tags => handleChangeTags(asset.id, tags)}
 								onDelete={() => handleDeleteAsset(asset.id)}
 								onEdit={() => openAssetEditor(asset.id)}
+								onRename={name => handleRenameAsset(asset.id, name)}
 								unreferenced={synced.ready && !synced.assetIds.has(asset.id)}
 								usedIn={usage.get(asset.name)}
 							/>

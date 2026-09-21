@@ -344,7 +344,9 @@
 			"title": "Edit {{name}}",
 			"tuningNote": "Drag these if too much or too little was cut—they re-use the cutout the model already made, so they apply instantly. Lower “keep ↔ cut” rescues a subject that came out full of holes; higher softness keeps the model’s own soft edges instead of forcing them to solid or clear.",
 			"unknownGpu": "not reported",
-			"width": "Width"
+			"width": "Width",
+			"renameTaken": "Another asset is already called “{{name}}”, and a scene saying “{{name}}” could then mean either of them.",
+			"renameError": "Could not rename this to “{{name}}”."
 		},
 		"passageEdit": {
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",
@@ -516,7 +518,14 @@
 			"importedNothing": "“{{name}}” was not copied.",
 			"importError": "Could not import “{{name}}”: {{message}}",
 			"usedInTitle": "Used in {{count}} scene: {{names}}",
-			"usedInTitle_plural": "Used in {{count}} scenes: {{names}}"
+			"usedInTitle_plural": "Used in {{count}} scenes: {{names}}",
+			"renameHint": "Double-click to rename",
+			"renameEmpty": "An asset needs a name—scenes have no other way to ask for it.",
+			"renameTaken": "Something else in this story is already called “{{name}}”. Asset names and character ids share one namespace, so a scene saying “{{name}}” could mean either.",
+			"renameUsed": "{{count}} scene writes “{{old}}”: {{names}}. Renaming does not rewrite it—that scene will ask for art that no longer exists.",
+			"renameUsed_plural": "{{count}} scenes write “{{old}}”: {{names}}. Renaming does not rewrite them—those scenes will ask for art that no longer exists.",
+			"renameError": "Could not rename this to “{{name}}”.",
+			"editImageHint": "Double-click to edit this image"
 		},
 		"slidersCharacters": {
 			"addAnchor": "Add Anchor",

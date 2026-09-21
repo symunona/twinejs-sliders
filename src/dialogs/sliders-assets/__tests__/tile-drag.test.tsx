@@ -80,6 +80,7 @@ describe('dragging a tile onto the stage', () => {
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
 					onEdit={jest.fn()}
+					onRename={jest.fn()}
 				/>
 			</FakeStateProvider>
 		);
@@ -100,6 +101,7 @@ describe('dragging a tile onto the stage', () => {
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
 					onEdit={jest.fn()}
+					onRename={jest.fn()}
 				/>
 			</FakeStateProvider>
 		);
@@ -116,6 +118,7 @@ describe('dragging a tile onto the stage', () => {
 					onChangeTags={jest.fn()}
 					onDelete={jest.fn()}
 					onEdit={jest.fn()}
+					onRename={jest.fn()}
 				/>
 			</FakeStateProvider>
 		);

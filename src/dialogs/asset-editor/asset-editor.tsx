@@ -10,6 +10,7 @@ import {
 	IconResize,
 	IconTarget,
 	IconWand,
+	IconWriting,
 	IconX
 } from '@tabler/icons';
 import * as React from 'react';
@@ -165,11 +166,21 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [tuning, setTuning] = React.useState<CutoutTuning>(DEFAULT_TUNING);
 	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
+	const [renameOpen, setRenameOpen] = React.useState(false);
+	/** The name in the rename prompt, which is the asset's own--not `name`, which is the
+	    name a "save as new" would use. */
+	const [renameName, setRenameName] = React.useState('');
 	const [replaceOpen, setReplaceOpen] = React.useState(false);
 	const [saveAsOpen, setSaveAsOpen] = React.useState(false);
 	const [saving, setSaving] = React.useState(false);
 	/** Every asset's id and name, to spot a name clash before saving. */
 	const [library, setLibrary] = React.useState<{id: string; name: string}[]>([]);
+	/**
+	 * Every name a scene can address--asset names AND character ids, one namespace. Wider
+	 * than `library`, which is assets alone: a rename to a character's id is refused by
+	 * the store, so the prompt has to know about them too.
+	 */
+	const [taken, setTaken] = React.useState<Set<string>>(new Set());
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	const {t} = useTranslation();
 
@@ -237,6 +248,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			}
 		});
 
+		store.takenNames().then(names => {
+			if (current) {
+				setTaken(names);
+			}
+		});
+
 		return () => {
 			current = false;
 		};
@@ -285,6 +302,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 			setMeta(assetMeta);
 			setName(assetMeta ? `${assetMeta.name}-edit` : sourceImage?.name ?? '');
+			setRenameName(assetMeta?.name ?? '');
 			setOrigin(assetMeta?.origin ?? DEFAULT_ANCHOR);
 			setOriginal(canvas);
 			setSource(canvas);
@@ -620,6 +638,44 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 	}
 
+	/**
+	 * Renames the asset itself. Metadata only: the pixels, the edit in progress and the id
+	 * are all untouched, so an author who opened this to crop something and noticed the
+	 * name was wrong does not have to abandon the edit to fix it.
+	 */
+	async function handleRename(value: string) {
+		const renamed = value.trim();
+
+		if (!meta || renamed === '' || renamed === meta.name) {
+			return;
+		}
+
+		setError(undefined);
+
+		try {
+			const updated = await store.update(meta.id, {name: renamed});
+
+			setMeta(updated);
+			setName(`${updated.name}-edit`);
+			setLibrary(current =>
+				current.map(asset =>
+					asset.id === updated.id ? {...asset, name: updated.name} : asset
+				)
+			);
+			setTaken(current => {
+				const next = new Set(current);
+
+				next.delete(meta.name);
+				next.add(updated.name);
+				return next;
+			});
+			refreshAssetLibrary();
+		} catch (renameError) {
+			console.error('Could not rename the asset', renameError);
+			setError(t('dialogs.assetEditor.renameError', {name: renamed}));
+		}
+	}
+
 	async function handleSave(asName: string) {
 		if (!source || !edits || !meta) {
 			return;
@@ -682,6 +738,35 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			};
 		},
 		[library, meta?.id, t]
+	);
+
+	// Unlike "save as new", where a clash is only advice, a rename that collides is
+	// refused: `store.update` throws on it, and two assets under one name is exactly what
+	// the store exists to prevent.
+	const validateRename = React.useCallback(
+		(value: string): PromptValidationResponse => {
+			const trimmed = value.trim().toLowerCase();
+
+			if (trimmed === '') {
+				return {message: t('dialogs.assetEditor.nameEmpty'), valid: false};
+			}
+
+			const clash = library.find(
+				asset => asset.id !== meta?.id && asset.name.toLowerCase() === trimmed
+			);
+
+			if (clash || (trimmed !== meta?.name.toLowerCase() && taken.has(value.trim()))) {
+				return {
+					message: t('dialogs.assetEditor.renameTaken', {
+						name: clash?.name ?? value.trim()
+					}),
+					valid: false
+				};
+			}
+
+			return {valid: true};
+		},
+		[library, meta?.id, meta?.name, t, taken]
 	);
 
 	const cropped =
@@ -759,6 +844,38 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			{...props}
 			className="asset-editor-dialog"
 			focusOnOpen
+			headerControls={
+				!detached &&
+				meta && (
+					<PromptButton
+						icon={<IconWriting />}
+						iconOnly
+						label={t('common.rename')}
+						onChange={event => setRenameName(event.target.value)}
+						onChangeOpen={setRenameOpen}
+						onSubmit={handleRename}
+						open={renameOpen}
+						prompt={t('common.renamePrompt', {name: meta.name})}
+						tooltipPosition="bottom"
+						validate={validateRename}
+						value={renameName}
+					/>
+				)
+			}
+			// The title is the asset's name, so a double click on it renames, the same
+			// gesture that renames a tile's name in the asset browser.
+			headerDisplayLabel={
+				<span
+					onDoubleClick={
+						!detached && meta ? () => setRenameOpen(true) : undefined
+					}
+					title={!detached && meta ? t('common.rename') : undefined}
+				>
+					{t('dialogs.assetEditor.title', {
+						name: meta?.name ?? sourceImage?.name ?? ''
+					})}
+				</span>
+			}
 			headerLabel={t('dialogs.assetEditor.title', {
 				name: meta?.name ?? sourceImage?.name ?? ''
 			})}

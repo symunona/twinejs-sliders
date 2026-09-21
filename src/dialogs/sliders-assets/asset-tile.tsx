@@ -1,12 +1,16 @@
 import {assetFragment, musicFragment} from '@sliders/asset-store';
 import {AssetMeta} from '@sliders/scene-types';
-import {IconMusic, IconPhotoEdit, IconTrash} from '@tabler/icons';
+import {IconMusic, IconPhotoEdit, IconTrash, IconWriting} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Badge} from '../../components/badge/badge';
 import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
+import {
+	PromptButton,
+	PromptValidationResponse
+} from '../../components/control/prompt-button';
 import {TagCardButton} from '../../components/tag/tag-card-button';
 import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
@@ -23,6 +27,9 @@ export interface AssetTileProps {
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
+	onRename: (name: string) => void;
+	/** Does something else in this library already answer to this name? */
+	nameTaken?: (name: string) => boolean;
 	/** Passage names whose scenes write this asset's name. */
 	usedIn?: string[];
 	/**
@@ -49,14 +56,18 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		allTags,
 		focused,
 		meta,
+		nameTaken,
 		onChangeTags,
 		onDelete,
 		onEdit,
+		onRename,
 		unreferenced,
 		usedIn
 	} = props;
 	const {t} = useTranslation();
 	const tileRef = React.useRef<HTMLDivElement>(null);
+	const [renameOpen, setRenameOpen] = React.useState(false);
+	const [draftName, setDraftName] = React.useState(meta.name);
 
 	// Backgrounds replace `bg:`, objects become an entry under `props:`. Only the NAME
 	// travels — scene YAML addresses assets by name, and `a_8f21` is unwritable. An `fx`
@@ -75,6 +86,45 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			tileRef.current?.scrollIntoView({block: 'nearest'});
 		}
 	}, [focused]);
+
+	// Something else renamed this--a sync pull, the image editor's own title. The draft
+	// is stale at that point, so it follows rather than overwriting.
+	React.useEffect(() => setDraftName(meta.name), [meta.name]);
+
+	// Scene YAML addresses assets by NAME, so a rename is the one edit here that can
+	// break a scene. Two names in one namespace is refused outright (the store throws
+	// anyway); a name scenes already write is allowed, but not silently--the beats keep
+	// saying the old word and the author is the only one who can fix them.
+	const validateName = React.useCallback(
+		(value: string): PromptValidationResponse => {
+			const trimmed = value.trim();
+
+			if (trimmed === '') {
+				return {message: t('dialogs.slidersAssets.renameEmpty'), valid: false};
+			}
+
+			if (trimmed !== meta.name && nameTaken?.(trimmed)) {
+				return {
+					message: t('dialogs.slidersAssets.renameTaken', {name: trimmed}),
+					valid: false
+				};
+			}
+
+			if (trimmed !== meta.name && usedIn && usedIn.length > 0) {
+				return {
+					message: t('dialogs.slidersAssets.renameUsed', {
+						count: usedIn.length,
+						names: usedIn.join(', '),
+						old: meta.name
+					}),
+					valid: true
+				};
+			}
+
+			return {valid: true};
+		},
+		[meta.name, nameTaken, t, usedIn]
+	);
 
 	return (
 		<div
@@ -105,7 +155,17 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					: undefined
 			}
 		>
-			<div className="sliders-tile-art">
+			<div
+				className="sliders-tile-art"
+				// The button below says the same thing, but the picture is what an author
+				// points at. Animated art has no editor to open, and a sound has no pixels.
+				onDoubleClick={isSound || meta.animated ? undefined : onEdit}
+				title={
+					isSound || meta.animated
+						? undefined
+						: t('dialogs.slidersAssets.editImageHint')
+				}
+			>
 				{isSound ? (
 					<SoundPreview
 						assetId={meta.id}
@@ -134,7 +194,13 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					</>
 				)}
 			</div>
-			<div className="sliders-tile-name">{meta.name}</div>
+			<div
+				className="sliders-tile-name"
+				onDoubleClick={() => setRenameOpen(true)}
+				title={t('dialogs.slidersAssets.renameHint')}
+			>
+				{meta.name}
+			</div>
 			<TileUses passages={usedIn ?? []} />
 			<div className="sliders-tile-badges">
 				{unreferenced && (
@@ -175,6 +241,18 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 						onClick={onEdit}
 					/>
 				)}
+				<PromptButton
+					icon={<IconWriting />}
+					iconOnly
+					label={t('common.rename')}
+					onChange={event => setDraftName(event.target.value)}
+					onChangeOpen={setRenameOpen}
+					onSubmit={value => onRename(value.trim())}
+					open={renameOpen}
+					prompt={t('common.renamePrompt', {name: meta.name})}
+					validate={validateName}
+					value={draftName}
+				/>
 				<TagCardButton
 					allTags={allTags}
 					iconOnly
