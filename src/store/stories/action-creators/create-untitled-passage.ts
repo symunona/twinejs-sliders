@@ -1,4 +1,4 @@
-import {passageDefaults} from '../defaults';
+import {newPassageSize, passageDefaults} from '../defaults';
 import {CreatePassageAction, Story} from '../stories.types';
 import {rectsIntersect} from '../../../util/geometry';
 import {unusedName} from '../../../util/unused-name';
@@ -18,6 +18,8 @@ export function createUntitledPassage(
 	}
 
 	const defs = passageDefaults();
+	// Not `defs`: a story whose passages preview their scenes wants another one of those.
+	const size = newPassageSize(story.passages);
 	const passageName = unusedName(
 		defs.name,
 		story.passages.map(passage => passage.name)
@@ -27,10 +29,10 @@ export function createUntitledPassage(
 
 	const passageGap = 25;
 	const bounds = {
-		height: defs.height,
-		left: Math.max(centerX - defs.width / 2, 0),
-		top: Math.max(centerY - defs.height / 2, 0),
-		width: defs.width
+		height: size.height,
+		left: Math.max(centerX - size.width / 2, 0),
+		top: Math.max(centerY - size.height / 2, 0),
+		width: size.width
 	};
 
 	if (story.snapToGrid) {

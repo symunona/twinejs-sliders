@@ -16,7 +16,6 @@
 import {foldPassageName, matchPassageName} from '@sliders/scene-types';
 import {Passage, Story} from '../store/stories';
 import {newPassagePositions} from '../store/stories/action-creators/new-passage-positions';
-import {passageDefaults} from '../store/stories/defaults';
 import {passageLinks} from './passage-links';
 
 /**
@@ -32,22 +31,20 @@ import {passageLinks} from './passage-links';
  */
 function ghostPassage(
 	name: string,
-	position: {left: number; top: number}
+	rect: {height: number; left: number; top: number; width: number}
 ): Passage {
-	const defaults = passageDefaults();
-
 	return {
-		height: defaults.height,
+		height: rect.height,
 		highlighted: false,
 		id: `ghost-${name}`,
-		left: position.left,
+		left: rect.left,
 		name,
 		selected: false,
 		story: '',
 		tags: [],
 		text: '',
-		top: position.top,
-		width: defaults.width
+		top: rect.top,
+		width: rect.width
 	};
 }
 

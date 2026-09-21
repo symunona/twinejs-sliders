@@ -1,6 +1,7 @@
 import {brokenLinkGhosts} from '../broken-link-ghosts';
 import {fakePassage, fakeStory} from '../../test-util';
 import {Passage, Story} from '../../store/stories';
+import {passageSizes} from '../passage-sizes';
 import {rectsIntersect} from '../geometry';
 
 function storyOf(passages: Passage[]): Story {
@@ -70,6 +71,35 @@ describe('brokenLinkGhosts()', () => {
 
 		expect(ghosts).toHaveLength(1);
 		expect(ghosts[0].name).toBe('Street');
+	});
+
+	// The ghost is created at exactly the rect it was drawn at, so it has to be drawn at
+	// the size creation would give it--otherwise the card jumps on click.
+	it('draws a ghost at the size a new passage would take', () => {
+		const start = fakePassage({
+			height: 100,
+			left: 0,
+			name: 'Start',
+			text: scene(['on: Street']),
+			top: 0,
+			width: 100
+		});
+		const previewing = fakePassage({
+			...passageSizes.largeWithPreview,
+			left: 5000,
+			name: 'Elsewhere',
+			text: 'Prose.',
+			top: 5000
+		});
+		const [plain] = brokenLinkGhosts(storyOf([start]));
+
+		expect(plain.height).toBe(passageSizes.small.height);
+		expect(plain.width).toBe(passageSizes.small.width);
+
+		const [previewSized] = brokenLinkGhosts(storyOf([start, previewing]));
+
+		expect(previewSized.height).toBe(passageSizes.largeWithPreview.height);
+		expect(previewSized.width).toBe(passageSizes.largeWithPreview.width);
 	});
 
 	it('does not overlap ghosts with each other or with real passages', () => {

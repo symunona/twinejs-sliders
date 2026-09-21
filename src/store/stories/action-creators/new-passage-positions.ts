@@ -1,5 +1,5 @@
 import {Passage, Story} from '../stories.types';
-import {passageDefaults} from '../defaults';
+import {newPassageSize} from '../defaults';
 import {rectsIntersect} from '../../../util/geometry';
 
 /**
@@ -10,22 +10,25 @@ import {rectsIntersect} from '../../../util/geometry';
  * Shared so that the automatic `[[…]]` creation and the editor's explicit "create this
  * passage" fix put a new passage in the same place. Two copies of this would drift, and
  * an author would have to learn two different layouts for the same idea.
+ *
+ * Full rects, not bare coordinates: the size a new passage takes depends on the story
+ * (`newPassageSize`), and the row has to be laid out at that size to know what it
+ * overlaps. Callers pass the whole rect on to creation so the two cannot disagree.
  */
 export function newPassagePositions(
 	story: Story,
 	parent: Passage,
 	count: number
-): {left: number; top: number}[] {
+): {height: number; left: number; top: number; width: number}[] {
 	if (count < 1) {
 		return [];
 	}
 
-	const passageDefs = passageDefaults();
+	const size = newPassageSize(story.passages);
 	const passageGap = 25;
 
 	let top = parent.top + parent.height + passageGap;
-	const newPassagesWidth =
-		count * passageDefs.width + (count - 1) * passageGap;
+	const newPassagesWidth = count * size.width + (count - 1) * passageGap;
 
 	// Horizontally center the passages.
 
@@ -38,7 +41,7 @@ export function newPassagePositions(
 			rectsIntersect(passage, {
 				left,
 				top,
-				height: passageDefs.height,
+				height: size.height,
 				width: newPassagesWidth
 			})
 		);
@@ -46,7 +49,7 @@ export function newPassagePositions(
 	while (needsMoving()) {
 		// Try rightward.
 
-		left += passageDefs.width + passageGap;
+		left += size.width + passageGap;
 
 		if (!needsMoving()) {
 			break;
@@ -54,7 +57,7 @@ export function newPassagePositions(
 
 		// Try leftward.
 
-		left -= 2 * (passageDefs.width + passageGap);
+		left -= 2 * (size.width + passageGap);
 
 		if (!needsMoving()) {
 			break;
@@ -62,15 +65,16 @@ export function newPassagePositions(
 
 		// Move downward and try again.
 
-		left += passageDefs.width + passageGap;
-		top += passageDefs.height + passageGap;
+		left += size.width + passageGap;
+		top += size.height + passageGap;
 	}
 
-	const result: {left: number; top: number}[] = [];
+	const result: {height: number; left: number; top: number; width: number}[] =
+		[];
 
 	for (let i = 0; i < count; i++) {
-		result.push({left, top});
-		left += passageDefs.width + passageGap;
+		result.push({height: size.height, left, top, width: size.width});
+		left += size.width + passageGap;
 	}
 
 	return result;

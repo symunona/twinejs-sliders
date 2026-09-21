@@ -10,15 +10,19 @@ import {useUndoableStoriesContext} from './undoable-stories-context';
  * `createNewlyLinkedPassages`).
  *
  * One helper so the two offers cannot drift on the undo label, on the name-already-exists
- * guard, or on where the card lands. The caller passes the position: the ghost already
- * has one, drawn on screen, and must be created at exactly that rect so the card does not
- * jump.
+ * guard, or on where the card lands. The caller passes the rect--position AND size: the
+ * ghost already has one, drawn on screen, and must be created at exactly that rect so the
+ * card does not jump, which it would if the ghost were drawn with a scene preview and the
+ * real passage came up small.
  */
 export function useCreateLinkedPassage(story: Story) {
 	const {dispatch} = useUndoableStoriesContext();
 
 	return React.useCallback(
-		(name: string, position: {left: number; top: number}) => {
+		(
+			name: string,
+			rect: {height?: number; left: number; top: number; width?: number}
+		) => {
 			if (story.passages.some(passage => passage.name === name)) {
 				return;
 			}
@@ -27,7 +31,7 @@ export function useCreateLinkedPassage(story: Story) {
 				{
 					type: 'createPassages',
 					storyId: story.id,
-					props: [{...position, name}]
+					props: [{...rect, name}]
 				},
 				'undoChange.newPassage'
 			);

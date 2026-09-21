@@ -1,7 +1,8 @@
 import {createUntitledPassage} from '../create-untitled-passage';
 import {Story} from '../../stories.types';
-import {fakeStory} from '../../../../test-util';
+import {fakePassage, fakeStory} from '../../../../test-util';
 import {passageDefaults} from '../../defaults';
+import {passageSizes} from '../../../../util/passage-sizes';
 
 describe('createUntitledPassage', () => {
 	const defs = passageDefaults();
@@ -24,6 +25,35 @@ describe('createUntitledPassage', () => {
 				top: 100 - defs.height / 2,
 				width: defs.width
 			},
+			storyId: story.id
+		});
+	});
+
+	// A story whose author sized a passage to show its scene gets another one of those,
+	// centered on the click the same way--see `newPassageSize`.
+	it('creates a preview-sized passage when the story already has one', () => {
+		const {height, width} = passageSizes.largeWithPreview;
+
+		// Placed well clear of the click, and off the grid, so the only thing under test
+		// is the size.
+		story.snapToGrid = false;
+		story.passages = [
+			fakePassage({
+				...passageSizes.largeWithPreview,
+				left: 5000,
+				top: 5000,
+				story: story.id
+			})
+		];
+
+		expect(createUntitledPassage(story, 1000, 1000)).toEqual({
+			type: 'createPassage',
+			props: expect.objectContaining({
+				height,
+				left: 1000 - width / 2,
+				top: 1000 - height / 2,
+				width
+			}),
 			storyId: story.id
 		});
 	});

@@ -53,7 +53,12 @@ export const InnerStoryEditRoute: React.FC = () => {
 	const handleCreateGhost = React.useCallback(
 		// Created at the rect it was drawn at, so the card does not jump on click.
 		(ghost: Passage) =>
-			createLinkedPassage(ghost.name, {left: ghost.left, top: ghost.top}),
+			createLinkedPassage(ghost.name, {
+				height: ghost.height,
+				left: ghost.left,
+				top: ghost.top,
+				width: ghost.width
+			}),
 		[createLinkedPassage]
 	);
 	const {blurPassage, focusPassage, presence} = useServerSyncContext();
