@@ -18,6 +18,8 @@ import {
 	BUBBLE_SIZINGS,
 	EASE_KINDS,
 	EASE_NAMES,
+	ENTITY_FITS,
+	FIT_Z,
 	FRAME_LOOPS,
 	LAYERS,
 	LAYER_BASELINE,
@@ -31,6 +33,7 @@ import {
 	type BubbleSizing,
 	type BubbleStyle,
 	type Camera,
+	type EntityFit,
 	type EntityKind,
 	type EntityPatch,
 	type EntityLink,
@@ -84,6 +87,7 @@ export const ENTITY_KEYS = [
 	'frame',
 	'frameLoop',
 	'flip',
+	'fit',
 	'layer',
 	'z',
 	'opacity',
@@ -100,6 +104,16 @@ export const ENTITY_KEYS = [
  * choices, and this one is a door.
  */
 export const LINK_ENTITY_KEYS = ['to', 'if'] as const;
+
+/**
+ * Entity keys a `fit:` plane has no use for.
+ *
+ * A plane fills the stage box, so there is no sprite box to place (`at`), to hang off
+ * another one (`of`), to size (`scale`) or to turn (`rot`). The renderer ignores all four;
+ * the parser says so out loud, because a key that silently does nothing is the trap this
+ * format keeps setting for its authors.
+ */
+export const FIT_IGNORES = ['at', 'of', 'scale', 'rot'] as const;
 
 /**
  * Keys inside one step of a `frame:` list.
@@ -228,6 +242,12 @@ interface Ctx {
 	pendingRemovals: {id: string; node: unknown}[];
 	/** `of:` edges declared in THIS block, with the node to point an error at. */
 	ofEdges: {id: string; parent: string; node: unknown}[];
+	/** Every id this document declares `fit:` on, wherever it declared it. */
+	fitIds: Set<string>;
+	/** `at`/`of`/`scale`/`rot` keys, warned about only if their entity turns out to be a plane. */
+	fitIgnored: {id: string; key: string; node: unknown}[];
+	/** Every say beat, by speaker — a plane has no sprite for a bubble to hang off. */
+	sayBeats: {id: string; node: unknown}[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1338,6 +1358,12 @@ function parseEntityBody(
 			continue;
 		}
 
+		// Held, not judged: whether one of these is a no-op depends on a `fit:` that may be
+		// in another block entirely. `checkFitPlanes` decides once the document is read.
+		if (selfId !== undefined && (FIT_IGNORES as readonly string[]).includes(key)) {
+			ctx.fitIgnored.push({id: selfId, key, node: pair.key});
+		}
+
 		switch (key) {
 			case 'at': {
 				const at = parseAt(ctx, pair.value, 'at', baseline);
@@ -1487,6 +1513,32 @@ function parseEntityBody(
 
 				if (flip !== undefined) {
 					body.patch.flip = flip;
+				}
+
+				break;
+			}
+
+			case 'fit': {
+				const fit = asString(ctx, pair.value, 'fit');
+
+				if (fit === undefined) {
+					break;
+				}
+
+				if ((ENTITY_FITS as readonly string[]).includes(fit)) {
+					body.patch.fit = fit as EntityFit;
+
+					if (selfId !== undefined) {
+						// Remembered for the whole document, not just this map: `fit:` may be
+						// declared in `cast:` while the `at:` or `say:` it makes meaningless
+						// lands in a beat, so the warnings are a cross-check run at the end.
+						ctx.fitIds.add(selfId);
+					}
+				} else {
+					addError(ctx, 'bad-value', `Unknown fit '${fit}'.`, pair.value, {
+						...keyFix(fit, ENTITY_FITS),
+						hint: `Must be one of ${ENTITY_FITS.join(', ')}.`
+					});
 				}
 
 				break;
@@ -1690,6 +1742,15 @@ function parseEntityBody(
 	// Desugar `layer:` last, so an explicit `z:` wins no matter which came first.
 	if (body.patch.z === undefined && body.layerZ !== undefined) {
 		body.patch.z = body.layerZ;
+	}
+
+	// And seed a plane's z after that, for the same reason and with the same rule: a `fit:`
+	// entity has no `at.y` to derive an order from, so without this it would sort as if it
+	// were standing on the default baseline — in front of most of the cast. An explicit
+	// `z:` in the same map wins whichever order the two were written in, and so does a
+	// `layer:`, which is already sugar for one.
+	if (body.patch.fit !== undefined && body.patch.z === undefined) {
+		body.patch.z = FIT_Z;
 	}
 
 	return body;
@@ -2282,6 +2343,7 @@ function parseBeat(
 				}
 
 				collectLinks(ctx, text, pair.value);
+				ctx.sayBeats.push({id: who, node: pair.value});
 				return {index, kind: 'say', text, who};
 			}
 
@@ -2307,6 +2369,7 @@ function parseBeat(
 					}
 
 					collectLinks(ctx, body.say, body.sayNode ?? pair.value);
+					ctx.sayBeats.push({id: who, node: body.sayNode ?? pair.value});
 					return {
 						index,
 						kind: 'say',
@@ -2553,6 +2616,66 @@ function checkOfEdges(ctx: Ctx, scene: Scene): void {
 }
 
 /**
+ * What a `fit:` plane makes meaningless, once the whole document has been read.
+ *
+ * Both are WARNINGS, and both are cross-checks rather than single-node ones: `fit:` lives
+ * in `cast:`/`props:` while the `at:` or the `say:` it silences may be five beats down, so
+ * neither can be decided at the moment it is read. A no-op key is the failure this format
+ * keeps producing — the author writes `at:`, nothing moves, and nothing says why.
+ *
+ * Not errors, because a plane that carries a stale `at:` still draws exactly right, and
+ * because `fit:` can be inherited through `from:` — which this cannot see, so silence here
+ * never means "that key does something".
+ */
+function checkFitPlanes(ctx: Ctx): void {
+	if (ctx.fitIds.size === 0) {
+		return;
+	}
+
+	for (const {id, key, node} of ctx.fitIgnored) {
+		if (!ctx.fitIds.has(id)) {
+			continue;
+		}
+
+		addError(
+			ctx,
+			'bad-value',
+			`'${id}' is a fit: plane, so ${key}: does nothing.`,
+			node,
+			{
+				hint: `A plane fills the stage, so it has no sprite box to ${
+					key === 'of'
+						? 'hang off another entity'
+						: key === 'scale'
+						? 'size'
+						: key === 'rot'
+						? 'turn'
+						: 'place'
+				}. Drop fit: to place it, or drop ${key}:. z:, opacity: and flip: still work.`,
+				severity: 'warning'
+			}
+		);
+	}
+
+	for (const {id, node} of ctx.sayBeats) {
+		if (!ctx.fitIds.has(id)) {
+			continue;
+		}
+
+		addError(
+			ctx,
+			'bad-value',
+			`'${id}' is a fit: plane, so a bubble has nothing to hang off.`,
+			node,
+			{
+				hint: 'A bubble is placed off the speaker’s rect, and a plane’s rect is the whole stage. Give the line to a character, or use box: for narration.',
+				severity: 'warning'
+			}
+		);
+	}
+}
+
+/**
  * One error for a line that fell out of the block scalar above it, replacing the three or
  * four YAML complaints it causes. See `block-scalar.ts`.
  */
@@ -2607,6 +2730,8 @@ function parseSceneDoc(text: string): ParseResult {
 		beatNodes: [],
 		entityLinkNodes: [],
 		errors: [],
+		fitIds: new Set(),
+		fitIgnored: [],
 		inlineLinks: new Map(),
 		linkIfNodes: new Map(),
 		linkNodes: new Map(),
@@ -2614,7 +2739,8 @@ function parseSceneDoc(text: string): ParseResult {
 		lineCounter,
 		ofEdges: [],
 		pendingLinks: [],
-		pendingRemovals: []
+		pendingRemovals: [],
+		sayBeats: []
 	};
 
 	let doc;
@@ -2927,6 +3053,7 @@ function parseSceneDoc(text: string): ParseResult {
 	}
 
 	checkOfEdges(ctx, scene);
+	checkFitPlanes(ctx);
 
 	if (scene.from === undefined) {
 		for (const removal of ctx.pendingRemovals) {

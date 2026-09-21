@@ -55,6 +55,7 @@ export const ENTITY_KEY_ORDER = [
 	'frame',
 	'frameLoop',
 	'flip',
+	'fit',
 	'layer',
 	'z',
 	'opacity',

@@ -34,6 +34,8 @@ import {
 	BUBBLE_SIZINGS,
 	EASE_KINDS,
 	EASE_NAMES,
+	ENTITY_FITS,
+	FIT_Z,
 	FRAME_LOOPS,
 	LAYERS,
 	SCENE_LOCKS
@@ -77,6 +79,9 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 
 const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	at: 'Position. A bare number is x, with the feet on the stage baseline; [x, y] is both.',
+	fit: `Draw this entity as a full-bleed PLANE instead of a sprite: it fills the stage and its picture is fitted to it. ${ENTITY_FITS.join(
+		' or '
+	)} — cover fills and crops, contain fits the whole picture in. A plane sits in the same z space as the cast, so a transparent PNG at z: 1 is a wall to stand behind. at:, of:, scale: and rot: do nothing on one; z:, opacity: and flip: still do. Without a z: it sits at ${FIT_Z}, behind everyone.`,
 	flip: 'true mirrors the sprite horizontally.',
 	frame:
 		'Which named frame of the character to draw — idle, angry, whatever it has. A LIST animates: frame: [walk_1, walk_2], or frame: [{name: walk_1, dur: 0.1, at: -0.2}] to time and move each step. dur is seconds, 0.1 by default.',

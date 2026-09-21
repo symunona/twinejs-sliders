@@ -41,6 +41,7 @@ import {
 	Character,
 	EASE_KINDS,
 	EASE_NAMES,
+	ENTITY_FITS,
 	FRAME_LOOPS,
 	LAYERS
 } from '@sliders/scene-types';
@@ -82,6 +83,8 @@ export type HintSlot =
 	| {kind: 'entities'}
 	| {kind: 'frame'; entity: string}
 	| {kind: 'layer'}
+	/** `fit:` — draw this entity as a full-bleed plane. */
+	| {kind: 'fit'}
 	/** `frameLoop:` — how an animated `frame:` list ends. */
 	| {kind: 'frameLoop'}
 	| {kind: 'fx'}
@@ -684,6 +687,9 @@ export function sceneHintContext(
 				case 'layer':
 					return found({kind: 'layer'});
 
+				case 'fit':
+					return found({kind: 'fit'});
+
 				case 'frameLoop':
 					return found({kind: 'frameLoop'});
 
@@ -878,6 +884,9 @@ function namesForSlot(
 
 		case 'layer':
 			return [...LAYERS];
+
+		case 'fit':
+			return [...ENTITY_FITS];
 
 		case 'frameLoop':
 			return [...FRAME_LOOPS];

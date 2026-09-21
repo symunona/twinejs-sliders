@@ -141,7 +141,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	 * Fit rides on the image alone, so the guides, handles and ghost frames stay put — you
 	 * are aligning art to the rig, not dragging the rig around. Scaling about the origin
 	 * keeps the feet planted, and the translate percentages read as fractions of the box
-	 * because the image is stretched across it. Matches `applyFit` in the DOM renderer.
+	 * because the image is stretched across it. Matches `applyFrameFit` in the DOM renderer.
 	 */
 	function fitStyle(value: FrameFit): React.CSSProperties {
 		return {

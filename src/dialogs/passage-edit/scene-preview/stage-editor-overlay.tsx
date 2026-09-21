@@ -270,6 +270,15 @@ export function hitTargets(
 		.map(item => ({...item.entity, order: item.order}));
 
 	for (const entity of sortByZ(all)) {
+		// A `fit:` plane's rect IS the stage, so it would swallow every press meant for the
+		// cast standing in front of it — and there would be nothing to do with the press
+		// anyway: a plane has no `at:` to drag, no `scale:` to pull and no `rot:` to turn.
+		// Skipped here rather than given a fake rect, so one rule covers the press, the
+		// hover cursor and the double click.
+		if (entity.fit) {
+			continue;
+		}
+
 		const rect = rectOf(entity.id);
 
 		if (rect) {
@@ -1044,6 +1053,12 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 	const single = selection.length === 1 ? selection[0] : undefined;
 	const singleRect = single === undefined ? undefined : rects.get(single);
+	// A plane can still be SELECTED — the caret landing on its line does that — but there
+	// is nothing to resize: `scale:` on a `fit:` entity is a key the parser warns about and
+	// the renderer ignores. Handles at the stage corners would be a gesture that writes a
+	// no-op into the file.
+	const singleIsPlane =
+		single !== undefined && !!stage.entities?.[single]?.fit;
 	// A tilted sprite's handles ride round with its box. Only their POSITION turns: a
 	// resize is a distance from the pivot, and rotating about that pivot leaves every
 	// distance alone, so `scaleFrom` needs to know nothing about any of this.
@@ -1154,7 +1169,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						return null;
 					}
 
-					const origin = box ? originPoint(box, camera, entity) : undefined;
+					// No origin cross on a plane: `at:` is the one thing it does not have, so
+					// a marker at the default baseline would name a coordinate nothing reads.
+					const origin =
+						box && !entity.fit ? originPoint(box, camera, entity) : undefined;
 					// Read-only markers. A character's anchors are global — dragging one
 					// here would silently move every other scene's bubbles, and that is
 					// the character editor's business, not this one's.
@@ -1249,6 +1267,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				    anchor that is nobody's origin. Multi-select gets move only. */}
 				{editable &&
 					single !== undefined &&
+					!singleIsPlane &&
 					singleRect &&
 					Object.entries(handlePoints(singleRect)).map(([handle, corner]) => {
 						const point = singlePivot

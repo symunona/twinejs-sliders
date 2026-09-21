@@ -97,6 +97,24 @@ describe('hitTargets()', () => {
 			hitTargets(stage, id => (id === 'mira' ? RECTS.mira : null))
 		).toHaveLength(1);
 	});
+
+	// A plane's rect IS the stage, so leaving it in would put a click target over every
+	// sprite on it — and there is nothing to drag once you have grabbed it.
+	it('leaves out a fit: plane, rect or no rect', () => {
+		const planeStage = parseSceneText(
+			['[scene]', 'cast:', '  mira: {at: -0.4}', 'props:', '  wall: {fit: cover}'].join(
+				'\n'
+			)
+		).states[0];
+		const rects: Record<string, Rect> = {
+			...RECTS,
+			wall: {left: 0, top: 0, width: 640, height: 360}
+		};
+
+		expect(hitTargets(planeStage, id => rects[id]).map(t => t.id)).toEqual([
+			'mira'
+		]);
+	});
 });
 
 describe('<StageEditorOverlay>', () => {

@@ -231,6 +231,12 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 				to: after.flip
 			});
 		}
+
+		// `fit` is deliberately NOT compared, and has no transition kind. There is nothing
+		// to tween between a sprite and a full-bleed plane — the box changes shape and the
+		// picture changes fit — and a missing transition means "snap", never "wrong": the
+		// renderer is handed the whole target stage either way. A plane that should arrive
+		// gently has `opacity`.
 	}
 
 	const beforeFx = fxById(prev.fx);

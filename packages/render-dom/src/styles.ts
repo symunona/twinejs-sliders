@@ -250,6 +250,33 @@ export const RENDER_DOM_CSS = `
 	pointer-events: none;
 }
 
+/* A fit: entity is a PLANE, not a sprite: it fills the stage box, and its picture is
+   fitted to that box instead of to a sprite rect. The renderer writes the same geometry
+   inline (layoutPlane), because an entity that was a sprite a beat ago still carries that
+   sprite's pixel width and height and a stylesheet cannot outrank an inline style. This is
+   the readable contract — and what an author's own stylesheet can hook. */
+.sliders-entity[data-fit] {
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+}
+
+/* Centred, unlike a sprite: object-position on a sprite pins the art at the entity's
+   origin (a character's feet), which on a backdrop plane would crop the sky instead of the
+   edges. */
+.sliders-entity[data-fit] > img {
+	object-position: 50% 50%;
+}
+
+.sliders-entity[data-fit='cover'] > img {
+	object-fit: cover;
+}
+
+.sliders-entity[data-fit='contain'] > img {
+	object-fit: contain;
+}
+
 /* The ONE entity that takes the pointer. The default above is load-bearing: the visual
    editor hit-tests by rectangle through an overlay that covers the whole stage, and a
    sprite that swallowed events would break dragging. The overlay still sits on top, so

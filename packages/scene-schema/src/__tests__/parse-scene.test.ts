@@ -1,7 +1,7 @@
 /**
  * @jest-environment-options {"customExportConditions": ["node"]}
  */
-import {LAYER_BASELINE} from '@sliders/scene-types';
+import {FIT_Z, LAYER_BASELINE, LAYER_Z} from '@sliders/scene-types';
 import {parseScene} from '../parse-scene';
 import type {SayBeat, SceneError, SetBeat} from '@sliders/scene-types';
 
@@ -956,5 +956,160 @@ describe('locked:', () => {
 		const {scene} = parseScene('locked: [bg, nonsense]\n');
 
 		expect(scene.locked).toEqual(['bg']);
+	});
+});
+
+/**
+ * `fit:` — an entity drawn as a full-bleed plane instead of a sprite.
+ *
+ * Two things are pinned here and both of them are about what the author is TOLD. The z
+ * seed, because a plane has no `at.y` to derive an order from and a plane that landed in
+ * front of the cast is the whole feature failing silently. And the two warnings, because
+ * `at:`, `of:`, `scale:`, `rot:` and `say:` on a plane are keys that do nothing — which is
+ * the one failure mode this format keeps producing.
+ */
+describe('fit:', () => {
+	it('takes cover and contain', () => {
+		const {errors, scene} = parseScene(
+			'props:\n  neon: {fit: cover}\n  card: {fit: contain}\n'
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.entities.neon).toMatchObject({fit: 'cover'});
+		expect(scene.entities.card).toMatchObject({fit: 'contain'});
+	});
+
+	it('rejects anything else, with a fix', () => {
+		const {errors, scene} = parseScene('props:\n  wall: {fit: coverr}\n');
+
+		expect(codes(errors)).toEqual(['bad-value']);
+		expect(find(errors, 'bad-value')?.hint).toContain('Must be one of');
+		expect(find(errors, 'bad-value')?.fix).toMatchObject({
+			replaces: 'coverr',
+			text: 'cover'
+		});
+		// Still an entity, just not a plane.
+		expect(scene.entities.wall).toMatchObject({kind: 'prop', ref: 'wall'});
+		expect(scene.entities.wall).not.toHaveProperty('fit');
+	});
+
+	it('seeds z behind everything derived', () => {
+		const {scene} = parseScene('props:\n  neon: {fit: cover}\n');
+
+		expect(scene.entities.neon).toMatchObject({z: FIT_Z});
+		expect(FIT_Z).toBe(LAYER_Z.back);
+	});
+
+	it('lets an explicit z win, in EITHER key order', () => {
+		// YAML map order is the author's, not a precedence rule, so both have to agree.
+		expect(
+			parseScene('props:\n  wall: {fit: cover, z: 3}\n').scene.entities.wall
+		).toMatchObject({fit: 'cover', z: 3});
+		expect(
+			parseScene('props:\n  wall: {z: 3, fit: cover}\n').scene.entities.wall
+		).toMatchObject({fit: 'cover', z: 3});
+	});
+
+	// `layer:` is sugar for a z seed, so it is an explicit z by another name.
+	it('lets a layer: seed win too', () => {
+		expect(
+			parseScene('props:\n  wall: {fit: cover, layer: front}\n').scene.entities.wall
+		).toMatchObject({fit: 'cover', z: 2});
+	});
+
+	it('patches a live entity from a beat', () => {
+		const {errors, scene} = parseScene(
+			'props:\n  wall: {fit: cover}\nbeats:\n  - wall: {fit: contain}\n'
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({
+			kind: 'set',
+			who: 'wall',
+			patch: {fit: 'contain'}
+		});
+	});
+
+	describe('the keys a plane ignores', () => {
+		it('warns about at, of, scale and rot written beside it', () => {
+			const {errors} = parseScene(
+				'props:\n  table: {at: 0}\n  wall: {fit: cover, at: -0.3, of: table, scale: 2, rot: 5}\n'
+			);
+
+			expect(errors).toHaveLength(4);
+			expect(errors.every(e => e.severity === 'warning')).toBe(true);
+			expect(errors.map(e => e.message).join(' ')).toContain(
+				"'wall' is a fit: plane, so at: does nothing."
+			);
+			expect(errors.map(e => e.message).join(' ')).toContain('so rot: does nothing.');
+		});
+
+		// The cross-check earns its keep here: `fit:` is in props:, the no-op key is five
+		// lines down in a beat, and neither node can see the other.
+		it('warns when the no-op key is in a beat instead', () => {
+			const {errors} = parseScene(
+				'props:\n  wall: {fit: cover}\nbeats:\n  - wall: {scale: 2}\n'
+			);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]).toMatchObject({severity: 'warning', line: 4});
+			expect(errors[0].message).toContain('so scale: does nothing.');
+		});
+
+		it('warns when the fit: is the one in the beat', () => {
+			const {errors} = parseScene(
+				'props:\n  wall: {at: -0.3}\nbeats:\n  - wall: {fit: cover}\n'
+			);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0].message).toContain('so at: does nothing.');
+		});
+
+		it('says nothing about an ordinary sprite', () => {
+			const {errors} = parseScene(
+				'props:\n  table: {at: 0}\n  wall: {at: -0.3, of: table, scale: 2, rot: 5}\n'
+			);
+
+			expect(errors).toEqual([]);
+		});
+	});
+
+	describe('say: on a plane', () => {
+		it('warns, because a bubble hangs off a rect that is the whole stage', () => {
+			const {errors} = parseScene(
+				'props:\n  wall: {fit: cover}\nbeats:\n  - wall: "Hello."\n'
+			);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0]).toMatchObject({severity: 'warning', line: 4});
+			expect(errors[0].message).toContain('a bubble has nothing to hang off');
+		});
+
+		it('warns on the long form too', () => {
+			const {errors} = parseScene(
+				'props:\n  wall: {fit: cover}\nbeats:\n  - wall: {say: "Hello.", opacity: 0.5}\n'
+			);
+
+			expect(errors).toHaveLength(1);
+			expect(errors[0].message).toContain('a bubble has nothing to hang off');
+		});
+
+		// A warning, not a parse error, precisely because it is a cross-check: `fit:` can
+		// arrive through `from:`, which this parse cannot see.
+		it('still produces the beat', () => {
+			const {scene} = parseScene(
+				'props:\n  wall: {fit: cover}\nbeats:\n  - wall: "Hello."\n'
+			);
+
+			expect(scene.beats[0]).toMatchObject({kind: 'say', who: 'wall'});
+		});
+
+		it('says nothing when the speaker is not a plane', () => {
+			const {errors} = parseScene(
+				'cast:\n  mira: {at: 0}\nbeats:\n  - mira: "Hello."\n'
+			);
+
+			expect(errors).toEqual([]);
+		});
 	});
 });

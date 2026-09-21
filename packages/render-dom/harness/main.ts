@@ -167,6 +167,22 @@ const STEPS: Step[] = [
 		transitions: [{kind: 'enter', duration: 0.4}],
 		bubbles: [],
 		box: 'Frame cycles run on the renderer\'s own clock, not the beat\'s.'
+	},
+	{
+		title: 'Two fit: planes with the cast sandwiched between them',
+		stage: stageOf([
+			// Backmost: a plane fills the stage and takes no sprite geometry at all.
+			prop('sky', 'plane_sky', {x: 0}, {fit: 'cover', z: -2}),
+			cast('mira', {x: -0.35}),
+			cast('joren', {x: 0.3}, {flip: true}),
+			prop('table', 'obj_table', {x: 0.15}),
+			// In FRONT of the cast, which is the thing `bg:` cannot do. Half transparent
+			// here only because the stub resolver draws solid rectangles.
+			prop('haze', 'plane_haze', {x: 0}, {fit: 'cover', z: 3, opacity: 0.45})
+		]),
+		transitions: [{kind: 'enter', duration: 0.4}],
+		bubbles: [],
+		box: 'fit: cover — a backdrop INSIDE the entity stack, so z: puts art in front of the cast.'
 	}
 ];
 
@@ -184,7 +200,11 @@ const assets = createStubResolver({
 	assets: {
 		obj_table: {w: 900, h: 300, color: '#6b4a2f'},
 		obj_candle: {w: 90, h: 260, color: '#ffd88a'},
-		bg_tavern_night: {w: 1920, h: 1080, kind: 'bg', color: '#243043'}
+		bg_tavern_night: {w: 1920, h: 1080, kind: 'bg', color: '#243043'},
+		// Deliberately the wrong aspect for the stage: a plane is object-fit: cover, so it
+		// has to fill anyway.
+		plane_sky: {w: 800, h: 1200, kind: 'bg', color: '#1d3a5f'},
+		plane_haze: {w: 1920, h: 1080, kind: 'bg', color: '#ff9a3c'}
 	}
 });
 

@@ -511,6 +511,10 @@ describe('half-typed and malformed input', () => {
 
 		const patch: EntityPatch = {
 			at: {x: -0.6, y: -0.2},
+			// A plane's keys and a sprite's keys in one entry is not a scene anyone would
+			// write — the parser warns about half of them. It is exactly what this test
+			// wants: every writable key at once, so none can go missing.
+			fit: 'cover',
 			flip: true,
 			frame: 'idle',
 			frameLoop: 'once',

@@ -231,6 +231,7 @@ cannot carry one.
 | `rot` | tilt, degrees CLOCKWISE, about the same origin `scale` grows about. Negative leans the other way. Absent = 0. |
 | `frame` | which named frame of the character/prop (D5) |
 | `flip` | mirror horizontally |
+| `fit` | `cover` / `contain`. Draw it as a full-bleed PLANE, not a sprite. See Planes. |
 | `layer` | `back` / `mid` / `front`. Optional. |
 | `z` | numeric escape hatch within a layer |
 
@@ -340,12 +341,51 @@ Exactly three, fixed order. Not author-definable.
 
 ```
 back  →  mid  →  front        (+ ui: DOM bubbles, above all, not addressable)
-bg is the backdrop, outside the layer stack.
+bg is ONE backdrop, outside the layer stack. For a backdrop inside it, see Planes.
 ```
 
 - Default for `cast` and `props`: `mid`.
 - Within a layer, z derives from y. Lower on screen = nearer = drawn later.
 - Override with numeric `z:`.
+
+## Planes — `fit:`
+
+An entity that fills the stage instead of standing on it. The in-stack backdrop.
+
+```yaml
+props:
+  neon: {fit: cover, z: -2}    # animated gif, backmost
+  wall: {fit: cover, z: 1}     # transparent PNG cutout, in FRONT of the cast
+cast:
+  mira: {at: -0.3}             # derived z in 0..1 -> behind the wall
+```
+
+`bg:` is one picture, outside the stack — it cannot have a character in front of it AND a
+picture in front of them. A plane is an ordinary entity in the one z space, so any number
+of them stack with the cast.
+
+| Rule | |
+|---|---|
+| Values | `cover` fills the stage and crops. `contain` fits the whole picture in, letterboxed. Nothing else. |
+| Where | `cast:`, `props:`, `entities:`, and a beat body — everywhere `scale:` and `z:` are. |
+| Honors | `z`, `opacity`, `flip`, enter/exit fades. |
+| Ignores | `at`, `of`, `scale`, `rot`. **Warned, never silent.** |
+| Default `z` | `-1` — same seed as `layer: back`, so a plane with no `z:` sits behind the whole derived 0..1 range. |
+| Explicit `z:` | wins, either key order. So does `layer:`. |
+| Ties at `-1` | broken by author order, like every other tie. |
+| Re-stating `fit:` | in a beat re-seeds the default `z` too. Write `z:` beside it to keep an order. |
+| `say:` on one | warned: a bubble hangs off the speaker's rect, and a plane's rect is the whole stage. Use a character, or `box:`. |
+| Picture anchor | centred, not the entity origin. A plane has no feet. |
+| Still an entity | a beat patches, fades and re-orders it like anything else. |
+
+`bg:` is unchanged and still the right key for one backdrop with `fx:` motion — a plane has
+no `bgFx` and no crossfade-on-swap.
+
+Visual editor: a plane is not draggable and takes no clicks — its rect is the whole stage,
+so hit-testing it would swallow every press meant for the cast. Select it from its YAML
+line.
+
+No parallax. A plane does not counter-translate with the camera (yet).
 
 ## Beats
 

@@ -31,6 +31,7 @@ import type {
 } from '@sliders/scene-types';
 import {
 	DEFAULT_FRAME_STEP_SECONDS,
+	FIT_Z,
 	bgMotionTiles,
 	cssEase
 } from '@sliders/scene-types';
@@ -854,6 +855,7 @@ export class DomRenderer implements Renderer {
 		// Stable hooks the e2e suite selects on. Do not rename.
 		el.dataset.entityId = id;
 		el.dataset.kind = res.entity.kind;
+		this.syncPlane(el, res.entity);
 		this.syncLink(el, res.entity);
 
 		const rec: EntityRecord = {
@@ -870,7 +872,7 @@ export class DomRenderer implements Renderer {
 		this.entities.set(id, rec);
 		rec.res = res;
 		this.setContent(rec, res);
-		this.applyFit(rec, res);
+		this.applyFrameFit(rec, res);
 		this.entityLayerEl?.appendChild(el);
 
 		// Enter: fade + slight rise. Snap into the start pose with transitions off, force a
@@ -879,6 +881,22 @@ export class DomRenderer implements Renderer {
 		void el.offsetWidth;
 		this.layout(rec, duration, undefined, ease);
 		this.syncAnim(rec, res, duration, ease);
+	}
+
+	/**
+	 * `data-fit` — what the stylesheet hangs the full-bleed rules off, and what the editor
+	 * and the e2e suite read to tell a plane from a sprite without re-deriving it.
+	 *
+	 * Removed rather than emptied when an entity stops being a plane: `[data-fit]` matches
+	 * an empty value too, so a stale attribute would keep a sprite stretched across the
+	 * stage with nothing in the CSS to say why.
+	 */
+	private syncPlane(el: HTMLElement, entity: StageEntity): void {
+		if (entity.fit) {
+			el.dataset.fit = entity.fit;
+		} else {
+			delete el.dataset.fit;
+		}
 	}
 
 	/**
@@ -958,6 +976,7 @@ export class DomRenderer implements Renderer {
 
 		// ABOVE the syncAnim bail-out below: an entity running a frame cycle takes the early
 		// return, and a link written after it would never update on a walking sprite.
+		this.syncPlane(rec.el, res.entity);
 		this.syncLink(rec.el, res.entity);
 
 		rec.entity = res.entity;
@@ -985,7 +1004,7 @@ export class DomRenderer implements Renderer {
 			durations.duration('frame', rec.id),
 			durations.ease('frame', rec.id)
 		);
-		this.applyFit(rec, res);
+		this.applyFrameFit(rec, res);
 		this.layout(rec, duration, undefined, ease);
 	}
 
@@ -1071,7 +1090,7 @@ export class DomRenderer implements Renderer {
 		rec.metrics = this.metricsFor(step.res);
 
 		this.setContent(rec, step.res, 0);
-		this.applyFit(rec, step.res);
+		this.applyFrameFit(rec, step.res);
 
 		// A step that names an `at` GLIDES over its own hold, so a walk translates smoothly
 		// while the poses swap. A step that names none inherits the entity's placement, and
@@ -1235,12 +1254,29 @@ export class DomRenderer implements Renderer {
 	 * sprite box's origin point, so a frame with a wider aspect than the manifest size
 	 * sits bottom centre (feet on the floor) rather than floating mid-box.
 	 */
-	private applyFit(rec: EntityRecord, res: ResolvedEntity): void {
+	private applyFrameFit(rec: EntityRecord, res: ResolvedEntity): void {
 		if (!rec.img) {
 			return;
 		}
 
 		const style = rec.img.style;
+
+		// A `fit:` plane's picture fills the stage, so neither of this function's two inputs
+		// applies: there is no sprite origin to pin it to and a frame's registration
+		// transform would shift a backdrop off the edge. Written inline as well as in the
+		// stylesheet because an entity that WAS a sprite still carries that sprite's
+		// `object-position`, and a stylesheet cannot outrank it.
+		if (res.entity.fit) {
+			style.objectFit = res.entity.fit;
+			style.objectPosition = '50% 50%';
+			style.transform = '';
+			style.transformOrigin = '';
+			return;
+		}
+
+		// Back to the stylesheet's `contain` for an entity that has stopped being a plane.
+		style.objectFit = '';
+
 		const originCss = `${rec.metrics.origin.x * 100}% ${
 			rec.metrics.origin.y * 100
 		}%`;
@@ -1295,6 +1331,11 @@ export class DomRenderer implements Renderer {
 	): void {
 		const {entity, metrics} = rec;
 
+		if (entity.fit) {
+			this.layoutPlane(rec, duration, from, ease);
+			return;
+		}
+
 		rec.rect = spriteRect(this.box, entity.at ?? {x: 0, y: 0}, metrics);
 
 		const style = rec.el.style;
@@ -1321,6 +1362,50 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
+	 * A `fit:` entity: a full-bleed PLANE in the same z space as every sprite.
+	 *
+	 * None of `spriteRect`'s metrics are consulted, and that is the whole feature — the
+	 * element is the stage box, the picture inside it is `object-fit: cover`/`contain`, and
+	 * `at`, `of`, `scale` and `rot` have nothing to act on (the parser warns about all
+	 * four). What still reaches it is everything that is not geometry: `z` through
+	 * `assignZ`, `opacity`, `flip`, and the enter/exit fade.
+	 *
+	 * `rect` is the stage box rather than nothing, because `rectOf` and `measure` are
+	 * contracts other code reads — the honest answer to "where is this plane" is "all of
+	 * it". The visual editor skips planes when it hit-tests rather than relying on a rect
+	 * that would swallow every click meant for the cast.
+	 *
+	 * ENTER_RISE is deliberately not applied: a backdrop sliding up 3% shows the stage edge
+	 * under it, so a plane's entrance is the fade alone.
+	 */
+	private layoutPlane(
+		rec: EntityRecord,
+		duration: number,
+		from?: {rise: number; opacity: number},
+		ease = cssEase(undefined, 'move')
+	): void {
+		const {entity} = rec;
+		const style = rec.el.style;
+
+		rec.rect = {
+			left: 0,
+			top: 0,
+			width: this.box.width,
+			height: this.box.height
+		};
+
+		style.width = '100%';
+		style.height = '100%';
+		style.transformOrigin = '50% 50%';
+		style.transitionDuration = `${Math.max(0, duration)}s`;
+		style.transitionTimingFunction = ease;
+		style.transform = `scaleX(${entity.flip ? -1 : 1})`;
+		style.opacity = String(
+			from ? from.opacity : clamp01(entity.opacity ?? 1)
+		);
+	}
+
+	/**
 	 * Draw order for the whole stage. Explicit z wins, otherwise it derives from y — lower on
 	 * screen is nearer, so it paints later. Ties go to whichever id the CURRENT scene lists
 	 * first.
@@ -1333,7 +1418,10 @@ export class DomRenderer implements Renderer {
 		const items = [...this.entities.values()].map(rec => ({
 			id: rec.id,
 			at: rec.entity.at ?? {x: 0, y: 0},
-			z: rec.entity.z,
+			// A plane has no y to derive an order from, so it falls back to the same seed
+			// the parser writes rather than to whatever `at` a materialized entity was
+			// given — a stage built by hand goes through here too. Explicit `z:` still wins.
+			z: rec.entity.fit ? rec.entity.z ?? FIT_Z : rec.entity.z,
 			// Anything not in the current stage is exiting. Park it after the live ones so a
 			// fading sprite cannot jump in front of the scene it is leaving.
 			order: this.keyOrder.get(rec.id) ?? Number.MAX_SAFE_INTEGER,

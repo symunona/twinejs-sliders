@@ -20,16 +20,42 @@ export const LAYERS = ['back', 'mid', 'front'] as const;
 export type Layer = (typeof LAYERS)[number];
 
 /**
+ * The z seed behind everything derived. `layer: back` and `fit:` share it, so a backdrop
+ * plane and a legacy back-layer sprite sort against each other by author order rather than
+ * by two numbers that drifted apart.
+ */
+const BACK_Z = -1;
+
+/**
  * What `layer:` desugars to. `mid` keeps the y-derived z, so it has no seed.
  *
  * The numbers match the space `resolveZ` documents: a derived z lands in 0..1, so -1 is
  * behind everything derived and 2 is in front of it.
  */
 export const LAYER_Z: Record<Layer, number | undefined> = {
-	back: -1,
+	back: BACK_Z,
 	mid: undefined,
 	front: 2
 };
+
+/**
+ * How a `fit:` entity fills the stage. CSS `object-fit` values, and deliberately only these
+ * two: `fill` stretches the art and `none`/`scale-down` are a sprite with extra steps.
+ */
+export const ENTITY_FITS = ['cover', 'contain'] as const;
+
+export type EntityFit = (typeof ENTITY_FITS)[number];
+
+/**
+ * What a `fit:` entity's z defaults to — the same seed `layer: back` uses.
+ *
+ * A plane has no `at.y` to derive a z from, so without a seed it would land wherever the
+ * default baseline happens to put it, which is IN FRONT of half the cast. Behind the whole
+ * derived 0..1 range is the only answer that makes `props: {wall: {fit: cover}}` draw what
+ * the author meant. An explicit `z:` still wins, and two planes tied at this z break by
+ * author order like everything else.
+ */
+export const FIT_Z = BACK_Z;
 
 /**
  * Scene y of the stage baseline — the floor an entity stands on when the author writes
@@ -155,8 +181,25 @@ export interface StageEntity {
 	frameLoop?: FrameLoop;
 	flip: boolean;
 	/**
+	 * Draw this entity as a full-bleed PLANE instead of as a positioned sprite: it fills the
+	 * stage box and its picture is `object-fit: cover` or `contain`.
+	 *
+	 * The point is stacking. `bg` is one backdrop outside the entity stack, so a wall in
+	 * FRONT of the cast and a sky behind them cannot both be backdrops; a plane lives in the
+	 * one z space every sprite lives in, so a transparent-PNG room front at `z: 1` and an
+	 * animated sky at `z: -2` sandwich the cast with no new concept.
+	 *
+	 * It is a DRAWING MODE, not a kind: a plane is still an ordinary entity that a beat can
+	 * patch, fade and re-order. What it has no use for is sprite geometry — `at`, `of`,
+	 * `scale` and `rot` are ignored (the parser warns), because there is no sprite box to
+	 * place, hang off, size or turn. `z`, `opacity` and `flip` all still mean what they say.
+	 */
+	fit?: EntityFit;
+	/**
 	 * Explicit draw order. When undefined, z derives from y — lower on screen is nearer, so
 	 * it paints later. ONE space for the whole stage: there are no layers to cross.
+	 *
+	 * A `fit:` entity has no y to derive from, so the parser seeds it with `FIT_Z`.
 	 */
 	z?: number;
 	opacity: number;

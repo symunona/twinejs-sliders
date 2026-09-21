@@ -124,6 +124,13 @@ export function mergePatch(
 		next.z = patch.z;
 	}
 
+	// Set-or-inherit like everything around it: a beat that turns an entity into a plane
+	// keeps it one, and there is deliberately no `fit: ~`. A plane going back to being a
+	// sprite needs an `at:` to go back to, so it is a new declaration, not a cleared key.
+	if (patch.fit !== undefined) {
+		next.fit = patch.fit;
+	}
+
 	if (patch.opacity !== undefined) {
 		next.opacity = patch.opacity;
 	}
@@ -154,6 +161,9 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 	return {
 		at: patch.at ? cloneVec(patch.at) : cloneVec(ENTITY_DEFAULTS.at),
 		flip: patch.flip ?? ENTITY_DEFAULTS.flip,
+		// No default: absent means "an ordinary sprite", which is what every renderer draws
+		// when it sees no key.
+		fit: patch.fit,
 		frame: patch.frame,
 		frameLoop: patch.frameLoop,
 		frames: patch.frames && cloneFrames(patch.frames),
