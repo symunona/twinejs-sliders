@@ -20,7 +20,11 @@ import {
 	type SyncRecordStore
 } from '../sync-record';
 import {clearSyncLog, setSyncLogEnabled, syncLogNotes} from '../sync-log';
-import {MAX_MERGE_ATTEMPTS, SyncQueue} from '../sync-queue';
+import {
+	MAX_MERGE_ATTEMPTS,
+	MAX_PATCH_FALLBACKS,
+	SyncQueue
+} from '../sync-queue';
 import {snapshotStory} from '../story-diff';
 import {settle, storyWithText, testPassage, testStory} from '../test-fixtures';
 import type {Passage, Story} from '../../../stories';
@@ -790,6 +794,62 @@ describe('a server that does not do PATCH', () => {
 			'getStory'
 		]);
 		expect(b.records.get('s1').state).toBe('conflict');
+	});
+
+	/**
+	 * ONE dropped request is the ordinary shape of a flaky link: the patch never arrived
+	 * and the retry behind it did. Reading that as "this server has no PATCH route" costs
+	 * the size win for the rest of the session, exactly when the network is bad — which
+	 * is the case the route exists for. A status would settle it; a dead connection has
+	 * to repeat before it means anything.
+	 */
+	it('keeps patching after a blip that killed only the patch', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		server.failNext(1);
+		await push(a, rooms('s1', {p1: 'one', p2: 'REWRITTEN'}));
+
+		const before = server.calls.filter(c => c.method === 'patchStory').length;
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'AGAIN'}));
+
+		expect(
+			server.calls.filter(c => c.method === 'patchStory').length
+		).toBeGreaterThan(before);
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'one',
+			p2: 'AGAIN'
+		});
+	});
+
+	/**
+	 * A refused CORS preflight also reaches the client as a network error, and that one
+	 * never stops. What tells it apart from a blip is only that it keeps happening, so
+	 * the queue gives up after `MAX_PATCH_FALLBACKS` rather than never.
+	 */
+	it('gives up on PATCH once the blip turns out to be permanent', async () => {
+		const a = browser('a');
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'two'}));
+
+		for (let i = 0; i < MAX_PATCH_FALLBACKS; i++) {
+			server.failNext(1);
+			await push(a, rooms('s1', {p1: 'one', p2: `try ${i}`}));
+		}
+
+		const before = server.calls.filter(c => c.method === 'patchStory').length;
+
+		await push(a, rooms('s1', {p1: 'one', p2: 'after'}));
+
+		expect(server.calls.filter(c => c.method === 'patchStory').length).toBe(
+			before
+		);
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'one',
+			p2: 'after'
+		});
 	});
 
 	/**

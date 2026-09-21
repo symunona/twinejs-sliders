@@ -36,6 +36,16 @@ export const DEFAULT_BACKOFF_MS = [5000, 15000, 60000];
  */
 export const MAX_MERGE_ATTEMPTS = 3;
 
+/**
+ * How many times a PATCH may fail ambiguously, with the PUT behind it getting through,
+ * before the queue stops offering PATCH for the session.
+ *
+ * Only for failures that say nothing about the method — a dropped connection, a refused
+ * CORS preflight, both of which reach here as `network`. A server that ANSWERS 405 needs
+ * no repetition and is switched off on the first one.
+ */
+export const MAX_PATCH_FALLBACKS = 3;
+
 /** E2E sets this to 50 so the suite does not sit through a five second debounce. */
 export const DEBOUNCE_PREF_KEY = 'sliders.sync.debounceMs';
 
@@ -69,8 +79,10 @@ export interface SyncQueueOptions {
 	onMerged?: (story: Story, rev: number) => boolean;
 	/**
 	 * Send changed passages instead of the whole story. On by default; tests turn it off
-	 * to exercise the PUT path. A server that answers a PATCH with anything other than a
-	 * conflict turns it off for the session by itself — see `patchMayBeUnsupported`.
+	 * to exercise the PUT path. A server that ANSWERS a PATCH with 400/405/415/501 turns
+	 * it off for the session by itself, and a failure that says nothing — a dead
+	 * connection, a refused preflight — has to repeat `MAX_PATCH_FALLBACKS` times first.
+	 * See `patchMayBeUnsupported` and `saysPatchUnsupported`.
 	 */
 	patch?: boolean;
 	/**
@@ -117,8 +129,13 @@ export class SyncQueue {
 	private readonly listeners = new Set<(records: SyncRecords) => void>();
 	private readonly store: SyncRecordStore;
 	private disposed = false;
-	/** Cleared for the session the first time a PUT works where a PATCH did not. */
+	/** Cleared for the session once a PUT working where a PATCH did not means something. */
 	private patchEnabled: boolean;
+	/**
+	 * Consecutive ambiguous PATCH failures whose PUT got through. Reset by any PATCH that
+	 * works, so a flaky connection never accumulates its way to switching PATCH off.
+	 */
+	private patchFallbacks = 0;
 
 	constructor(options: SyncQueueOptions) {
 		this.options = options;
@@ -384,9 +401,15 @@ export class SyncQueue {
 		}
 
 		try {
-			return await client.patchStory(story.id, patch, record.rev, {
+			const result = await client.patchStory(story.id, patch, record.rev, {
 				keepalive: options.keepalive
 			});
+
+			// The method works. Whatever the earlier failures were, they were about the
+			// wire, so they stop counting towards switching PATCH off.
+			this.patchFallbacks = 0;
+
+			return result;
 		} catch (error) {
 			if (!patchMayBeUnsupported(error)) {
 				throw error;
@@ -396,9 +419,25 @@ export class SyncQueue {
 				keepalive: options.keepalive
 			});
 
-			this.patchEnabled = false;
+			this.patchFallbacks += 1;
+
+			// A STATUS is an answer about the request, so one is enough to settle it.
+			// A dropped connection is not: on a flaky link, the patch failing and the
+			// retry getting through is an ordinary coincidence, and switching PATCH off
+			// for it throws the size win away exactly when the network is bad — which is
+			// when it matters. The only thing that tells a refused method from a blip is
+			// whether it keeps happening, so an ambiguous failure has to repeat.
+			if (
+				saysPatchUnsupported(error) ||
+				this.patchFallbacks >= MAX_PATCH_FALLBACKS
+			) {
+				this.patchEnabled = false;
+			}
+
 			logSync('push', 'patch refused, put instead', story.id, () => ({
-				error: error instanceof Error ? error.message : String(error)
+				error: error instanceof Error ? error.message : String(error),
+				fallbacks: this.patchFallbacks,
+				patchDisabled: !this.patchEnabled
 			}));
 
 			return result;
@@ -669,13 +708,24 @@ function patchMayBeUnsupported(error: unknown): boolean {
 		return false;
 	}
 
+	return error.network || error.status === 0 || saysPatchUnsupported(error);
+}
+
+/**
+ * Did the SERVER answer, and say the method or the body was wrong?
+ *
+ * The narrower half of the question above, and the only half that settles anything on
+ * its own. A status means the request arrived and was understood well enough to be
+ * refused, so one is proof; a dead connection means nothing arrived, and looks the same
+ * whether the route is missing or the wifi blinked.
+ */
+function saysPatchUnsupported(error: unknown): boolean {
 	return (
-		error.network ||
-		error.status === 0 ||
-		error.status === 400 ||
-		error.status === 405 ||
-		error.status === 415 ||
-		error.status === 501
+		isServerError(error) &&
+		(error.status === 400 ||
+			error.status === 405 ||
+			error.status === 415 ||
+			error.status === 501)
 	);
 }
 
