@@ -523,21 +523,35 @@ export class SyncQueue {
 				// same 412 and merges again; the cap is there so a fast typist ends up
 				// parked rather than in a loop.
 				if (entry.story !== story) {
-					entry.mergeAttempts = (entry.mergeAttempts ?? 0) + 1;
+					const attempts = (entry.mergeAttempts ?? 0) + 1;
 
-					if (entry.mergeAttempts <= MAX_MERGE_ATTEMPTS) {
+					if (attempts <= MAX_MERGE_ATTEMPTS) {
 						const latest = entry.story;
 
 						logSync('push', 'merge: superseded, retrying', storyId, () => ({
-							attempt: entry.mergeAttempts
+							attempt: attempts
 						}));
 						clearTimers(entry);
 						this.pending.delete(storyId);
 						this.write(storyId, {state: 'dirty'});
 						this.push(latest);
+						// The count has to outlive the entry that carried it. `push` mints
+						// a fresh `Pending`, so leaving it on the old one resets it to zero
+						// every round and the cap never arrives — a typist who lands a
+						// keystroke inside each round trip retries forever. Re-attaching
+						// here rather than keeping a second map on the queue: the entry is
+						// still the only thing that knows this story is mid-retry.
+						const next = this.pending.get(storyId);
+
+						if (next) {
+							next.mergeAttempts = attempts;
+						}
 
 						return;
 					}
+
+					// Out of retries: fall through and park, which is what this story did
+					// before merging existed.
 				} else {
 					await this.landMerge(storyId, entry, outcome.story, outcome.rev);
 

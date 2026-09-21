@@ -20,7 +20,7 @@ import {
 	type SyncRecordStore
 } from '../sync-record';
 import {clearSyncLog, setSyncLogEnabled, syncLogNotes} from '../sync-log';
-import {SyncQueue} from '../sync-queue';
+import {MAX_MERGE_ATTEMPTS, SyncQueue} from '../sync-queue';
 import {snapshotStory} from '../story-diff';
 import {settle, storyWithText, testPassage, testStory} from '../test-fixtures';
 import type {Passage, Story} from '../../../stories';
@@ -1031,5 +1031,102 @@ describe('the base a patch is computed from', () => {
 		await push(a, second);
 
 		expect(a.records.get('s1').snapshot).toEqual(snapshotStory(second));
+	});
+});
+
+describe('a merge the author keeps superseding', () => {
+	/**
+	 * Every conflict check hands back a merge computed from text the author has already
+	 * typed past, so it is thrown away and retried with the newer text — which hits the
+	 * same 412 and merges again. `MAX_MERGE_ATTEMPTS` is the only thing that ends that,
+	 * and it only ends it if the count SURVIVES the `Pending` entry the retry deletes on
+	 * its way out. It did not: `push` minted a fresh entry, the count restarted at zero
+	 * every round, and a typist who lands a keystroke inside each round trip never
+	 * parked and never landed.
+	 */
+	async function neverStopsTyping() {
+		const base = rooms('s1', {p1: 'one', p2: 'two'});
+		const a = browser('a');
+		const records = memorySyncRecordStore();
+		const real = server.client({id: 'b', name: 'b'});
+		let checks = 0;
+		let typed = 0;
+		const queue: SyncQueue = new SyncQueue({
+			client: {
+				...real,
+				getStory: (id: string, ifNoneMatch?: number) => {
+					checks++;
+					typed++;
+					// The author lands a keystroke while the check is in flight, every
+					// single time. Nothing here ever settles on its own.
+					queue.push(rooms('s1', {p1: 'one', p2: `B types ${typed}`}));
+
+					return real.getStory(id, ifNoneMatch);
+				}
+			} as ServerClient,
+			debounceMs: 0,
+			onMerged: () => true,
+			records
+		});
+
+		// B made the story, so B has a snapshot to merge against.
+		queue.push(base);
+		await queue.flush('s1');
+		await settle();
+
+		// A holds the same rev and edits the OTHER room, so B's next push is a real 412
+		// over passages nobody is fighting about.
+		a.records.update('s1', {pushedHash: storyHash(base), rev: 1});
+		await push(a, rooms('s1', {p1: 'A WAS HERE', p2: 'two'}));
+
+		checks = 0;
+		queue.push(rooms('s1', {p1: 'one', p2: 'B types 0'}));
+		await queue.flush('s1');
+		await settle();
+
+		// Run every retry the queue scheduled, and then some.
+		for (let i = 0; i < MAX_MERGE_ATTEMPTS + 6; i++) {
+			jest.advanceTimersByTime(50);
+			await settle(20);
+		}
+
+		return {checks: () => checks, queue, records};
+	}
+
+	it('gives up after the cap rather than retrying forever', async () => {
+		const {checks, queue} = await neverStopsTyping();
+
+		// The push that found the 412, plus one per allowed retry.
+		expect(checks()).toBe(MAX_MERGE_ATTEMPTS + 1);
+		expect(
+			syncLogNotes({event: 'push'}).filter(
+				note => note === 'merge: superseded, retrying'
+			)
+		).toHaveLength(MAX_MERGE_ATTEMPTS);
+
+		queue.dispose();
+	});
+
+	it('parks, exactly as it did before merging existed', async () => {
+		const {queue, records} = await neverStopsTyping();
+
+		expect(records.get('s1').state).toBe('conflict');
+
+		queue.dispose();
+	});
+
+	/**
+	 * A merge is only ever pushed for text the author has stopped moving. Landing one
+	 * computed from superseded text would overwrite the keystrokes it does not contain.
+	 */
+	it('never pushes a merge it computed from stale text', async () => {
+		const {queue} = await neverStopsTyping();
+
+		expect(textOf(server.stored('s1') as Story)).toEqual({
+			p1: 'A WAS HERE',
+			p2: 'two'
+		});
+
+		queue.dispose();
 	});
 });

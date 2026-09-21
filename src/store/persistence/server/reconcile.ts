@@ -264,21 +264,6 @@ export interface ReconcileVerifiedInput {
 }
 
 /**
- * `reconcileMerging`'s answer.
- *
- * `action` widens `ReconcileAction` with `merge` rather than adding a member to it:
- * `ReconcileAction` is switched on in the hook, and a new member there would be a
- * compile error in a file this change deliberately does not touch.
- */
-export interface ReconcileOutcome {
-	action: ReconcileAction | 'merge';
-	/** Only when `action` is `merge`: theirs plus mine, to land and then push. */
-	story?: Story;
-	/** Only when `action` is `merge`: the server rev it is based on. */
-	rev?: number;
-}
-
-/**
  * The table, with a suspected conflict checked against the server's bytes.
  *
  * One function so that the hook and any test asking "what would sync do here" are reading
@@ -311,52 +296,4 @@ export async function reconcileVerified(
 	const verdict = await verifyConflict({client, hash, local, records});
 
 	return verdict === 'resolved' ? 'none' : 'conflict';
-}
-
-/**
- * The table, with a suspected conflict checked AND, where it can be, merged.
- *
- * The merging sibling of `reconcileVerified`, for the poll and socket path. It is
- * separate rather than a flag because the two have different obligations: a caller of
- * this one must be able to land `story` in the local store and push it, in that order,
- * and a caller that cannot must keep using `reconcileVerified`. See the wiring note in
- * `SyncQueueOptions.onMerged`.
- *
- * Nothing is written here. `merge` is a proposal.
- */
-export async function reconcileMerging(
-	input: ReconcileVerifiedInput
-): Promise<ReconcileOutcome> {
-	const {client, local, records, server} = input;
-	const record = records.get(local.id);
-	const hash = storyHash(local);
-	const decision = reconcileDecision({
-		local: {
-			dirty: hash !== record.pushedHash,
-			rev: record.rev,
-			sync: local.sync === true
-		},
-		server
-	});
-
-	if (decision !== 'conflict') {
-		return {action: decision};
-	}
-
-	const outcome = await examineConflict({
-		client,
-		hash,
-		local,
-		merge: true,
-		records
-	});
-
-	switch (outcome.verdict) {
-		case 'resolved':
-			return {action: 'none'};
-		case 'merged':
-			return {action: 'merge', rev: outcome.rev, story: outcome.story};
-		default:
-			return {action: 'conflict'};
-	}
 }
