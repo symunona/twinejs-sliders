@@ -24,6 +24,7 @@ import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
 import {useAssetUsage} from './use-asset-usage';
+import {useSceneRefRename} from './use-scene-ref-rename';
 import {useSyncedRefs} from './use-synced-refs';
 import './sliders-assets.css';
 
@@ -47,6 +48,7 @@ export type SlidersAssetsDialogProps = DialogComponentProps;
 export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => {
 	const {dispatch} = useDialogsContext();
 	const library = useAssetLibrary();
+	const renameScenes = useSceneRefRename();
 	// Art no scene names never leaves this machine on a push. Badge it, don't change it.
 	const synced = useSyncedRefs();
 	const usage = useAssetUsage();
@@ -230,7 +232,20 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		);
 	}
 
-	async function handleRenameAsset(id: string, name: string) {
+	/**
+	 * Renaming art, and optionally carrying the scenes that name it along.
+	 *
+	 * The store moves first: a rename it refuses (a clash the prompt did not catch, one
+	 * namespace with character ids) must not leave the passages rewritten to a name no
+	 * asset answers to.
+	 */
+	async function handleRenameAsset(
+		id: string,
+		name: string,
+		updateScenes = false
+	) {
+		const oldName = library.all.find(asset => asset.id === id)?.name;
+
 		setRenameError(undefined);
 
 		try {
@@ -238,6 +253,12 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		} catch (error) {
 			console.error(`Could not rename ${id} to ${name}`, error);
 			setRenameError(t('dialogs.slidersAssets.renameError', {name}));
+			library.refresh();
+			return;
+		}
+
+		if (updateScenes && oldName) {
+			renameScenes(oldName, name);
 		}
 
 		library.refresh();
@@ -375,7 +396,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 								onChangeTags={tags => handleChangeTags(asset.id, tags)}
 								onDelete={() => handleDeleteAsset(asset.id)}
 								onEdit={() => openAssetEditor(asset.id)}
-								onRename={name => handleRenameAsset(asset.id, name)}
+								onRename={(name, updateScenes) =>
+									handleRenameAsset(asset.id, name, updateScenes)
+								}
 								unreferenced={synced.ready && !synced.assetIds.has(asset.id)}
 								usedIn={usage.get(asset.name)}
 							/>

@@ -112,6 +112,48 @@ describe('renaming an asset from its tile', () => {
 		expect(screen.getByRole('button', {name: 'common.ok'})).toBeEnabled();
 	});
 
+	/**
+	 * The third way out of the prompt. `renameSceneRefs` rewrites the beats; the tile only
+	 * has to say how many scenes are at stake and hand the decision back.
+	 */
+	it('offers to carry the scenes along, and says so only when there are any', async () => {
+		const {onRename} = renderTile({usedIn: ['Tavern', 'Cellar']});
+
+		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
+		await userEvent.clear(renameField());
+		await userEvent.type(renameField(), 'lantern');
+		await userEvent.click(
+			screen.getByRole('button', {name: 'dialogs.slidersAssets.renameUpdateScenes'})
+		);
+		expect(onRename).toHaveBeenCalledWith('lantern', true);
+	});
+
+	it('offers only the plain rename when no scene writes the name', async () => {
+		renderTile();
+
+		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
+		expect(
+			screen.queryByRole('button', {
+				name: 'dialogs.slidersAssets.renameUpdateScenes'
+			})
+		).not.toBeInTheDocument();
+	});
+
+	/** Both submits run the same validation--neither is a way around a name clash. */
+	it('disables both submits on a name the library already answers to', async () => {
+		renderTile({nameTaken: name => name === 'lantern', usedIn: ['Tavern']});
+
+		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
+		await userEvent.clear(renameField());
+		await userEvent.type(renameField(), 'lantern');
+		expect(
+			screen.getByRole('button', {
+				name: 'dialogs.slidersAssets.renameUpdateScenes'
+			})
+		).toBeDisabled();
+		expect(screen.getByRole('button', {name: 'common.ok'})).toBeDisabled();
+	});
+
 	it('refuses an empty name', async () => {
 		renderTile();
 

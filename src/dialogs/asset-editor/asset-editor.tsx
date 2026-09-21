@@ -37,6 +37,8 @@ import {
 	refreshAssetLibrary,
 	useAssetStore
 } from '../sliders-assets/asset-store-context';
+import {useAssetUsage} from '../sliders-assets/use-asset-usage';
+import {useSceneRefRename} from '../sliders-assets/use-scene-ref-rename';
 import {AdjustSlider} from './adjust-slider';
 import {
 	applyTuning,
@@ -141,6 +143,10 @@ function elapsedLabel(seconds: number): string {
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId, source: sourceImage} = props;
 	const store = useAssetStore();
+	// Which passages write this asset's name, so the rename prompt can offer to carry them
+	// along -- the same list the asset browser's tiles show.
+	const usage = useAssetUsage();
+	const renameScenes = useSceneRefRename();
 	const [background, setBackground] = React.useState<BackgroundSupport>();
 	const cancel = React.useRef<AbortController>();
 	const preview = React.useRef<HTMLCanvasElement>(null);
@@ -183,6 +189,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [taken, setTaken] = React.useState<Set<string>>(new Set());
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	const {t} = useTranslation();
+
+	/** Passages whose scenes write this asset's name. Empty while it has no name yet. */
+	const usedIn = (meta && usage.get(meta.name)) || [];
 
 	// Every section's prose hides behind an icon until asked for. Each one keeps
 	// its own state so that opening the background note doesn't unfold the rest.
@@ -643,12 +652,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * are all untouched, so an author who opened this to crop something and noticed the
 	 * name was wrong does not have to abandon the edit to fix it.
 	 */
-	async function handleRename(value: string) {
+	async function handleRename(value: string, updateScenes = false) {
 		const renamed = value.trim();
 
 		if (!meta || renamed === '' || renamed === meta.name) {
 			return;
 		}
+
+		const oldName = meta.name;
 
 		setError(undefined);
 
@@ -669,6 +680,11 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				next.add(updated.name);
 				return next;
 			});
+
+			if (updateScenes) {
+				renameScenes(oldName, updated.name);
+			}
+
 			refreshAssetLibrary();
 		} catch (renameError) {
 			console.error('Could not rename the asset', renameError);
@@ -764,9 +780,21 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				};
 			}
 
+			// Allowed, but said out loud: the second submit carries those scenes along,
+			// and the plain one leaves them naming art that is gone.
+			if (trimmed !== meta?.name.toLowerCase() && usedIn.length > 0) {
+				return {
+					message: t('dialogs.assetEditor.renameUsed', {
+						count: usedIn.length,
+						old: meta?.name
+					}),
+					valid: true
+				};
+			}
+
 			return {valid: true};
 		},
-		[library, meta?.id, meta?.name, t, taken]
+		[library, meta?.id, meta?.name, t, taken, usedIn.length]
 	);
 
 	const cropped =
@@ -848,6 +876,17 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				!detached &&
 				meta && (
 					<PromptButton
+						altSubmit={
+							usedIn.length > 0
+								? {
+										icon: <IconWriting />,
+										label: t('dialogs.assetEditor.renameUpdateScenes', {
+											count: usedIn.length
+										}),
+										onSubmit: value => handleRename(value, true)
+								  }
+								: undefined
+						}
 						icon={<IconWriting />}
 						iconOnly
 						label={t('common.rename')}

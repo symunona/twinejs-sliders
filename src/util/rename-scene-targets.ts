@@ -40,11 +40,14 @@ interface Target {
 /**
  * The new name as YAML.
  *
+ * Shared with `rename-scene-refs.ts`: both splice a bare name into someone else's file, and
+ * a second opinion about when a name needs quotes is a corrupted block.
+ *
  * `stringify` decides on quoting for block context — a name like `42` or `yes` has to come
  * back quoted or it stops being a string. Flow context is stricter than `stringify` knows
  * here (the scalar's own node is gone), so anything a `{…}` would end early is quoted too.
  */
-function scalarText(name: string, flow: boolean): string {
+export function scalarText(name: string, flow: boolean): string {
 	const written = stringify(name, {version: '1.2'}).trim();
 
 	if (flow && /^[^'"].*[,{}[\]]/.test(written)) {

@@ -346,7 +346,12 @@
 			"unknownGpu": "not reported",
 			"width": "Width",
 			"renameTaken": "Another asset is already called “{{name}}”, and a scene saying “{{name}}” could then mean either of them.",
-			"renameError": "Could not rename this to “{{name}}”."
+			"renameError": "Could not rename this to “{{name}}”.",
+			"renameUsed": "{{count}} scene writes “{{old}}”. Rename And Update rewrites it; Rename alone leaves it asking for art that no longer exists.",
+			"renameUsed_plural": "{{count}} scenes write “{{old}}”. Rename And Update rewrites them; Rename alone leaves them asking for art that no longer exists.",
+			"renameUpdateScenes": "Rename And Update {{count}} Scene",
+			"renameUpdateScenes_plural": "Rename And Update {{count}} Scenes",
+			"renameChange": "rename asset {{name}}"
 		},
 		"passageEdit": {
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",
@@ -522,10 +527,13 @@
 			"renameHint": "Double-click to rename",
 			"renameEmpty": "An asset needs a name—scenes have no other way to ask for it.",
 			"renameTaken": "Something else in this story is already called “{{name}}”. Asset names and character ids share one namespace, so a scene saying “{{name}}” could mean either.",
-			"renameUsed": "{{count}} scene writes “{{old}}”: {{names}}. Renaming does not rewrite it—that scene will ask for art that no longer exists.",
-			"renameUsed_plural": "{{count}} scenes write “{{old}}”: {{names}}. Renaming does not rewrite them—those scenes will ask for art that no longer exists.",
+			"renameUsed": "{{count}} scene writes “{{old}}”: {{names}}. Rename And Update rewrites it; Rename alone leaves it asking for art that no longer exists.",
+			"renameUsed_plural": "{{count}} scenes write “{{old}}”: {{names}}. Rename And Update rewrites them; Rename alone leaves them asking for art that no longer exists.",
 			"renameError": "Could not rename this to “{{name}}”.",
-			"editImageHint": "Double-click to edit this image"
+			"editImageHint": "Double-click to edit this image",
+			"renameUpdateScenes": "Rename And Update {{count}} Scene",
+			"renameUpdateScenes_plural": "Rename And Update {{count}} Scenes",
+			"renameChange": "rename asset {{name}}"
 		},
 		"slidersCharacters": {
 			"addAnchor": "Add Anchor",

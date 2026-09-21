@@ -18,8 +18,25 @@ export type PromptButtonValidator = (
 	value: string
 ) => PromptValidationResponse | Promise<PromptValidationResponse>;
 
+/**
+ * A second way to say yes, offered beside the ordinary one.
+ *
+ * Renaming something a story already writes by name is the case this exists for: the
+ * author can rename the thing alone, or rename it and carry every scene that names it
+ * along. Both are submits -- they run the same validation and close the prompt -- so
+ * neither is a checkbox the author can leave in the wrong position.
+ */
+export interface PromptAltSubmit {
+	icon?: React.ReactNode;
+	label: string;
+	onSubmit: (value: string) => void;
+	variant?: IconButtonProps['variant'];
+}
+
 export interface PromptButtonProps
 	extends Omit<CardButtonProps, 'ariaLabel' | 'onChangeOpen' | 'open'> {
+	/** An extra submit, drawn first because it is the one that does more. */
+	altSubmit?: PromptAltSubmit;
 	cancelIcon?: React.ReactNode;
 	cancelLabel?: string;
 	/**
@@ -46,6 +63,7 @@ export interface PromptButtonProps
 
 export const PromptButton: React.FC<PromptButtonProps> = props => {
 	const {
+		altSubmit,
 		cancelIcon,
 		cancelLabel,
 		onChange,
@@ -96,7 +114,10 @@ export const PromptButton: React.FC<PromptButtonProps> = props => {
 		setOpen(false);
 	}
 
-	async function handleSubmit(event: React.FormEvent) {
+	async function handleSubmit(
+		event: React.FormEvent,
+		submit: (value: string) => void = onSubmit
+	) {
 		event.preventDefault();
 
 		if (validateOn === 'submit' && validate) {
@@ -121,7 +142,7 @@ export const PromptButton: React.FC<PromptButtonProps> = props => {
 		// submit button, so we need to catch that here.
 
 		if (validation?.valid) {
-			onSubmit(value);
+			submit(value);
 			setOpen(false);
 		}
 	}
@@ -144,6 +165,16 @@ export const PromptButton: React.FC<PromptButtonProps> = props => {
 						)}
 					</CardContent>
 					<ButtonBar>
+						{altSubmit && (
+							<IconButton
+								buttonType="button"
+								disabled={!validation?.valid}
+								icon={altSubmit.icon ?? <IconCheck />}
+								label={altSubmit.label}
+								onClick={event => handleSubmit(event, altSubmit.onSubmit)}
+								variant={altSubmit.variant ?? 'create'}
+							/>
+						)}
 						<IconButton
 							buttonType="submit"
 							disabled={!validation?.valid}
