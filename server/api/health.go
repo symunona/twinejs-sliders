@@ -28,6 +28,7 @@ type pingResponse struct {
 	MaxAssetBytes int64            `json:"maxAssetBytes"`
 	MaxStoryBytes int64            `json:"maxStoryBytes"`
 	KeepRevisions int              `json:"keepRevisions"`
+	PinnedMax     int              `json:"pinnedMax"`
 	Events        bool             `json:"events"`
 	Clients       []PresenceClient `json:"clients"`
 	Time          string           `json:"time"`
@@ -73,6 +74,7 @@ func (s *server) ping(w http.ResponseWriter, r *http.Request) {
 		MaxAssetBytes: s.opts.MaxAssetBytes,
 		MaxStoryBytes: s.opts.MaxStoryBytes,
 		KeepRevisions: s.opts.KeepRevisions,
+		PinnedMax:     s.opts.PinnedMax,
 		Events:        events,
 		Clients:       clients,
 		Time:          time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),

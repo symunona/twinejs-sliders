@@ -64,6 +64,21 @@ export interface StoryIndexEntry {
 	bytes: number;
 	assetCount: number;
 	assetBytes: number;
+	/**
+	 * The asset manifest's own rev. Bumps on every manifest write.
+	 *
+	 * OPTIONAL, and it has to be: a server older than this field sends the row without it,
+	 * so the type would be lying if it promised a number. Every reader has to decide what
+	 * "the server cannot say" means for it — `use-server-sync.ts` is the one that matters
+	 * and says so there.
+	 *
+	 * It exists because the two totals above answer a narrower question than they look
+	 * like they do. `assetCount` and `assetBytes` move only when art is added or dropped,
+	 * and an edit's settings, an anchor or a cutout sidecar all rewrite the manifest
+	 * without touching either — so a client watching the totals alone never learns that
+	 * the art it is holding changed.
+	 */
+	assetRev?: number;
 	deleted: boolean;
 }
 
@@ -71,9 +86,24 @@ export interface StoryIndexResponse {
 	stories: StoryIndexEntry[];
 }
 
+/**
+ * A one-line description of what this write did, for the History dialog.
+ *
+ * Derived on the CLIENT (`patch-summary.ts`), because the client holds both sides of the
+ * comparison already and the server would have to diff a 100 KB story on every five-second
+ * autosave to say the same thing — and because only the client knows a drag from a find &
+ * replace from a voice tool call.
+ *
+ * Display only, and never trusted: the server clamps the length and strips control
+ * characters on the way in. Stored on the revision entry as `summary`, beside — not
+ * instead of — a `label` a human wrote.
+ */
+type StoryWriteSummary = string;
+
 export interface PutStoryRequest {
 	story: Story;
 	client: string;
+	summary?: StoryWriteSummary;
 }
 
 export interface PutStoryResponse {
@@ -152,6 +182,7 @@ export interface StorySnapshot {
 export interface PatchStoryRequest {
 	client: string;
 	patch: StoryPatch;
+	summary?: StoryWriteSummary;
 }
 
 /** Same shape a PUT answers with: PATCH goes through the same write path. */
@@ -186,11 +217,51 @@ export interface RevisionEntry {
 	passages: number;
 	/** Set when this revision was made by restoring an older one. */
 	restoredFrom?: number;
+	/**
+	 * What a human typed about this version. <=120 runes, server-clamped.
+	 *
+	 * All three of these are `omitempty` on the Go side, so an index written before the
+	 * feature — or one nobody has labelled — sends nothing and they arrive undefined.
+	 * Absent means `''` / `false`; no reader may tell the two apart.
+	 */
+	label?: string;
+	/** Prune skips this version. `PINNED_MAX` per story bounds the disk instead. */
+	pinned?: boolean;
+	/** This client's own sentence about the write that made this version. Display only. */
+	summary?: string;
 }
 
 export interface RevisionsResponse {
 	current: number;
 	revisions: RevisionEntry[];
+}
+
+/**
+ * What `POST /stories/{id}/revisions/{rev}/label` asks for.
+ *
+ * Both fields optional, and both mean two different things when present: omitted (or
+ * null) leaves that field alone, `label: ''` clears the label, `pinned: false` unpins.
+ * A body with neither is a 400 — there would be nothing to do.
+ */
+export interface RevisionMetaRequest {
+	label?: string | null;
+	pinned?: boolean | null;
+}
+
+/**
+ * The row as it now stands, so the dialog can patch it without re-listing.
+ *
+ * `pins` and `pinnedMax` come along because the cap is a thing the UI wants to say
+ * something about before it is hit, and only the server knows either number.
+ */
+export interface RevisionMetaResponse {
+	id: string;
+	rev: number;
+	label: string;
+	pinned: boolean;
+	summary: string;
+	pins: number;
+	pinnedMax: number;
 }
 
 export interface RestoreResponse {
@@ -227,6 +298,14 @@ export type ServerMessage =
 	| {t: 'assets'; story: string; rev: number; by: string}
 	| {t: 'presence'; clients: PresenceClient[]}
 	| {t: 'stolen'; story: string; passage: string; by: string}
+	/**
+	 * A label or a pin moved on one revision of one story.
+	 *
+	 * No `by`: labelling is not a write of the story, so there is no rev bump, no
+	 * snapshot and nothing to reconcile or attribute. The only thing in the app that
+	 * cares is an open History dialog, which re-lists.
+	 */
+	| {t: 'revmeta'; id: string; rev: number}
 	| {t: 'pong'};
 
 // ---------------------------------------------------------------------------

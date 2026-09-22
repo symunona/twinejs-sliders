@@ -49,6 +49,7 @@ describe('<SyncStatus>', () => {
 						lock: () => undefined,
 						presence: emptyPresence(),
 						progress,
+						pullAssets: async () => undefined,
 						records,
 						socketConnected: connected,
 						stealPassage: () => undefined

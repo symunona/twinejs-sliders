@@ -62,6 +62,15 @@ type deletedMessage struct {
 	By string `json:"by"`
 }
 
+// revMetaMessage is a label or a pin moving on one revision. No `by`: nothing changed
+// that a client has to reconcile, so there is nothing to attribute — the message exists
+// only to make an open History dialog re-list.
+type revMetaMessage struct {
+	T   string `json:"t"`
+	ID  string `json:"id"`
+	Rev int    `json:"rev"`
+}
+
 type assetsMessage struct {
 	T     string `json:"t"`
 	Story string `json:"story"`

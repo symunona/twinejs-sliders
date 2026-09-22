@@ -254,3 +254,97 @@ describe('assets', () => {
 		).toEqual({missing: ['a_1'], present: [], stale: []});
 	});
 });
+
+describe('revision meta', () => {
+	const ok = {
+		id: 'story-1',
+		label: 'Tavern Night',
+		pinned: true,
+		pinnedMax: 50,
+		pins: 3,
+		rev: 42,
+		summary: 'Tavern Night +2 more'
+	};
+
+	it('posts to the label route and answers with the row', async () => {
+		const fetchImpl = jest.fn(async () => response(200, ok));
+
+		expect(
+			await clientWith(fetchImpl).setRevisionMeta('story-1', 42, {
+				label: 'Tavern Night',
+				pinned: true
+			})
+		).toEqual(ok);
+
+		const [url, init] = fetchImpl.mock.calls[0] as unknown as [
+			string,
+			FakeInit
+		];
+
+		expect(url).toBe(
+			'https://example.test/api/v1/stories/story-1/revisions/42/label'
+		);
+		expect(init.method).toBe('POST');
+		expect(JSON.parse(init.body as string)).toEqual({
+			label: 'Tavern Night',
+			pinned: true
+		});
+	});
+
+	/**
+	 * `''` clears and `false` unpins. A client that dropped falsy fields on the way out
+	 * would turn both into "leave it alone", and the author would watch the label they
+	 * just emptied come straight back.
+	 */
+	it('sends the clearing spellings verbatim', async () => {
+		const fetchImpl = jest.fn(async () => response(200, {...ok, label: ''}));
+
+		await clientWith(fetchImpl).setRevisionMeta('story-1', 42, {
+			label: '',
+			pinned: false
+		});
+
+		const [, init] = fetchImpl.mock.calls[0] as unknown as [string, FakeInit];
+
+		expect(JSON.parse(init.body as string)).toEqual({
+			label: '',
+			pinned: false
+		});
+	});
+
+	/** No `If-Match` on the way out, so nothing on the way back may read as a lost race. */
+	it('states no precondition', async () => {
+		const fetchImpl = jest.fn(async () => response(200, ok));
+
+		await clientWith(fetchImpl).setRevisionMeta('story-1', 42, {pinned: true});
+
+		const [, init] = fetchImpl.mock.calls[0] as unknown as [string, FakeInit];
+
+		expect(init.headers).not.toHaveProperty('If-Match');
+	});
+
+	/**
+	 * The cap is a 400 on purpose. Reaching the conflict path with it would put a
+	 * "someone else saved first" banner in front of a pin that simply hit its limit.
+	 */
+	it('keeps a PINNED_MAX refusal off the conflict path', async () => {
+		const fetchImpl = jest.fn(async () =>
+			response(400, {
+				error: {
+					code: 'bad_request',
+					message:
+						'story already has 50 pinned revisions (PINNED_MAX); unpin one before pinning another'
+				}
+			})
+		);
+
+		await expect(
+			clientWith(fetchImpl).setRevisionMeta('story-1', 42, {pinned: true})
+		).rejects.toMatchObject({
+			code: 'bad_request',
+			conflict: false,
+			retryable: false,
+			status: 400
+		});
+	});
+});

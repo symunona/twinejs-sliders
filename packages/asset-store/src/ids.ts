@@ -4,14 +4,34 @@ const ID_ALPHABET = '0123456789abcdef';
 const ID_LENGTH = 4;
 
 /**
- * Where an asset's extra blobs live: `a_8f21#src`, `a_8f21#cutout`.
+ * A sidecar kind is a slug. It ends up as a filename on both sides of the wire, and it
+ * must stay clear of the `a_` + hex shape an asset id has.
+ */
+const SIDECAR_KIND = /^[a-z0-9][a-z0-9-]*$/;
+
+/**
+ * Where an asset's extra blobs live: `a_8f21.src`, `a_8f21.cutout`.
  *
- * Backends key blobs by an opaque string, so a sidecar needs nothing new from them. `#`
- * is what makes that safe — `randomAssetId` emits `a_` and hex, and every name that
- * reaches a key is slugged to `[a-z0-9/_-]`, so no asset can ever own a sidecar's key.
+ * The kind IS the suffix. The key used to be `#` plus a two-name mapping table, and both
+ * halves were wrong: a table between the manifest's word and the blob's drifts, and `#`
+ * is rejected by the sync server's `ValidID` (`server/store/store.go`, which allows
+ * `[A-Za-z0-9._-]`), so a sidecar stored under one could never be pushed anywhere. `.`
+ * passes that pattern as it stands, so syncing costs the server no change.
+ *
+ * Backends key blobs by an opaque string, so a sidecar needs nothing new from them, and
+ * nothing can collide: `randomAssetId` emits `a_` and hex, and every name that reaches a
+ * key is slugged to `[a-z0-9/_-]` — neither can contain a dot.
  */
 export function sidecarKey(id: AssetId, kind: SidecarKind): string {
-	return `${id}#${kind === 'source' ? 'src' : 'cutout'}`;
+	// Loud, because the alternative is a blob under a key the server will later refuse,
+	// discovered a release after the kind was added.
+	if (!SIDECAR_KIND.test(kind)) {
+		throw new Error(
+			`"${kind}" is not a usable sidecar kind: it must be a slug like "cutout".`
+		);
+	}
+
+	return `${id}.${kind}`;
 }
 
 function webCrypto(): Crypto {

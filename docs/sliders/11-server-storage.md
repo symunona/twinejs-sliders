@@ -90,7 +90,8 @@ On an accepted `PUT /stories/{id}`:
    `revs/<oldRev>.assets.gz` when it changed
 3. rewrite `revs/index.json` (a few KB, atomic)
 4. `meta.json` gets the new rev, time, client
-5. delete everything past the newest `REV_KEEP` (default 20)
+5. delete everything past the newest `REV_KEEP` unpinned snapshots (default 20); pinned
+   ones are never deleted
 6. broadcast `{"t":"story","id","rev","by"}` on the bus
 
 A write whose body hashes the same as the current one stores no snapshot — autosave that
@@ -105,6 +106,7 @@ per story, so `REV_KEEP` can be raised in `.env` without anyone noticing.
 | `GET` | `/stories/{id}/revisions/{rev}` | that `Story` body |
 | `GET` | `/stories/{id}/revisions/{rev}/assets` | the manifest as of that rev |
 | `POST` | `/stories/{id}/restore` | `{"rev":37}` → copies that body to current, bumps rev, records `restoredFrom: 37` |
+| `POST` | `/stories/{id}/revisions/{rev}/label` | `{label?, pinned?}` → names or pins that version |
 
 Restore is **server side and is an ordinary write**: it bumps the rev, snapshots what it
 replaced, and broadcasts, so every other editor pulls it like any other change. Restoring
@@ -117,11 +119,27 @@ each body makes that answerable rather than mysterious: `POST /restore` returns
 
 ### In the UI
 
-**History…** in the story-edit route menu. One list, newest first: *when*, *who*, passage
-count, size, and a **Restore** button per row; the current version sits at the top marked
-*now*. Restore asks once ("Restore the version from 10:12 by mira? The current version
-stays in history."), then the story updates in place. That is the whole feature — no
-diffing, no branching, no labels.
+**History…** in the story-edit route menu. One list, newest first: *when*, *who*, the
+version's words, passage count, size, and a **Restore** button per row; the current version
+sits at the top marked *now*. Restore asks once ("Restore the version from 10:12 by mira?
+The current version stays in history."), then the story updates in place. No diffing, no
+branching.
+
+The words are the `label` if a human typed one, else the client's `summary`, else nothing.
+A pencil per row edits the label — an empty submit clears it and the row falls back to the
+summary — and a pin toggle marks the row and takes it out of the prune. Both work on the
+top row too. A `revmeta` on the bus makes an open dialog re-list.
+
+### Labels, pins and summaries
+
+`docs/2026-09-22-plan-history-enrichment.md`. A rev index entry carries three optional
+extras: `label` (a human typed it), `pinned` (prune skips it, `PINNED_MAX` = 50 per story)
+and `summary` (the client's one line about the write that made this version, sent as
+`summary` beside `client` on the `PUT`/`PATCH`). Labelling is
+`POST /stories/{id}/revisions/{rev}/label` and is **not** a story write: no rev bump, no
+snapshot, no `story` broadcast — it broadcasts `{"t":"revmeta","id","rev"}` instead. The
+current rev has no index row, so its three fields live on `meta.json` until the version is
+replaced. Shapes and clamps are in `server/README.md`.
 
 ## Deployment
 

@@ -22,11 +22,24 @@
  * Guard 2 is what stops a ping-pong. A pull that changes the library fires
  * `refreshAssetLibrary`, and the sync hook pushes on that signal — so without it, two
  * clients would take turns pulling nothing and pushing a manifest at each other forever.
+ *
+ * Guard 2 asks about bytes AND about provenance. Bytes alone was the original question
+ * and it was too narrow by exactly one case, the common one: an author edits a picture on
+ * one machine, and the second machine — which already holds those bytes, under a
+ * different id, under a different name — decided it had nothing to do and never learned
+ * that the edit existed, let alone how to undo it. Which fields are compared, and the
+ * reason each excluded one is excluded, is `AssetProvenance` in `checkout-story.ts`. That
+ * list is load-bearing: widen it and the guard stops guarding.
  */
 
 import type {AssetStore} from '@sliders/asset-store';
 import type {AssetMeta, Character} from '@sliders/scene-types';
-import {checkoutAssets, dedupeKey} from './checkout-story';
+import {
+	checkoutAssets,
+	dedupeKey,
+	provenanceOf,
+	sameProvenance
+} from './checkout-story';
 import type {AssetDownloadProgress} from './checkout-story';
 import type {ServerClient} from './client';
 import type {AssetManifest} from './server.types';
@@ -43,11 +56,22 @@ export interface AssetPullResult {
 	downloaded: string[];
 	/** Ids the server could not hand over. Reported, never thrown. */
 	missing: string[];
+	/**
+	 * Sidecar keys (`<id>.<kind>`) the manifest named and the server would not hand over.
+	 * Its own channel for the reason `asset-sync.ts` keeps one: a lost sidecar costs the
+	 * ability to re-open an edit, a lost asset costs the picture, and a report that says
+	 * the same thing about both is lying about one of them.
+	 */
+	missingSidecars: string[];
 	warnings: string[];
 	/**
-	 * The local library actually gained something. ONLY then is a library refresh worth
-	 * firing: a refresh schedules a push, and a push that uploads nothing still writes a
-	 * manifest, which is another client's cue to pull.
+	 * The local library actually gained something — bytes, a character, or another
+	 * device's edit settings. ONLY then is a library refresh worth firing: a refresh
+	 * schedules a push, and a push that uploads nothing still writes a manifest, which is
+	 * another client's cue to pull.
+	 *
+	 * Read off what the store HOLDS after the pull, never off what the pull meant to do.
+	 * `landProvenance` re-reads each asset it writes for exactly that reason.
 	 */
 	changed: boolean;
 	/** Nothing was fetched at all — same rev, or nothing missing locally. */
@@ -83,17 +107,44 @@ function castShape(characters: Character[]): string {
 		.join('|');
 }
 
-/** Which manifest entries have no local twin, and are worth asking the server for. */
-function absentLocally(
-	manifest: AssetManifest,
-	local: AssetMeta[]
-): AssetMeta[] {
-	const here = new Set(local.map(dedupeKey));
+/**
+ * Which manifest entries are worth asking the server about: the ones whose bytes are not
+ * here, and the ones whose bytes ARE here under someone else's provenance.
+ *
+ * The second half exists because an edit does not move an asset's bytes. Crop, brightness
+ * and a background removal are all recorded beside the picture — `edits`, `tuning`, a
+ * `cutout` sidecar — and the finished pixels are what the hash covers. Keyed on
+ * `dedupeKey` alone, a machine that already holds those pixels answers "nothing to do"
+ * every time, forever, and the author's second computer can look at the edited picture
+ * but never re-open the edit.
+ *
+ * `dedupeKey` still does the MATCHING, though: ids diverge permanently between two
+ * libraries, so the local twin is the asset with the same bytes and owner, never the one
+ * with the same id. See `AssetProvenance` for the whole compared surface.
+ *
+ * Ids the server lists in `missing` are dropped from both halves. It is telling us it has
+ * no bytes for them; the manifest row is all that is left of that asset, and comparing a
+ * local twin against it would ask for a download that 404s on every poll.
+ */
+function needsPull(manifest: AssetManifest, local: AssetMeta[]): AssetMeta[] {
+	const here = new Map<string, AssetMeta>();
 	const serverMissing = new Set(manifest.missing ?? []);
 
-	return (manifest.assets ?? []).filter(
-		meta => !here.has(dedupeKey(meta)) && !serverMissing.has(meta.id)
-	);
+	for (const meta of local) {
+		if (!here.has(dedupeKey(meta))) {
+			here.set(dedupeKey(meta), meta);
+		}
+	}
+
+	return (manifest.assets ?? []).filter(meta => {
+		if (serverMissing.has(meta.id)) {
+			return false;
+		}
+
+		const twin = here.get(dedupeKey(meta));
+
+		return !twin || !sameProvenance(provenanceOf(meta), provenanceOf(twin));
+	});
 }
 
 export async function pullStoryAssets(
@@ -104,6 +155,7 @@ export async function pullStoryAssets(
 		changed: false,
 		downloaded: [],
 		missing: [],
+		missingSidecars: [],
 		rev,
 		skipped: true,
 		warnings: []
@@ -124,7 +176,7 @@ export async function pullStoryAssets(
 	}
 
 	const local = await store.list({includeFrames: true});
-	const wanted = absentLocally(manifest, local);
+	const wanted = needsPull(manifest, local);
 	const castMoved =
 		castShape(manifest.characters ?? []) !==
 		castShape(await store.listCharacters());
@@ -133,7 +185,14 @@ export async function pullStoryAssets(
 		return nothing(manifest.rev);
 	}
 
-	const {downloaded, missingAssets, warnings} = await checkoutAssets({
+	const {
+		downloaded,
+		missingAssets,
+		missingSidecars,
+		provenanceApplied,
+		stored,
+		warnings
+	} = await checkoutAssets({
 		client,
 		manifest,
 		onProgress: (progress: AssetDownloadProgress) =>
@@ -148,9 +207,21 @@ export async function pullStoryAssets(
 	});
 
 	return {
-		changed: downloaded.length > 0 || castMoved,
+		// `stored` and `provenanceApplied`, never "we fetched something" or "something
+		// differed". Both are read off what the library HOLDS once the pull is done.
+		//
+		// A fetched asset the plan then dropped -- its name taken locally by different
+		// bytes -- used to count here, and it cost the other editor their work: the
+		// change fired a refresh, the refresh scheduled a push, and the push wrote this
+		// library's older manifest over the one they had just published. A sidecar the
+		// server will not hand over is the same shape of mistake with a slower fuse: the
+		// difference cannot be closed by any pull, so reporting it would push, wake the
+		// peer, and arrive back here on the next rev with the same unfetchable blob. Both
+		// stand unreported here and are named in `missingSidecars` and `warnings` instead.
+		changed: stored.length > 0 || provenanceApplied.length > 0 || castMoved,
 		downloaded,
 		missing: missingAssets,
+		missingSidecars,
 		rev: manifest.rev,
 		skipped: false,
 		warnings

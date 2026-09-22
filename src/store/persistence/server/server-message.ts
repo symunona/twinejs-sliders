@@ -74,7 +74,41 @@ export type ServerMessageEffect =
 	/** Put one story through the same decision table the poll uses. */
 	| {type: 'reconcile'; story: Story; server: ServerStoryState}
 	/** Fetch whatever art this story is now missing. */
-	| {type: 'pullAssets'; storyId: string};
+	| {type: 'pullAssets'; storyId: string}
+	/** Tell whoever is showing this story's revision list that a row's meta moved. */
+	| {type: 'revisionMeta'; id: string; rev: number};
+
+// ---------------------------------------------------------------------------
+// Revision meta listeners
+// ---------------------------------------------------------------------------
+
+const revisionMetaListeners = new Set<(id: string, rev: number) => void>();
+
+/**
+ * Fires when someone else labelled or pinned a revision of a story.
+ *
+ * A module-level table, like `onStoryPulled` and `sync-reason.ts`, and for the same
+ * reason: the only subscriber is a dialog that may not be mounted, and the alternative is
+ * threading a subscription through the sync context for one consumer. Nothing about the
+ * story changed — no rev, no bytes, no record — so there is nothing here for the rest of
+ * the app to hear about.
+ */
+export function onRevisionMeta(
+	listener: (id: string, rev: number) => void
+): () => void {
+	revisionMetaListeners.add(listener);
+
+	return () => {
+		revisionMetaListeners.delete(listener);
+	};
+}
+
+/** Exported for the same reason `handleServerMessage` is: so a test can drive it. */
+export function notifyRevisionMeta(id: string, rev: number): void {
+	for (const listener of revisionMetaListeners) {
+		listener(id, rev);
+	}
+}
 
 // ---------------------------------------------------------------------------
 // The plan
@@ -159,6 +193,14 @@ export function planServerMessage(
 
 			return effects;
 		}
+
+		case 'revmeta':
+			// A label or a pin. Not a write: the rev did not move, the bytes did not
+			// move, and no record here describes either. So there is no index patch and
+			// nothing to reconcile — the one thing that wants to know is an open History
+			// dialog, and it is told whether or not this browser holds the story, since
+			// a dialog can be open on a ghost.
+			return [{id: message.id, rev: message.rev, type: 'revisionMeta'}];
 
 		case 'assets':
 			// Asset bytes are not part of the story document, so there is nothing to
@@ -250,6 +292,12 @@ export function handleServerMessage(
 			case 'pullAssets':
 				env.pullAssets(effect.storyId);
 				break;
+
+			case 'revisionMeta':
+				// Straight to the module table rather than through `env`: the hook has
+				// no part in this and would only be a place for the message to get lost.
+				notifyRevisionMeta(effect.id, effect.rev);
+				break;
 		}
 	}
 
@@ -282,6 +330,10 @@ function noteFor(
 		return `${message.t}: refresh and pull assets`;
 	}
 
+	if (effects.some(effect => effect.type === 'revisionMeta')) {
+		return `${message.t}: revision list changed`;
+	}
+
 	return `${message.t}: not held, refresh`;
 }
 
@@ -290,6 +342,7 @@ function storyIdOf(message: ServerMessage): string | undefined {
 		case 'story':
 		case 'revived':
 		case 'deleted':
+		case 'revmeta':
 			return message.id;
 
 		case 'assets':

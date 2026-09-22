@@ -22,9 +22,11 @@
 |---|---|---|
 | 4 | jsdom has no `ResizeObserver`, `CSS.supports`, `document.elementsFromPoint`. | Guard the observer; stub the rest per test. |
 | 2 | i18n is not initialised under jest, so `t()` returns its own KEY. | Find controls structurally; assert on keys. Never `t()` a keyword the author typed. |
+| 1 | `src/__mocks__/react-i18next.ts` hands back a FRESH `t` every call. A component memoising on `t` re-runs forever — `<PromptButton>` re-validates and sets state on each new identity. Worker climbed to 2 GB and was OOM-killed twice, ~250 s each. Reads as a slow test, is an infinite render. | Mock `react-i18next` locally with a STABLE `t`, as the real hook does. Suspect it when one suite eats the box. |
 | 1 | React 16 derives `onPointerEnter/Leave` from the pointerover/out pair. | Fire `pointerOver`/`pointerOut`; a dispatched `pointerenter` does not bubble. |
 | 1 | `clientWidth` lives on Element, not HTMLElement — nothing to restore after shadowing. | `delete` the shadow. |
 | 1 | `codemirror` resolves to a build whose default export is not the constructor. | Drive `mode()` over a hand-made `StringStream`. |
+| 2 | `marqueeable-passage-map.test.tsx` marquee tests are FLAKY, rate rising with box load — clean 6/6 alone on an idle box, ~1 in 3 on a busy one, and two different assertions have failed. Seen on three branches including ones that share no commits, so not yours. | Re-run the one file before believing it. `uptime` first: another agent's jest is usually the reason. |
 | 1 | `jest-canvas-mock` is loaded globally, so `getContext('2d')` works and every drawing call is a no-op — `getImageData` returns a BLANK `ImageData` whatever was drawn. A rasteriser tested against it passes while drawing nothing. | Nothing that composites pixels is provable under jest. Test the geometry, stub a real scanline context for the raster, and verify the pixels in a browser. |
 | 1 | `pgrep -af 'bin/jest'` matches a peer's `while pgrep -f 'bin/jest'` waiter loop, so the lock check reports a false positive and an agent waits forever for itself. | Match `node.*bin/jest`. |
 
@@ -57,4 +59,5 @@
 | 6 | Scene Help `KeyHelp` tripwire fires and the build goes red. | Working as designed. Document the key. |
 | 1 | Editing any `.css` under `src/` makes vite-plugin-checker lint it as JS → full-screen "Parsing error", blank app. | Restart the dev server. |
 | 1 | `npx vite` after a branch switch loads React twice ("Invalid hook call"), app renders blank. | `rm -rf node_modules/.vite`. |
-| 1 | `use-scene-parse.ts` is BINARY to git — HEAD contains a literal NUL used as a join delimiter. | Not a corruption. Leave it. |
+| 2 | Files with a literal NUL are BINARY to git AND to grep — `use-scene-parse.ts`, `src/util/sliders-bundle/apply-bundle.ts`. Not a corruption, a join delimiter. | Leave the file. Search it with `grep -a`. |
+| 1 | `grep` in a NUL file prints NOTHING — no "binary file matches", no error, exit 1. Reads as "symbol not here" and sends you looking in the wrong place. | `grep -a`. Suspect it when a symbol you can see in the file will not match. |

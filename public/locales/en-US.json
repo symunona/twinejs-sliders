@@ -392,6 +392,10 @@
 			"renameChange": "rename asset {{name}}",
 			"unsavedChanges": "Unsaved changes",
 			"noChanges": "No changes yet",
+			"changedElsewhere": "Changed Elsewhere",
+			"changedElsewherePrompt": "Somebody else edited “{{name}}” on another machine, and this window is still showing the older version. Reloading takes theirs and loses the changes in front of you. Keeping yours is fine too—but saving will write your settings over their work.",
+			"changedElsewhereReload": "Reload, Lose My Changes",
+			"changedElsewhereKeep": "Keep Editing",
 			"toolsLabel": "Tool",
 			"tool": {
 				"adjust": "Color",
@@ -904,7 +908,15 @@
 			"restoring": "Restoring…",
 			"restoreConfirm": "Restore the version from {{date}} by {{client}}? The current version stays in history.",
 			"restoreError": "That version couldn't be restored: {{message}}",
-			"missingAssets": "{{count}} pictures from that version are no longer on the server."
+			"missingAssets": "{{count}} pictures from that version are no longer on the server.",
+			"label": "Label",
+			"labelPlaceholder": "What happened in this version?",
+			"editLabel": "Edit label",
+			"saveLabel": "Save label",
+			"pin": "Pin this version",
+			"unpin": "Unpin this version",
+			"pinned": "pinned",
+			"metaError": "That version couldn't be updated:"
 		}
 	},
 	"electron": {
@@ -1121,6 +1133,23 @@
 		},
 		"passageDefaults": {
 			"name": "Untitled Passage"
+		},
+		"patchSummary": {
+			"created": "+ {{name}}",
+			"deleted": "− {{name}}",
+			"edited": "{{name}}",
+			"more": "{{summary}} +{{count}} more",
+			"more_plural": "{{summary}} +{{count}} more",
+			"moved": "moved {{count}} passage",
+			"moved_plural": "moved {{count}} passages",
+			"reason": {
+				"findReplace": "find & replace",
+				"import": "imported",
+				"restore": "restored",
+				"voice": "voice: {{tool}}"
+			},
+			"renamed": "{{from}} renamed → {{to}}",
+			"storySettings": "story settings"
 		},
 		"storyDefaults": {
 			"name": "Untitled Story"

@@ -1316,14 +1316,64 @@ export interface AssetMask {
 }
 
 /**
- * An extra blob an asset owns, stored beside its current bytes.
+ * The sidecars this app writes today.
  *
- * `source` is the pixels an edit started from; `cutout` is the alpha map a background
+ * `src` is the pixels an edit started from; `cutout` is the alpha map a background
  * removal produced. Both exist so an edit can be re-opened and redone rather than only
  * stacked on, and neither is ever read by the renderer — the asset's own bytes are
  * always the finished picture.
+ *
+ * `src` and not `source`: the kind IS the key suffix (`a_8f21.src`), so there is no
+ * mapping table between the two to drift.
  */
-export type SidecarKind = 'source' | 'cutout';
+export type KnownSidecarKind = 'src' | 'cutout';
+
+/**
+ * An extra blob an asset owns, stored beside its current bytes.
+ *
+ * Open, not a closed union: a feature that needs its own blob adds a kind without
+ * touching this file. `KnownSidecarKind` keeps autocomplete for the two that ship.
+ *
+ * A kind must be a slug — `[a-z0-9][a-z0-9-]*`. It becomes a filename on both sides of
+ * the wire, and it must never look like an asset id, which is `a_` plus hex.
+ */
+export type SidecarKind = KnownSidecarKind | (string & {});
+
+/**
+ * What the manifest records about one sidecar blob.
+ *
+ * The same `{bytes, hash}` pair an asset carries, deliberately: sync already diffs
+ * assets on exactly that, so sidecars extend the existing diff rather than growing a
+ * second one beside it that will drift.
+ *
+ * Every field is optional because a sidecar written before this existed has none of
+ * them. Such an entry still names a blob that is really there — it just cannot be
+ * diffed, so it never syncs until the next save rewrites it.
+ */
+export interface SidecarEntry {
+	bytes?: number;
+	/** SHA-256 of the blob, hex. Without one this sidecar cannot sync. */
+	hash?: string;
+	/** Backends key opaque strings and store no type, so it is recorded here. */
+	mime?: string;
+	/**
+	 * Whether this blob rides along with the manifest to the server.
+	 *
+	 * Per kind, not per store: `cutout` is a few hundred KB and worth having on every
+	 * device an author edits from, while `src` is the un-edited original — routinely
+	 * 16 MB, and wanted by nothing but this device's own editor.
+	 */
+	sync?: boolean;
+}
+
+/**
+ * An asset's sidecar index: which extra blobs it owns, and what is known about each.
+ *
+ * `Partial`, and it has to be: `SidecarKind` is two string literals beside an index
+ * signature, so a bare `Record` of it makes `src` and `cutout` REQUIRED properties —
+ * `{cutout: {}}` alone would not typecheck.
+ */
+export type SidecarEntries = Partial<Record<SidecarKind, SidecarEntry>>;
 
 export interface AssetMeta {
 	id: AssetId;
@@ -1372,19 +1422,24 @@ export interface AssetMeta {
 	 * Holes and patches drawn by hand, on top of whatever the cutout model produced.
 	 *
 	 * Metadata rather than a sidecar, so it rides sync and can be re-opened a shape at a
-	 * time. Like `edits`, it only describes bytes that were rendered FROM the `source`
+	 * time. Like `edits`, it only describes bytes that were rendered FROM the `src`
 	 * sidecar — without that base the asset's own pixels already are the mask, and
 	 * re-applying it would cut the same hole twice.
 	 */
 	mask?: AssetMask;
 	/**
-	 * Which extra blobs this asset owns. An explicit list rather than a probe, so that
-	 * `remove` can delete them without any backend having to scan for keys by prefix.
+	 * Which extra blobs this asset owns, and what is known about each. An explicit index
+	 * rather than a probe, so that `remove` can delete them without any backend having to
+	 * scan for keys by prefix.
 	 *
-	 * Local to this device: sidecars are deliberately left out of sync and of bundles,
-	 * because a reader never needs the pixels an edit started from.
+	 * Never in a bundle: a reader needs the finished picture, not the pixels an edit
+	 * started from. Over the wire only per entry, and only when `sync` says so — see
+	 * `SidecarEntry`.
+	 *
+	 * Was a `SidecarKind[]`, and is read back as one: `migrateSidecars` turns the old
+	 * array into entries that name the blob and nothing else.
 	 */
-	sidecars?: SidecarKind[];
+	sidecars?: SidecarEntries;
 }
 
 /** Resolves asset ids to something a renderer can draw. */

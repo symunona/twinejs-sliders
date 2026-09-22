@@ -61,17 +61,32 @@ func (n *recordingNotifier) StoryRevived(id string, rev int, by Origin) {
 func (n *recordingNotifier) AssetsChanged(story string, rev int, by Origin) {
 	n.record(fmt.Sprintf("assets %s %d %s", story, rev, by.Name))
 }
+func (n *recordingNotifier) RevisionMetaChanged(id string, rev int, by Origin) {
+	n.record(fmt.Sprintf("revmeta %s %d %s", id, rev, by.Name))
+}
 
 func newHarness(t *testing.T, tweak func(*Options)) *harness {
 	t.Helper()
+	return newHarnessWith(t, nil, tweak)
+}
+
+// newHarnessWith also lets a test reach the store's own options — PINNED_MAX has to be
+// the same number on both sides or the handler reports a cap the store does not enforce.
+func newHarnessWith(t *testing.T, storeTweak func(*store.Options), tweak func(*Options)) *harness {
+	t.Helper()
 
 	dir := t.TempDir()
-	st, err := store.New(store.Options{
+	sopts := store.Options{
 		Dir:          dir,
 		RevKeep:      20,
+		PinnedMax:    50,
 		OrphanTTL:    168 * time.Hour,
 		TombstoneTTL: 2160 * time.Hour,
-	})
+	}
+	if storeTweak != nil {
+		storeTweak(&sopts)
+	}
+	st, err := store.New(sopts)
 	if err != nil {
 		t.Fatalf("store.New: %v", err)
 	}
@@ -83,7 +98,8 @@ func newHarness(t *testing.T, tweak func(*Options)) *harness {
 		Origins:       []string{"http://127.0.0.1:5173"},
 		MaxStoryBytes: 1 << 20,
 		MaxAssetBytes: 1 << 20,
-		KeepRevisions: 20,
+		KeepRevisions: sopts.RevKeep,
+		PinnedMax:     sopts.PinnedMax,
 		Version:       "test",
 		Notifier:      notify,
 	}
@@ -270,7 +286,7 @@ func TestPingReportsLimitsAndNoHubYet(t *testing.T) {
 	if body.BytesUsed <= 0 {
 		t.Fatalf("bytesUsed = %d", body.BytesUsed)
 	}
-	if body.MaxAssetBytes != 1<<20 || body.MaxStoryBytes != 1<<20 || body.KeepRevisions != 20 {
+	if body.MaxAssetBytes != 1<<20 || body.MaxStoryBytes != 1<<20 || body.KeepRevisions != 20 || body.PinnedMax != 50 {
 		t.Fatalf("limits not reported: %+v", body)
 	}
 	if body.Events {
@@ -609,6 +625,42 @@ func TestAssetLifecycle(t *testing.T) {
 	expectError(t, h.do("GET", "/api/v1/stories/story-1/assets/a1", nil), http.StatusNotFound, codeNotFound)
 }
 
+func TestSidecarGetCarriesItsOwnETagAndType(t *testing.T) {
+	h := newHarness(t, nil)
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", "one")), http.StatusOK)
+
+	cut := []byte("alpha map bytes")
+	man, err := json.Marshal(map[string]any{"version": 1, "characters": []any{}, "assets": []any{map[string]any{
+		"id": "a1", "name": "a1", "kind": "bg", "tags": []string{}, "animated": false,
+		"w": 4, "h": 4, "bytes": 2, "hash": sha([]byte("a1")), "mime": "image/webp",
+		"sidecars": map[string]any{
+			"cutout": map[string]any{"hash": sha(cut), "bytes": len(cut), "mime": "image/png", "sync": true},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1/assets", man), http.StatusOK)
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1/assets/a1.cutout", cut,
+		"X-Asset-Hash", sha(cut), "Content-Type", "image/png"), http.StatusOK)
+
+	res := h.do("GET", "/api/v1/stories/story-1/assets/a1.cutout", nil)
+	expectStatus(t, res, http.StatusOK)
+	got, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !bytes.Equal(got, cut) {
+		t.Fatalf("GET returned %q", got)
+	}
+	// Both headers come from the manifest, and the manifest only knows a sidecar through
+	// its parent's `sidecars` object.
+	if res.Header.Get("ETag") != `"`+sha(cut)+`"` {
+		t.Fatalf("sidecar etag = %q, want its own hash", res.Header.Get("ETag"))
+	}
+	if res.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("sidecar content-type = %q", res.Header.Get("Content-Type"))
+	}
+}
+
 func TestManifestIfNoneMatchAndIfMatch(t *testing.T) {
 	h := newHarness(t, nil)
 	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", "one")), http.StatusOK)
@@ -671,6 +723,87 @@ func TestAssetsOfTombstoneAreGone(t *testing.T) {
 	expectStatus(t, h.do("DELETE", "/api/v1/stories/story-1", nil), http.StatusOK)
 
 	expectError(t, h.do("GET", "/api/v1/stories/story-1/assets", nil), http.StatusGone, codeDeleted)
+}
+
+// sidecarManifestPayload is manifestPayload for one asset, plus whatever `sidecars` is
+// handed in verbatim — a manifest write that changes it and nothing else leaves the count
+// and the byte total exactly where they were.
+func sidecarManifestPayload(sidecars string) []byte {
+	asset := map[string]any{
+		"id": "a1", "name": "a1", "kind": "bg", "tags": []string{}, "animated": false,
+		"w": 4, "h": 4, "bytes": 2, "hash": sha([]byte("a1")), "mime": "image/webp",
+	}
+	if sidecars != "" {
+		asset["sidecars"] = json.RawMessage(sidecars)
+	}
+	raw, err := json.Marshal(map[string]any{"version": 1, "characters": []any{}, "assets": []any{asset}})
+	if err != nil {
+		panic(err)
+	}
+	return raw
+}
+
+// indexRow reads one story's row off the wire as raw JSON, so the assertion is about the
+// keys the client actually parses and not about the Go field names.
+func (h *harness) indexRow(id string) map[string]any {
+	h.t.Helper()
+	res := h.do("GET", "/api/v1/stories", nil)
+	expectStatus(h.t, res, http.StatusOK)
+	var index struct {
+		Stories []map[string]any `json:"stories"`
+	}
+	decode(h.t, res, &index)
+	for _, row := range index.Stories {
+		if row["id"] == id {
+			return row
+		}
+	}
+	h.t.Fatalf("%s is not in the index: %+v", id, index.Stories)
+	return nil
+}
+
+// TestIndexCarriesAssetRev covers the poll that never woke up: the client decides whether
+// to re-pull the art from the index row alone, and a manifest write that only changes
+// metadata moves neither assetCount nor assetBytes.
+func TestIndexCarriesAssetRev(t *testing.T) {
+	h := newHarness(t, nil)
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", "one")), http.StatusOK)
+
+	// No manifest yet: the field is present and does not drift between polls, so an
+	// art-less story never reads as "the art moved".
+	first := h.indexRow("story-1")
+	if _, ok := first["assetRev"]; !ok {
+		t.Fatalf("no assetRev on the row: %+v", first)
+	}
+	if second := h.indexRow("story-1"); second["assetRev"] != first["assetRev"] {
+		t.Fatalf("assetRev drifted with no manifest: %v then %v", first["assetRev"], second["assetRev"])
+	}
+
+	res := h.do("PUT", "/api/v1/stories/story-1/assets", sidecarManifestPayload(""))
+	expectStatus(t, res, http.StatusOK)
+	var man store.Manifest
+	decode(t, res, &man)
+
+	row := h.indexRow("story-1")
+	if row["assetRev"] != float64(man.Rev) {
+		t.Fatalf("row assetRev = %v, manifest rev = %d", row["assetRev"], man.Rev)
+	}
+	if row["assetCount"] != float64(1) || row["assetBytes"] != float64(2) {
+		t.Fatalf("count/bytes = %v/%v, want 1/2", row["assetCount"], row["assetBytes"])
+	}
+
+	// The metadata-only write: same asset, same bytes, a cutout sidecar added.
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1/assets",
+		sidecarManifestPayload(`{"cutout":{"hash":"c0ffee","bytes":9}}`)), http.StatusOK)
+
+	after := h.indexRow("story-1")
+	if after["assetCount"] != row["assetCount"] || after["assetBytes"] != row["assetBytes"] {
+		t.Fatalf("not a metadata-only write: %v/%v then %v/%v",
+			row["assetCount"], row["assetBytes"], after["assetCount"], after["assetBytes"])
+	}
+	if after["assetRev"] == row["assetRev"] {
+		t.Fatalf("assetRev stuck at %v across a manifest write", after["assetRev"])
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -756,5 +889,196 @@ func TestConcurrentPutsGetUniqueRevs(t *testing.T) {
 	}
 	if len(parsed) != 20 {
 		t.Fatalf("index has %d entries, want REV_KEEP=20", len(parsed))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Revision labels and pins
+// ---------------------------------------------------------------------------
+
+func (h *harness) revisions() store.Revisions {
+	h.t.Helper()
+	res := h.do("GET", "/api/v1/stories/story-1/revisions", nil)
+	expectStatus(h.t, res, http.StatusOK)
+	var revs store.Revisions
+	decode(h.t, res, &revs)
+	return revs
+}
+
+func (h *harness) label(rev int, body string) *http.Response {
+	h.t.Helper()
+	return h.do("POST", fmt.Sprintf("/api/v1/stories/story-1/revisions/%d/label", rev), []byte(body))
+}
+
+func TestLabelRevisionIsNotAStoryWrite(t *testing.T) {
+	h := newHarness(t, nil)
+	for _, text := range []string{"one", "two", "three"} {
+		expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", text)), http.StatusOK)
+	}
+
+	res := h.label(1, `{"label":"before I broke the tavern","pinned":true}`)
+	expectStatus(t, res, http.StatusOK)
+	var meta store.RevisionMetaResult
+	decode(t, res, &meta)
+	if meta.ID != "story-1" || meta.Rev != 1 {
+		t.Fatalf("result = %+v", meta)
+	}
+	if meta.Label != "before I broke the tavern" || !meta.Pinned {
+		t.Fatalf("result = %+v", meta)
+	}
+	if meta.Pins != 1 || meta.Max != 50 {
+		t.Fatalf("pins = %d/%d, want 1/50", meta.Pins, meta.Max)
+	}
+	if res.Header.Get("ETag") != "" {
+		t.Fatalf("a label handed back an ETag: %q", res.Header.Get("ETag"))
+	}
+
+	// No rev bump, no extra snapshot.
+	revs := h.revisions()
+	if revs.Current != 3 {
+		t.Fatalf("labelling moved the rev to %d", revs.Current)
+	}
+	if len(revs.Revisions) != 3 {
+		t.Fatalf("labelling changed the history: %+v", revs.Revisions)
+	}
+	last := revs.Revisions[len(revs.Revisions)-1]
+	if last.Rev != 1 || last.Label != "before I broke the tavern" || !last.Pinned {
+		t.Fatalf("rev 1 row = %+v", last)
+	}
+
+	// The bus hears `revmeta`, not `story`.
+	events := h.notify.all()
+	if got := events[len(events)-1]; got != "revmeta story-1 1 mira" {
+		t.Fatalf("last event = %q", got)
+	}
+	for _, e := range events {
+		if strings.HasPrefix(e, "story story-1 4") {
+			t.Fatalf("labelling broadcast a story change: %v", events)
+		}
+	}
+}
+
+func TestLabelRevisionOmittedFieldsAndClearing(t *testing.T) {
+	h := newHarness(t, nil)
+	for _, text := range []string{"one", "two"} {
+		expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", text)), http.StatusOK)
+	}
+
+	expectStatus(t, h.label(1, `{"label":"tavern","pinned":true}`), http.StatusOK)
+
+	// `pinned` alone leaves the label where it was.
+	res := h.label(1, `{"pinned":false}`)
+	expectStatus(t, res, http.StatusOK)
+	var meta store.RevisionMetaResult
+	decode(t, res, &meta)
+	if meta.Label != "tavern" || meta.Pinned {
+		t.Fatalf("result = %+v", meta)
+	}
+
+	// An explicit null is "unchanged", same as leaving it out.
+	res = h.label(1, `{"label":null,"pinned":true}`)
+	expectStatus(t, res, http.StatusOK)
+	decode(t, res, &meta)
+	if meta.Label != "tavern" || !meta.Pinned {
+		t.Fatalf("null did not mean unchanged: %+v", meta)
+	}
+
+	// An empty string clears.
+	res = h.label(1, `{"label":""}`)
+	expectStatus(t, res, http.StatusOK)
+	decode(t, res, &meta)
+	if meta.Label != "" || !meta.Pinned {
+		t.Fatalf("empty string did not clear the label only: %+v", meta)
+	}
+
+	// Control characters and over-length text are the server's problem, not the client's.
+	res = h.label(1, `{"label":"a\nb\tc"}`)
+	expectStatus(t, res, http.StatusOK)
+	decode(t, res, &meta)
+	if meta.Label != "abc" {
+		t.Fatalf("label = %q", meta.Label)
+	}
+	long, _ := json.Marshal(map[string]any{"label": strings.Repeat("x", 500)})
+	res = h.label(1, string(long))
+	expectStatus(t, res, http.StatusOK)
+	decode(t, res, &meta)
+	if len([]rune(meta.Label)) != 120 {
+		t.Fatalf("label is %d runes, want 120", len([]rune(meta.Label)))
+	}
+}
+
+func TestLabelRevisionRefusals(t *testing.T) {
+	h := newHarnessWith(t, func(o *store.Options) { o.PinnedMax = 2 }, nil)
+	for _, text := range []string{"one", "two", "three", "four"} {
+		expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", text)), http.StatusOK)
+	}
+
+	expectError(t, h.label(9, `{"label":"x"}`), http.StatusNotFound, codeNotFound)
+	expectError(t, h.label(1, `{}`), http.StatusBadRequest, codeBadRequest)
+	expectError(t, h.label(1, `not json`), http.StatusBadRequest, codeBadRequest)
+	expectError(t, h.do("POST", "/api/v1/stories/story-1/revisions/nope/label", []byte(`{"label":"x"}`)),
+		http.StatusBadRequest, codeBadRequest)
+	expectError(t, h.raw("POST", "/api/v1/stories/story-1/revisions/1/label", []byte(`{"label":"x"}`)),
+		http.StatusUnauthorized, codeUnauthorized)
+
+	// PINNED_MAX is a 4xx with a message that names the limit — not a 412, which the
+	// client reads as a lost If-Match race.
+	expectStatus(t, h.label(1, `{"pinned":true}`), http.StatusOK)
+	expectStatus(t, h.label(2, `{"pinned":true}`), http.StatusOK)
+	res := h.label(3, `{"pinned":true}`)
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a 3rd pin gave %d, want 400", res.StatusCode)
+	}
+	var body errorBody
+	decode(t, res, &body)
+	if body.Error.Code != codeBadRequest || !strings.Contains(body.Error.Message, "PINNED_MAX") {
+		t.Fatalf("refusal = %+v", body.Error)
+	}
+}
+
+func TestWriteSummaryLandsOnTheRevItCreated(t *testing.T) {
+	h := newHarness(t, nil)
+
+	put := func(text, summary string) {
+		t.Helper()
+		body, err := json.Marshal(map[string]any{
+			"client":  "twine-sliders test",
+			"summary": summary,
+			"story": map[string]any{
+				"id": "story-1", "ifid": "IFID-1", "name": "Lighthouse", "sync": true,
+				"passages": []map[string]any{{"id": "p1", "name": "Start", "text": text}},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", body), http.StatusOK)
+	}
+
+	put("one", "+ Start")
+	if got := h.revisions().Revisions[0].Summary; got != "+ Start" {
+		t.Fatalf("current row summary = %q", got)
+	}
+
+	put("two", strings.Repeat("é", 150)+"\ndrop me")
+	revs := h.revisions()
+	if revs.Revisions[1].Rev != 1 || revs.Revisions[1].Summary != "+ Start" {
+		t.Fatalf("rev 1 row = %+v", revs.Revisions[1])
+	}
+	current := revs.Revisions[0].Summary
+	if len(current) > 200 {
+		t.Fatalf("summary is %d bytes", len(current))
+	}
+	if strings.Contains(current, "\n") {
+		t.Fatalf("a newline survived: %q", current)
+	}
+
+	// PATCH carries the same field.
+	res := h.do("PATCH", "/api/v1/stories/story-1",
+		[]byte(`{"client":"t","summary":"find & replace","patch":{"story":{"name":"Tavern"}}}`),
+		"If-Match", `"2"`)
+	expectStatus(t, res, http.StatusOK)
+	if got := h.revisions().Revisions[0].Summary; got != "find & replace" {
+		t.Fatalf("patch summary = %q", got)
 	}
 }

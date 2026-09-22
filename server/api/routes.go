@@ -24,6 +24,9 @@ type Options struct {
 	MaxStoryBytes int64
 	MaxAssetBytes int64
 	KeepRevisions int
+	// PinnedMax is PINNED_MAX, reported by /ping so the History dialog can say how many
+	// pins are left before the server starts refusing them.
+	PinnedMax int
 	// Version is the server build string reported by /ping.
 	Version string
 	// Notifier receives every accepted change. Nil means no hub.
@@ -75,6 +78,7 @@ func NewHandler(opts Options) http.Handler {
 	mux.HandleFunc("GET /api/v1/stories/{id}/revisions", s.listRevisions)
 	mux.HandleFunc("GET /api/v1/stories/{id}/revisions/{rev}", s.getRevision)
 	mux.HandleFunc("GET /api/v1/stories/{id}/revisions/{rev}/assets", s.getRevisionAssets)
+	mux.HandleFunc("POST /api/v1/stories/{id}/revisions/{rev}/label", s.labelRevision)
 	mux.HandleFunc("POST /api/v1/stories/{id}/restore", s.restoreStory)
 
 	mux.HandleFunc("GET /api/v1/stories/{id}/assets", s.getManifest)

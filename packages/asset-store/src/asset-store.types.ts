@@ -40,17 +40,22 @@ export interface PutAssetOptions {
 	origin?: Frac2;
 	/** What the asset editor baked these bytes with, so the edit can be re-opened. */
 	edits?: ImageEdits;
-	/** What the cutout controls were set to. Only meaningful with `cutout`. */
+	/** What the cutout controls were set to. Only meaningful with a `cutout` sidecar. */
 	tuning?: CutoutTuning;
 	/**
 	 * The shapes drawn by hand into these bytes. Metadata, not a sidecar — but only
-	 * re-appliable while the `source` sidecar it was drawn against is still there.
+	 * re-appliable while the `src` sidecar it was drawn against is still there.
 	 */
 	mask?: AssetMask;
-	/** The pixels the edit started from, stored as the `source` sidecar. */
-	source?: Blob;
-	/** The alpha map a background removal produced, stored as the `cutout` sidecar. */
-	cutout?: Blob;
+	/**
+	 * Extra blobs to keep beside the bytes, by kind — `src` for the pixels the edit
+	 * started from, `cutout` for the alpha map a background removal produced.
+	 *
+	 * Open on purpose: a feature that needs its own blob names a new kind and nothing
+	 * here changes. The kind becomes the blob's key suffix (`a_8f21.cutout`), so it has
+	 * to be a slug; `sidecarKey` says so out loud.
+	 */
+	sidecars?: Partial<Record<SidecarKind, Blob | null>>;
 }
 
 /**
@@ -72,15 +77,44 @@ export interface ReplaceAssetOptions {
 	 */
 	mask?: AssetMask;
 	/**
-	 * The pixels this edit started from.
+	 * Extra blobs to keep beside the new bytes, by kind. A blob replaces what was stored
+	 * under that kind. `null` DELETES it. A kind this call does not name — or names as
+	 * `undefined` — keeps whatever was there.
 	 *
-	 * Written ONCE. An asset that already has a `source` sidecar keeps the one it has,
-	 * because that is the un-edited picture and what is being offered here is only the
-	 * base of the current round — which was itself rendered from that sidecar.
+	 * The three-way split exists because "I did not touch the cutout" and "the cutout is
+	 * gone" are different saves and used to be the same one: undoing a background removal
+	 * cleared `tuning` off the meta and left the alpha map behind it, on disk and in the
+	 * manifest.
+	 *
+	 * `src` is the exception on the write side: written ONCE. An asset that already has
+	 * one keeps the one it has, because that is the un-edited picture and what is being
+	 * offered here is only the base of the current round — which was itself rendered from
+	 * that sidecar. `null` still removes it; write-once guards against an accidental
+	 * overwrite, not against a caller that has said outright to drop it.
 	 */
-	source?: Blob;
-	/** The alpha map, replacing whatever was stored before. */
-	cutout?: Blob;
+	sidecars?: Partial<Record<SidecarKind, Blob | null>>;
+}
+
+/**
+ * What a pull may legitimately carry onto an asset whose bytes are already here.
+ *
+ * Deliberately narrower than `AssetMeta`: everything measured from the bytes — `hash`,
+ * `bytes`, `w`, `h`, `mime` — is absent, because the precondition for landing this is
+ * that the bytes already match. Identity (`name`, `kind`, `tags`, `ownerCharacter`) is
+ * absent too; that is the library compare's business, not provenance.
+ */
+export interface SyncedProvenance {
+	edits?: ImageEdits;
+	/** The hand-drawn holes. Metadata, so it travels with the manifest and not as a blob. */
+	mask?: AssetMask;
+	tuning?: CutoutTuning;
+	origin?: Frac2;
+	/**
+	 * Blobs that actually arrived, by kind. Only syncable kinds ever appear here — a
+	 * `src` cannot cross the wire, so naming one would be a claim this device could
+	 * never make good on.
+	 */
+	sidecars?: Partial<Record<SidecarKind, Blob>>;
 }
 
 export interface PutAssetResult {
@@ -149,6 +183,30 @@ export interface AssetStore extends AssetResolver {
 	 * business here: the asset's own bytes are always the finished picture.
 	 */
 	sidecar(id: AssetId, kind: SidecarKind): Promise<Blob | undefined>;
+	/**
+	 * Lands another device's provenance — edit settings and the sidecar blobs that
+	 * travelled with them — onto an asset this library already holds the bytes for.
+	 *
+	 * NOT `importAsset`. That one blanks `edits`, `tuning` and `sidecars` on purpose: a
+	 * bundle ships baked bytes and no sidecars, so keeping the settings would tell the
+	 * editor to render an edit that is already in the pixels. A pull is the opposite
+	 * case — the bytes are known to match and the sidecars did come along — so the
+	 * settings are exactly what must survive.
+	 *
+	 * Bytes and `hash` are never touched; that the bytes already agree is the
+	 * precondition for calling this at all.
+	 *
+	 * Syncable kinds are RECONCILED against what arrived: a blob is written, and a kind
+	 * that no longer arrives is deleted, blob and entry. The deletion is the feature —
+	 * it is how "the author undid the background removal" reaches this machine.
+	 * Non-syncable kinds are left exactly as they were, which is what stops the sync
+	 * looping: this device's `src` never crossed the wire, so the sender could neither
+	 * have sent it nor have meant to drop it.
+	 */
+	applySyncedProvenance(
+		id: AssetId,
+		incoming: SyncedProvenance
+	): Promise<AssetMeta>;
 	/**
 	 * Edits metadata in place. A `name` that another asset or character already answers to
 	 * THROWS rather than being quietly numbered: a rename is a deliberate act, and an author

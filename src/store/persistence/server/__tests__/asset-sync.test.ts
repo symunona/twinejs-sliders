@@ -3,6 +3,7 @@
  */
 import {
 	BackedAssetStore,
+	blobBytes,
 	MemoryBackend,
 	contentHash
 } from '@sliders/asset-store';
@@ -346,5 +347,161 @@ describe('syncStoryAssets', () => {
 		];
 
 		expect(sentManifest.characters.map(item => item.id)).toEqual(['bob']);
+	});
+});
+
+describe('syncStoryAssets sidecars', () => {
+	const CUTOUT = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+	/**
+	 * An asset with a sidecar, set up the blunt way: `importAsset` strips `sidecars` on
+	 * purpose, and `replace` would drag the whole edit-options surface into a test that is
+	 * only about what goes over the wire. So the manifest entry and the blob are written
+	 * separately, which is exactly the pair `store.sidecar()` reads back.
+	 */
+	async function storeWithSidecar(
+		entry: Record<string, unknown>,
+		{blob = true, kind = 'cutout'}: {blob?: boolean; kind?: string} = {}
+	) {
+		const bytes = webpBytes();
+		const backend = new MemoryBackend();
+		const store = new BackedAssetStore(backend);
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+		await store.update('a_8f21', {
+			sidecars: {[kind]: entry}
+		} as unknown as Partial<AssetMeta>);
+
+		if (blob) {
+			await backend.writeBlob(`a_8f21.${kind}`, new Blob([CUTOUT]));
+		}
+
+		return {bytes, store};
+	}
+
+	async function cutoutEntry(overrides: Record<string, unknown> = {}) {
+		return {
+			bytes: CUTOUT.length,
+			hash: await contentHash(CUTOUT),
+			mime: 'image/png',
+			sync: true,
+			...overrides
+		};
+	}
+
+	function offered(diffAssets: jest.Mock): string[] {
+		const [, sent] = diffAssets.mock.calls[0] as unknown as [
+			string,
+			{id: string}[]
+		];
+
+		return sent.map(row => row.id);
+	}
+
+	it('offers a syncing sidecar to the diff and uploads it under <id>.<kind>', async () => {
+		const {store} = await storeWithSidecar(await cutoutEntry());
+		const {client, diffAssets, putAssetBlob} = fakeClient({
+			missing: ['a_8f21.cutout'],
+			present: ['a_8f21']
+		});
+		const result = await syncStoryAssets({
+			client,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(offered(diffAssets)).toEqual(['a_8f21', 'a_8f21.cutout']);
+
+		const [, key, blob, hash, mime] = putAssetBlob.mock
+			.calls[0] as unknown as [string, string, Blob, string, string];
+
+		expect(key).toBe('a_8f21.cutout');
+		expect(hash).toBe(await contentHash(CUTOUT));
+		expect(mime).toBe('image/png');
+		// The hash above is the manifest's claim; this is the blob actually handed over.
+		expect(await contentHash(await blobBytes(blob))).toBe(
+			await contentHash(CUTOUT)
+		);
+
+		// Its own channel: a sidecar is not a picture, and a caller counting uploaded art
+		// must not count re-edit bases among it.
+		expect(result.uploadedSidecars).toEqual(['a_8f21.cutout']);
+		expect(result.uploaded).toEqual([]);
+	});
+
+	it('never offers a kind whose policy is not to sync', async () => {
+		// `src` is the un-edited original -- routinely 16 MB, and wanted by nothing but
+		// the device that made the edit.
+		const {store} = await storeWithSidecar(await cutoutEntry(), {kind: 'src'});
+		const {client, diffAssets, putAssetBlob} = fakeClient({
+			present: ['a_8f21']
+		});
+
+		await syncStoryAssets({client, story: storyReferencing(), store});
+
+		expect(offered(diffAssets)).toEqual(['a_8f21']);
+		expect(putAssetBlob).not.toHaveBeenCalled();
+	});
+
+	it('offers a syncable kind whose entry was stamped before the policy said so', async () => {
+		// `sync` on the entry is a record of what was true when it was WRITTEN. The
+		// policy is `sidecarSyncs`, and it is the one that decides -- otherwise opting a
+		// kind in would silently skip every entry that already existed.
+		const {store} = await storeWithSidecar(await cutoutEntry({sync: false}));
+		const {client, diffAssets} = fakeClient({present: ['a_8f21']});
+
+		await syncStoryAssets({client, story: storyReferencing(), store});
+
+		expect(offered(diffAssets)).toEqual(['a_8f21', 'a_8f21.cutout']);
+	});
+
+	it('never offers a sidecar with no hash, which would re-upload on every push', async () => {
+		const {store} = await storeWithSidecar(
+			await cutoutEntry({hash: undefined})
+		);
+		const {client, diffAssets, putAssetBlob} = fakeClient({
+			present: ['a_8f21']
+		});
+
+		await syncStoryAssets({client, story: storyReferencing(), store});
+
+		// The server cannot vouch for bytes nobody measured, so it answers `stale` — and a
+		// row offered here every time is a blob uploaded here every time.
+		expect(offered(diffAssets)).toEqual(['a_8f21']);
+		expect(putAssetBlob).not.toHaveBeenCalled();
+	});
+
+	it('skips a sidecar the server already holds', async () => {
+		const {store} = await storeWithSidecar(await cutoutEntry());
+		const {client, putAssetBlob} = fakeClient({
+			present: ['a_8f21', 'a_8f21.cutout']
+		});
+		const result = await syncStoryAssets({
+			client,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(putAssetBlob).not.toHaveBeenCalled();
+		expect(result.uploadedSidecars).toEqual([]);
+	});
+
+	it('reports a sidecar whose blob is gone without calling the picture lost', async () => {
+		const {store} = await storeWithSidecar(await cutoutEntry(), {blob: false});
+		const {client, putAssetBlob, putManifest} = fakeClient({
+			missing: ['a_8f21', 'a_8f21.cutout']
+		});
+		const result = await syncStoryAssets({
+			client,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(result.missingSidecars).toEqual(['a_8f21.cutout']);
+		// The asset's own bytes are still here and still go up, and the push still finishes.
+		expect(result.missingLocally).toEqual([]);
+		expect(result.uploaded).toEqual(['a_8f21']);
+		expect(putAssetBlob).toHaveBeenCalledTimes(1);
+		expect(putManifest).toHaveBeenCalledTimes(1);
 	});
 });

@@ -100,6 +100,7 @@ export function testSyncContext(
 		lock: () => undefined,
 		presence: emptyPresence('self'),
 		progress: {},
+		pullAssets: jest.fn().mockResolvedValue(undefined),
 		records: {},
 		socketConnected: true,
 		stealPassage: jest.fn(),

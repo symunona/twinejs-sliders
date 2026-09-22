@@ -19,8 +19,15 @@ import {
 	type SyncRecordStore,
 	type SyncRecords
 } from './sync-record';
+import {patchSummary, reasonSummary} from './patch-summary';
 import type {PutStoryResponse, StoryPatch, SyncRecord} from './server.types';
-import {diffFromSnapshot, snapshotStory, usableSnapshot} from './story-diff';
+import {
+	diffFromSnapshot,
+	diffPassages,
+	snapshotStory,
+	usableSnapshot
+} from './story-diff';
+import {type SyncReason, takeSyncReason} from './sync-reason';
 
 /** Spec 11: debounce 5 s, max wait 30 s, backoff 5 → 15 → 60. */
 export const DEFAULT_DEBOUNCE_MS = 5000;
@@ -104,6 +111,15 @@ interface Pending {
 	attempt: number;
 	/** How many merges were thrown away because the author typed mid-round-trip. */
 	mergeAttempts?: number;
+	/**
+	 * What the gesture that dirtied this story said it was doing, if it said anything.
+	 *
+	 * Sticks to the entry rather than being read at flush time: a find & replace dirties
+	 * the story forty times in one debounce window, and only the first of those pushes
+	 * finds the note (`takeSyncReason` consumes it). Never cleared by a later reason-less
+	 * push, or plain typing during the same window would erase it.
+	 */
+	reason?: SyncReason;
 	inFlight?: Promise<void>;
 }
 
@@ -126,6 +142,22 @@ function debounceOverride(): number | undefined {
 export class SyncQueue {
 	private readonly options: SyncQueueOptions;
 	private readonly pending = new Map<string, Pending>();
+	/**
+	 * The story as last pushed, per story id — the base a patch is computed against.
+	 *
+	 * `record.snapshot` is hashes, not text, on purpose: it lives in `localStorage` and a
+	 * second copy of every story there was the thing `StorySnapshot` exists to avoid. But
+	 * a SENTENCE about a patch needs the words behind it — the name of a removed id, what a
+	 * renamed passage used to be called — so this keeps the object itself, in memory only,
+	 * written exactly where `snapshot` is written and guarded by exactly the same
+	 * comparison (`hash === record.pushedHash`). A pull, a checkout or a publish therefore
+	 * invalidates it for free, same as the snapshot, and the cost of being wrong is one
+	 * History row with no sentence on it.
+	 *
+	 * Not in `SyncRecord`: nothing outside this class should be able to mistake it for
+	 * state worth persisting.
+	 */
+	private readonly bases = new Map<string, {hash: string; story: Story}>();
 	private readonly listeners = new Set<(records: SyncRecords) => void>();
 	private readonly store: SyncRecordStore;
 	private disposed = false;
@@ -168,7 +200,7 @@ export class SyncQueue {
 	 * something, and queueing pushes behind that decision only means a longer line of
 	 * pushes that will all fail the same way.
 	 */
-	push(story: Story): void {
+	push(story: Story, options: {reason?: SyncReason} = {}): void {
 		if (this.disposed) {
 			return;
 		}
@@ -189,6 +221,10 @@ export class SyncQueue {
 			return;
 		}
 
+		// Taken only once the push is really happening. A story parked in `conflict`, or
+		// one whose hash did not move, returns above with the note still on the table, so
+		// the gesture keeps its label until a save actually carries it.
+		const reason = options.reason ?? takeSyncReason(story.id);
 		const debounceMs =
 			debounceOverride() ?? this.options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 		const maxWaitMs = this.options.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
@@ -196,6 +232,11 @@ export class SyncQueue {
 
 		if (existing) {
 			existing.story = story;
+
+			if (reason) {
+				existing.reason = reason;
+			}
+
 			// A fresh edit clears a parked backoff: the author is still working, and
 			// whatever went wrong is worth trying again on their schedule, not ours.
 			if (existing.retryTimer) {
@@ -220,7 +261,7 @@ export class SyncQueue {
 			return;
 		}
 
-		const entry: Pending = {attempt: 0, story};
+		const entry: Pending = {attempt: 0, reason, story};
 
 		entry.debounceTimer = setTimeout(
 			() => void this.flush(story.id),
@@ -303,9 +344,10 @@ export class SyncQueue {
 		this.write(storyId, {state: 'pushing'});
 
 		const patch = this.patchFor(record, story);
+		const summary = this.summaryFor(record, story, patch, entry.reason);
 		const run = async () => {
 			try {
-				const result = await this.send(story, record, patch, options);
+				const result = await this.send(story, record, patch, options, summary);
 
 				// An edit that arrived mid-flight left its own debounce timer on this
 				// entry. Dropping the entry would drop that timer with it, and the
@@ -315,6 +357,12 @@ export class SyncQueue {
 				if (!superseded) {
 					this.pending.delete(storyId);
 				}
+
+				// The label belonged to THIS write. A superseded entry keeps its timers
+				// and its text, but the keystrokes that arrived mid-flight are plain
+				// typing and derive their own sentence. (A FAILED write keeps the reason:
+				// the retry resends the same body, so it is still the same gesture.)
+				entry.reason = undefined;
 
 				logSync('push', patch ? 'landed: patch' : 'landed', storyId, () => ({
 					keepalive: options.keepalive === true,
@@ -343,6 +391,7 @@ export class SyncQueue {
 					snapshot: snapshotStory(story),
 					state: superseded ? 'dirty' : 'idle'
 				});
+				this.bases.set(storyId, {hash, story});
 				this.options.onPushed?.(story);
 			} catch (error) {
 				await this.fail(storyId, entry, error, options, story, hash);
@@ -374,6 +423,38 @@ export class SyncQueue {
 	}
 
 	/**
+	 * A sentence for the History dialog, or `''` for none.
+	 *
+	 * A stated `reason` beats the derived text, always: the gesture knows what it did and
+	 * the bytes only know what moved. Absent one, this derives from the patch — including
+	 * on the PUT path, where a base exists but PATCH is switched off, because a server
+	 * without PATCH is not a reason for an author to lose their history labels.
+	 *
+	 * Derivation is best-effort by design. No base means no sentence and the row reads the
+	 * way it reads today; it must never cost a write.
+	 */
+	private summaryFor(
+		record: SyncRecord,
+		story: Story,
+		patch: StoryPatch | undefined,
+		reason: SyncReason | undefined
+	): string {
+		if (reason) {
+			return reasonSummary(reason);
+		}
+
+		const base = this.bases.get(record.storyId);
+
+		if (!base || base.hash !== record.pushedHash) {
+			return '';
+		}
+
+		const derived = patch ?? diffPassages(base.story, story);
+
+		return derived ? patchSummary(derived, base.story) : '';
+	}
+
+	/**
 	 * One write, as a PATCH when there is a base and a PUT otherwise.
 	 *
 	 * A PATCH that fails with anything but a conflict is retried ONCE as a whole PUT. If
@@ -390,20 +471,28 @@ export class SyncQueue {
 		story: Story,
 		record: SyncRecord,
 		patch: StoryPatch | undefined,
-		options: {keepalive?: boolean}
+		options: {keepalive?: boolean},
+		summary: string
 	): Promise<PutStoryResponse> {
 		const {client} = this.options;
+		// Omitted rather than sent empty: `{keepalive}` is what every existing caller and
+		// test sees, and an empty summary is the absence of one, not a blank label.
+		const write = {
+			keepalive: options.keepalive,
+			...(summary ? {summary} : {})
+		};
 
 		if (!patch) {
-			return client.putStory(story, record.rev || undefined, {
-				keepalive: options.keepalive
-			});
+			return client.putStory(story, record.rev || undefined, write);
 		}
 
 		try {
-			const result = await client.patchStory(story.id, patch, record.rev, {
-				keepalive: options.keepalive
-			});
+			const result = await client.patchStory(
+				story.id,
+				patch,
+				record.rev,
+				write
+			);
 
 			// The method works. Whatever the earlier failures were, they were about the
 			// wire, so they stop counting towards switching PATCH off.
@@ -415,9 +504,7 @@ export class SyncQueue {
 				throw error;
 			}
 
-			const result = await client.putStory(story, record.rev || undefined, {
-				keepalive: options.keepalive
-			});
+			const result = await client.putStory(story, record.rev || undefined, write);
 
 			this.patchFallbacks += 1;
 
@@ -519,6 +606,7 @@ export class SyncQueue {
 			snapshot: snapshotStory(merged),
 			state: 'idle'
 		});
+		this.bases.set(storyId, {hash: storyHash(merged), story: merged});
 		this.options.onPushed?.(merged);
 	}
 
@@ -667,6 +755,7 @@ export class SyncQueue {
 		}
 
 		this.pending.clear();
+		this.bases.clear();
 		this.listeners.clear();
 	}
 

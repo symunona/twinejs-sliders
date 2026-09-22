@@ -3,7 +3,7 @@ import {
 	MemoryBackend,
 	contentHash
 } from '@sliders/asset-store';
-import type {AssetMeta, Character} from '@sliders/scene-types';
+import type {AssetMeta, Character, ImageEdits} from '@sliders/scene-types';
 import {webpBytes} from '../../../../../packages/asset-store/src/test-fixtures';
 import {checkoutStory} from '../checkout-story';
 import type {ServerClient} from '../client';
@@ -51,6 +51,16 @@ async function meta(
 		...overrides
 	};
 }
+
+/** What the asset editor leaves behind. Any value will do; it only has to survive. */
+const EDITS: ImageEdits = {
+	brightness: 12,
+	contrast: -4,
+	crop: {h: 100, w: 200, x: 0, y: 0},
+	gamma: 1,
+	height: 100,
+	width: 200
+};
 
 function character(overrides: Partial<Character> = {}): Character {
 	return {
@@ -258,6 +268,116 @@ describe('checkoutStory', () => {
 
 		expect(result.warnings).toEqual(['not_found']);
 		expect(result.missingAssets).toEqual([]);
+	});
+
+	it('downloads a sidecar under <id>.<kind> and lands the settings with it', async () => {
+		const bytes = webpBytes();
+		const cutout = new Uint8Array([1, 2, 3, 4, 5]);
+		const edited = await meta(bytes, {
+			edits: EDITS,
+			sidecars: {
+				cutout: {
+					bytes: cutout.length,
+					hash: await contentHash(cutout),
+					mime: 'image/png',
+					sync: true
+				}
+			}
+		});
+		const {client, dispatched, getAssetBlob} = fakeServer({
+			assets: [edited],
+			blobs: {
+				a_8f21: new Blob([bytes]),
+				'a_8f21.cutout': new Blob([cutout], {type: 'image/png'})
+			}
+		});
+		const store = newStore();
+
+		const result = await checkoutStory({
+			client,
+			dispatch: action => dispatched.push(action as StoriesAction),
+			stories: [],
+			store,
+			storyId: 'story-1'
+		});
+
+		expect(getAssetBlob.mock.calls.map(call => call[1])).toEqual([
+			'a_8f21',
+			'a_8f21.cutout'
+		]);
+		expect(result.missingSidecars).toEqual([]);
+		// The picture is not enough. Without these two the asset editor opens on baked
+		// pixels with its controls at zero, and the edit can be stacked on but never undone.
+		expect(await store.meta('a_8f21')).toMatchObject({edits: EDITS});
+		expect((await store.sidecar('a_8f21', 'cutout'))?.size).toBe(cutout.length);
+	});
+
+	it('leaves the asset alone when its sidecar will not come down', async () => {
+		const bytes = webpBytes();
+		const cutout = new Uint8Array([1, 2, 3]);
+		const edited = await meta(bytes, {
+			edits: EDITS,
+			sidecars: {
+				cutout: {
+					bytes: cutout.length,
+					hash: await contentHash(cutout),
+					sync: true
+				}
+			}
+		});
+		const {client, dispatched} = fakeServer({
+			assets: [edited],
+			blobs: {a_8f21: new Blob([bytes])}
+		});
+		const store = newStore();
+
+		const result = await checkoutStory({
+			client,
+			dispatch: action => dispatched.push(action as StoriesAction),
+			stories: [],
+			store,
+			storyId: 'story-1'
+		});
+
+		// A lost sidecar costs re-editability, not the picture — so it is reported on its
+		// own channel and the asset, its bytes and the settings that did arrive all stand.
+		expect(result.missingSidecars).toEqual(['a_8f21.cutout']);
+		expect(result.missingAssets).toEqual([]);
+		expect(result.downloaded).toEqual(['a_8f21']);
+		expect((await store.get('a_8f21'))?.size).toBe(bytes.length);
+		expect(await store.meta('a_8f21')).toMatchObject({edits: EDITS});
+		expect(await store.sidecar('a_8f21', 'cutout')).toBeUndefined();
+	});
+
+	it('never asks for a sidecar whose kind does not sync', async () => {
+		const bytes = webpBytes();
+		const original = new Uint8Array([9, 9, 9]);
+		const edited = await meta(bytes, {
+			sidecars: {
+				src: {
+					bytes: original.length,
+					hash: await contentHash(original),
+					sync: false
+				}
+			}
+		});
+		const {client, dispatched, getAssetBlob} = fakeServer({
+			assets: [edited],
+			blobs: {a_8f21: new Blob([bytes])}
+		});
+
+		const result = await checkoutStory({
+			client,
+			dispatch: action => dispatched.push(action as StoriesAction),
+			stories: [],
+			store: newStore(),
+			storyId: 'story-1'
+		});
+
+		// `src` is the un-edited original and never leaves the device that made the edit,
+		// so the key names bytes the server was never given. Asking would 404 every time.
+		expect(getAssetBlob.mock.calls.map(call => call[1])).toEqual(['a_8f21']);
+		expect(result.missingSidecars).toEqual([]);
 	});
 
 	it('does not re-download bytes the local library already holds', async () => {

@@ -12,14 +12,21 @@
  * the last blob has landed anyway.
  */
 
+import {sidecarKey, sidecarSyncs} from '@sliders/asset-store';
 import type {AssetStore} from '@sliders/asset-store';
-import type {AssetMeta, Character} from '@sliders/scene-types';
+import type {
+	AssetId,
+	AssetMeta,
+	Character,
+	SidecarKind
+} from '@sliders/scene-types';
 import {
 	collectAssetRefs,
 	resolveBundleRefs
 } from '../../../util/sliders-bundle';
 import type {Story} from '../../stories';
 import type {ServerClient} from './client';
+import {stable} from './stable-json';
 
 export interface AssetSyncProgress {
 	phase: 'scan' | 'diff' | 'upload' | 'manifest';
@@ -32,10 +39,18 @@ export interface AssetSyncProgress {
 export interface AssetSyncResult {
 	/** Asset ids whose bytes went up this time. */
 	uploaded: string[];
+	/** Sidecar keys (`<id>.<kind>`) whose bytes went up this time. */
+	uploadedSidecars: string[];
 	/** Asset ids the server already had. */
 	skipped: string[];
 	/** Ids the local store no longer has bytes for. Reported, never thrown. */
 	missingLocally: string[];
+	/**
+	 * Sidecar keys the manifest names but this device cannot produce. Separate from
+	 * `missingLocally` on purpose: a lost sidecar costs re-editability, a lost asset
+	 * costs the picture, and a UI that says the same thing about both is lying about one.
+	 */
+	missingSidecars: string[];
 	/** Names written in scene YAML that resolve to nothing here. */
 	unresolved: string[];
 	/** Rev of the manifest after the write. */
@@ -68,25 +83,70 @@ export interface SyncStoryAssetsOptions {
 }
 
 /**
- * Stable JSON, so the fingerprint does not move when a store implementation happens to
- * hand its keys back in a different order.
+ * One blob the server may need: an asset's own bytes, or a sidecar an asset owns.
+ *
+ * Both go through the same diff and the same upload loop, because to the server they are
+ * the same thing — a blob keyed by a string, with a hash to compare. Keeping two loops
+ * would mean two round trips and two chances for the rules to drift apart.
  */
-function stable(value: unknown): string {
-	if (Array.isArray(value)) {
-		return `[${value.map(stable).join(',')}]`;
+interface UploadRow {
+	/** What the server keys this blob by: an asset id, or `<id>.<kind>`. */
+	key: string;
+	hash: string;
+	bytes: number;
+	mime: string;
+	/** The asset's name, for the progress readout. Sidecars borrow their owner's. */
+	name: string;
+	/** Absent for an asset's own bytes. */
+	sidecar?: {id: AssetId; kind: SidecarKind};
+}
+
+/**
+ * Every blob worth offering the server, assets first.
+ *
+ * A sidecar joins only when its kind syncs AND its entry carries a `hash`. Both halves
+ * matter and for different reasons. The kind is the size policy — `src` is the un-edited
+ * original, routinely 16 MB, and wanted by nothing but the device that made the edit.
+ * The hash is what `diffAssets` compares: offering a hashless row would ask the server to
+ * vouch for bytes nobody measured, it answers `stale` to that, and the blob re-uploads on
+ * every single push.
+ *
+ * `sidecarSyncs(kind)` and NOT `entry.sync`. The field records what the policy was when
+ * the entry was written; the predicate is what it is now. They agree today, and the day
+ * they stop — a kind opted in after entries for it already existed — reading the field
+ * would quietly keep every one of those out of the push, with nothing to show for it.
+ */
+function uploadRows(assets: AssetMeta[]): UploadRow[] {
+	const rows: UploadRow[] = [];
+
+	for (const meta of assets) {
+		rows.push({
+			bytes: meta.bytes,
+			hash: meta.hash,
+			key: meta.id,
+			mime: meta.mime,
+			name: meta.name
+		});
 	}
 
-	if (value && typeof value === 'object') {
-		const entries = Object.entries(value as Record<string, unknown>)
-			.filter(([, item]) => item !== undefined)
-			.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+	for (const meta of assets) {
+		for (const [kind, entry] of Object.entries(meta.sidecars ?? {})) {
+			if (!sidecarSyncs(kind) || !entry?.hash) {
+				continue;
+			}
 
-		return `{${entries
-			.map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`)
-			.join(',')}}`;
+			rows.push({
+				bytes: entry.bytes ?? 0,
+				hash: entry.hash,
+				key: sidecarKey(meta.id, kind),
+				mime: entry.mime ?? 'application/octet-stream',
+				name: meta.name,
+				sidecar: {id: meta.id, kind}
+			});
+		}
 	}
 
-	return JSON.stringify(value) ?? 'null';
+	return rows;
 }
 
 /** What a manifest write would say, as one comparable string. */
@@ -126,11 +186,13 @@ export async function syncStoryAssets(
 			characterCount: characters.length,
 			fingerprint,
 			missingLocally: [],
+			missingSidecars: [],
 			rev: 0,
 			skipped: assets.map(meta => meta.id),
 			unchanged: true,
 			unresolved: [],
-			uploaded: []
+			uploaded: [],
+			uploadedSidecars: []
 		};
 	}
 
@@ -140,13 +202,11 @@ export async function syncStoryAssets(
 	report({done: 1, phase: 'scan', total: 1});
 	report({done: 0, phase: 'diff', total: 1});
 
+	const rows = uploadRows(assets);
+
 	const diff = await client.diffAssets(
 		story.id,
-		assets.map(meta => ({
-			bytes: meta.bytes,
-			hash: meta.hash,
-			id: meta.id
-		}))
+		rows.map(row => ({bytes: row.bytes, hash: row.hash, id: row.key}))
 	);
 
 	report({done: 1, phase: 'diff', total: 1});
@@ -154,31 +214,44 @@ export async function syncStoryAssets(
 	// `stale` is present-under-a-different-hash, which for our purposes is missing: the
 	// bytes the manifest names are not the bytes the server holds.
 	const wanted = new Set([...diff.missing, ...diff.stale]);
-	const byId = new Map<string, AssetMeta>(assets.map(meta => [meta.id, meta]));
-	const toUpload = assets.filter(meta => wanted.has(meta.id));
+	const toUpload = rows.filter(row => wanted.has(row.key));
 	const uploaded: string[] = [];
+	const uploadedSidecars: string[] = [];
 	const missingLocally: string[] = [];
+	const missingSidecars: string[] = [];
 
-	for (const [index, meta] of toUpload.entries()) {
+	for (const [index, row] of toUpload.entries()) {
 		report({
 			done: index,
-			name: meta.name,
+			name: row.name,
 			phase: 'upload',
 			total: toUpload.length
 		});
 
-		const blob = await store.get(meta.id);
+		const blob = row.sidecar
+			? await store.sidecar(row.sidecar.id, row.sidecar.kind)
+			: await store.get(row.key);
 
 		if (!blob) {
+			if (row.sidecar) {
+				// A sidecar is a convenience — the finished picture is the asset's own bytes,
+				// and those are uploaded above regardless. So a missing one is reported on its
+				// own channel and costs the push nothing: the alternative, counting it among
+				// the assets that are gone, would tell the author a picture had been lost
+				// when only its re-edit base had.
+				missingSidecars.push(row.key);
+				continue;
+			}
+
 			// The manifest still names it. The server answers `missing` for it on the next
 			// checkout, which is a truthful "this picture is gone" rather than a push that
 			// refuses to finish.
-			missingLocally.push(meta.id);
+			missingLocally.push(row.key);
 			continue;
 		}
 
-		await client.putAssetBlob(story.id, meta.id, blob, meta.hash, meta.mime);
-		uploaded.push(meta.id);
+		await client.putAssetBlob(story.id, row.key, blob, row.hash, row.mime);
+		(row.sidecar ? uploadedSidecars : uploaded).push(row.key);
 	}
 
 	report({done: toUpload.length, phase: 'upload', total: toUpload.length});
@@ -199,10 +272,14 @@ export async function syncStoryAssets(
 		characterCount: characters.length,
 		fingerprint,
 		missingLocally,
+		missingSidecars,
 		rev: result?.rev ?? 0,
-		skipped: [...byId.keys()].filter(id => !wanted.has(id)),
+		// Assets only. `skipped` answers "which pictures did the server already have",
+		// and a sidecar is not a picture.
+		skipped: assets.map(meta => meta.id).filter(id => !wanted.has(id)),
 		unchanged: false,
 		unresolved: resolved.unresolved,
-		uploaded
+		uploaded,
+		uploadedSidecars
 	};
 }

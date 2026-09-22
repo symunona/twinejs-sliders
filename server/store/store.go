@@ -32,8 +32,12 @@ import (
 type Options struct {
 	// Dir is DATA_DIR: the parent of `stories/`.
 	Dir string
-	// RevKeep is how many snapshots survive per story.
+	// RevKeep is how many snapshots survive per story. It counts UNPINNED snapshots
+	// only — a pin is not subject to a retention policy.
 	RevKeep int
+	// PinnedMax is PINNED_MAX: how many pinned revisions one story may hold. Pins are
+	// never pruned, so this is the bound that keeps a bad script off the disk.
+	PinnedMax int
 	// OrphanTTL is how long an asset blob may sit unnamed by the manifest.
 	OrphanTTL time.Duration
 	// TombstoneTTL is how long a deleted story's history survives.
@@ -71,6 +75,9 @@ type Store struct {
 func New(opts Options) (*Store, error) {
 	if opts.RevKeep < 1 {
 		opts.RevKeep = 1
+	}
+	if opts.PinnedMax < 1 {
+		opts.PinnedMax = 50
 	}
 	s := &Store{opts: opts, locks: make(map[string]*sync.Mutex)}
 	if err := os.MkdirAll(s.storiesDir(), 0o755); err != nil {

@@ -73,6 +73,13 @@ func (s *Store) sweepStory(id string, now time.Time, res *SweepResult) error {
 	named := make(map[string]bool, len(man.Assets))
 	for _, info := range man.infos() {
 		named[info.ID] = true
+		// A synced sidecar is an ordinary blob stored under `<assetId>.<kind>`, which is
+		// not a top-level manifest id — so without this it looks orphaned from the day it
+		// is pushed and goes away one OrphanTTL later, long after the upload that would
+		// have explained it.
+		for _, sid := range info.sidecarIDs() {
+			named[sid] = true
+		}
 	}
 
 	blobs, err := os.ReadDir(s.assetsDir(id))

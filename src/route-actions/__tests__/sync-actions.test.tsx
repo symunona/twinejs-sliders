@@ -25,6 +25,7 @@ describe('<SyncActions>', () => {
 						lock: () => undefined,
 						presence: emptyPresence(),
 						progress: {},
+						pullAssets: async () => undefined,
 						records: {},
 						socketConnected: true,
 						stealPassage: () => undefined

@@ -16,6 +16,8 @@ import type {
 	PingResponse,
 	PutStoryResponse,
 	RestoreResponse,
+	RevisionMetaRequest,
+	RevisionMetaResponse,
 	RevisionsResponse,
 	ServerErrorBody,
 	ServerErrorCode,
@@ -203,7 +205,7 @@ export interface ServerClient {
 	putStory(
 		story: Story,
 		ifMatch?: number,
-		options?: {revive?: boolean; keepalive?: boolean}
+		options?: {revive?: boolean; keepalive?: boolean; summary?: string}
 	): Promise<PutStoryResponse>;
 	/**
 	 * Upload only what changed. `ifMatch` is REQUIRED, unlike `putStory`.
@@ -218,7 +220,7 @@ export interface ServerClient {
 		id: string,
 		patch: StoryPatch,
 		ifMatch: number,
-		options?: {keepalive?: boolean}
+		options?: {keepalive?: boolean; summary?: string}
 	): Promise<PatchStoryResponse>;
 	deleteStory(id: string, purge?: boolean): Promise<void>;
 	reviveStory(story: Story): Promise<PutStoryResponse>;
@@ -247,6 +249,19 @@ export interface ServerClient {
 	listRevisions(id: string): Promise<RevisionsResponse>;
 	getRevision(id: string, rev: number): Promise<Story>;
 	restoreRevision(id: string, rev: number): Promise<RestoreResponse>;
+	/**
+	 * Name or pin one revision. `rev` may be the CURRENT one — the server parks its
+	 * label and pin on `meta.json` until that version is snapshotted.
+	 *
+	 * NOT a write of the story: no `If-Match`, no ETag back, no rev bump. Which is why
+	 * the cap refusal is a plain 400 rather than a 412 — a pin that hit `PINNED_MAX` is
+	 * not somebody else having saved first, and must not reach the conflict path.
+	 */
+	setRevisionMeta(
+		id: string,
+		rev: number,
+		meta: RevisionMetaRequest
+	): Promise<RevisionMetaResponse>;
 }
 
 class FetchServerClient implements ServerClient {
@@ -369,7 +384,7 @@ class FetchServerClient implements ServerClient {
 	async putStory(
 		story: Story,
 		ifMatch?: number,
-		options: {revive?: boolean; keepalive?: boolean} = {}
+		options: {revive?: boolean; keepalive?: boolean; summary?: string} = {}
 	): Promise<PutStoryResponse> {
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json'
@@ -385,6 +400,7 @@ class FetchServerClient implements ServerClient {
 			{
 				body: JSON.stringify({
 					client: this.options.appVersion ?? 'twine-sliders',
+					...(options.summary ? {summary: options.summary} : {}),
 					story: outgoingStory(story)
 				}),
 				headers,
@@ -400,12 +416,13 @@ class FetchServerClient implements ServerClient {
 		id: string,
 		patch: StoryPatch,
 		ifMatch: number,
-		options: {keepalive?: boolean} = {}
+		options: {keepalive?: boolean; summary?: string} = {}
 	): Promise<PatchStoryResponse> {
 		const response = await this.send(`/stories/${encodeURIComponent(id)}`, {
 			body: JSON.stringify({
 				client: this.options.appVersion ?? 'twine-sliders',
-				patch
+				patch,
+				...(options.summary ? {summary: options.summary} : {})
 			}),
 			headers: {
 				'Content-Type': 'application/json',
@@ -539,6 +556,26 @@ class FetchServerClient implements ServerClient {
 		const wrapped = raw as {story?: Story};
 
 		return incomingStory(wrapped.story ?? raw);
+	}
+
+	async setRevisionMeta(
+		id: string,
+		rev: number,
+		meta: RevisionMetaRequest
+	): Promise<RevisionMetaResponse> {
+		const response = await this.send(
+			`/stories/${encodeURIComponent(id)}/revisions/${rev}/label`,
+			{
+				// Sent verbatim, `null`s and all: the wire distinguishes "leave it alone"
+				// (absent or null) from "clear it" (`''`, `false`), and squeezing out a
+				// falsy value here would turn the second into the first.
+				body: JSON.stringify(meta),
+				headers: {'Content-Type': 'application/json'},
+				method: 'POST'
+			}
+		);
+
+		return (await response.json()) as RevisionMetaResponse;
 	}
 
 	async restoreRevision(id: string, rev: number): Promise<RestoreResponse> {
