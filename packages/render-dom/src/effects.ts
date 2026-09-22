@@ -38,12 +38,12 @@
  * playback and flashes — the same reason `setContent` goes to such lengths to keep the
  * element it has.
  *
- * The generated rules only ever write `translate`, `clip-path`, `opacity`, `filter` and
- * `background-position`. None of those is touched by `applyFrameFit` or `layout`, which own
- * `transform`, `transform-origin`, `object-fit` and `object-position`. So an effect can be
- * layered onto a mirrored, tilted, origin-pinned sprite without the two ever fighting over a
- * property — `translate` is its own longhand and composes with `transform` rather than
- * replacing it.
+ * The generated rules only ever write `translate`, `rotate`, `clip-path`, `opacity`,
+ * `filter` and `background-position`. None of those is touched by `applyFrameFit` or
+ * `layout`, which own `transform`, `transform-origin`, `object-fit` and `object-position`.
+ * So an effect can be layered onto a mirrored, tilted, origin-pinned sprite without the two
+ * ever fighting over a property — `translate` and `rotate` are their own longhands and
+ * compose with `transform` rather than replacing it.
  */
 
 import type {AssetEffect, GlitchEffect} from '@sliders/scene-types';
@@ -52,6 +52,7 @@ import type {AssetEffect, GlitchEffect} from '@sliders/scene-types';
 export const GLITCH_DEFAULTS: GlitchEffect = {
 	kind: 'glitch',
 	amount: 35,
+	rotate: 0,
 	bands: 5,
 	speed: 24,
 	split: 30,
@@ -72,6 +73,10 @@ export const GLITCH_RANGES: Record<
 	{max: number; min: number; step: number}
 > = {
 	amount: {min: 0, max: 100, step: 1},
+	// Degrees, not a 0..100 like its neighbours -- see `GlitchEffect.rotate`. Past about
+	// thirty the band no longer reads as a torn strip of the picture, it reads as a second
+	// picture lying on top of the first at an angle.
+	rotate: {min: 0, max: 30, step: 1},
 	bands: {min: 1, max: 12, step: 1},
 	speed: {min: 1, max: 50, step: 1},
 	split: {min: 0, max: 100, step: 1},
@@ -155,12 +160,38 @@ export function effectIsIdle(effect: AssetEffect | undefined): boolean {
 	}
 
 	return (
-		(normal.amount === 0 || normal.burst === 0) &&
+		!tears(normal) &&
 		normal.split === 0 &&
 		normal.scanlines === 0 &&
 		normal.noise === 0
 	);
 }
+
+/**
+ * Whether the bands do anything.
+ *
+ * Either knob on its own is a tear: sliding without twisting is the analogue look, twisting
+ * without sliding is a strip of the picture that lifts off and comes back. `burst` gates
+ * both, because it is how often a band is corrupted at all — at zero there is no burst to
+ * slide or twist in.
+ */
+function tears(glitch: GlitchEffect): boolean {
+	return (glitch.amount > 0 || glitch.rotate > 0) && glitch.burst > 0;
+}
+
+/**
+ * Parameters added after glitch shipped, which contribute to the class name only when they
+ * are set to something.
+ *
+ * The class is the SEED of the tear as well as its name, so a hash that moved would hand
+ * every already-tuned effect a different pseudo-random track — exactly what `seeded` exists
+ * to prevent. Leaving a new key out while it is at zero keeps the old effects on their old
+ * hash, and is sound because zero is what the normalizer gives a key that is missing
+ * entirely: for these, "absent" and "off" are the same effect and must hash the same.
+ *
+ * Every future parameter belongs here, and its default has to be zero for that to hold.
+ */
+const LATE_KEYS = new Set<keyof typeof GLITCH_RANGES>(['rotate']);
 
 /**
  * FNV-1a over the effect's own numbers.
@@ -172,7 +203,10 @@ export function effectIsIdle(effect: AssetEffect | undefined): boolean {
 export function effectClass(effect: AssetEffect): string {
 	const normal = normalizeGlitch(effect);
 	const keys = Object.keys(GLITCH_RANGES).sort() as (keyof typeof GLITCH_RANGES)[];
-	const text = `${normal.kind}|${keys.map(key => `${key}:${normal[key]}`).join('|')}`;
+	const text = `${normal.kind}|${keys
+		.filter(key => !(LATE_KEYS.has(key) && normal[key] === 0))
+		.map(key => `${key}:${normal[key]}`)
+		.join('|')}`;
 	let hash = 0x811c9dc5;
 
 	for (let index = 0; index < text.length; index++) {
@@ -236,7 +270,7 @@ export function effectLayers(effect: AssetEffect | undefined): EffectLayer[] {
 		layers.push({art: true, role: 'split-a'}, {art: true, role: 'split-b'});
 	}
 
-	if (normal.amount > 0 && normal.burst > 0) {
+	if (tears(normal)) {
 		for (let band = 0; band < normal.bands; band++) {
 			layers.push({art: true, band, role: 'band'});
 		}
@@ -317,7 +351,7 @@ export function effectCss(effect: AssetEffect): string {
 	// Rolled per band rather than shared, so the bands tear independently. One shared roll
 	// makes the whole picture jump sideways as a unit, which looks like a camera shake.
 
-	if (glitch.amount > 0 && glitch.burst > 0) {
+	if (tears(glitch)) {
 		for (let band = 0; band < glitch.bands; band++) {
 			const name = `${scope}-band-${band}`;
 			// Bands of equal height that tile the picture exactly. Unequal heights read as
@@ -326,11 +360,19 @@ export function effectCss(effect: AssetEffect): string {
 			const top = round((band / glitch.bands) * 100);
 			const bottom = round(100 - ((band + 1) / glitch.bands) * 100);
 			const offsets: number[] = [];
+			const angles: number[] = [];
 
 			for (let frame = 0; frame < frames; frame++) {
-				offsets.push(
-					rng() < chance ? round((rng() * 2 - 1) * tear) : 0
-				);
+				const torn = rng() < chance;
+
+				offsets.push(torn ? round((rng() * 2 - 1) * tear) : 0);
+
+				// Rolled only when the author asked for a twist, so a glitch with `rotate`
+				// at zero draws the byte-identical track it drew before this key existed —
+				// one extra draw per frame would shift the whole sequence.
+				if (glitch.rotate > 0) {
+					angles.push(torn ? round((rng() * 2 - 1) * glitch.rotate) : 0);
+				}
 			}
 
 			out.push(
@@ -340,7 +382,18 @@ export function effectCss(effect: AssetEffect): string {
 					`}`
 			);
 			out.push(
-				track(name, frames, frame => `translate: ${offsets[frame]}% 0;`)
+				track(
+					name,
+					frames,
+					// `rotate` is its own longhand, like `translate`, so the two compose
+					// here and neither touches the `transform` the renderer's layout owns.
+					// The band is clipped BEFORE it is transformed, so what turns is the
+					// torn strip itself rather than a wedge of the whole picture.
+					frame =>
+						glitch.rotate > 0
+							? `translate: ${offsets[frame]}% 0; rotate: ${angles[frame]}deg;`
+							: `translate: ${offsets[frame]}% 0;`
+				)
 			);
 		}
 	}
