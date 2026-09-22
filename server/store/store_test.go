@@ -362,6 +362,42 @@ func manifestJSON(t *testing.T, ids ...string) []byte {
 	return raw
 }
 
+// manifestSidecarJSON builds an assets.json naming one asset whose `sidecars` field is
+// verbatim whatever is handed in — "" leaves the key off entirely. The editor owns that
+// shape and has already changed it once, so the server is tested against the shapes it
+// will actually meet rather than the one it would like.
+func manifestSidecarJSON(t *testing.T, id, sidecars string) []byte {
+	t.Helper()
+	asset := map[string]any{
+		"id": id, "name": id, "kind": "bg", "tags": []string{}, "animated": false,
+		"w": 10, "h": 10, "bytes": 4, "hash": sha([]byte(id)), "mime": "image/webp",
+	}
+	if sidecars != "" {
+		asset["sidecars"] = json.RawMessage(sidecars)
+	}
+	raw, err := json.Marshal(map[string]any{"assets": []any{asset}, "characters": []any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// putBlobAged uploads a blob and backdates it so the next sweep sees it as expired.
+func putBlobAged(t *testing.T, s *Store, storyID, assetID, mime string, age time.Duration) {
+	t.Helper()
+	if _, err := s.PutAsset(storyID, assetID, bytes.NewReader([]byte(assetID)), sha([]byte(assetID)), mime); err != nil {
+		t.Fatalf("PutAsset %s: %v", assetID, err)
+	}
+	path, _, ok := s.blobPath(storyID, assetID)
+	if !ok {
+		t.Fatalf("PutAsset %s left no blob", assetID)
+	}
+	past := time.Now().Add(-age)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRestoreSnapshotsWhatItReplacedAndReportsMissingAssets(t *testing.T) {
 	s := testStore(t, nil)
 
@@ -474,6 +510,88 @@ func TestOrphanSweepRespectsTTL(t *testing.T) {
 	}
 	if _, _, ok := s.blobPath("story-1", "a1"); !ok {
 		t.Fatal("blob named by the manifest was swept")
+	}
+}
+
+func TestSweepKeepsSidecarsTheManifestNames(t *testing.T) {
+	s := testStore(t, func(o *Options) { o.OrphanTTL = time.Hour })
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+
+	sidecars := `{"cutout":{"hash":"ff","bytes":12,"mime":"image/png","sync":true}}`
+	if _, err := s.PutManifest("story-1", manifestSidecarJSON(t, "a1", sidecars), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+
+	putBlobAged(t, s, "story-1", "a1", "image/webp", 2*time.Hour)
+	putBlobAged(t, s, "story-1", "a1.cutout", "image/png", 2*time.Hour)
+	// Same name shape, no manifest entry anywhere: still an orphan, still swept.
+	putBlobAged(t, s, "story-1", "a9999.cutout", "image/png", 2*time.Hour)
+
+	res, err := s.Sweep(time.Now())
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if res.OrphanBlobs != 1 {
+		t.Fatalf("swept %d blobs, want 1", res.OrphanBlobs)
+	}
+	if _, _, ok := s.blobPath("story-1", "a1.cutout"); !ok {
+		t.Fatal("a sidecar the manifest names was swept — pushed art disappearing one OrphanTTL after upload")
+	}
+	if _, _, ok := s.blobPath("story-1", "a1"); !ok {
+		t.Fatal("blob named by the manifest was swept")
+	}
+	if _, _, ok := s.blobPath("story-1", "a9999.cutout"); ok {
+		t.Fatal("a sidecar of an asset no manifest names survived — nothing would ever collect it")
+	}
+}
+
+func TestSweepSurvivesEverySidecarShape(t *testing.T) {
+	// The editor writes this field; the server only reads it. Anything unreadable has to
+	// mean "names no sidecars", never "names nothing" — the second answer deletes the
+	// asset's own bytes.
+	shapes := []struct {
+		name     string
+		sidecars string
+	}{
+		{"absent", ""},
+		{"null", `null`},
+		{"old array form", `["source","cutout"]`},
+		{"empty object", `{}`},
+		{"not an object at all", `"cutout"`},
+	}
+	for _, tc := range shapes {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testStore(t, func(o *Options) { o.OrphanTTL = time.Hour })
+			mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+			if _, err := s.PutManifest("story-1", manifestSidecarJSON(t, "a1", tc.sidecars), nil, testClient); err != nil {
+				t.Fatal(err)
+			}
+			putBlobAged(t, s, "story-1", "a1", "image/webp", 2*time.Hour)
+
+			if _, err := s.Sweep(time.Now()); err != nil {
+				t.Fatalf("Sweep: %v", err)
+			}
+			if _, _, ok := s.blobPath("story-1", "a1"); !ok {
+				t.Fatalf("sidecars %s took the asset's own blob with it", tc.sidecars)
+			}
+		})
+	}
+}
+
+func TestValidIDTakesSidecarKeys(t *testing.T) {
+	// `.` is the sidecar separator precisely because ids already allow it; `#` and the
+	// rest stay out, and this pattern is the path-traversal guard, so it does not move.
+	ok := []string{"a_8f21", "a_8f21.cutout", "a_8f21.src", "a-1.cutout.v2"}
+	for _, id := range ok {
+		if !ValidID(id) {
+			t.Errorf("ValidID(%q) = false, want true", id)
+		}
+	}
+	bad := []string{"a_8f21#cutout", "a_8f21/cutout", "../a_8f21", "a_8f21/../x", ".hidden", "", ".", ".."}
+	for _, id := range bad {
+		if ValidID(id) {
+			t.Errorf("ValidID(%q) = true, want false", id)
+		}
 	}
 }
 

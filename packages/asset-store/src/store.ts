@@ -2,6 +2,7 @@ import type {
 	AssetId,
 	AssetMeta,
 	Character,
+	SidecarEntries,
 	SidecarKind
 } from '@sliders/scene-types';
 import {
@@ -23,7 +24,21 @@ import {
 	uniqueAssetId,
 	uniqueName
 } from './ids';
+import {migrateSidecars} from './migrate-sidecars';
 import {prepareUpload} from './transcode';
+
+/**
+ * Which kinds ride along with the manifest to the server.
+ *
+ * Policy, so it lives here and not in `scene-types`, which describes the wire SHAPE.
+ * `cutout` is a few hundred KB and worth having on every device an author edits from;
+ * `src` is the un-edited original, routinely 16 MB, and wanted by nothing but this
+ * device's own editor.
+ *
+ * An unknown kind does NOT sync. Opting in is a deliberate act, so a sidecar somebody
+ * adds next year cannot quietly start pushing megabytes off every author's machine.
+ */
+const SIDECAR_SYNC: Record<string, boolean> = {cutout: true, src: false};
 
 /**
  * A character with spec 04's defaults: origin at the feet, and no frames yet.
@@ -78,7 +93,7 @@ export class BackedAssetStore implements AssetStore {
 	readonly backend: BackendKind;
 	readonly scope: string;
 
-	private manifest?: AssetManifest;
+	private manifest?: Promise<AssetManifest>;
 	private urls = new Map<AssetId, string>();
 	/** Serializes manifest read-modify-write cycles. */
 	private queue: Promise<unknown> = Promise.resolve();
@@ -88,14 +103,36 @@ export class BackedAssetStore implements AssetStore {
 		this.scope = scope;
 	}
 
+	/**
+	 * The manifest, read and brought up to date once.
+	 *
+	 * The PROMISE is cached, not the result. Sidecar migration renames blobs, so two
+	 * loads racing would have the second one migrate a freshly read old-shape manifest
+	 * whose legacy blobs the first has already moved — and drop every sidecar as missing.
+	 * A failed read clears the cache, so it stays retryable the way it was.
+	 */
 	private async load(): Promise<AssetManifest> {
-		if (!this.manifest) {
-			this.manifest = await this.storage.readManifest();
-			this.manifest.assets ??= {};
-			this.manifest.characters ??= {};
+		this.manifest ??= this.readManifest().catch(error => {
+			this.manifest = undefined;
+			throw error;
+		});
+
+		return await this.manifest;
+	}
+
+	private async readManifest(): Promise<AssetManifest> {
+		const manifest = await this.storage.readManifest();
+
+		manifest.assets ??= {};
+		manifest.characters ??= {};
+
+		// Eager, and written straight back: this moves bytes rather than reshaping a
+		// value, so it cannot be redone on every read the way `migrateCharacter` is.
+		if (await migrateSidecars(manifest, this.storage)) {
+			await this.storage.writeManifest(manifest);
 		}
 
-		return this.manifest;
+		return manifest;
 	}
 
 	/** Runs `body` with exclusive access to the manifest, then persists it. */
@@ -190,7 +227,7 @@ export class BackedAssetStore implements AssetStore {
 				origin: options.origin,
 				edits: options.edits,
 				tuning: options.tuning,
-				sidecars: await this.writeSidecars(id, [], options),
+				sidecars: await this.writeSidecars(id, {}, options),
 				...(prepared.duration !== undefined
 					? {duration: prepared.duration}
 					: {})
@@ -278,7 +315,7 @@ export class BackedAssetStore implements AssetStore {
 		// The manifest is the index. Asking the backend for a key that was never written
 		// is not an error anywhere, but it is a round trip, and `remove` already relies
 		// on this list being the truth about what exists.
-		if (!meta?.sidecars?.includes(kind)) {
+		if (!meta?.sidecars?.[kind]) {
 			return undefined;
 		}
 
@@ -286,47 +323,67 @@ export class BackedAssetStore implements AssetStore {
 	}
 
 	/** Deletes every sidecar an asset owns. */
-	private async dropSidecars(id: AssetId, kinds: SidecarKind[] = []) {
-		for (const kind of kinds) {
+	private async dropSidecars(
+		id: AssetId,
+		sidecars: SidecarEntries = {}
+	) {
+		for (const kind of Object.keys(sidecars)) {
 			await this.storage.deleteBlob(sidecarKey(id, kind));
 		}
 	}
 
 	/**
-	 * Writes an edit's sidecars and reports which kinds the asset ends up owning.
+	 * Writes an edit's sidecars and reports what the asset ends up owning.
 	 *
-	 * `source` is write-once: the first edit's base is the unedited picture, and every
+	 * Each entry is measured as it is written: `{bytes, hash}` is the same pair sync
+	 * already diffs assets on, so a sidecar extends that diff instead of growing a
+	 * second one beside it. `mime` because the backends store no type of their own.
+	 *
+	 * `src` is write-once: the first edit's base is the unedited picture, and every
 	 * later edit is rendered from it, so a later base is never worth storing.
 	 *
-	 * A call that mentions none of this is a RE-UPLOAD, not an edit, and it takes the old
-	 * sidecars down with it. They describe pixels that have just been thrown away, and
-	 * leaving them would hand the editor a base belonging to a different picture.
+	 * A call that mentions no blob, no `edits` and no `tuning` is a RE-UPLOAD, not an
+	 * edit, and it takes the old sidecars down with it. They describe pixels that have
+	 * just been thrown away, and leaving them would hand the editor a base belonging to
+	 * a different picture.
 	 */
 	private async writeSidecars(
 		id: AssetId,
-		existing: SidecarKind[] = [],
+		existing: SidecarEntries = {},
 		options: ReplaceAssetOptions = {}
-	): Promise<SidecarKind[] | undefined> {
-		if (!options.source && !options.cutout && !options.edits && !options.tuning) {
+	): Promise<SidecarEntries | undefined> {
+		// By blob, not by key: a caller that spells an absent sidecar out as
+		// `{cutout: undefined}` is saying the same thing as one that omits it.
+		const offered = Object.entries(options.sidecars ?? {}).filter(
+			([, blob]) => blob
+		) as [string, Blob][];
+
+		if (!offered.length && !options.edits && !options.tuning) {
 			await this.dropSidecars(id, existing);
 			return undefined;
 		}
 
-		const kinds = new Set(existing);
+		const sidecars: SidecarEntries = {...existing};
 
-		if (options.source && !kinds.has('source')) {
-			await this.storage.writeBlob(sidecarKey(id, 'source'), options.source);
-			kinds.add('source');
+		for (const [kind, blob] of offered) {
+			if (kind === 'src' && sidecars.src) {
+				continue;
+			}
+
+			await this.storage.writeBlob(sidecarKey(id, kind), blob);
+			sidecars[kind] = {
+				bytes: blob.size,
+				hash: await contentHash(await blobBytes(blob)),
+				// Empty when the caller built the blob without one. Recording '' would
+				// send the server a Content-Type it cannot use.
+				mime: blob.type || undefined,
+				sync: SIDECAR_SYNC[kind] ?? false
+			};
 		}
 
-		if (options.cutout) {
-			await this.storage.writeBlob(sidecarKey(id, 'cutout'), options.cutout);
-			kinds.add('cutout');
-		}
-
-		// Undefined rather than an empty array, so an asset that has never been edited
+		// Undefined rather than an empty record, so an asset that has never been edited
 		// keeps a manifest entry identical to the one it had before this existed.
-		return kinds.size ? [...kinds] : undefined;
+		return Object.keys(sidecars).length ? sidecars : undefined;
 	}
 
 	async replace(

@@ -609,6 +609,42 @@ func TestAssetLifecycle(t *testing.T) {
 	expectError(t, h.do("GET", "/api/v1/stories/story-1/assets/a1", nil), http.StatusNotFound, codeNotFound)
 }
 
+func TestSidecarGetCarriesItsOwnETagAndType(t *testing.T) {
+	h := newHarness(t, nil)
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", "one")), http.StatusOK)
+
+	cut := []byte("alpha map bytes")
+	man, err := json.Marshal(map[string]any{"version": 1, "characters": []any{}, "assets": []any{map[string]any{
+		"id": "a1", "name": "a1", "kind": "bg", "tags": []string{}, "animated": false,
+		"w": 4, "h": 4, "bytes": 2, "hash": sha([]byte("a1")), "mime": "image/webp",
+		"sidecars": map[string]any{
+			"cutout": map[string]any{"hash": sha(cut), "bytes": len(cut), "mime": "image/png", "sync": true},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1/assets", man), http.StatusOK)
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1/assets/a1.cutout", cut,
+		"X-Asset-Hash", sha(cut), "Content-Type", "image/png"), http.StatusOK)
+
+	res := h.do("GET", "/api/v1/stories/story-1/assets/a1.cutout", nil)
+	expectStatus(t, res, http.StatusOK)
+	got, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !bytes.Equal(got, cut) {
+		t.Fatalf("GET returned %q", got)
+	}
+	// Both headers come from the manifest, and the manifest only knows a sidecar through
+	// its parent's `sidecars` object.
+	if res.Header.Get("ETag") != `"`+sha(cut)+`"` {
+		t.Fatalf("sidecar etag = %q, want its own hash", res.Header.Get("ETag"))
+	}
+	if res.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("sidecar content-type = %q", res.Header.Get("Content-Type"))
+	}
+}
+
 func TestManifestIfNoneMatchAndIfMatch(t *testing.T) {
 	h := newHarness(t, nil)
 	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", "one")), http.StatusOK)

@@ -160,6 +160,173 @@ func TestDiffSplitsMissingPresentStale(t *testing.T) {
 	}
 }
 
+// sidecarManifest is one asset carrying three shapes of sidecar the client actually
+// writes: a current entry, a second one for the mismatch case, and one from before
+// entries carried metadata, which names real bytes but cannot be diffed.
+func sidecarManifest(t *testing.T, cut []byte) []byte {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{
+		"cutout": map[string]any{"hash": sha(cut), "bytes": len(cut), "mime": "image/png", "sync": true},
+		"shadow": map[string]any{"hash": sha([]byte("declared")), "bytes": 8, "mime": "image/png", "sync": true},
+		"legacy": map[string]any{"bytes": 6, "mime": "image/png"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manifestSidecarJSON(t, "a1", string(raw))
+}
+
+func mustDiff(t *testing.T, s *Store, storyID string, want map[string]string) DiffResult {
+	t.Helper()
+	assets := make([]map[string]any, 0, len(want))
+	for id, hash := range want {
+		assets = append(assets, map[string]any{"id": id, "hash": hash, "bytes": 1})
+	}
+	body, err := json.Marshal(map[string]any{"assets": assets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var req DiffRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Diff(storyID, req)
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	return res
+}
+
+func has(list []string, want string) bool {
+	for _, got := range list {
+		if got == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDiffResolvesSidecarsAgainstTheirOwnHash(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+
+	cut := []byte("cutout bytes")
+	if _, err := s.PutManifest("story-1", sidecarManifest(t, cut), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.PutAsset("story-1", "a1", bytes.NewReader([]byte("a1")), sha([]byte("a1")), "image/webp"); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"a1.cutout", "a1.shadow", "a1.legacy"} {
+		body := []byte(id)
+		if id == "a1.cutout" {
+			body = cut
+		}
+		if _, err := s.PutAsset("story-1", id, bytes.NewReader(body), sha(body), "image/png"); err != nil {
+			t.Fatalf("PutAsset %s: %v", id, err)
+		}
+	}
+
+	res := mustDiff(t, s, "story-1", map[string]string{
+		"a1":        sha([]byte("a1")),
+		"a1.cutout": sha(cut),
+		"a1.shadow": "0000",
+		"a1.legacy": sha([]byte("a1.legacy")),
+		"a1.ghost":  sha([]byte("whatever")),
+	})
+
+	if !has(res.Present, "a1.cutout") {
+		t.Fatalf("a sidecar matching its manifest hash is not present: %+v", res)
+	}
+	if !has(res.Present, "a1") {
+		t.Fatalf("plain asset lost: %+v", res)
+	}
+	if !has(res.Stale, "a1.shadow") {
+		t.Fatalf("a sidecar whose hash moved is not stale: %+v", res)
+	}
+	// No hash in the manifest entry, so there is nothing to vouch for. Answering
+	// `present` here would strand whatever bytes happen to be on disk forever.
+	if !has(res.Stale, "a1.legacy") {
+		t.Fatalf("a sidecar entry with no hash was vouched for: %+v", res)
+	}
+	if !has(res.Missing, "a1.ghost") {
+		t.Fatalf("a sidecar with no blob is not missing: %+v", res)
+	}
+}
+
+func TestAssetCarriesItsSidecarHashAndMime(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+
+	cut := []byte("cutout bytes")
+	if _, err := s.PutManifest("story-1", sidecarManifest(t, cut), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"a1.cutout", "a1.legacy"} {
+		body := []byte(id)
+		if id == "a1.cutout" {
+			body = cut
+		}
+		if _, err := s.PutAsset("story-1", id, bytes.NewReader(body), sha(body), "image/png"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	file, err := s.Asset("story-1", "a1.cutout")
+	if err != nil {
+		t.Fatalf("Asset: %v", err)
+	}
+	if file.Hash != sha(cut) {
+		t.Fatalf("sidecar hash = %q, want its own %q", file.Hash, sha(cut))
+	}
+	if file.Mime != "image/png" {
+		t.Fatalf("sidecar mime = %q", file.Mime)
+	}
+
+	// Nothing declared, nothing claimed — the handler leaves ETag and Content-Type off,
+	// which is what it does today.
+	legacy, err := s.Asset("story-1", "a1.legacy")
+	if err != nil {
+		t.Fatalf("Asset: %v", err)
+	}
+	if legacy.Hash != "" {
+		t.Fatalf("hashless sidecar answered with hash %q", legacy.Hash)
+	}
+}
+
+func TestDiffIgnoresUnreadableSidecars(t *testing.T) {
+	// The editor owns this field and has already changed its shape once. Anything the
+	// server cannot read means "cannot vouch", never a panic and never a wrong answer
+	// about the asset beside it.
+	shapes := []string{`null`, `["source","cutout"]`, `"cutout"`, `{"cutout":5}`, `{"cutout":{}}`}
+	for _, sidecars := range shapes {
+		t.Run(sidecars, func(t *testing.T) {
+			s := testStore(t, nil)
+			mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+			if _, err := s.PutManifest("story-1", manifestSidecarJSON(t, "a1", sidecars), nil, testClient); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.PutAsset("story-1", "a1", bytes.NewReader([]byte("a1")), sha([]byte("a1")), "image/webp"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.PutAsset("story-1", "a1.cutout", bytes.NewReader([]byte("cut")), sha([]byte("cut")), "image/png"); err != nil {
+				t.Fatal(err)
+			}
+
+			res := mustDiff(t, s, "story-1", map[string]string{
+				"a1":        sha([]byte("a1")),
+				"a1.cutout": sha([]byte("cut")),
+			})
+			if !has(res.Present, "a1") {
+				t.Fatalf("sidecars %s cost the asset its own answer: %+v", sidecars, res)
+			}
+			if !has(res.Stale, "a1.cutout") {
+				t.Fatalf("sidecars %s vouched for a sidecar it cannot read: %+v", sidecars, res)
+			}
+		})
+	}
+}
+
 func TestDeleteAssetLeavesManifestAlone(t *testing.T) {
 	s := testStore(t, nil)
 	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))

@@ -201,13 +201,20 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
 	/**
 	 * The bytes `original` was decoded from, kept so a save can store them as the asset's
-	 * `source` sidecar -- the base every later edit of it is re-rendered from.
+	 * `src` sidecar -- the base every later edit of it is re-rendered from.
 	 */
 	const [baseBlob, setBaseBlob] = React.useState<Blob>();
 	/**
 	 * The settings this asset opened with. Re-opening an edit restores its controls, and
 	 * without a baseline to compare against that restored state would read as unsaved work
 	 * and light up both save buttons before the author had touched anything.
+	 *
+	 * What the dialog actually RESTORED, never what the manifest claimed. A manifest can
+	 * name a cutout whose alpha map does not arrive -- the blob is not on this device, or
+	 * it is stored against pixels of another size -- and the picture then on screen has no
+	 * cutout on it. Recording the manifest's `tuning` as the baseline in that case opens
+	 * the dialog dirty, and a save from there writes settings back out from controls that
+	 * never loaded.
 	 */
 	const [saved, setSaved] = React.useState<{
 		edits?: ImageEdits;
@@ -312,7 +319,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// asset has been edited before, its own bytes otherwise. Re-rendering from the
 			// base is what stops a second pass stacking on an already-baked, already
 			// re-encoded picture.
-			const base = assetId ? await store.sidecar(assetId, 'source') : undefined;
+			const base = assetId ? await store.sidecar(assetId, 'src') : undefined;
 			const blob = assetId ? base ?? (await store.get(assetId)) : sourceImage?.blob;
 
 			if (!current) {
@@ -369,12 +376,15 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			setOriginal(canvas);
 			setSource(canvas);
 			setEdits(restored ?? defaultEdits(canvas.width, canvas.height));
-			setSaved({edits: restored, tuning: assetMeta?.tuning});
+			// Deliberately no `tuning` yet. The manifest may promise a cutout whose map
+			// never reaches the canvas below, and `saved` is a record of what the dialog
+			// is SHOWING -- see the comment on the state itself.
+			setSaved({edits: restored});
 
 			// A stored cutout goes back through the path a fresh one takes, so its two
 			// sliders keep working without the model having to run for a second time.
 			const storedMap =
-				base && assetMeta?.sidecars?.includes('cutout')
+				base && assetMeta?.sidecars?.cutout
 					? await store.sidecar(assetMeta.id, 'cutout')
 					: undefined;
 			const map = storedMap ? await decodeCutout(storedMap) : undefined;
@@ -392,6 +402,11 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				setAlpha(map.alpha);
 				setTuning(tuning);
 				setSource(applyTuning(canvas, map.alpha, tuning));
+				// The cutout is on screen, so the tuning is now part of what this dialog
+				// opened with. `tuning` and not `assetMeta.tuning`: an asset that stored a
+				// map but no settings is showing the defaults, and reading the baseline
+				// off the manifest would call those defaults an unsaved change.
+				setSaved(current => ({...current, tuning}));
 			}
 		}
 
@@ -684,12 +699,17 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 
 		return {
-			cutout:
-				alpha && backgroundRemoved
-					? await encodeCutout(alpha, original.width, original.height)
-					: undefined,
 			edits,
-			source: baseBlob,
+			// Spelled out rather than omitted when there is nothing to write: the store
+			// reads an absent blob and an absent key as the same thing, and one shape
+			// here says which kinds this dialog is responsible for.
+			sidecars: {
+				cutout:
+					alpha && backgroundRemoved
+						? await encodeCutout(alpha, original.width, original.height)
+						: undefined,
+				src: baseBlob
+			},
 			tuning: backgroundRemoved ? tuning : undefined
 		};
 	}

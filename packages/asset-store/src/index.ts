@@ -8,6 +8,7 @@ export * from './characters';
 export * from './create-asset-store';
 export * from './fragment';
 export * from './ids';
+export * from './migrate-sidecars';
 export * from './sniff';
 export * from './sniff-audio';
 export * from './store';

@@ -56,6 +56,41 @@ type assetInfo struct {
 	Hash  string `json:"hash"`
 	Mime  string `json:"mime"`
 	Bytes int64  `json:"bytes"`
+	// Sidecars stays raw for the same reason the manifest keeps whole entries raw: the
+	// editor owns the shape. Decoding it here into a map would make an entry written by
+	// an older build — `"sidecars": ["source","cutout"]` — fail to unmarshal, and a
+	// failed entry is one infos() drops, which tells the janitor the asset's own blob is
+	// unnamed. A field the server barely reads must not be able to delete an asset.
+	Sidecars json.RawMessage `json:"sidecars"`
+}
+
+// sidecarIDs names the blobs this asset owns besides its own: `<id>.<kind>` for every
+// key of the `sidecars` object, which is exactly the name a pushed sidecar lands under on
+// disk.
+//
+// Every shape that is not the current object form — absent, null, the old array — names
+// nothing and is not an error. This is the one direction the ambiguity may fall: naming
+// too few blobs costs a re-upload, naming too many keeps bytes alive a while longer, but
+// an error that aborted or emptied the set would sweep files nobody can get back.
+func (a assetInfo) sidecarIDs() []string {
+	if a.ID == "" || len(a.Sidecars) == 0 {
+		return nil
+	}
+	var kinds map[string]json.RawMessage
+	if err := json.Unmarshal(a.Sidecars, &kinds); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(kinds))
+	for kind := range kinds {
+		id := a.ID + "." + kind
+		// PutAsset refuses anything ValidID refuses, so a kind that does not survive it
+		// cannot have a blob on disk to name in the first place.
+		if !ValidID(id) {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
 }
 
 func (m Manifest) infos() []assetInfo {
@@ -70,13 +105,75 @@ func (m Manifest) infos() []assetInfo {
 	return out
 }
 
+// info finds the manifest entry that describes one stored blob.
+//
+// A sidecar blob is stored under `<assetID>.<kind>` and is named nowhere at top level, so
+// a miss falls through to the base asset's `sidecars` object. Without that, every sidecar
+// looks like bytes the manifest cannot vouch for: Diff calls them `stale` and the client
+// re-uploads each one on every push, forever, and Asset serves them with no ETag and no
+// Content-Type.
 func (m Manifest) info(id string) (assetInfo, bool) {
-	for _, info := range m.infos() {
+	infos := m.infos()
+	for _, info := range infos {
 		if info.ID == id {
 			return info, true
 		}
 	}
+
+	// Split on the LAST dot. A kind is a slug and cannot contain one, while ValidID
+	// permits dots in an asset id — ids are `a_` plus hex today, but the pattern is the
+	// contract, not today's generator.
+	dot := strings.LastIndex(id, ".")
+	if dot <= 0 || dot == len(id)-1 {
+		return assetInfo{}, false
+	}
+	base, kind := id[:dot], id[dot+1:]
+	for _, parent := range infos {
+		if parent.ID == base {
+			return parent.sidecar(kind)
+		}
+	}
 	return assetInfo{}, false
+}
+
+// sidecarMeta is the handful of sidecar fields the server uses. Every one is optional:
+// entries written before sidecars carried metadata have none of them.
+type sidecarMeta struct {
+	Hash  string `json:"hash"`
+	Bytes int64  `json:"bytes"`
+	Mime  string `json:"mime"`
+}
+
+// sidecar looks one kind up in this asset's `sidecars` object and answers as the manifest
+// entry for that blob.
+//
+// A kind with no hash resolves to nothing rather than to an entry with a blank one. Diff
+// compares hashes for equality, so a blank would answer `present` to a client that also
+// sent a blank — vouching for bytes nobody ever hashed, which is the one thing that branch
+// must not do. Such an entry stays exactly as it is today: unknown, therefore `stale`,
+// therefore re-uploaded, which is the safe end of the trade.
+//
+// sidecarIDs still names it, hash or no hash. The janitor asks whether something owns
+// these bytes; Diff asks whether the server can vouch for them. Different questions.
+func (a assetInfo) sidecar(kind string) (assetInfo, bool) {
+	if kind == "" || len(a.Sidecars) == 0 {
+		return assetInfo{}, false
+	}
+	// Per-kind raw, so one junk value does not blind the kinds beside it — and so the old
+	// array form is a miss rather than anything worse.
+	var kinds map[string]json.RawMessage
+	if err := json.Unmarshal(a.Sidecars, &kinds); err != nil {
+		return assetInfo{}, false
+	}
+	raw, ok := kinds[kind]
+	if !ok {
+		return assetInfo{}, false
+	}
+	var side sidecarMeta
+	if err := json.Unmarshal(raw, &side); err != nil || side.Hash == "" {
+		return assetInfo{}, false
+	}
+	return assetInfo{ID: a.ID + "." + kind, Hash: side.Hash, Mime: side.Mime, Bytes: side.Bytes}, true
 }
 
 // assetExtensions is the closed set of names a blob can have on disk. Reads try each in

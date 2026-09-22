@@ -39,12 +39,17 @@ export interface PutAssetOptions {
 	origin?: Frac2;
 	/** What the asset editor baked these bytes with, so the edit can be re-opened. */
 	edits?: ImageEdits;
-	/** What the cutout controls were set to. Only meaningful with `cutout`. */
+	/** What the cutout controls were set to. Only meaningful with a `cutout` sidecar. */
 	tuning?: CutoutTuning;
-	/** The pixels the edit started from, stored as the `source` sidecar. */
-	source?: Blob;
-	/** The alpha map a background removal produced, stored as the `cutout` sidecar. */
-	cutout?: Blob;
+	/**
+	 * Extra blobs to keep beside the bytes, by kind — `src` for the pixels the edit
+	 * started from, `cutout` for the alpha map a background removal produced.
+	 *
+	 * Open on purpose: a feature that needs its own blob names a new kind and nothing
+	 * here changes. The kind becomes the blob's key suffix (`a_8f21.cutout`), so it has
+	 * to be a slug; `sidecarKey` says so out loud.
+	 */
+	sidecars?: Partial<Record<SidecarKind, Blob>>;
 }
 
 /**
@@ -60,15 +65,15 @@ export interface ReplaceAssetOptions {
 	/** What the cutout controls were set to. Cleared when absent. */
 	tuning?: CutoutTuning;
 	/**
-	 * The pixels this edit started from.
+	 * Extra blobs to keep beside the new bytes, by kind. A kind this call does not name
+	 * keeps whatever was stored under it; `cutout` and every other kind offered here
+	 * replaces what was there.
 	 *
-	 * Written ONCE. An asset that already has a `source` sidecar keeps the one it has,
-	 * because that is the un-edited picture and what is being offered here is only the
-	 * base of the current round — which was itself rendered from that sidecar.
+	 * `src` is the exception: written ONCE. An asset that already has one keeps the one
+	 * it has, because that is the un-edited picture and what is being offered here is
+	 * only the base of the current round — which was itself rendered from that sidecar.
 	 */
-	source?: Blob;
-	/** The alpha map, replacing whatever was stored before. */
-	cutout?: Blob;
+	sidecars?: Partial<Record<SidecarKind, Blob>>;
 }
 
 export interface PutAssetResult {
