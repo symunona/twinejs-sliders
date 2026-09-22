@@ -64,3 +64,26 @@
 	font-family: var(--font-monospaced);
 	width: 100%;
 }
+
+.voice-mode-dialog .voice-status {
+	align-items: center;
+	display: flex;
+	gap: calc(var(--grid-size) / 2);
+}
+
+.voice-mode-dialog .voice-state {
+	color: var(--faded-text-color);
+	min-width: 0;
+}
+
+.voice-mode-dialog .voice-note {
+	align-items: center;
+	color: var(--faded-text-color);
+	display: flex;
+	gap: calc(var(--grid-size) / 2);
+	margin: calc(var(--grid-size) / 2) 0;
+}
+
+.voice-mode-dialog .voice-note svg {
+	flex: 0 0 auto;
+}
