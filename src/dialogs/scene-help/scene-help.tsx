@@ -69,6 +69,8 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	id:
 		'Names this scene so from: can point at it, and names its backdrop when there is no bg:. Must be unique in the story.',
 	links: 'Ways out of the scene. In a scene passage these are the ONLY ways out.',
+	linkList:
+		'Draws those ways out INSIDE the stage box instead of in a list under it. Writing the key at all is the switch — every key in it is optional. at: [x, y] is the list’s centre and w:/h: its size, all fractions of the stage box measured from its top left, the way a bubble’s at: is and not the way an entity’s is. as: is a token your stylesheet paints. show: auto | always | never overrules the story-wide sliders.showLinks, and auto is the standing rule: the list stays hidden while the beats already offer the reader something to click. icon: and transition: are defaults each entry may override.',
 	music:
 		'The bed: one sound, looping, by asset name. music: rain@0.4 turns it down, music: ~ is silence. Say it in every scene that wants it — the same track at the same volume plays straight through a passage change without restarting.',
 	locked: `What the visual editor must not let a gesture change here: true for the whole stage, or a list — ${SCENE_LOCKS.join(

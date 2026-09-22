@@ -6,7 +6,7 @@
  */
 
 import {storyBubbleStyle as bubbleStyleFromVars} from '@sliders/scene-schema';
-import type {BubbleStyle} from '@sliders/scene-types';
+import type {BubbleStyle, LinkListShow} from '@sliders/scene-types';
 import {get} from '../state';
 
 /** Seconds to wait before advancing past a beat on its own. 0 disables it. */
@@ -24,6 +24,9 @@ export const FULL_SCREEN = 'sliders.fullScreen';
  * Three-valued, unlike the flags above, because the default is neither on nor off: absent
  * means "decide per scene" — see `showSceneLinks`. Set it to `true` for a story that wants
  * the list under every scene, `false` for one that never wants it.
+ *
+ * A scene that wrote `linkList: {show: always|never}` beats it either way: that scene has
+ * placed its own list and is the more specific statement.
  */
 export const SHOW_LINKS = 'sliders.showLinks';
 
@@ -68,14 +71,34 @@ export function fullScreenScenes(): boolean {
 }
 
 /**
- * Should this scene draw its `links:` under the stage?
+ * Should this scene draw its `links:` as a list at all?
  *
- * Unset (the default) is per scene: the list is drawn only when the beats offer the reader
- * nothing to click, because a scene that ends on `[[stay]] or [[go]]` would otherwise show
- * the same two choices twice, the second copy visible from the first beat on. A story that
- * disagrees says so with `sliders.showLinks`, which wins either way.
+ * The one decision, wherever the list ends up: Chapbook markup under the stage for a scene
+ * with no `linkList:` block, a layer inside the stage box for a scene with one. Which of
+ * the two draws it is `scene-modifier.ts`'s business; whether anything draws it is this.
+ *
+ * Three tiers, narrowest first.
+ *
+ * 1. The scene's own `linkList: {show: always|never}`. An author who placed a list on the
+ *    stage has said where it goes and when, and that is more specific than any story-wide
+ *    default — so it wins outright, and `sliders.showLinks` never gets a look in.
+ * 2. `sliders.showLinks`, for a story that wants the list under every scene or under none.
+ * 3. `auto`, the rule the list has always had: drawn only when the beats offer the reader
+ *    nothing to click, because a scene that ends on `[[stay]] or [[go]]` would otherwise
+ *    show the same two choices twice, the second copy visible from the first beat on.
+ *
+ * `show` is that scene key. `auto` and absent are the same answer, so a scene with no
+ * `linkList:` block asks with nothing and gets exactly the two-tier rule it got before the
+ * key existed.
  */
-export function showSceneLinks(beatsOfferLinks: boolean): boolean {
+export function showSceneLinks(
+	beatsOfferLinks: boolean,
+	show?: LinkListShow
+): boolean {
+	if (show === 'always' || show === 'never') {
+		return show === 'always';
+	}
+
 	const flag = get(SHOW_LINKS);
 
 	return typeof flag === 'boolean' ? flag : !beatsOfferLinks;

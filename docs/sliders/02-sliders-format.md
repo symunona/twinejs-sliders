@@ -39,11 +39,17 @@ its `links:`.** A `[[link]]` written under the block is not drawn.
 
 ### The link list under the stage
 
-The `links:` map is drawn a second time, as ordinary Chapbook links under the stage (over
-the bottom of it in full screen). **Only when the beats offer the reader nothing to
-click.**
+The `links:` map is drawn a second time, as a list the reader clicks.
 
-| The beats hold | Bottom list |
+**Where** it draws is the scene's call. No `linkList:` block — the case this section
+describes — and it is ordinary Chapbook links under the stage (over the bottom of it in
+full screen). A `linkList:` block and the stage draws it inside the stage box instead; see
+**`linkList:`** under Links (D3).
+
+**Whether** it draws is `show:`, and its default `auto` is the rule below: **only when the
+beats offer the reader nothing to click.**
+
+| The beats hold | List, under `auto` |
 |---|---|
 | nothing clickable | drawn |
 | a `[[…]]` in a `say:`/`box:` line | not drawn |
@@ -56,6 +62,8 @@ answer visible before the line that asks the question. A scene with no clickable
 still needs it, or there is no way out at all.
 
 The rule is `beatsOfferLinks` in `@sliders/scene-schema`, asked after `if:` filtering.
+`linkList: {show: always}` / `{show: never}` skip the question outright — see `show:`
+precedence under Links (D3).
 
 #### When it appears
 
@@ -78,6 +86,9 @@ asked for is worse than the rule. A story that truly wants a way out visible fro
 writes those links in the passage, outside the `[scene]` block, with
 `sliders.sceneOnly: false`. `sliders.showLinks: false` never draws the list at all, so
 timing does not apply.
+
+`linkList: {show: always}` is the same deal: whether, not when. The hold is about the beats
+being read, not about where the list sits, so a list drawn inside the stage box waits too.
 
 The hold is **script**, not CSS alone: `<sliders-stage>` finds its own fork (the element's
 paragraph's next sibling — `~` would grab the wrong one when a passage holds several
@@ -161,6 +172,7 @@ links:
 | `fx` | seq | `name@amount` or `{id, …}` |
 | `beats` | seq | the timeline |
 | `links` | map of name → props | link targets + props |
+| `linkList` | map | where the link list draws, and what its entries inherit. Absent = Chapbook links under the stage. |
 
 #### `id` is the default backdrop
 
@@ -623,6 +635,83 @@ link.
 
 Because bubbles are DOM (D2), a link in bubble text is an `<a>` in a `<div>`. Hover, focus,
 keyboard nav, screen readers — free.
+
+### Where the list draws — `linkList:`
+
+A top-level block. It is the one switch:
+
+| `linkList:` | The list |
+|---|---|
+| absent | ordinary Chapbook links under the stage, as always. Nothing changes. |
+| present, any keys | the STAGE draws it, inside the stage box, as a positioned layer |
+| `linkList: ~` | absent, the way `links: ~` is |
+
+`linkList: {}` is a legal way to say "on the stage, defaults for everything". Every key is
+optional.
+
+```yaml
+links:
+  stay: Tavern Fight
+  leave: {to: Street, if: has_coin}
+linkList:
+  at: [0.5, 0.86]    # the list's CENTRE, fractions of the stage box from its TOP LEFT
+  w: 0.8             # fraction of stage width
+  h: 0.18            # fraction of stage height
+  as: parchment      # free token → data-style
+  show: auto         # auto · always · never
+  icon: door         # default for every entry; an entry's own icon: wins
+  transition: fade   # same
+```
+
+| Key | Means | Default |
+|---|---|---|
+| `at` | the list's **CENTRE**, `[x, y]` fractions of the stage box from its TOP LEFT | `[0.5, 0.86]` |
+| `w` | width, fraction of the stage box's width | `0.8` |
+| `h` | height, fraction of the stage box's height | as tall as its entries |
+| `as` | style token. Any token. | none |
+| `show` | `auto` · `always` · `never` | `auto` |
+| `icon` | default `icon:` for every entry. An entry's own wins. | none |
+| `transition` | default `transition:` for every entry. An entry's own wins. | none |
+
+⚠️ **`at:` here is a BUBBLE's coordinate, not an entity's.** The list is an overlay ON the
+stage, not a thing standing on its floor, so it is measured the way `bubble: {at:}` is:
+
+| | Origin | x | y |
+|---|---|---|---|
+| entity `at:` (Coordinates, above) | stage CENTRE | −1 left … +1 right | **UP** positive, −1 … +1 |
+| `bubble: {at:}`, `linkList: {at:}` | stage box **TOP LEFT** | 0 left … 1 right | **DOWN** positive, 0 … 1 |
+
+So `at: [0.5, 0.86]` is centred, near the bottom. `at: [0, -0.85]` — the entity spelling of
+"bottom centre" — puts the list off the top left corner instead. Always the pair, too: a
+bare `at: 0.5` is an error here, not "x only" the way it is on an entity.
+
+#### `show:` precedence
+
+| | Beats |
+|---|---|
+| 1. scene `linkList: {show: always}` / `{show: never}` | everything |
+| 2. story `sliders.showLinks: true` / `false` | the `auto` rule |
+| 3. `auto` = `beatsOfferLinks`, the rule that has always applied | — |
+
+A scene that placed its own menu is being more specific than a story default, so it wins.
+Writing `show: auto` out is the same as omitting it: the story config still decides.
+
+`show:` says **whether**, never **when** — a forced list still waits for the beats to be
+done. See "When it appears", above.
+
+#### Styling
+
+Root element `<div class="sliders-linklist" data-style="…">`, one `<a class="sliders-link">`
+per entry. `as:` reaches the DOM as `data-style` — the same extension point `bubble: {as:}`
+and `bg: {fx:}` have, so a new look is a stylesheet, not a format change:
+
+```css
+/* In the story stylesheet. */
+.sliders-linklist[data-style='parchment'] {
+  background: #e8d9b0;
+  border: 2px solid #6b4f1d;
+}
+```
 
 ### Clickable objects: `link:`
 

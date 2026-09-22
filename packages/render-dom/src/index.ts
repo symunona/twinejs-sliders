@@ -37,6 +37,9 @@ export type {
 	PlaceBubbleInput
 } from './dialogue';
 
+export {LinkListLayer} from './link-list';
+export type {LinkListEntry, LinkListLayerOptions} from './link-list';
+
 export {
 	BUBBLE_SHAPE_FNS,
 	bubbleShape,
@@ -89,6 +92,7 @@ export type {Rect, SpriteMetrics, StageBox} from './coords';
 
 export {
 	DIALOGUE_CSS,
+	LINK_LIST_CSS,
 	RENDER_DOM_CSS,
 	injectBubbleFonts,
 	injectStyles

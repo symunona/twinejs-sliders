@@ -683,6 +683,74 @@ export const DIALOGUE_CSS = `
 }
 `;
 
+export const LINK_LIST_CSS = `
+/*
+ * The link list drawn inside the stage box — what a scene's \`linkList:\` asks for.
+ *
+ * Position, width and a stated height arrive INLINE from the layer, in stage fractions, so
+ * everything here is look and nothing here is geometry: a rule that argued with those
+ * numbers would move a menu the author placed by hand.
+ */
+.sliders-linklist {
+	position: absolute;
+	left: 0;
+	top: 0;
+	/* Over the dialogue layer's 50. A narration bar spans the bottom of the stage, which
+	   is exactly where a default list lands, and the way out of a scene has to stay on
+	   top of the words rather than under them. */
+	z-index: 55;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	/* A stated \`h:\` is the author fixing the box. Spilling out of it would put entries
+	   over art they were placed to keep clear of; clipping at least keeps the picture. */
+	overflow: hidden;
+	font: 16px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+	/* Load-bearing, for the same reason .sliders-entity's default is: the visual editor
+	   hit-tests by rectangle through an overlay that covers the whole stage, and this box
+	   is 80% of the stage wide by default. Taking the pointer here would swallow every
+	   drag that merely crossed the gaps between entries, or the empty room a stated \`h:\`
+	   leaves. Only the anchors below are clickable. */
+	pointer-events: none;
+}
+
+/*
+ * An entry is a plate, not a line of ink.
+ *
+ * The base .sliders-link is written for text inside a bubble, where it sits on a light fill
+ * and an underline is enough. This list lies straight on the artwork, which can be
+ * anything, so an entry brings its own background — nothing else keeps the words readable
+ * over the next scene's backdrop.
+ */
+.sliders-linklist .sliders-link {
+	pointer-events: auto;
+	box-sizing: border-box;
+	padding: 8px 14px;
+	border-radius: 10px;
+	background: var(--sliders-linklist-bg, rgba(6, 8, 14, 0.82));
+	color: var(--sliders-linklist-color, #eef1f7);
+	text-align: center;
+	text-decoration: none;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+	transition: background 0.18s ease;
+}
+
+/* Focus is here as well as hover because an entry is a real tab stop and a reader on a
+   keyboard has no hover: the lit plate is what says which way out is about to be taken.
+   The ring itself is .sliders-link:focus-visible's, and it wraps the plate because the
+   plate IS the element. */
+.sliders-linklist .sliders-link:hover,
+.sliders-linklist .sliders-link:focus-visible {
+	background: var(--sliders-linklist-hover-bg, rgba(22, 28, 46, 0.94));
+	text-decoration: none;
+}
+
+/* An icon token reaches the DOM as data-icon and stops there — the same extension point
+   \`as:\` and bubble \`font:\` have. The renderer ships no glyph set, so a story that names an
+   icon owns the rule that draws it. */
+`;
+
 /**
  * Fetch the comic faces `font:` can name, once per document.
  *
@@ -729,6 +797,6 @@ export function injectStyles(doc: Document | undefined = globalThis.document): v
 	const style = doc.createElement('style');
 
 	style.id = STYLE_ID;
-	style.textContent = RENDER_DOM_CSS + DIALOGUE_CSS;
+	style.textContent = RENDER_DOM_CSS + DIALOGUE_CSS + LINK_LIST_CSS;
 	(doc.head ?? doc.documentElement)?.appendChild(style);
 }

@@ -43,6 +43,8 @@ import {
 	type FrameLoop,
 	type FrameStep,
 	type Layer,
+	type LinkListShow,
+	type LinkListStyle,
 	type ParseResult,
 	type Scene,
 	type SceneError,
@@ -75,7 +77,8 @@ export const TOP_LEVEL_KEYS = [
 	'bubble',
 	'locked',
 	'beats',
-	'links'
+	'links',
+	'linkList'
 ] as const;
 
 /** Keys accepted inside a `cast:` / `props:` / `entities:` entry. */
@@ -185,6 +188,31 @@ export const SOUND_KEYS = ['id', 'volume'] as const;
 export const BG_KEYS = ['id', 'fx', 'speed'] as const;
 
 export const LINK_KEYS = ['to', 'if', 'icon', 'transition'] as const;
+
+/**
+ * Keys inside the scene's `linkList:` block — where the bottom link list is drawn.
+ *
+ * `icon` and `transition` repeat two of `LINK_KEYS` on purpose: here they are the DEFAULT
+ * every entry inherits, there they are one entry's own answer. The parser keeps them
+ * apart — nothing is merged into a `SceneLink` at parse time — because a scene that
+ * inherits its links from another one would otherwise carry this scene's defaults baked
+ * into them.
+ */
+export const LINK_LIST_KEYS = [
+	'as',
+	'at',
+	'w',
+	'h',
+	'show',
+	'icon',
+	'transition'
+] as const;
+
+/**
+ * Typed rather than `as const` so a value that is not a `LinkListShow` fails the build
+ * here, where the check lives, instead of being reported as an unknown token at runtime.
+ */
+const LINK_LIST_SHOWS: readonly LinkListShow[] = ['auto', 'always', 'never'];
 
 /** The single tag the subset permits: `cast: !only {…}`. */
 const ONLY_TAG = '!only';
@@ -2519,6 +2547,127 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 	}
 }
 
+/**
+ * `linkList: {at: [0.5, 0.86], w: 0.8, show: auto}` — where the scene draws its link list.
+ *
+ * The block's PRESENCE is the switch: written at all, the stage draws the list itself as a
+ * positioned layer; absent, the player emits Chapbook's ordinary markup under the stage,
+ * which is what every scene did before this key existed. So an empty `linkList: {}` comes
+ * back as an empty style rather than as `undefined` — unlike `parseBubbleStyle`, which
+ * drops a block that said nothing, because there the block is only ever decoration and
+ * here it moves the list.
+ *
+ * Coordinates are a bubble's, not an entity's (`parseFrac2`: fractions of the stage box
+ * from its top left), because the list is an overlay ON the stage and not a thing standing
+ * on its floor.
+ */
+function parseLinkList(ctx: Ctx, node: unknown): LinkListStyle | undefined {
+	if (!isMap(node)) {
+		addError(ctx, 'bad-value', 'linkList must be a map of style keys.', node, {
+			hint: 'linkList: {at: [0.5, 0.86], w: 0.8} draws the list inside the stage box.'
+		});
+		return undefined;
+	}
+
+	const style: LinkListStyle = {};
+
+	for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+		const key = keyName(pair);
+
+		if (key === undefined) {
+			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+			continue;
+		}
+
+		switch (key) {
+			case 'as':
+			case 'icon':
+			case 'transition': {
+				// None of the three is checked against a list. `as:` is a style token a
+				// story may invent and paint in its own stylesheet, exactly as a bubble's
+				// is, and the other two are defaults for keys `links:` does not check
+				// either — a name the renderer cannot resolve draws no icon, it does not
+				// break the scene.
+				const value = asString(ctx, pair.value, `linkList ${key}`);
+
+				if (value !== undefined) {
+					style[key] = value;
+				}
+
+				break;
+			}
+
+			case 'at': {
+				const at = parseFrac2(ctx, pair.value, 'linkList at');
+
+				if (at) {
+					style.at = at;
+				}
+
+				break;
+			}
+
+			case 'w':
+			case 'h': {
+				const value = asNumber(ctx, pair.value, `linkList ${key}`);
+
+				if (value === undefined) {
+					break;
+				}
+
+				// The same guard a bubble's w:/h: gets, for the same reason: these read as
+				// percentages to everyone who has not yet been told they are fractions, and
+				// `w: 80` silently draws a list eighty stages wide instead of erroring.
+				if (value <= 0 || value > 1) {
+					addError(
+						ctx,
+						'bad-value',
+						`linkList ${key === 'w' ? 'width' : 'height'} of ${value} is outside 0 to 1.`,
+						pair.value,
+						{
+							hint:
+								key === 'w'
+									? 'w: is a fraction of the stage width. 0.8 is a list nearly as wide as the stage.'
+									: 'h: is a fraction of the stage height. Leave it out and the list is as tall as its entries.'
+						}
+					);
+					break;
+				}
+
+				style[key] = value;
+				break;
+			}
+
+			case 'show': {
+				const show = asString(ctx, pair.value, 'linkList show');
+
+				if (show === undefined) {
+					break;
+				}
+
+				if (!(LINK_LIST_SHOWS as readonly string[]).includes(show)) {
+					addError(ctx, 'bad-value', `Unknown show '${show}'.`, pair.value, {
+						hint:
+							`show: is one of ${LINK_LIST_SHOWS.join(', ')}. ` +
+							"'auto' hides the list when the beats already offer the reader a link."
+					});
+					break;
+				}
+
+				style.show = show as LinkListShow;
+				break;
+			}
+
+			default:
+				addError(ctx, 'unknown-key', `Unknown linkList key '${key}'.`, pair.key, {
+					...keyFix(key, LINK_LIST_KEYS)
+				});
+		}
+	}
+
+	return style;
+}
+
 function parseCamera(ctx: Ctx, map: YAMLMap): Partial<Camera> {
 	const camera: Partial<Camera> = {};
 
@@ -3000,6 +3149,20 @@ function parseSceneDoc(text: string): ParseResult {
 				}
 
 				parseLinks(ctx, pair.value as YAMLMap, scene);
+				break;
+			}
+
+			case 'linkList': {
+				if (isNullNode(pair.value)) {
+					break; // `linkList: ~` reads as absent, the way `links: ~` does.
+				}
+
+				const linkList = parseLinkList(ctx, pair.value);
+
+				if (linkList) {
+					scene.linkList = linkList;
+				}
+
 				break;
 			}
 

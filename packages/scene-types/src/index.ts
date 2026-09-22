@@ -753,6 +753,47 @@ export interface SceneLink {
 	transition?: string;
 }
 
+/** What overrules the list's own "only when the beats offer nothing" rule. */
+export type LinkListShow = 'auto' | 'always' | 'never';
+
+/**
+ * Where the link list sits, and what every entry in it inherits.
+ *
+ * Present AT ALL means the stage draws the list itself, as a positioned layer inside the
+ * stage box. Absent means the player emits it as ordinary Chapbook links under the stage,
+ * which is what every scene did before this key existed and still the right answer for a
+ * scene that just wants a way out.
+ *
+ * Coordinates are a bubble's, not an entity's: fractions of the stage box measured from
+ * its top left, because this is an overlay ON the stage rather than a thing standing on
+ * its floor.
+ */
+export interface LinkListStyle {
+	/**
+	 * Any token. Reaches the DOM as `data-style`, the same extension point `bubble: {as:}`
+	 * has, so a story's stylesheet can paint a list it did not have to be told about.
+	 */
+	as?: string;
+	/** The list's CENTRE, in fractions of the stage box from its top left. */
+	at?: Frac2;
+	/** Width as a fraction of the stage box's width. */
+	w?: number;
+	/** Height as a fraction of the stage box's height. Default: as tall as its entries. */
+	h?: number;
+	/**
+	 * `auto` keeps the rule the list has always had: drawn only when the beats leave the
+	 * reader nothing to click (`beatsOfferLinks`), so a scene ending on `[[stay]] or
+	 * [[go]]` does not show the same two choices twice. `always` and `never` are the
+	 * author overruling that, and they beat the story-wide `sliders.showLinks` flag —
+	 * a scene that placed its own menu is being more specific than a story default.
+	 */
+	show?: LinkListShow;
+	/** Default `icon:` for every entry. An entry's own `icon:` wins. */
+	icon?: string;
+	/** Default `transition:` for every entry. An entry's own wins. */
+	transition?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Scene — the parsed authoring unit, before from: resolution.
 // ---------------------------------------------------------------------------
@@ -849,6 +890,8 @@ export interface Scene {
 	music?: StageSound | null;
 	beats: Beat[];
 	links: Record<string, SceneLink>;
+	/** Set only when the scene wrote a `linkList:` block. See `LinkListStyle`. */
+	linkList?: LinkListStyle;
 	/** True when `cast: !only {...}` was used — replace rather than merge. */
 	replaceCast?: boolean;
 	replaceProps?: boolean;
