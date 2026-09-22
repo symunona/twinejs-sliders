@@ -58,8 +58,6 @@ export interface ToolPassage {
 	name: string;
 	tags: string[];
 	text: string;
-	/** The editor's `Passage` carries more; the tools read only the four above. */
-	[key: string]: unknown;
 }
 
 /** One row in the panel's transcript — the only record a voice session leaves behind. */

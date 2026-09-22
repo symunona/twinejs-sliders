@@ -403,7 +403,7 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 	// error screen a reader actually gets.
 	const names = passages.map(passage => passage.name);
 	const startName = passages.find(
-		passage => passage.id === (body.startPassage as string | undefined)
+		passage => passage.id === body.startPassage
 	)?.name;
 	const incoming = new Set<string>();
 

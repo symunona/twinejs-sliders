@@ -930,6 +930,24 @@
 			"later": "Later",
 			"laterExplanation": "Later: nothing changes, and this story stops syncing until you resolve it."
 		},
+		"voiceMode": {
+			"title": "Voice",
+			"connecting": "Connecting\u2026",
+			"listening": "Listening",
+			"speaking": "Speaking",
+			"working": "Working",
+			"error": "Voice error",
+			"off": "Voice off",
+			"clear": "Clear transcript",
+			"undoLast": "Undo that",
+			"runPlaceholder": "Tool call, e.g. read_passage Tavern Night",
+			"run": "Run",
+			"empty": "Nothing yet. Type a tool call, or turn the microphone on.",
+			"needsKey": "Add a Gemini API key in AI preferences to talk. Tool calls below work without one.",
+			"headphones": "Use headphones \u2014 without them the model hears itself through the speakers and answers itself.",
+			"toolsHeading": "Tools",
+			"checkpointLabel": "before voice session, {{time}}"
+		},
 		"storyHistory": {
 			"title": "History",
 			"buttonLabel": "History…",
@@ -1030,7 +1048,8 @@
 				"startStoryHere": "Start Story Here",
 				"stylesheet": "Stylesheet",
 				"testFromHere": "Test From Here",
-				"slidersGenerator": "Generate"
+				"slidersGenerator": "Generate",
+				"voiceMode": "Voice"
 			},
 			"topBar": {
 				"editJavaScript": "Edit Story JavaScript",

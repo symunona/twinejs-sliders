@@ -9,7 +9,7 @@ function passage(name: string, text: string): PassageLike {
 }
 
 function story(passages: PassageLike[]): StoryLike {
-	return {id: 'story-1', ifid: 'IFID', name: 'Trip to my Desert', passages};
+	return {id: 'story-1', name: 'Trip to my Desert', passages};
 }
 
 function asset(id: string, name: string, kind: string): AssetMetaRow {

@@ -15,6 +15,7 @@ const TestStoryEditToolbar = () => {
 			getCenter={() => ({left: 0, top: 0})}
 			story={stories[0]}
 			onOpenFuzzyFinder={jest.fn()}
+			setCenter={jest.fn()}
 		/>
 	);
 };

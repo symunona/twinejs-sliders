@@ -8,21 +8,28 @@
  * and the panel would start printing different maps.
  */
 
-/** One passage, as anything that reads a story needs it. */
+/**
+ * One passage, as anything that reads a story needs it.
+ *
+ * No index signature, deliberately. `{[key: string]: unknown}` would read as "and whatever
+ * else", but TypeScript treats it as a REQUIREMENT: an ordinary interface without one is
+ * not assignable to it, so the editor's `Passage` — the main thing this was written for —
+ * would have been the one type that did not fit. Extra fields flow in anyway.
+ */
 export interface PassageLike {
 	id: string;
 	name: string;
 	tags: string[];
 	text: string;
-	[key: string]: unknown;
 }
 
-/** A story body: passages plus whatever else the caller happens to carry. */
+/** A story body: the passages, and the one other field the linter reads. */
 export interface StoryLike {
 	id: string;
 	name: string;
 	passages: PassageLike[];
-	[key: string]: unknown;
+	/** Where the reader starts, by passage id. Unreachability is measured from it. */
+	startPassage?: string;
 }
 
 export interface AssetMetaRow {
