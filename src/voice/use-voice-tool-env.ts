@@ -55,6 +55,11 @@ const DESC = {
 } as const;
 
 export interface UseVoiceToolEnvOptions {
+	/**
+	 * Rasterises the scene a passage holds. Absent means no host is mounted, and the
+	 * `screenshot_scene` tool then says so rather than pretending to look.
+	 */
+	screenshot?: VoiceToolEnv['screenshot'];
 	/** Scrolls the map so a passage is on screen. From `useViewCenter`. */
 	setCenter: (point: Point) => void;
 	story: Story;
@@ -88,7 +93,7 @@ function manifestOf(
 }
 
 export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
-	const {setCenter, story} = options;
+	const {screenshot, setCenter, story} = options;
 	const {dispatch} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const assetStore = useAssetStore();
@@ -320,6 +325,8 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 				});
 			},
 
+			screenshot,
+
 			renamePassage: (id, name) =>
 				dispatch(
 					updatePassage(storyRef.current, passageById(id), {name}),
@@ -374,6 +381,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			dispatch,
 			passageById,
 			scenesOf,
+			screenshot,
 			setCenter
 		]
 	);

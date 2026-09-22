@@ -50,6 +50,11 @@ function strings(args: Record<string, unknown>, key: string): string[] {
 }
 
 export interface ToolRunner {
+	/**
+	 * Re-arm the screenshot cap. The adapter calls this when the model's turn ends; a
+	 * caller with no notion of turns simply never does, and gets one picture per session.
+	 */
+	endTurn(): void;
 	/** Refs whose text the model has actually seen. The `write_passage` gate. */
 	readonly seen: ReadonlySet<string>;
 	run(name: string, args: Record<string, unknown>): Promise<ToolResult>;
@@ -57,6 +62,12 @@ export interface ToolRunner {
 
 export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 	const seen = new Set<string>();
+	/**
+	 * One picture per turn (plan §4). Not a cost guard — a model handed two views of the
+	 * same stage in one turn starts comparing them and narrating the difference, which is
+	 * not what anyone asked it to look at.
+	 */
+	let shotThisTurn = false;
 
 	/**
 	 * Resolve what the model calls a passage. Name first and case-insensitively, because
@@ -316,6 +327,10 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 				return toolError('the scene preview is not mounted, so there is nothing to look at');
 			}
 
+			if (shotThisTurn) {
+				return toolError('one screenshot per turn — say what you see first');
+			}
+
 			const passage = find(str(args, 'ref'));
 
 			if (!passage) {
@@ -323,6 +338,8 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 			}
 
 			const shot = await env.screenshot(passage.id, int(args, 'beat'));
+
+			shotThisTurn = true;
 
 			return {
 				beat: int(args, 'beat') ?? 0,
@@ -642,6 +659,9 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 	};
 
 	return {
+		endTurn() {
+			shotThisTurn = false;
+		},
 		async run(name, args) {
 			if (!voiceToolsByName.has(name)) {
 				return toolError(`no tool called '${name}'`);

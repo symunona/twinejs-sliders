@@ -18,6 +18,7 @@ import {useLiveVoice} from '../../voice/live/use-live-voice';
 import {sceneIdsOf} from '../../voice/runner';
 import {voiceTools} from '../../voice/tools';
 import {parseToolLine, useVoiceSession} from '../../voice/use-voice-session';
+import {useSceneScreenshot} from '../../voice/screenshot/use-scene-screenshot';
 import {useVoiceToolEnv} from '../../voice/use-voice-tool-env';
 import type {Point} from '../../util/geometry';
 import {DialogComponentProps} from '../dialogs.types';
@@ -45,7 +46,8 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 	const {prefs} = usePrefsContext();
 	const {stories} = useUndoableStoriesContext();
 	const story = storyWithId(stories, storyId);
-	const env = useVoiceToolEnv({setCenter, story});
+	const {capture, host} = useSceneScreenshot(story);
+	const env = useVoiceToolEnv({screenshot: capture, setCenter, story});
 	const session = useVoiceSession(env);
 	const [line, setLine] = React.useState('');
 	const [busy, setBusy] = React.useState(false);
@@ -58,6 +60,7 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 		apiKey: prefs.geminiApiKey,
 		onCall: session.call,
 		onSay: session.say,
+		onTurnComplete: session.endTurn,
 		sceneIds,
 		storyName: story.name
 	});
@@ -152,6 +155,7 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 				emptyText={t('dialogs.voiceMode.empty')}
 				rows={session.rows}
 			/>
+			{host}
 			<form
 				className="voice-run"
 				onSubmit={event => {

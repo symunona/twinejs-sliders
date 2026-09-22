@@ -210,6 +210,45 @@ describe('read tools', () => {
 
 		expect(result).toMatchObject({beat: 1, height: 432, ok: true, width: 768});
 	});
+
+	it('allows only one screenshot per turn', async () => {
+		const {env} = fakeEnv();
+
+		env.screenshot = async () => ({data: 'AAA', height: 432, mime: 'image/png', width: 768});
+
+		const runner = createToolRunner(env);
+
+		expect(await runner.run('screenshot_scene', {ref: 'p1'})).toMatchObject({ok: true});
+		expect(await runner.run('screenshot_scene', {ref: 'p1'})).toMatchObject({
+			error: expect.stringMatching(/one screenshot per turn/),
+			ok: false
+		});
+	});
+
+	it('re-arms the screenshot cap when the turn ends', async () => {
+		const {env} = fakeEnv();
+
+		env.screenshot = async () => ({data: 'AAA', height: 432, mime: 'image/png', width: 768});
+
+		const runner = createToolRunner(env);
+
+		await runner.run('screenshot_scene', {ref: 'p1'});
+		runner.endTurn();
+
+		expect(await runner.run('screenshot_scene', {ref: 'p1'})).toMatchObject({ok: true});
+	});
+
+	it('does not burn the turn’s screenshot on a call that failed', async () => {
+		const {env} = fakeEnv();
+
+		env.screenshot = async () => ({data: 'AAA', height: 432, mime: 'image/png', width: 768});
+
+		const runner = createToolRunner(env);
+
+		await runner.run('screenshot_scene', {ref: 'Nowhere'});
+
+		expect(await runner.run('screenshot_scene', {ref: 'p1'})).toMatchObject({ok: true});
+	});
 });
 
 describe('the blind-write gate', () => {

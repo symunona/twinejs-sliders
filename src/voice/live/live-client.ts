@@ -37,6 +37,8 @@ export interface LiveClientOptions {
 	/** The author stopped the model mid-sentence. Drop queued audio. */
 	onInterrupt: () => void;
 	onState: (state: LiveState, detail?: string) => void;
+	/** The model finished a turn. Re-arms per-turn caps. */
+	onTurnComplete?: () => void;
 	/** A turn, as text. `role` says whose. Both go in the transcript. */
 	onTranscript: (role: 'user' | 'model', text: string) => void;
 	systemInstruction: string;
@@ -50,6 +52,38 @@ export interface LiveClient {
 	sendAudio(base64: string): void;
 	sendText(text: string): void;
 	readonly state: LiveState;
+}
+
+/**
+ * Pull an inline image off a tool result and REMOVE it, so the bytes travel once.
+ *
+ * Mutating the result is the point: leaving it in place would send the same picture twice
+ * — once as unreadable base64 inside the function response, once as the turn the model can
+ * actually see.
+ */
+function takePicture(
+	result: unknown
+): {data: string; mime: string} | undefined {
+	if (result === null || typeof result !== 'object') {
+		return undefined;
+	}
+
+	const record = result as Record<string, unknown>;
+	const image = record.image;
+
+	if (
+		image === null ||
+		typeof image !== 'object' ||
+		typeof (image as Record<string, unknown>).data !== 'string'
+	) {
+		return undefined;
+	}
+
+	delete record.image;
+
+	const {data, mime} = image as {data: string; mime?: string};
+
+	return {data, mime: mime ?? 'image/png'};
 }
 
 export function connectLive(options: LiveClientOptions): LiveClient {
@@ -112,8 +146,12 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 			options.onTranscript('model', event.outputText);
 		}
 
-		if (event.turnComplete && state === 'speaking') {
-			setState('listening');
+		if (event.turnComplete) {
+			options.onTurnComplete?.();
+
+			if (state === 'speaking') {
+				setState('listening');
+			}
 		}
 
 		if (event.calls.length === 0) {
@@ -127,6 +165,7 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 		// dispatch only if React had flushed in between. The model asked for them in an
 		// order; it gets that order.
 		const responses: {id?: string; name: string; response: unknown}[] = [];
+		const pictures: {caption: string; data: string; mime: string}[] = [];
 
 		for (const call of event.calls) {
 			if (cancelled.has(call.id ?? '')) {
@@ -135,11 +174,19 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 			}
 
 			try {
-				responses.push({
-					id: call.id,
-					name: call.name,
-					response: await options.onCall(call)
-				});
+				const result = await options.onCall(call);
+				const picture = takePicture(result);
+
+				if (picture) {
+					pictures.push({
+						caption: `The rendered scene for ${call.name}(${JSON.stringify(
+							call.args
+						)}).`,
+						...picture
+					});
+				}
+
+				responses.push({id: call.id, name: call.name, response: result});
 			} catch (error) {
 				responses.push({
 					id: call.id,
@@ -151,6 +198,13 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 
 		if (responses.length > 0) {
 			send(toolResponseMessage(responses));
+		}
+
+		// AFTER the tool response, never instead of it: a `functionResponse` carries JSON,
+		// so an image there is a base64 string the model reads as text, which is not
+		// looking at anything. The picture is its own user turn.
+		for (const picture of pictures) {
+			send(imageTurnMessage(picture.data, picture.mime, picture.caption));
 		}
 
 		if (!closed) {

@@ -72,6 +72,8 @@ export interface VoiceSession {
 	call(name: string, args: Record<string, unknown>): Promise<ToolResult>;
 	clear(): void;
 	rows: TranscriptRow[];
+	/** The model's turn ended. Re-arms the one-screenshot-per-turn cap. */
+	endTurn(): void;
 	/** Append a row this session did not produce — a spoken turn, a connection notice. */
 	say(kind: TranscriptRow['kind'], text: string): void;
 	/** Undo the last change, whoever made it. The escape hatch, always reachable. */
@@ -125,6 +127,7 @@ export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 	return {
 		call,
 		clear: React.useCallback(() => setRows([]), []),
+		endTurn: React.useCallback(() => runner.current.endTurn(), []),
 		rows,
 		say,
 		undo,

@@ -23,6 +23,8 @@ export interface UseLiveVoiceOptions {
 	onCall: (name: string, args: Record<string, unknown>) => Promise<ToolResult>;
 	/** Anything worth a transcript row that is not a tool call. */
 	onSay: (kind: 'user' | 'model' | 'system', text: string) => void;
+	/** The model's turn ended. Re-arms the runner's per-turn caps. */
+	onTurnComplete: () => void;
 	sceneIds: string[];
 	storyName: string;
 }
@@ -92,6 +94,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 				}
 			},
 			onTranscript: (role, text) => optionsRef.current.onSay(role, text),
+			onTurnComplete: () => optionsRef.current.onTurnComplete(),
 			systemInstruction: systemInstruction({
 				sceneIds: current.sceneIds,
 				storyName: current.storyName
