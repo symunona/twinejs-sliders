@@ -73,3 +73,14 @@ export function holdLinkList(stage: Element): HTMLElement | undefined {
 export function releaseLinkList(list?: HTMLElement): void {
 	list?.removeAttribute(PENDING);
 }
+
+/**
+ * Put a released list back under wraps: the reader stepped BACK into the beats.
+ *
+ * The reveal is not a one-way door, because the beats are not either. A reader who walks
+ * back into the middle of the scene is reading it again, and the choices are a spoiler
+ * again — the same reason they were held the first time round.
+ */
+export function holdLinkListAgain(list?: HTMLElement): void {
+	list?.setAttribute(PENDING, '');
+}

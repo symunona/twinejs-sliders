@@ -24,6 +24,13 @@ import {get, set} from '../state';
 import {passageNamed} from '../story';
 import {CustomElement} from '../util/custom-element';
 import {manifestResolver} from './assets';
+import {
+	SCENE_START,
+	currentStop,
+	lastStop,
+	previousStop,
+	stopIndices
+} from './beat-steps';
 import {enterCinema, leaveCinema} from './cinema';
 import {
 	STAGE_VAR,
@@ -32,7 +39,8 @@ import {
 	muted,
 	storyBubbleDefaults
 } from './config';
-import {holdLinkList, releaseLinkList} from './link-list';
+import {currentPassage, resumeAtEnd} from './history';
+import {holdLinkList, holdLinkListAgain, releaseLinkList} from './link-list';
 import {stageFrom} from './scene-graph';
 
 const {warn} = createLoggers('scene');
@@ -191,6 +199,14 @@ export class SlidersStage extends CustomElement {
 		publishStage(entry);
 		this.addEventListener('click', this.handleClick);
 		this.listenForGesture();
+
+		// A reader who walked BACK into this passage arrives at the end of the scene, where
+		// they left it, instead of watching it play out a second time.
+		if (resumeAtEnd(currentPassage())) {
+			void this.showStop(lastStop(this.stops()), true);
+			return;
+		}
+
 		void this.play();
 	}
 
@@ -203,7 +219,14 @@ export class SlidersStage extends CustomElement {
 	 * the document, so a reader who clicked to get here has already paid for it.
 	 */
 	private listenForGesture() {
-		if (navigator.userActivation?.hasBeenActive) {
+		// Cast because the repo's two TypeScript configs disagree about it: the format's own
+		// `lib` knows `userActivation`, the root one — which is what ts-jest compiles with,
+		// so any jest suite that ever imports this file compiles it — does not.
+		const activation = (
+			navigator as Navigator & {userActivation?: {hasBeenActive: boolean}}
+		).userActivation;
+
+		if (activation?.hasBeenActive) {
 			this.unlockSound();
 			return;
 		}
@@ -284,29 +307,8 @@ export class SlidersStage extends CustomElement {
 
 			switch (beat.kind) {
 				case 'say':
-					this.dialogue?.setBox(null);
-					this.dialogue?.say(beat.who, beat.text, {
-						// Four layers, widest first: the story's `sliders.bubble.*`
-						// variables, the scene's own `bubble:`, the speaking character's,
-						// then this beat's `as:`/`bubble:`. Merged key by key the whole
-						// way, so each one only states what it cares about.
-						style: mergeBubbleStyle(
-							mergeBubbleStyle(
-								this.sceneBubbleDefaults(),
-								await this.bubbleDefaults(beat.who)
-							),
-							beat.style
-						)
-					});
-					this.waitForReader(beat.dur);
-					return;
-
 				case 'box':
-					this.dialogue?.clear();
-					this.dialogue?.setBox(
-						beat.text,
-						mergeBubbleStyle(this.sceneBubbleDefaults(), beat.style)
-					);
+					await this.showLine(beat);
 					this.waitForReader(beat.dur);
 					return;
 
@@ -336,6 +338,144 @@ export class SlidersStage extends CustomElement {
 		// (see `waitForReader`), and the click that used to do nothing but clear the beat
 		// marker now brings the list up.
 		releaseLinkList(this.linkList);
+	}
+
+	/**
+	 * Put a `say` or a `box` on screen.
+	 *
+	 * Shared by playing forward and by stepping back, so a line the reader returns to looks
+	 * exactly like the line they read the first time — the merge order alone is four layers
+	 * deep, and two copies of it would drift.
+	 */
+	private async showLine(beat: Beat): Promise<void> {
+		if (beat.kind === 'say') {
+			this.dialogue?.setBox(null);
+			this.dialogue?.say(beat.who, beat.text, {
+				// Four layers, widest first: the story's `sliders.bubble.*` variables, the
+				// scene's own `bubble:`, the speaking character's, then this beat's
+				// `as:`/`bubble:`. Merged key by key the whole way, so each one only states
+				// what it cares about.
+				style: mergeBubbleStyle(
+					mergeBubbleStyle(
+						this.sceneBubbleDefaults(),
+						await this.bubbleDefaults(beat.who)
+					),
+					beat.style
+				)
+			});
+			return;
+		}
+
+		if (beat.kind === 'box') {
+			this.dialogue?.clear();
+			this.dialogue?.setBox(
+				beat.text,
+				mergeBubbleStyle(this.sceneBubbleDefaults(), beat.style)
+			);
+		}
+	}
+
+	/** The beats this scene stops on. See `beat-steps.ts` for what counts as a stop. */
+	private stops(): number[] {
+		return stopIndices(this.scene?.beats ?? []);
+	}
+
+	/**
+	 * Draw the scene as it stood at stop `index`, or at its opening stage for `-1`.
+	 *
+	 * Backwards is a SNAP, not a rewind: the transitions are re-timed to zero, so a
+	 * five-second pan does not cost five seconds to step out of. Sound is not re-cued
+	 * either — a door that slammed once slammed once, and replaying it on the way back
+	 * would make walking through a scene sound like a scene being walked through twice.
+	 *
+	 * `end` draws the scene's FINAL stage instead of the stage at that stop, for a reader
+	 * arriving from a back-step: the last line may be followed by beats that move the
+	 * camera, and they belong to the picture the reader left.
+	 */
+	private async showStop(index: number, end = false): Promise<void> {
+		window.clearTimeout(this.timer);
+
+		const beats = this.scene?.beats ?? [];
+		const from = resolveStage(
+			this.states[this.beatIndex] ?? this.states[this.states.length - 1]
+		);
+		const target = end
+			? this.states[this.states.length - 1]
+			: this.states[index + 1] ?? this.states[0];
+
+		this.beatIndex = end ? beats.length : index + 1;
+
+		const to = resolveStage(target);
+
+		await this.renderer?.apply(to, timeTransitions(diffStages(from, to), 0));
+		publishStage(target);
+
+		if (index >= 0) {
+			await this.showLine(beats[index]);
+		} else {
+			this.dialogue?.clear();
+			this.dialogue?.setBox(null);
+		}
+
+		// No auto advance is re-armed here. The reader has taken the wheel; a timer that
+		// pulled them forward out of the beat they just stepped back into would make Left
+		// look broken on any scene with an `autoAdvance:`.
+		if (this.beatIndex < beats.length) {
+			this.setAttribute('data-waiting', 'beat');
+			holdLinkListAgain(this.linkList);
+		} else {
+			this.removeAttribute('data-waiting');
+			releaseLinkList(this.linkList);
+		}
+	}
+
+	/**
+	 * Is there anything left for a step forward to do?
+	 *
+	 * `data-waiting` is part of the answer, not just the beat cursor. The LAST beat always
+	 * waits for the reader, and the step that ends that wait plays no beat at all — it is
+	 * the one that reveals the links under the stage. Counting beats alone said "nothing
+	 * left" one step too early, and a keyboard reader never got the list: Right looked for
+	 * a link to follow, the list was still held back, so nothing happened and the scene had
+	 * no way out that did not involve a mouse.
+	 */
+	canAdvance(): boolean {
+		return (
+			this.beatIndex < (this.scene?.beats?.length ?? 0) ||
+			this.hasAttribute('data-waiting')
+		);
+	}
+
+	/** Forward one step, exactly as a click on the stage would. */
+	advance(): void {
+		void this.play();
+	}
+
+	/**
+	 * Back one line, and `false` when the scene has no line behind it.
+	 *
+	 * `false` is the signal to the caller that back means something bigger than a beat —
+	 * the reader is at the mouth of the scene, so the step out of it is a step out of the
+	 * passage.
+	 */
+	stepBack(): boolean {
+		if (!this.scene) {
+			return false;
+		}
+
+		const stops = this.stops();
+		const target = previousStop(stops, currentStop(stops, this.beatIndex));
+
+		// The scene's opening stage is not a step of its own. Going forward the reader never
+		// stands on it — the beats run straight through to the first line — so stopping
+		// there on the way back would be a press that shows them a picture with nothing to
+		// read and no memory of having been there. From the first line, back means out.
+		if (target === SCENE_START) {
+			return false;
+		}
+
+		void this.showStop(target);
+		return true;
 	}
 
 	/** The story's variables with this scene's own `bubble:` over them. */
