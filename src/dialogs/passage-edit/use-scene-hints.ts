@@ -175,6 +175,32 @@ const ENTITY_AT = '0';
 const ENTITY_SUFFIX = '}';
 
 /**
+ * The entity line a plane snippet writes, and the part of it the pick selects.
+ *
+ * No `z:`. The parser seeds a plane's z at `-1` on its own -- behind the whole derived
+ * 0..1 range the cast sits in -- which is what an author reaching for a second backdrop
+ * means nearly every time. The stacking a plane exists FOR, art in front of the cast, needs
+ * a number nobody can guess on the author's behalf, so it is left to be typed rather than
+ * prefilled with one that is wrong more often than right.
+ *
+ * The NAME is what gets selected, not `cover`: the fit is a two-value choice the author can
+ * reopen the dropdown on, and the placeholder id is the one part of the line that is always
+ * wrong until they replace it.
+ */
+const PLANE_NAME = 'name';
+const PLANE_ENTITY = `${PLANE_NAME}: {fit: cover}`;
+
+/**
+ * What the plane snippet calls itself in the dropdown.
+ *
+ * Written as the line it produces rather than prose, so it reads as the one entry in the
+ * list that is not an asset name, and so that typing `plane`, `fit` or `cover` all narrow
+ * to it through the same substring match every other name uses. Untranslated for the same
+ * reason the names around it are: this is scene YAML, not UI copy.
+ */
+const PLANE_LABEL = 'plane {fit: cover}';
+
+/**
  * What ends a name, scanning outward from the cursor. Everything else belongs to it --
  * INCLUDING spaces, because an asset called `oak table` and a passage called `Tavern
  * Fight` are both one name. YAML structure and quotes are the boundaries; a list dash is
@@ -1080,6 +1106,66 @@ function insertPromoted(
 	};
 }
 
+/**
+ * Selects the placeholder id in a plane line that has just been written at `line`, with its
+ * first character at `ch`.
+ */
+function selectPlaneName(cm: Editor, line: number, ch: number) {
+	cm.setSelection({ch, line}, {ch: ch + PLANE_NAME.length, line});
+}
+
+/**
+ * Picks `props` in the scene's own key list and writes the BLOCK, not the key: the header
+ * line plus a plane entry under it, indented one level in.
+ *
+ * Every other key in that list is half a line and stops at its colon, because the value is
+ * a name or a number the author is about to type. `props:` is not -- its value is a map,
+ * whose first member is a line of its own, and an author who has never written one has to
+ * guess both the indent and the shape of an entity at once. Writing the first member is
+ * what turns the key into an example.
+ *
+ * A plane rather than `{at: 0}` because the in-stack backdrop is the thing `props:` can do
+ * that `bg:` cannot, and it is the half of the block nobody finds by reading the key name.
+ * A prop that stands on the floor is one edit away from here; the reverse was three.
+ */
+function insertPropsBlock(indent: string) {
+	return (
+		cm: Editor,
+		data: {from: CodeMirror.Position; to: CodeMirror.Position},
+		completion: {from?: CodeMirror.Position; to?: CodeMirror.Position}
+	) => {
+		const from = completion.from ?? data.from;
+		const to = completion.to ?? data.to;
+
+		cm.replaceRange(propsBlockText(indent), from, to, 'complete');
+		selectPlaneName(cm, from.line + 1, indent.length + 2);
+	};
+}
+
+function propsBlockText(indent: string): string {
+	return `props:\n${indent}  ${PLANE_ENTITY}`;
+}
+
+/**
+ * Picks the plane snippet from the `props:` name list and writes one entity line.
+ *
+ * Only one line here, unlike `insertPropsBlock`: the cursor is already sitting at the indent
+ * of a member, so the header and the spaces are the author's, not ours.
+ */
+function insertPlane() {
+	return (
+		cm: Editor,
+		data: {from: CodeMirror.Position; to: CodeMirror.Position},
+		completion: {from?: CodeMirror.Position; to?: CodeMirror.Position}
+	) => {
+		const from = completion.from ?? data.from;
+		const to = completion.to ?? data.to;
+
+		cm.replaceRange(PLANE_ENTITY, from, to, 'complete');
+		selectPlaneName(cm, from.line, from.ch);
+	};
+}
+
 function insertEntity(name: string) {
 	return (
 		cm: Editor,
@@ -1162,12 +1248,31 @@ export function sceneCompletion(
 	// middle of being typed wants it narrowed.
 	const exact = all.some(name => name.toLowerCase() === written.toLowerCase());
 	const names = exact || matched.length === 0 ? all : matched;
+	// Pinned above the asset names under `props:`, and filtered by the same substring rule
+	// they are -- `plane`, `fit` and `cover` are all in its label, so any of the three
+	// narrows to it. Only where a whole entity line can be written: on a name in the middle
+	// of `ref: pl` there is no room for one, and `promote` is rewriting a value rather than
+	// opening a member.
+	const offerPlane =
+		slot.kind === 'props' &&
+		scaffold &&
+		!promote &&
+		PLANE_LABEL.toLowerCase().includes(candidate);
 
-	if (names.length === 0) {
+	// The snippet is an offer of its own: an empty library still has a plane to write, and
+	// that is the case where an author is most likely to be asking what goes here.
+	if (names.length === 0 && !offerPlane) {
 		return undefined;
 	}
 
 	const bucket = slotKey(slot);
+	// Where `props:` starts on its line, so the member it writes lands one level in from it
+	// rather than at column 2. Anything but whitespace in front of the key means the token
+	// is not a line-leading one, and there is no indent to copy.
+	const lead = line.slice(0, start);
+	const indent = /^[ \t]*$/.test(lead) ? lead : '';
+	const propsBlock = (name: string) =>
+		slot.kind === 'keys' && slot.id === 'top' && name === 'props';
 	const completion = {
 		from: {ch: start, line: cursor.line},
 		// Read back by the caller, which reopens the dropdown after a key is
@@ -1179,7 +1284,9 @@ export function sceneCompletion(
 			// The name is what shows and what gets remembered; `text` is only
 			// what lands in the document, scaffold and spaces and all.
 			displayText: name,
-			hint: promote
+			hint: propsBlock(name)
+				? insertPropsBlock(indent)
+				: promote
 				? insertPromoted(name, promote, cursor.line)
 				: scaffold
 					? slot.kind === 'speaker'
@@ -1188,8 +1295,11 @@ export function sceneCompletion(
 					: undefined,
 			text:
 				// A key is only ever half a line, so it writes its own colon and
-				// leaves the cursor where the value goes.
-				slot.kind === 'keys'
+				// leaves the cursor where the value goes. `props:` is the exception:
+				// its value is a map, so it brings its first member with it.
+				propsBlock(name)
+					? propsBlockText(indent)
+					: slot.kind === 'keys'
 					? `${name}: `
 					: scaffold
 						? slot.kind === 'speaker'
@@ -1199,9 +1309,23 @@ export function sceneCompletion(
 		}))
 	};
 
-	CodeMirror.on(completion, 'pick', (picked: {displayText: string}) =>
-		noteNameUsed(bucket, picked.displayText)
-	);
+	if (offerPlane) {
+		completion.list.unshift({
+			className: 'sliders-hint-snippet',
+			displayText: PLANE_LABEL,
+			hint: insertPlane(),
+			text: PLANE_ENTITY
+		});
+	}
+
+	CodeMirror.on(completion, 'pick', (picked: {displayText: string}) => {
+		// The snippet is not a name, so it does not belong in the bucket of names the
+		// author has recently used -- it is pinned first already, and remembering it would
+		// only push a real asset out of the list.
+		if (picked.displayText !== PLANE_LABEL) {
+			noteNameUsed(bucket, picked.displayText);
+		}
+	});
 
 	return completion;
 }
