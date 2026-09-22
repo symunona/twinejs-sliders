@@ -2119,8 +2119,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									edits={edits}
 									// Back to absent rather than to zero: an overlap of nothing is
 									// not an edit, and a zero written into the meta is a
-									// difference every comparison then has to forgive.
+									// difference every comparison then has to forgive. The axis
+									// goes the same way, for the same reason.
 									onChange={tile => changeEdits({tile: tile || undefined})}
+									onChangeAxis={tileAxis =>
+										changeEdits({
+											tileAxis: tileAxis === 'x' ? undefined : tileAxis
+										})
+									}
 									source={source}
 								/>
 							)}

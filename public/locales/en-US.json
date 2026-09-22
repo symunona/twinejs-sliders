@@ -414,16 +414,25 @@
 				"background": "Background \u2014 cut the subject out of its background.",
 				"mask": "Mask \u2014 cut holes by hand, where no model is going to find the edge for you.",
 				"size": "Sizing \u2014 anchor, resize and crop.",
-				"tile": "Seamless \u2014 fold the right edge over the left, so the picture loops.",
+				"tile": "Seamless \u2014 fold one edge over the facing one, so the picture loops.",
 				"effect": "Effect \u2014 a live look drawn over the asset. Changes no pixels."
 			},
 			"tile": "Seamless loop",
-			"tileNote": "A scrolling backdrop travels a whole frame and starts over. The restart itself is hidden\u2014a second copy is already in place\u2014but art whose left and right edges do not match jumps once per lap. Overlap folds the right edge back over the left until they do. It costs width: the two strips become one, so the picture is saved that much narrower.",
+			"tileNote": "A scrolling backdrop travels a whole frame and starts over. The restart itself is hidden\u2014a second copy is already in place\u2014but art whose facing edges do not match jumps once per lap. Overlap folds one edge back over the other until they do. It costs size: the two strips become one, so the picture is saved that much smaller the way it loops.",
+			"tileAxisLabel": "Loop direction",
+			"tileAxis": {
+				"x": "Sideways",
+				"y": "Up and down"
+			},
+			"tileAxisHint": {
+				"x": "Sideways \u2014 fold the right edge over the left, for scroll_infinite_left and _right.",
+				"y": "Up and down \u2014 fold the bottom edge over the top, for scroll_infinite_up and _down."
+			},
 			"tileOverlap": "Overlap",
 			"tileSeam": "The loop, with the join in the middle",
 			"tileSeamNote": "Two copies, half a picture apart. The join is between the red ticks\u2014drag Overlap until nothing shows there.",
-			"tileCost": "Overlapping {{pixels}}px. Saved at {{width}}px wide.",
-			"tileOff": "No overlap. The edges meet exactly as they are.",
+			"tileCost": "Overlapping {{pixels}}px, and saving that much smaller.",
+			"tileOff": "No overlap. The two edges meet exactly as they are.",
 			"generateWith": "Generate From This",
 			"generateWithHint": "Opens the image generator with this asset attached as context.",
 			"generateWithDirtyHint": "Opens the image generator with this asset attached as context \u2014 the version in the library, not the unsaved edit in front of you.",

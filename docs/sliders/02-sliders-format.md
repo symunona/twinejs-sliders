@@ -203,7 +203,7 @@ backdrop. The renderer draws a second copy one frame ahead for those four, becau
 `<img>` cannot tile — so the restart is invisible, but only if the ART ITSELF tiles. A
 backdrop whose left and right edges do not match will show that mismatch once per lap; that
 is the picture, not the motion. The asset editor's **Seamless** tool folds those two edges
-into one — see [16-seamless-loop.md](16-seamless-loop.md).
+into one, sideways or up and down — see [16-seamless-loop.md](16-seamless-loop.md).
 
 #### A beat can cut the backdrop
 

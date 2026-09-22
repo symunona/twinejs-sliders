@@ -1,4 +1,10 @@
-import {TILE_RANGE, blendSeam, seamWidth, tiledWidth} from '../tile-edits';
+import {
+	TILE_RANGE,
+	axisSize,
+	blendSeam,
+	seamWidth,
+	tiledSize
+} from '../tile-edits';
 
 /** A row of opaque greys, one per column, so a pixel can be read back as a number. */
 function greys(values: number[], height = 1): Uint8ClampedArray {
@@ -14,6 +20,24 @@ function greys(values: number[], height = 1): Uint8ClampedArray {
 			data[at + 3] = 255;
 		});
 	}
+
+	return data;
+}
+
+/** A column of opaque greys, one per row: the same picture, stood on its end. */
+function greyRows(values: number[], width = 1): Uint8ClampedArray {
+	const data = new Uint8ClampedArray(values.length * width * 4);
+
+	values.forEach((value, y) => {
+		for (let x = 0; x < width; x++) {
+			const at = (y * width + x) * 4;
+
+			data[at] = value;
+			data[at + 1] = value;
+			data[at + 2] = value;
+			data[at + 3] = 255;
+		}
+	});
 
 	return data;
 }
@@ -55,20 +79,54 @@ describe('seamWidth', () => {
 	});
 });
 
-describe('tiledWidth', () => {
-	it('is the width itself when nothing overlaps', () => {
-		expect(tiledWidth(100, 0)).toBe(100);
-		expect(tiledWidth(100, undefined)).toBe(100);
+describe('axisSize', () => {
+	it('reads the width sideways and the height downwards', () => {
+		expect(axisSize({height: 60, width: 100}, 'x')).toBe(100);
+		expect(axisSize({height: 60, width: 100}, 'y')).toBe(60);
 	});
 
-	it('loses exactly the overlap', () => {
-		expect(tiledWidth(100, 0.25)).toBe(75);
+	it('treats an absent axis as sideways', () => {
+		expect(axisSize({height: 60, width: 100}, undefined)).toBe(100);
+	});
+});
+
+describe('tiledSize', () => {
+	const size = {height: 60, width: 100};
+
+	it('is the size itself when nothing overlaps', () => {
+		expect(tiledSize(size, 0, 'x')).toEqual(size);
+		expect(tiledSize(size, undefined, 'y')).toEqual(size);
+	});
+
+	it('takes the overlap off the width, sideways', () => {
+		expect(tiledSize(size, 0.25, 'x')).toEqual({height: 60, width: 75});
+	});
+
+	it('takes it off the height instead, downwards', () => {
+		expect(tiledSize(size, 0.25, 'y')).toEqual({height: 45, width: 100});
+	});
+
+	it('folds sideways when no axis was named', () => {
+		expect(tiledSize(size, 0.25, undefined)).toEqual({height: 60, width: 75});
 	});
 
 	it('stays at a pixel', () => {
-		expect(tiledWidth(2, 0.5)).toBe(1);
+		expect(tiledSize({height: 2, width: 2}, 0.5, 'y')).toEqual({
+			height: 1,
+			width: 2
+		});
 	});
 });
+
+/** The red channel down one column, for the pictures `greyRows` builds. */
+function column(
+	result: {data: Uint8ClampedArray; height: number; width: number},
+	x = 0
+): number[] {
+	return Array.from({length: result.height}, (_unused, y) =>
+		Number(result.data[(y * result.width + x) * 4])
+	);
+}
 
 describe('blendSeam', () => {
 	it('hands the pixels straight back when nothing overlaps', () => {
@@ -181,5 +239,100 @@ describe('blendSeam', () => {
 	it('offers an overlap range that cannot swallow the picture', () => {
 		expect(TILE_RANGE.min).toBe(0);
 		expect(TILE_RANGE.max).toBeLessThanOrEqual(0.5);
+	});
+});
+
+describe('blendSeam, downwards', () => {
+	it('shortens the picture by the overlap and keeps its width', () => {
+		const result = blendSeam(greyRows([0, 0, 0, 0, 0, 0], 3), 3, 6, 2, 'y');
+
+		expect(result.height).toBe(4);
+		expect(result.width).toBe(3);
+		expect(result.data).toHaveLength(3 * 4 * 4);
+	});
+
+	it('leaves everything past the overlap untouched', () => {
+		const result = blendSeam(
+			greyRows([0, 100, 200, 220, 240, 250]),
+			1,
+			6,
+			2,
+			'y'
+		);
+
+		expect(column(result).slice(2)).toEqual([200, 220]);
+	});
+
+	it('lands the bottom edge next to the top one', () => {
+		const result = blendSeam(greyRows([0, 10, 20, 30, 200, 210]), 1, 6, 2, 'y');
+		const out = column(result);
+
+		expect(out[0]).toBe(Math.round(200 * 0.75 + 0 * 0.25));
+		expect(out[1]).toBe(Math.round(210 * 0.25 + 10 * 0.75));
+		expect(out[out.length - 1]).toBe(30);
+	});
+
+	it('crossfades rather than cutting', () => {
+		const source = greyRows([0, 0, 0, 0, 255, 255, 255, 255]);
+		const out = column(blendSeam(source, 1, 8, 4, 'y'));
+
+		expect(out).toHaveLength(4);
+
+		for (let y = 1; y < out.length; y++) {
+			expect(out[y]).toBeLessThan(out[y - 1]);
+		}
+	});
+
+	it('blends every column the same way', () => {
+		const result = blendSeam(
+			greyRows([0, 10, 20, 30, 200, 210], 3),
+			3,
+			6,
+			2,
+			'y'
+		);
+
+		expect(column(result, 1)).toEqual(column(result, 0));
+		expect(column(result, 2)).toEqual(column(result, 0));
+	});
+
+	/*
+	The one mistake this shape of code invites: reading the far edge with the SOURCE width
+	when the output is narrower, or the other way about. Sideways the two differ, downwards
+	they do not -- so a picture wider than one pixel, folded downwards, is what catches a
+	stride taken from the wrong size.
+	*/
+	it('does not mix neighbouring columns into each other', () => {
+		const data = new Uint8ClampedArray(2 * 4 * 4);
+
+		// Left column black all the way down, right column white all the way down.
+		for (let y = 0; y < 4; y++) {
+			const at = y * 2 * 4;
+
+			data[at + 3] = 255;
+			data[at + 4] = 255;
+			data[at + 5] = 255;
+			data[at + 6] = 255;
+			data[at + 7] = 255;
+		}
+
+		const result = blendSeam(data, 2, 4, 2, 'y');
+
+		expect(column(result, 0)).toEqual([0, 0]);
+		expect(column(result, 1)).toEqual([255, 255]);
+	});
+
+	it('does not pull colour out of transparent pixels', () => {
+		const data = greyRows([255, 255, 0, 0, 0, 0]);
+
+		// The two rows that will be folded over the start are transparent black.
+		for (const y of [4, 5]) {
+			data[y * 4 + 3] = 0;
+		}
+
+		const result = blendSeam(data, 1, 6, 2, 'y');
+
+		expect(column(result).slice(0, 2)).toEqual([255, 255]);
+		expect(result.data[3]).toBeLessThan(result.data[7]);
 	});
 });

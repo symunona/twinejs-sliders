@@ -1,17 +1,23 @@
-import type {ImageEdits} from '@sliders/scene-types';
-import {IconRepeat} from '@tabler/icons';
+import type {ImageEdits, TileAxis} from '@sliders/scene-types';
+import {
+	IconArrowsHorizontal,
+	IconArrowsVertical,
+	IconRepeat
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {IconButton} from '../../components/control/icon-button';
 import {AdjustSlider} from './adjust-slider';
 import {NoteBody, useNote} from './editor-note';
 import {EditorSection} from './editor-section';
 import {drawEdited, outputSize} from './image-edits';
-import {TILE_RANGE, seamWidth} from './tile-edits';
+import {TILE_AXES, TILE_RANGE, axisSize, seamWidth} from './tile-edits';
 
 export interface TileToolProps {
 	disabled?: boolean;
 	edits: ImageEdits;
 	onChange: (tile: number) => void;
+	onChangeAxis: (axis: TileAxis) => void;
 	/** The composed picture, full size: whatever the crop and the cutout have left. */
 	source?: CanvasImageSource;
 }
@@ -20,8 +26,13 @@ export interface TileToolProps {
 const PREVIEW_WIDTH = 380;
 const PREVIEW_HEIGHT = 220;
 
-/** How far the join ticks reach in from the top and bottom edges. */
+/** How far the join ticks reach in from the edges they sit on. */
 const TICK = 9;
+
+const AXIS_ICONS: Record<TileAxis, React.ReactNode> = {
+	x: <IconArrowsHorizontal />,
+	y: <IconArrowsVertical />
+};
 
 /**
  * Draws the picture as the reader will meet it: looping, with the join in the middle.
@@ -29,9 +40,9 @@ const TICK = 9;
  * The stage canvas cannot answer the only question this tool asks. It shows the whole
  * source with the crop drawn over it, so the two edges being married are at opposite ends
  * of it — and the join between them is not anywhere on screen at all, because it only
- * exists once the picture has wrapped. So the preview here is two copies side by side,
- * offset by half a width: dead centre is the seam, and everything either side of it is
- * what the reader sees a moment before and after the lap restarts.
+ * exists once the picture has wrapped. So the preview here is two copies, offset by half a
+ * picture: dead centre is the seam, and everything either side of it is what the reader
+ * sees a moment before and after the lap restarts.
  */
 function drawLoop(
 	target: HTMLCanvasElement,
@@ -69,44 +80,63 @@ function drawLoop(
 
 	// Half a picture each side of the join. Whole pixels, so the two copies meet exactly
 	// rather than resampling a blur into the one place that is being judged.
-	const half = Math.round(width / 2);
+	const vertical = edits.tileAxis === 'y';
+	const half = Math.round((vertical ? height : width) / 2);
+	const span = vertical ? height : width;
 
-	context.drawImage(tile, -half, 0);
-	context.drawImage(tile, width - half, 0);
+	context.drawImage(tile, vertical ? 0 : -half, vertical ? -half : 0);
+	context.drawImage(
+		tile,
+		vertical ? 0 : span - half,
+		vertical ? span - half : 0
+	);
 
-	// Ticks at the edges rather than a line down the middle: a marker drawn ON the seam
+	// Ticks at the edges rather than a line along the middle: a marker drawn ON the seam
 	// would hide the flaw it is pointing at.
+	const seam = span - half;
+
 	context.save();
 	context.strokeStyle = 'rgba(255, 0, 0, 0.85)';
 	context.lineWidth = 2;
 	context.beginPath();
-	context.moveTo(width - half, 0);
-	context.lineTo(width - half, TICK);
-	context.moveTo(width - half, height - TICK);
-	context.lineTo(width - half, height);
+
+	if (vertical) {
+		context.moveTo(0, seam);
+		context.lineTo(TICK, seam);
+		context.moveTo(width - TICK, seam);
+		context.lineTo(width, seam);
+	} else {
+		context.moveTo(seam, 0);
+		context.lineTo(seam, TICK);
+		context.moveTo(seam, height - TICK);
+		context.lineTo(seam, height);
+	}
+
 	context.stroke();
 	context.restore();
 }
 
 /**
- * The right pane for the Seamless tool: one slider, and the loop it makes.
+ * The right pane for the Seamless tool: which way the picture loops, how much of it
+ * overlaps, and the loop that makes.
  *
  * `scroll_infinite_*` is the endless-walk backdrop — the renderer travels a whole frame and
  * starts over, drawing a second copy one frame ahead so the restart itself is invisible.
- * What it cannot hide is art whose left and right edges do not match, which shows up as a
- * jump once per lap. This folds the right edge back over the left until they do.
+ * What it cannot hide is art whose facing edges do not match, which shows up as a jump once
+ * per lap. This folds one edge back over the other until they do.
  *
- * The cost is width: the overlap is two strips becoming one, so the picture comes out
- * narrower. That is the whole trade, and it is why the size is written in the header rather
- * than left for someone to discover after saving.
+ * The cost is size: the overlap is two strips becoming one, so the picture comes out
+ * smaller along whichever axis was folded. That is the whole trade, and it is why the size
+ * is written in the header rather than left for someone to discover after saving.
  */
 export const TileTool: React.FC<TileToolProps> = props => {
-	const {disabled, edits, onChange, source} = props;
+	const {disabled, edits, onChange, onChangeAxis, source} = props;
 	const {t} = useTranslation();
 	const note = useNote();
 	const preview = React.useRef<HTMLCanvasElement>(null);
+	const axis: TileAxis = edits.tileAxis ?? 'x';
 	const output = outputSize(edits);
-	const seam = seamWidth(edits.width, edits.tile);
+	const seam = seamWidth(axisSize(edits, axis), edits.tile);
 
 	React.useEffect(() => {
 		if (preview.current && source) {
@@ -124,6 +154,25 @@ export const TileTool: React.FC<TileToolProps> = props => {
 			<NoteBody kind="info" note={note}>
 				{t('dialogs.assetEditor.tileNote')}
 			</NoteBody>
+			<div
+				aria-label={t('dialogs.assetEditor.tileAxisLabel')}
+				className="asset-editor-mask-group"
+				role="radiogroup"
+			>
+				{TILE_AXES.map(id => (
+					<IconButton
+						ariaChecked={axis === id}
+						disabled={disabled}
+						icon={AXIS_ICONS[id]}
+						key={id}
+						label={t(`dialogs.assetEditor.tileAxis.${id}`)}
+						onClick={() => onChangeAxis(id)}
+						role="radio"
+						selected={axis === id}
+						tooltipLabel={t(`dialogs.assetEditor.tileAxisHint.${id}`)}
+					/>
+				))}
+			</div>
 			<div className="asset-editor-loop">
 				<canvas
 					aria-label={t('dialogs.assetEditor.tileSeam')}
@@ -147,10 +196,7 @@ export const TileTool: React.FC<TileToolProps> = props => {
 			/>
 			<p className="asset-editor-detail">
 				{seam > 0
-					? t('dialogs.assetEditor.tileCost', {
-							pixels: seam,
-							width: output.width
-					  })
+					? t('dialogs.assetEditor.tileCost', {pixels: seam})
 					: t('dialogs.assetEditor.tileOff')}
 			</p>
 		</EditorSection>

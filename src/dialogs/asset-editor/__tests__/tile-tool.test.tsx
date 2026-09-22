@@ -17,11 +17,29 @@ function edits(changes: Partial<ImageEdits> = {}): ImageEdits {
 
 function renderTool(props?: Partial<TileToolProps>) {
 	const onChange = jest.fn();
+	const onChangeAxis = jest.fn();
 	const result = render(
-		<TileTool edits={edits()} onChange={onChange} {...props} />
+		<TileTool
+			edits={edits()}
+			onChange={onChange}
+			onChangeAxis={onChangeAxis}
+			{...props}
+		/>
 	);
 
-	return {...result, onChange};
+	return {...result, onChange, onChangeAxis};
+}
+
+/*
+The axis buttons carry a visible label AND a tooltip, and `IconButton` gives a non-`iconOnly`
+button its `tooltipLabel` as the accessible name -- the tooltip is aria-hidden, so the hint
+has to reach a screen reader from the button itself. So they are looked up by hint key, the
+same way `effect-tool.test.tsx` does.
+*/
+function axis(id: 'x' | 'y') {
+	return screen.getByRole('radio', {
+		name: `dialogs.assetEditor.tileAxisHint.${id}`
+	});
 }
 
 function overlap(): HTMLInputElement {
@@ -84,5 +102,33 @@ describe('<TileTool>', () => {
 	it('greys the overlap out while the editor is busy', () => {
 		renderTool({disabled: true});
 		expect(overlap()).toBeDisabled();
+	});
+
+	it('loops sideways until told otherwise', () => {
+		renderTool();
+		expect(axis('x')).toHaveAttribute('aria-checked', 'true');
+		expect(axis('y')).toHaveAttribute('aria-checked', 'false');
+	});
+
+	it('shows the axis it was opened with', () => {
+		renderTool({edits: edits({tile: 0.25, tileAxis: 'y'})});
+		expect(axis('y')).toHaveAttribute('aria-checked', 'true');
+	});
+
+	it('reports a change of direction', () => {
+		const {onChangeAxis} = renderTool();
+
+		fireEvent.click(axis('y'));
+		expect(onChangeAxis).toHaveBeenCalledWith('y');
+	});
+
+	it('takes the overlap off the height when it loops downwards', () => {
+		renderTool({edits: edits({tile: 0.25, tileAxis: 'y'})});
+		expect(screen.getByText('800\u00d7450')).toBeInTheDocument();
+	});
+
+	it('greys the direction out while the editor is busy', () => {
+		renderTool({disabled: true});
+		expect(axis('y')).toBeDisabled();
 	});
 });
