@@ -168,6 +168,8 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'assetEditor.removeBackground', scope: 'asset-editor'},
 	{id: 'assetEditor.restoreBackground', scope: 'asset-editor'},
 	{id: 'assetEditor.resetCrop', scope: 'asset-editor'},
+	{id: 'assetEditor.cycleMaskMode', scope: 'asset-editor'},
+	{id: 'assetEditor.clearMask', scope: 'asset-editor'},
 	{id: 'assetEditor.saveAsNew', scope: 'asset-editor'},
 	{id: 'assetEditor.replace', scope: 'asset-editor'},
 

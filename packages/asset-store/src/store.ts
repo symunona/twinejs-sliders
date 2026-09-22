@@ -190,6 +190,7 @@ export class BackedAssetStore implements AssetStore {
 				origin: options.origin,
 				edits: options.edits,
 				tuning: options.tuning,
+				mask: options.mask,
 				sidecars: await this.writeSidecars(id, [], options),
 				...(prepared.duration !== undefined
 					? {duration: prepared.duration}
@@ -215,11 +216,13 @@ export class BackedAssetStore implements AssetStore {
 			// Sidecars are local to the device that made the edit and never travel in a
 			// bundle, so the settings that describe them cannot come in either. Kept, they
 			// would tell the editor to render a stored edit over bytes that are already
-			// that edit -- brightness applied twice, the crop taken twice.
+			// that edit -- brightness applied twice, the crop taken twice, the mask
+			// cutting a hole where these bytes already have one.
 			const stored: AssetMeta = {
 				...copy,
 				edits: undefined,
 				id,
+				mask: undefined,
 				sidecars: undefined,
 				tuning: undefined
 			};
@@ -301,13 +304,24 @@ export class BackedAssetStore implements AssetStore {
 	 * A call that mentions none of this is a RE-UPLOAD, not an edit, and it takes the old
 	 * sidecars down with it. They describe pixels that have just been thrown away, and
 	 * leaving them would hand the editor a base belonging to a different picture.
+	 *
+	 * `mask` counts as mentioning it, even though a mask is metadata and writes no
+	 * sidecar of its own. Shapes are fractions of the `source` sidecar: drop that base
+	 * and the holes can never be re-opened, only re-cut into bytes that already have
+	 * them.
 	 */
 	private async writeSidecars(
 		id: AssetId,
 		existing: SidecarKind[] = [],
 		options: ReplaceAssetOptions = {}
 	): Promise<SidecarKind[] | undefined> {
-		if (!options.source && !options.cutout && !options.edits && !options.tuning) {
+		if (
+			!options.source &&
+			!options.cutout &&
+			!options.edits &&
+			!options.tuning &&
+			!options.mask
+		) {
 			await this.dropSidecars(id, existing);
 			return undefined;
 		}
@@ -359,6 +373,7 @@ export class BackedAssetStore implements AssetStore {
 				// merged: a replace naming none of them says these bytes are not a render
 				// of anything--a re-upload, not an edit.
 				edits: options.edits,
+				mask: options.mask,
 				sidecars,
 				tuning: options.tuning
 			};

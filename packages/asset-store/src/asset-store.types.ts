@@ -1,6 +1,7 @@
 import type {
 	AssetId,
 	AssetKind,
+	AssetMask,
 	AssetMeta,
 	AssetResolver,
 	Character,
@@ -41,6 +42,11 @@ export interface PutAssetOptions {
 	edits?: ImageEdits;
 	/** What the cutout controls were set to. Only meaningful with `cutout`. */
 	tuning?: CutoutTuning;
+	/**
+	 * The shapes drawn by hand into these bytes. Metadata, not a sidecar — but only
+	 * re-appliable while the `source` sidecar it was drawn against is still there.
+	 */
+	mask?: AssetMask;
 	/** The pixels the edit started from, stored as the `source` sidecar. */
 	source?: Blob;
 	/** The alpha map a background removal produced, stored as the `cutout` sidecar. */
@@ -59,6 +65,12 @@ export interface ReplaceAssetOptions {
 	edits?: ImageEdits;
 	/** What the cutout controls were set to. Cleared when absent. */
 	tuning?: CutoutTuning;
+	/**
+	 * The shapes drawn by hand into these bytes. Cleared when absent — a replace that
+	 * names none of the settings is a re-upload, and the old holes belong to the picture
+	 * it just threw away.
+	 */
+	mask?: AssetMask;
 	/**
 	 * The pixels this edit started from.
 	 *

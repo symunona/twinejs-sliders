@@ -1,9 +1,18 @@
-import {IconAdjustments, IconResize, IconWand} from '@tabler/icons';
+import {
+	IconAdjustments,
+	IconContrast,
+	IconPhoto,
+	IconResize,
+	IconScissors,
+	IconVector,
+	IconWand
+} from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {ButtonBarSeparator} from '../../components/container/button-bar';
 import {IconButton} from '../../components/control/icon-button';
+import {MASK_MODES, MaskMode} from './mask-shapes';
 
 /**
  * Which set of controls the right pane is showing.
@@ -12,14 +21,21 @@ import {IconButton} from '../../components/control/icon-button';
  * groups deep, so the control being reached for was usually below the fold and the
  * one above it was in the way.
  */
-export type ToolId = 'adjust' | 'size' | 'background';
+export type ToolId = 'adjust' | 'size' | 'background' | 'mask';
 
-export const TOOL_IDS: ToolId[] = ['adjust', 'size', 'background'];
+export const TOOL_IDS: ToolId[] = ['adjust', 'size', 'background', 'mask'];
 
 const TOOL_ICONS: Record<ToolId, React.ReactNode> = {
 	adjust: <IconAdjustments />,
 	background: <IconWand />,
+	mask: <IconScissors />,
 	size: <IconResize />
+};
+
+const MODE_ICONS: Record<MaskMode, React.ReactNode> = {
+	alpha: <IconContrast />,
+	paint: <IconVector />,
+	rendered: <IconPhoto />
 };
 
 export interface EditorToolbarProps {
@@ -42,6 +58,22 @@ export interface EditorToolbarProps {
 	tool: ToolId;
 	/** Which tools this image can use. Detached editing has no anchor, but still sizes. */
 	tools?: ToolId[];
+	/**
+	 * Which of the three previews the stage is drawing.
+	 *
+	 * Up here rather than in the mask pane, where it started, because the one mode nobody
+	 * can do without is `alpha` and the tool it is wanted in is *background*: it is how an
+	 * author judges what the model actually produced. A switch that can only be reached by
+	 * opening the mask pane cannot answer that question. Absent `onChangeMode` there is no
+	 * switch at all, which is what a toolbar with no image behind it wants.
+	 */
+	mode?: MaskMode;
+	onChangeMode?: (mode: MaskMode) => void;
+	/**
+	 * The modes worth offering. The rest are shown greyed rather than hidden: a switch
+	 * that grows a third button the moment a shape is drawn is a switch nobody finds.
+	 */
+	modes?: readonly MaskMode[];
 }
 
 /**
@@ -56,8 +88,11 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = props => {
 		actions,
 		dirty,
 		generateHint,
+		mode,
+		modes = MASK_MODES,
 		note,
 		noteButton,
+		onChangeMode,
 		onGenerate,
 		onSelectTool,
 		tool,
@@ -92,6 +127,38 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = props => {
 							onClick={onGenerate}
 							tooltipLabel={generateHint}
 						/>
+					</>
+				)}
+				{onChangeMode && (
+					<>
+						<ButtonBarSeparator />
+						<div
+							aria-label={t('dialogs.assetEditor.modeLabel')}
+							// The mask feature's own row-of-radios class, not
+							// `asset-editor-tools`: that one carries `margin-left: auto`, and
+							// two of those in one row split the slack between them and pull
+							// the tool switch away from the edge it has always sat on.
+							className="asset-editor-mask-group"
+							role="radiogroup"
+						>
+							{MASK_MODES.map(id => (
+								<IconButton
+									ariaChecked={mode === id}
+									disabled={!modes.includes(id)}
+									icon={MODE_ICONS[id]}
+									iconOnly
+									key={id}
+									label={t(`dialogs.assetEditor.mode.${id}`)}
+									onClick={() => onChangeMode(id)}
+									role="radio"
+									// `selected`, never `selectable`: that prop adds
+									// `aria-pressed`, which a radio must not carry on top of
+									// `aria-checked`.
+									selected={mode === id}
+									tooltipLabel={t(`dialogs.assetEditor.modeHint.${id}`)}
+								/>
+							))}
+						</div>
 					</>
 				)}
 				<ButtonBarSeparator />

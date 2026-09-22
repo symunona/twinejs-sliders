@@ -1267,6 +1267,43 @@ export interface CutoutTuning {
 	softness: number;
 }
 
+/** Whether a hand-drawn shape forces its area transparent or forces it opaque. */
+export type MaskOp = 'cut' | 'keep';
+
+/**
+ * One hand-drawn region of an asset's alpha — a closed polygon, nothing else.
+ *
+ * Shapes rather than pixels because a mask has to survive the edits around it. A painted
+ * sidecar is invalid the moment the asset is recropped or resized, never syncs, and cannot
+ * be re-opened to move one corner; fractions of the source image survive all three.
+ */
+export interface MaskShape {
+	id: string;
+	op: MaskOp;
+	/**
+	 * How far the edge fades, as a fraction of the image's short edge. 0 is a hard cut.
+	 * Relative for the same reason the points are: a pixel radius would change meaning
+	 * the moment new bytes gave the asset a different size.
+	 */
+	feather: number;
+	/**
+	 * Fractions of the SOURCE image, rounded to three decimals like an anchor. The
+	 * polygon closes itself — the last point is not repeated.
+	 */
+	points: Frac2[];
+}
+
+/**
+ * The hand-drawn half of an asset's transparency.
+ *
+ * Kept independent of `tuning`, which describes the model's alpha: the two are composited
+ * as `clamp(tuned + keep − cut, 0, 1)` so that dragging a tuning slider can never reshape
+ * an edge that was drawn by hand.
+ */
+export interface AssetMask {
+	shapes: MaskShape[];
+}
+
 /**
  * An extra blob an asset owns, stored beside its current bytes.
  *
@@ -1320,6 +1357,15 @@ export interface AssetMeta {
 	 * which holds the alpha the tuning is applied to.
 	 */
 	tuning?: CutoutTuning;
+	/**
+	 * Holes and patches drawn by hand, on top of whatever the cutout model produced.
+	 *
+	 * Metadata rather than a sidecar, so it rides sync and can be re-opened a shape at a
+	 * time. Like `edits`, it only describes bytes that were rendered FROM the `source`
+	 * sidecar — without that base the asset's own pixels already are the mask, and
+	 * re-applying it would cut the same hole twice.
+	 */
+	mask?: AssetMask;
 	/**
 	 * Which extra blobs this asset owns. An explicit list rather than a probe, so that
 	 * `remove` can delete them without any backend having to scan for keys by prefix.
