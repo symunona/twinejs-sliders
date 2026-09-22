@@ -1416,6 +1416,19 @@ export interface GlitchEffect {
 	kind: 'glitch';
 	/** How far a band slides, 0 (still) to 100 (a quarter of the art's width). */
 	amount: number;
+	/**
+	 * How far a band twists while it is torn, in DEGREES, 0 (flat) to 30.
+	 *
+	 * The one parameter here that is not unitless, and deliberately so: the reason every
+	 * distance is a fraction of the art's width is that the same asset is drawn at a dozen
+	 * sizes, and an angle already survives that — ten degrees is ten degrees on a thumbnail
+	 * and on a 4K stage.
+	 *
+	 * Defaults to 0, which is also what every asset written before this key existed reads
+	 * as. A tear that slides and does not twist is the analogue-video look the rest of these
+	 * parameters are tuned for; twisting is the digital-corruption one, so it is opt-in.
+	 */
+	rotate: number;
 	/** How many horizontal slices the picture is torn into, 1..12. */
 	bands: number;
 	/** Steps per second of the tear clock, 1..50. Low reads as mechanical, high as electrical. */

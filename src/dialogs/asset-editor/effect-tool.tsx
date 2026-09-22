@@ -49,6 +49,7 @@ const PRESET_ICONS: Record<string, React.ReactNode> = {
  */
 const GLITCH_KEYS: (keyof Omit<GlitchEffect, 'kind'>)[] = [
 	'amount',
+	'rotate',
 	'bands',
 	'speed',
 	'split',
@@ -61,7 +62,7 @@ const GLITCH_KEYS: (keyof Omit<GlitchEffect, 'kind'>)[] = [
 /**
  * Starting points, not styles.
  *
- * Eight sliders from a standing start is a long way from a look, and the two numbers that
+ * Nine sliders from a standing start is a long way from a look, and the two numbers that
  * decide whether a glitch reads at all — `amount` and `burst` — are the two whose useful band
  * is narrowest. A preset lands inside it; the sliders are then for taste.
  */
@@ -105,6 +106,10 @@ export const GLITCH_PRESETS: {effect: GlitchEffect; id: string}[] = [
 			burst: 80,
 			noise: 40,
 			period: 1,
+			// The only preset that twists, and the only one that should: a tilted band is
+			// a picture coming apart as DATA rather than as a signal, which is what this
+			// one is for. It is also how the slider gets discovered.
+			rotate: 5,
 			speed: 40,
 			split: 70
 		}

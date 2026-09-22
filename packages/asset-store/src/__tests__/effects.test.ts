@@ -23,6 +23,7 @@ const GLITCH: GlitchEffect = {
 	burst: 50,
 	noise: 0,
 	period: 2,
+	rotate: 0,
 	scanlines: 0,
 	speed: 24,
 	split: 25

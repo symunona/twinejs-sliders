@@ -51,7 +51,7 @@ export const FX_CSS = `
 	/* Matches the renderer's own sprite rule, so a layer lines up with the <img> it was
 	   cloned from rather than stretching to the box. */
 	object-fit: contain;
-	will-change: translate, clip-path, opacity, background-position;
+	will-change: translate, rotate, clip-path, opacity, background-position;
 }
 
 /* A plane's picture fills the stage, so its layers have to as well. */

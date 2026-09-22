@@ -423,7 +423,7 @@
 			"effectLabel": "Effect",
 			"effectHint": "The effect runs live over the picture. Nothing here changes the pixels.",
 			"effectNote": "An effect is a look, not an edit. Nothing here touches the image\u2014the settings are saved on the asset and drawn as animation wherever it appears, so the preview beside you is the result. A reader whose system asks for less motion sees the plain picture.",
-			"effectIdle": "Every setting is at zero, so nothing is drawn. Raise Tear or Color split.",
+			"effectIdle": "Every setting is at zero, so nothing is drawn. Raise Tear, Twist or Color split.",
 			"effectKind": {
 				"none": "None",
 				"glitch": "Glitch"
@@ -446,6 +446,7 @@
 			},
 			"effectParam": {
 				"amount": "Tear",
+				"rotate": "Twist (°)",
 				"bands": "Bands",
 				"speed": "Steps/s",
 				"split": "Color split",

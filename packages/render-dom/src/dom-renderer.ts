@@ -613,6 +613,7 @@ export class DomRenderer implements Renderer {
 			this.charCache.clear();
 			this.urlCache.clear();
 			this.metaCache.clear();
+			this.forgetBg();
 
 			return;
 		}
@@ -620,6 +621,27 @@ export class DomRenderer implements Renderer {
 		this.charCache.delete(id);
 		this.urlCache.delete(id);
 		this.metaCache.delete(id);
+
+		if (id === this.bgId) {
+			this.forgetBg();
+		}
+	}
+
+	/**
+	 * Make the next `syncBg` rebuild the backdrop even though the scene still asks for the
+	 * same asset.
+	 *
+	 * `syncBg` early-returns on an unchanged id, which is right for every ordinary apply —
+	 * rebuilding would remount the `<img>` and restart an animated WebP on every keystroke.
+	 * It is wrong after an invalidate, which is the caller saying the bytes behind that id
+	 * have moved: the object URL on screen has been revoked, so the backdrop is showing a
+	 * broken image and no amount of re-applying the same stage would replace it.
+	 *
+	 * Only the id is forgotten, not the element. `syncBg` drops whatever the last backdrop
+	 * left behind, so handing it a live `bgEl` is what gets the stale picture removed.
+	 */
+	private forgetBg(): void {
+		this.bgId = undefined;
 	}
 
 	// -----------------------------------------------------------------------
