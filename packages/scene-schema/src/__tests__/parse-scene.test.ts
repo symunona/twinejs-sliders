@@ -143,12 +143,22 @@ describe('parseScene', () => {
 			expect(scene.entities.mira).toMatchObject({at: {x: 0.2, y: -0.7}});
 		});
 
-		it('warns but still parses when out of -1..1', () => {
-			const {scene, errors} = parseScene('cast:\n  mira: {at: [4, -9]}\n');
+		// Parking an entity off the stage is how it walks on in the next beat. The old
+		// bound was the stage edge, so most entrances painted the player's warning list
+		// red.
+		it('says nothing about a spot just off the stage', () => {
+			const {scene, errors} = parseScene('cast:\n  mira: {at: [-1.6, -0.2]}\n');
+
+			expect(errors).toEqual([]);
+			expect(scene.entities.mira).toMatchObject({at: {x: -1.6, y: -0.2}});
+		});
+
+		it('warns but still parses when the numbers read as pixels', () => {
+			const {scene, errors} = parseScene('cast:\n  mira: {at: [400, -90]}\n');
 
 			expect(codes(errors)).toEqual(['bad-coordinate', 'bad-coordinate']);
 			expect(errors.every(e => e.severity === 'warning')).toBe(true);
-			expect(scene.entities.mira).toMatchObject({at: {x: 4, y: -9}});
+			expect(scene.entities.mira).toMatchObject({at: {x: 400, y: -90}});
 		});
 
 		it('rejects a non-numeric at', () => {

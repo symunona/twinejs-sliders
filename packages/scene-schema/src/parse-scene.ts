@@ -612,15 +612,29 @@ function keyName(pair: Pair<unknown, unknown>): string | undefined {
 // Coordinates (spec 02, "Coordinates")
 // ---------------------------------------------------------------------------
 
+/**
+ * How far off the stage a coordinate may sit before it is worth a word.
+ *
+ * NOT 1. Parking an entity off the stage is the ordinary way to walk one on: `at: -1.6`
+ * in the opening beat, then `at: -0.3` in the next, and the character enters from the
+ * left. Warning at the stage edge fired on most entrances and painted the player's
+ * warning list red for a scene that was doing exactly what it meant to.
+ *
+ * What survives is the pixel typo: `at: 400` or `at: [120, 80]` from someone who read the
+ * numbers as screen coordinates. Nothing legitimate reaches eight stage-widths out, so
+ * the bound catches that reading and lets every entrance through.
+ */
+const OFF_STAGE_LIMIT = 8;
+
 function checkRange(ctx: Ctx, value: number, axis: 'x' | 'y', node: unknown): void {
-	if (value < -1 || value > 1) {
+	if (value < -OFF_STAGE_LIMIT || value > OFF_STAGE_LIMIT) {
 		addError(
 			ctx,
 			'bad-coordinate',
-			`${axis} of ${value} is outside the stage (-1 to 1).`,
+			`${axis} of ${value} is far outside the stage (-1 to 1).`,
 			node,
 			{
-				hint: 'Coordinates are normalized: -1 is the left/bottom edge, +1 the right/top.',
+				hint: 'Coordinates are normalized, never pixels: -1 is the left/bottom edge, +1 the right/top. Just off the stage (-1.6, say) is fine — that is how an entity walks on.',
 				severity: 'warning'
 			}
 		);
