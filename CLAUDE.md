@@ -14,7 +14,7 @@ Always communicate caveman: short, concise, to the point. Docs too.
 | `.claude/ENVIRONMENT.md` | Run, test, deploy, `twine-cli`, e2e. |
 | `format/README.md` | Before touching `format/`. Non-negotiable. |
 | `docs/sliders/02-sliders-format.md` + `packages/scene-schema/src/parse-scene.ts` | Scene YAML keys and grammar. The parser is the spec. |
-| `docs/sliders/` | Per-feature specs, 01..13. |
+| `docs/sliders/` | Per-feature specs, 01..15. |
 | `docs/sliders/archive/2026-log.md` | Only when digging for why something is the way it is. Not loaded. |
 
 Do not restate in CLAUDE.md what the code, a spec or a test already says.
