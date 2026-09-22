@@ -1230,6 +1230,14 @@ export interface CropRect {
 }
 
 /**
+ * Which way a picture is made to loop.
+ *
+ * `x` folds its right edge over its left, for `scroll_infinite_left`/`_right`. `y` folds
+ * its bottom over its top, for `_up`/`_down`.
+ */
+export type TileAxis = 'x' | 'y';
+
+/**
  * What the asset editor's adjustment controls were set to when an asset was last saved.
  *
  * Stored on the asset rather than baked-and-forgotten so that re-opening an edited asset
@@ -1249,10 +1257,10 @@ export interface ImageEdits {
 	width: number;
 	height: number;
 	/**
-	 * How much of the right edge is folded back over the left, as a fraction of `width`,
-	 * to make the picture loop. 0 to 0.5.
+	 * How much of the far edge is folded back over the near one, as a fraction of the
+	 * edge `tileAxis` names, to make the picture loop. 0 to 0.5.
 	 *
-	 * The saved image comes out that much NARROWER than `width` — the overlap is two
+	 * The saved image comes out that much SMALLER along that axis — the overlap is two
 	 * strips becoming one, not a fade — so this is the one edit whose output size is not
 	 * what the sizing controls say.
 	 *
@@ -1260,6 +1268,11 @@ export interface ImageEdits {
 	 * that never asked to loop should not carry a zero into every manifest.
 	 */
 	tile?: number;
+	/**
+	 * Which way the picture is made to loop. Absent means `x`, which is both the
+	 * commoner backdrop and what the field meant before there was a choice.
+	 */
+	tileAxis?: TileAxis;
 }
 
 /**

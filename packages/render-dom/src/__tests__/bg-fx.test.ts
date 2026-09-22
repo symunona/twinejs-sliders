@@ -198,9 +198,14 @@ describe('backdrop motion', () => {
 		expect(RENDER_DOM_CSS).toContain('@keyframes sliders-bg-circling');
 		expect(RENDER_DOM_CSS).toContain('@keyframes sliders-bg-scroll-left');
 		// The trailing copy is parked by CSS, not by the renderer: one keyframe drives both.
+		// A pixel SHORT of a whole frame, and the travel a pixel short to match -- the two
+		// copies have to overlap or the column they share shows the stage through it, and
+		// the travel has to lose the same pixel or the lap hops by one. Asserted together,
+		// because either one alone is a bug.
 		expect(RENDER_DOM_CSS).toContain(
-			".sliders-bg-tile[data-bg-fx='scroll_infinite_left'] { left: 100%; }"
+			".sliders-bg-tile[data-bg-fx='scroll_infinite_left'] { left: calc(100% - 1px); }"
 		);
+		expect(RENDER_DOM_CSS).toContain('translate3d(calc(-100% + 1px), 0, 0)');
 		// Each preset names its own default, so `speed:` is genuinely optional.
 		expect(RENDER_DOM_CSS).toContain('var(--sliders-bg-speed, 24s)');
 		expect(RENDER_DOM_CSS).toContain('prefers-reduced-motion');
