@@ -177,6 +177,12 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 		return {
 			assetBytes: assets.reduce((sum, asset) => sum + (asset.bytes ?? 0), 0),
 			assetCount: assets.length,
+			// Always reported, like the Go row, and moved by `putManifest` alone. Leave it
+			// off and every test that drives sync through this fake would be exercising the
+			// old-server fallback in `use-server-sync.ts` while looking like it tested the
+			// real path — and a manifest-only write, which moves neither total above, would
+			// be indistinguishable from a text write.
+			assetRev: entry.assetRev,
 			bytes: JSON.stringify(entry.body).length,
 			deleted: entry.deleted,
 			id: entry.body.id,

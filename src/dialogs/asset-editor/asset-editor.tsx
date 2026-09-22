@@ -7,6 +7,7 @@ import {
 	IconEraser,
 	IconFilePlus,
 	IconLink,
+	IconRefresh,
 	IconResize,
 	IconTarget,
 	IconWand,
@@ -32,6 +33,10 @@ import {
 	PromptValidationResponse
 } from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
+import {
+	ServerSyncContextProps,
+	useServerSyncContext
+} from '../../store/persistence/server/use-server-sync';
 // Imported from the module rather than the barrel: the generator opens this dialog to
 // edit a generation, so the two files are a cycle either way, and going through
 // `../asset-generator` would drag the whole generator barrel into that cycle. Only
@@ -41,6 +46,7 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
+	useAssetScope,
 	useAssetStore
 } from '../sliders-assets/asset-store-context';
 import {useAssetUsage} from '../sliders-assets/use-asset-usage';
@@ -108,6 +114,45 @@ function megabytes(bytes: number): string {
 	return `${Math.round(bytes / 1024 / 102.4) / 10} MB`;
 }
 
+/**
+ * Every sidecar this asset owns, by content hash, in one comparable string.
+ *
+ * `src` is the pixels an edit is re-rendered from and `cutout` is the alpha map that is
+ * composited over them, so a sidecar whose hash moved is a different picture on screen
+ * even when the asset's own bytes did not budge.
+ */
+function sidecarShape(meta: AssetMeta): string {
+	return Object.entries(meta.sidecars ?? {})
+		.map(([kind, entry]) => `${kind}:${entry?.hash ?? ''}`)
+		.sort()
+		.join('|');
+}
+
+/**
+ * Whether two versions of one asset would open this dialog the same way.
+ *
+ * Exactly the fields `load()` below reads, and nothing else. That is why this is not
+ * `sameProvenance()` from the sync layer, which looks almost identical: that compares what
+ * a pull is ALLOWED to carry between two libraries, and it leaves the asset's own bytes
+ * out on purpose. The question here is the narrower one -- is what is on screen still what
+ * the store holds -- and the bytes are half of it.
+ *
+ * `name` is deliberately not compared. A rename elsewhere leaves every pixel and every
+ * control in this dialog correct, and throwing an author's crop away over a title is the
+ * trade this whole prompt exists to avoid.
+ */
+function sameShownAsset(a: AssetMeta, b: AssetMeta): boolean {
+	return (
+		a.hash === b.hash &&
+		sameAnchor(a.origin ?? DEFAULT_ANCHOR, b.origin ?? DEFAULT_ANCHOR) &&
+		sameTuning(a.tuning, b.tuning) &&
+		(a.edits && b.edits
+			? sameEdits(a.edits, b.edits)
+			: a.edits === undefined && b.edits === undefined) &&
+		sidecarShape(a) === sidecarShape(b)
+	);
+}
+
 /** Which of the four steps a stage is, so the wait has a shape. */
 const STAGE_STEPS: Record<EngineProgress['stage'], number> = {
 	download: 1,
@@ -153,6 +198,9 @@ function elapsedLabel(seconds: number): string {
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId, source: sourceImage} = props;
 	const store = useAssetStore();
+	/** Whose library this is. Assets are per story, and so is the pull below. */
+	const scope = useAssetScope();
+	const {pullAssets} = useServerSyncContext();
 	const {dispatch} = useDialogsContext();
 	// Which passages write this asset's name, so the rename prompt can offer to carry them
 	// along -- the same list the asset browser's tiles show.
@@ -183,6 +231,23 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [tuning, setTuning] = React.useState<CutoutTuning>(DEFAULT_TUNING);
 	const [elapsed, setElapsed] = React.useState(0);
 	const [progress, setProgress] = React.useState<EngineProgress>();
+	/**
+	 * A pull found that another editor has moved this asset since the dialog opened.
+	 *
+	 * Only ever raised over unsaved work: with nothing to lose the reload is silent, and
+	 * an interruption that costs the author a decision they have no stake in is noise.
+	 * It stays raised after a "keep editing", so the offer is still there once the crop
+	 * in progress has been dealt with.
+	 */
+	const [changedElsewhere, setChangedElsewhere] = React.useState(false);
+	const [changedOpen, setChangedOpen] = React.useState(false);
+	/**
+	 * Bumped to make the load effect run again. Re-running it is the point: reloading is
+	 * exactly what that effect already does, and a second copy of it here would be one
+	 * more place for the restore rules -- the crop-relative anchor, the baseline `saved`,
+	 * the cutout whose map may not fit -- to drift out of step.
+	 */
+	const [reloads, setReloads] = React.useState(0);
 	const [renameOpen, setRenameOpen] = React.useState(false);
 	/** The name in the rename prompt, which is the asset's own--not `name`, which is the
 	    name a "save as new" would use. */
@@ -421,7 +486,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		return () => {
 			current = false;
 		};
-	}, [assetId, sourceImage, store, t]);
+		// `reloads` is what a pull that landed somebody else's version pushes on: the
+		// whole effect is the reload.
+	}, [assetId, reloads, sourceImage, store, t]);
 
 	// Redraw the preview whenever the source or the adjustments change. The crop
 	// is drawn as an overlay instead, so that it stays possible to re-crop.
@@ -995,6 +1062,97 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 	const saveDisabled = busy || !source || !edits || !dirty;
 
+	/**
+	 * What the pull's continuation has to read when it settles, kept in a ref instead of
+	 * in the effect's dependencies. `dirty` flips on every slider drag and `meta` changes
+	 * on a rename; an effect listing either would pull again per gesture--a loop against
+	 * the server, wearing a dependency array.
+	 */
+	const latest = React.useRef<{
+		dirty: boolean;
+		meta?: AssetMeta;
+		pullAssets?: ServerSyncContextProps['pullAssets'];
+	}>({dirty: false});
+
+	React.useEffect(() => {
+		latest.current = {dirty, meta, pullAssets};
+	});
+
+	// Another editor can crop this asset, cut its background out or move its anchor, and
+	// nothing on this machine hears about it. The stale picture is the smaller half of
+	// that: the expensive half is opening this dialog on it and saving, which writes
+	// settings from before their work straight back over it.
+	//
+	// So ask the server once, as the dialog opens, and never wait for the answer. What is
+	// already on disk is what the author came here to edit, and an author editing with no
+	// server at all--no client, no sync, a request that fails--has to see none of this.
+
+	React.useEffect(() => {
+		// Detached editing owns nothing in the library, so there is nothing under it that
+		// could have gone stale.
+		if (!assetId) {
+			return;
+		}
+
+		const id = assetId;
+		let current = true;
+
+		async function wake() {
+			const result = await latest.current.pullAssets?.(scope);
+
+			// `changed` is read off what the library HOLDS once the pull is done, never off
+			// what it set out to fetch. A pull that landed nothing must not send the dialog
+			// looking--see the sync model's third rule.
+			if (!current || !result?.changed) {
+				return;
+			}
+
+			const shown = latest.current.meta;
+
+			// No metadata yet means the first load is still running, and it is reading a
+			// store this pull has already finished writing to. It opens on the new version
+			// by itself.
+			if (!shown) {
+				return;
+			}
+
+			const held = await store.meta(id);
+
+			// A pull is per story, and it routinely lands art this dialog is not showing.
+			// Reloading over somebody else's new background would throw away a crop for a
+			// change that never touched this picture.
+			if (!current || !held || sameShownAsset(shown, held)) {
+				return;
+			}
+
+			if (latest.current.dirty) {
+				setChangedElsewhere(true);
+				setChangedOpen(true);
+			} else {
+				setReloads(count => count + 1);
+			}
+		}
+
+		wake().catch(pullError => {
+			// Logged, never shown. Working offline is ordinary, and the dialog an error
+			// would interrupt is perfectly usable without a server.
+			console.warn('Could not refresh this asset from the server', pullError);
+		});
+
+		return () => {
+			current = false;
+		};
+		// Once per open. `pullAssets` is read through the ref for that reason: the context
+		// rebuilds it, and listing it here would pull on every one of those renders.
+	}, [assetId, scope, store]);
+
+	/** Take the other editor's version, and with it the loss of whatever is in front. */
+	function reloadChanged() {
+		setChangedElsewhere(false);
+		setChangedOpen(false);
+		setReloads(count => count + 1);
+	}
+
 	useCommand({
 		enabled: !busy && !backgroundRemoved && !!background?.engine,
 		id: 'assetEditor.removeBackground',
@@ -1092,6 +1250,28 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				})}
 				variant="create"
 			/>
+			{/*
+			 * Shown only when a pull landed somebody else's version of this asset on top
+			 * of unsaved work. The same prompt shape as the two saves beside it, and for
+			 * the same reason: what it asks for cannot be undone.
+			 */}
+			{changedElsewhere && (
+				<ConfirmButton
+					cancelLabel={t('dialogs.assetEditor.changedElsewhereKeep')}
+					confirmIcon={<IconRefresh />}
+					confirmLabel={t('dialogs.assetEditor.changedElsewhereReload')}
+					confirmVariant="danger"
+					icon={<IconRefresh />}
+					label={t('dialogs.assetEditor.changedElsewhere')}
+					onChangeOpen={setChangedOpen}
+					onConfirm={reloadChanged}
+					open={changedOpen}
+					prompt={t('dialogs.assetEditor.changedElsewherePrompt', {
+						name: meta?.name ?? ''
+					})}
+					variant="danger"
+				/>
+			)}
 		</>
 	);
 

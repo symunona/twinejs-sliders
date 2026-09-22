@@ -64,6 +64,21 @@ export interface StoryIndexEntry {
 	bytes: number;
 	assetCount: number;
 	assetBytes: number;
+	/**
+	 * The asset manifest's own rev. Bumps on every manifest write.
+	 *
+	 * OPTIONAL, and it has to be: a server older than this field sends the row without it,
+	 * so the type would be lying if it promised a number. Every reader has to decide what
+	 * "the server cannot say" means for it — `use-server-sync.ts` is the one that matters
+	 * and says so there.
+	 *
+	 * It exists because the two totals above answer a narrower question than they look
+	 * like they do. `assetCount` and `assetBytes` move only when art is added or dropped,
+	 * and an edit's settings, an anchor or a cutout sidecar all rewrite the manifest
+	 * without touching either — so a client watching the totals alone never learns that
+	 * the art it is holding changed.
+	 */
+	assetRev?: number;
 	deleted: boolean;
 }
 

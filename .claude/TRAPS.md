@@ -26,7 +26,7 @@
 | 1 | React 16 derives `onPointerEnter/Leave` from the pointerover/out pair. | Fire `pointerOver`/`pointerOut`; a dispatched `pointerenter` does not bubble. |
 | 1 | `clientWidth` lives on Element, not HTMLElement — nothing to restore after shadowing. | `delete` the shadow. |
 | 1 | `codemirror` resolves to a build whose default export is not the constructor. | Drive `mode()` over a hand-made `StringStream`. |
-| 1 | `marqueeable-passage-map.test.tsx` "overrides the selected state … while dragging" fails under load, passes 6/6 alone. Seen on two branches, so not yours. | Re-run the one file before believing it. |
+| 2 | `marqueeable-passage-map.test.tsx` marquee tests are FLAKY, rate rising with box load — clean 6/6 alone on an idle box, ~1 in 3 on a busy one, and two different assertions have failed. Seen on three branches including ones that share no commits, so not yours. | Re-run the one file before believing it. `uptime` first: another agent's jest is usually the reason. |
 
 ## agent-browser / manual verification
 

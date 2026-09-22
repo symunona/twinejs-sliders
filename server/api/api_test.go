@@ -709,6 +709,87 @@ func TestAssetsOfTombstoneAreGone(t *testing.T) {
 	expectError(t, h.do("GET", "/api/v1/stories/story-1/assets", nil), http.StatusGone, codeDeleted)
 }
 
+// sidecarManifestPayload is manifestPayload for one asset, plus whatever `sidecars` is
+// handed in verbatim — a manifest write that changes it and nothing else leaves the count
+// and the byte total exactly where they were.
+func sidecarManifestPayload(sidecars string) []byte {
+	asset := map[string]any{
+		"id": "a1", "name": "a1", "kind": "bg", "tags": []string{}, "animated": false,
+		"w": 4, "h": 4, "bytes": 2, "hash": sha([]byte("a1")), "mime": "image/webp",
+	}
+	if sidecars != "" {
+		asset["sidecars"] = json.RawMessage(sidecars)
+	}
+	raw, err := json.Marshal(map[string]any{"version": 1, "characters": []any{}, "assets": []any{asset}})
+	if err != nil {
+		panic(err)
+	}
+	return raw
+}
+
+// indexRow reads one story's row off the wire as raw JSON, so the assertion is about the
+// keys the client actually parses and not about the Go field names.
+func (h *harness) indexRow(id string) map[string]any {
+	h.t.Helper()
+	res := h.do("GET", "/api/v1/stories", nil)
+	expectStatus(h.t, res, http.StatusOK)
+	var index struct {
+		Stories []map[string]any `json:"stories"`
+	}
+	decode(h.t, res, &index)
+	for _, row := range index.Stories {
+		if row["id"] == id {
+			return row
+		}
+	}
+	h.t.Fatalf("%s is not in the index: %+v", id, index.Stories)
+	return nil
+}
+
+// TestIndexCarriesAssetRev covers the poll that never woke up: the client decides whether
+// to re-pull the art from the index row alone, and a manifest write that only changes
+// metadata moves neither assetCount nor assetBytes.
+func TestIndexCarriesAssetRev(t *testing.T) {
+	h := newHarness(t, nil)
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1", storyPayload("Lighthouse", "one")), http.StatusOK)
+
+	// No manifest yet: the field is present and does not drift between polls, so an
+	// art-less story never reads as "the art moved".
+	first := h.indexRow("story-1")
+	if _, ok := first["assetRev"]; !ok {
+		t.Fatalf("no assetRev on the row: %+v", first)
+	}
+	if second := h.indexRow("story-1"); second["assetRev"] != first["assetRev"] {
+		t.Fatalf("assetRev drifted with no manifest: %v then %v", first["assetRev"], second["assetRev"])
+	}
+
+	res := h.do("PUT", "/api/v1/stories/story-1/assets", sidecarManifestPayload(""))
+	expectStatus(t, res, http.StatusOK)
+	var man store.Manifest
+	decode(t, res, &man)
+
+	row := h.indexRow("story-1")
+	if row["assetRev"] != float64(man.Rev) {
+		t.Fatalf("row assetRev = %v, manifest rev = %d", row["assetRev"], man.Rev)
+	}
+	if row["assetCount"] != float64(1) || row["assetBytes"] != float64(2) {
+		t.Fatalf("count/bytes = %v/%v, want 1/2", row["assetCount"], row["assetBytes"])
+	}
+
+	// The metadata-only write: same asset, same bytes, a cutout sidecar added.
+	expectStatus(t, h.do("PUT", "/api/v1/stories/story-1/assets",
+		sidecarManifestPayload(`{"cutout":{"hash":"c0ffee","bytes":9}}`)), http.StatusOK)
+
+	after := h.indexRow("story-1")
+	if after["assetCount"] != row["assetCount"] || after["assetBytes"] != row["assetBytes"] {
+		t.Fatalf("not a metadata-only write: %v/%v then %v/%v",
+			row["assetCount"], row["assetBytes"], after["assetCount"], after["assetBytes"])
+	}
+	if after["assetRev"] == row["assetRev"] {
+		t.Fatalf("assetRev stuck at %v across a manifest write", after["assetRev"])
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Concurrency
 // ---------------------------------------------------------------------------

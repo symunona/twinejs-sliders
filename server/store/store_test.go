@@ -246,6 +246,95 @@ func TestListIncludesTombstonesFlagged(t *testing.T) {
 	}
 }
 
+// listEntry pulls one story's row out of the index.
+func listEntry(t *testing.T, s *Store, id string) IndexEntry {
+	t.Helper()
+	list, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range list {
+		if e.ID == id {
+			return e
+		}
+	}
+	t.Fatalf("%s is not in the index: %+v", id, list)
+	return IndexEntry{}
+}
+
+func TestListCarriesAssetRev(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+	if _, err := s.PutManifest("story-1", manifestJSON(t, "a1", "a2"), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+
+	meta, err := s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := listEntry(t, s, "story-1")
+	if e.AssetRev != meta.AssetRev {
+		t.Fatalf("index assetRev = %d, story's own = %d", e.AssetRev, meta.AssetRev)
+	}
+	if e.AssetCount != 2 || e.AssetBytes != 8 {
+		t.Fatalf("count/bytes = %d/%d, want 2/8", e.AssetCount, e.AssetBytes)
+	}
+
+	// The story's own rev is a separate counter and must not leak into this one.
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "two"))
+	if e := listEntry(t, s, "story-1"); e.AssetRev != meta.AssetRev {
+		t.Fatalf("a story write moved the index assetRev to %d", e.AssetRev)
+	}
+}
+
+// TestListAssetRevMovesOnMetadataOnlyWrite is the bug: a client that watches
+// assetCount:assetBytes sleeps through every manifest write that only changes metadata —
+// a cutout sidecar, an anchor, an edit's settings — and keeps showing the old art.
+func TestListAssetRevMovesOnMetadataOnlyWrite(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+	if _, err := s.PutManifest("story-1", manifestSidecarJSON(t, "a1", ""), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+	before := listEntry(t, s, "story-1")
+
+	if _, err := s.PutManifest("story-1", manifestSidecarJSON(t, "a1", `{"cutout":{"hash":"c0ffee"}}`), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+	after := listEntry(t, s, "story-1")
+
+	if after.AssetCount != before.AssetCount || after.AssetBytes != before.AssetBytes {
+		t.Fatalf("not a metadata-only write: %d/%d then %d/%d",
+			before.AssetCount, before.AssetBytes, after.AssetCount, after.AssetBytes)
+	}
+	if after.AssetRev <= before.AssetRev {
+		t.Fatalf("index assetRev %d did not move past %d", after.AssetRev, before.AssetRev)
+	}
+}
+
+func TestListAssetRevStableWithoutManifest(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+
+	// A story published before it had art has no assets.json at all. Whatever the row
+	// reports has to be the same on the next poll, or the client reads every poll as
+	// "the art moved" and re-pulls a story that has none.
+	first := listEntry(t, s, "story-1")
+	second := listEntry(t, s, "story-1")
+	if first.AssetRev != second.AssetRev {
+		t.Fatalf("assetRev drifted with no manifest: %d then %d", first.AssetRev, second.AssetRev)
+	}
+	if first.AssetCount != 0 || first.AssetBytes != 0 {
+		t.Fatalf("count/bytes = %d/%d, want 0/0", first.AssetCount, first.AssetBytes)
+	}
+
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "two"))
+	if third := listEntry(t, s, "story-1"); third.AssetRev != first.AssetRev {
+		t.Fatalf("a story write moved assetRev to %d, want %d", third.AssetRev, first.AssetRev)
+	}
+}
+
 func TestRevKeepPrunesOldestFirst(t *testing.T) {
 	const keep = 5
 	s := testStore(t, func(o *Options) { o.RevKeep = keep })

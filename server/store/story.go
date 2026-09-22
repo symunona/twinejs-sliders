@@ -45,9 +45,15 @@ type IndexEntry struct {
 	LastClient   string `json:"lastClient"`
 	PassageCount int    `json:"passageCount"`
 	Bytes        int64  `json:"bytes"`
-	AssetCount   int    `json:"assetCount"`
-	AssetBytes   int64  `json:"assetBytes"`
-	Deleted      bool   `json:"deleted"`
+	// AssetRev is what a polling client watches to decide it has to re-pull the art.
+	// Count and bytes cannot answer that: an edit's settings, an anchor or a cutout
+	// sidecar all move the manifest without moving either number, so a client signing
+	// off `assetCount:assetBytes` never notices and shows yesterday's picture until the
+	// page is reloaded. The rev bumps on every manifest write, which is the question.
+	AssetRev   int   `json:"assetRev"`
+	AssetCount int   `json:"assetCount"`
+	AssetBytes int64 `json:"assetBytes"`
+	Deleted    bool  `json:"deleted"`
 }
 
 // PutResult is PutStoryResponse in server.types.ts.
@@ -166,6 +172,7 @@ func (s *Store) List() ([]IndexEntry, error) {
 			LastClient:   m.LastClient,
 			PassageCount: m.PassageCount,
 			Bytes:        m.Bytes,
+			AssetRev:     m.AssetRev,
 			AssetCount:   m.AssetCount,
 			AssetBytes:   m.AssetBytes,
 			Deleted:      m.Deleted,

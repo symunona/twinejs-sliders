@@ -354,6 +354,10 @@
 			"renameChange": "rename asset {{name}}",
 			"unsavedChanges": "Unsaved changes",
 			"noChanges": "No changes yet",
+			"changedElsewhere": "Changed Elsewhere",
+			"changedElsewherePrompt": "Somebody else edited “{{name}}” on another machine, and this window is still showing the older version. Reloading takes theirs and loses the changes in front of you. Keeping yours is fine too—but saving will write your settings over their work.",
+			"changedElsewhereReload": "Reload, Lose My Changes",
+			"changedElsewhereKeep": "Keep Editing",
 			"toolsLabel": "Tool",
 			"tool": {
 				"adjust": "Color",
