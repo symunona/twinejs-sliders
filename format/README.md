@@ -20,6 +20,7 @@ The edits into Chapbook's own files, runtime half:
 | File | Edit |
 | --- | --- |
 | `runtime/index.ts` | calls `initSliders()` after `initStory()` |
+| `runtime/index.ts` | calls `applyStoryStartVars()` before `initStory()` — story vars when `startnode=` is not the real start |
 | `runtime/index.css` | imports `sliders/sliders.css` |
 | `runtime/template/modifiers/index.ts` | adds `sceneModifier` to the builtins |
 | `runtime/template/render-parsed.ts` | filters blocks through `sceneOnlyBlocks()` |

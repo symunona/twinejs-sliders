@@ -158,8 +158,13 @@ export function startPassage() {
  * passage}`, reveal links, the trail restore — so they cannot disagree.
  */
 export function passageNamed(name: string) {
+	// A passage whose `name` attribute was missing has no name to match, and folding
+	// `undefined` throws inside `matchPassageName`. Drop those here rather than widening
+	// the shared matcher, which the editor also calls with real names only.
 	const matched = matchPassageName(
-		story.passages.map(p => p.name),
+		story.passages
+			.map(p => p.name)
+			.filter((passageName): passageName is string => passageName !== undefined),
 		name
 	);
 

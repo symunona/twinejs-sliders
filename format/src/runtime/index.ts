@@ -4,6 +4,7 @@ import {initDisplay} from './display';
 import {initExtensibility} from './extensibility';
 import {initLoggerState, loggerDefaults} from './logger';
 import {initSliders} from './sliders';
+import {applyStoryStartVars} from './sliders/story-start-vars';
 import {initSound} from './sound';
 import {
 	canRestoreFromStorage,
@@ -55,6 +56,13 @@ export function init() {
   initTemplate();
   initLookups();
   initSound();
+
+  // Before `initStory()`, which defaults `trail` -- and the `trail` state-change is what
+  // renders the first passage. A "test from here" publish points `startnode=` at the
+  // passage under test, so the story's own vars, which live in the REAL start passage,
+  // would otherwise never be set at all. No-op on a normal play.
+
+  applyStoryStartVars();
   initStory();
   initSliders();
 
