@@ -31,7 +31,8 @@ export interface DialogCardProps {
 	/**
 	 * Hotkey scope commands inside this dialog register in. Dialogs with
 	 * shortcuts of their own--the asset manager, say--pass their own so that
-	 * their keys can't fire while a different dialog has focus.
+	 * their keys can't fire while a different dialog has focus. `dialog` is
+	 * always resolved as well, so the generic dialog commands keep working.
 	 */
 	hotkeyScope?: string;
 	/**
@@ -159,13 +160,20 @@ export const DialogCard: React.FC<DialogCardProps> = props => {
 	// focus here out of a text field. Without it the focus() call above does
 	// nothing and focus falls to the body, where this dialog's shortcuts no
 	// longer resolve.
+	//
+	// The scope sits on this element rather than somewhere inside the contents,
+	// so that the header controls and the container itself--where Escape parks
+	// focus--are inside it too. A scope declared deeper works only while focus
+	// is deeper, which is exactly when the user is typing and least needs it.
 
 	return (
 		<div
 			aria-label={headerLabel}
 			role="dialog"
 			className={calcdClassName}
-			data-hotkey-scope={hotkeyScope}
+			data-hotkey-scope={
+				hotkeyScope === 'dialog' ? 'dialog' : `${hotkeyScope} dialog`
+			}
 			onKeyDown={handleKeyDown}
 			ref={container}
 			tabIndex={-1}

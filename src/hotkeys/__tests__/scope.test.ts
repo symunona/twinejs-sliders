@@ -34,6 +34,32 @@ describe('scopeChain()', () => {
 		expect(scopeChain(target)).toEqual(['story-map', 'global']);
 	});
 
+	it('reads several scopes off one element, innermost first', () => {
+		const target = build(
+			'<div data-hotkey-scope="passage-editor dialog" id="target"></div>'
+		);
+
+		expect(scopeChain(target)).toEqual(['passage-editor', 'dialog', 'global']);
+	});
+
+	it('resolves a multi-scope element from a descendant', () => {
+		const target = build(
+			`<div data-hotkey-scope="passage-editor dialog">
+				<span id="target"></span>
+			</div>`
+		);
+
+		expect(scopeChain(target)).toEqual(['passage-editor', 'dialog', 'global']);
+	});
+
+	it('ignores extra whitespace between scopes', () => {
+		const target = build(
+			'<div data-hotkey-scope="  asset-editor   dialog  " id="target"></div>'
+		);
+
+		expect(scopeChain(target)).toEqual(['asset-editor', 'dialog', 'global']);
+	});
+
 	it('does not repeat a scope that appears twice', () => {
 		const target = build(
 			`<div data-hotkey-scope="dialog">

@@ -169,14 +169,14 @@ export const InnerStoryListRoute: React.FC = () => {
 	}, [dialogsDispatch, shouldShowDonationPrompt]);
 
 	return (
-		<div className="story-list-route">
+		// Scope covers the toolbar too--see the story edit route for why.
+		<div className="story-list-route" data-hotkey-scope="story-list">
 			<StoryListToolbar selectedStories={selectedStories} />
 			<ClickAwayListener
 				ignoreSelector=".story-card"
 				onClickAway={() => storiesDispatch(deselectAllStories())}
 			>
 				<MainContent
-					data-hotkey-scope="story-list"
 					title={t(
 						prefs.storyListTagFilter.length > 0
 							? 'routes.storyList.taggedTitleCount'

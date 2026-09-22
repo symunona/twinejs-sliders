@@ -2,6 +2,12 @@
  * Scopes are marked in the DOM with this attribute, e.g.
  * `<div data-hotkey-scope="story-map">`. Nothing keeps track of which one is
  * "active"--the DOM already knows, because focus is in one of them.
+ *
+ * One element may carry several, separated by whitespace and listed innermost
+ * first: `data-hotkey-scope="passage-editor dialog"` is the same as a
+ * `passage-editor` element nested inside a `dialog` one. A dialog that has a
+ * scope of its own needs this--it is a single element, and its shortcuts and
+ * the generic dialog ones both have to resolve from it.
  */
 export const HOTKEY_SCOPE_ATTRIBUTE = 'data-hotkey-scope';
 
@@ -69,10 +75,12 @@ export function scopeChain(element?: Element | null): string[] {
 		current;
 		current = current.parentElement
 	) {
-		const scope = current.getAttribute?.(HOTKEY_SCOPE_ATTRIBUTE);
+		const attribute = current.getAttribute?.(HOTKEY_SCOPE_ATTRIBUTE);
 
-		if (scope && !result.includes(scope)) {
-			result.push(scope);
+		for (const scope of attribute?.trim().split(/\s+/) ?? []) {
+			if (scope && !result.includes(scope)) {
+				result.push(scope);
+			}
 		}
 	}
 

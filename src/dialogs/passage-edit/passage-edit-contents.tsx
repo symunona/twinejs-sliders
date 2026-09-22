@@ -254,14 +254,10 @@ export const PassageEditContents: React.FC<
 	}
 
 	return (
-		// `passage-editor` has been in the scope list all along with nothing declaring it.
-		// It does now: commands that belong to writing a scene shouldn't fire from every
-		// other dialog the way a `dialog`-scoped one would.
-		<div
-			className="passage-edit-contents"
-			aria-hidden={disabled}
-			data-hotkey-scope="passage-editor"
-		>
+		// The `passage-editor` scope is declared by the dialog card around this, not here:
+		// a scope on these contents only resolves while focus is inside them, and the
+		// editor's own Escape handler moves focus out to the card.
+		<div className="passage-edit-contents" aria-hidden={disabled}>
 			{prefs.passageEditorToolbars && (
 				<>
 					<PassageToolbar

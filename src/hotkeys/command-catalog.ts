@@ -94,9 +94,13 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'sliders.characters', scope: 'story-map'},
 	{id: 'sliders.generator', scope: 'story-map'},
 
-	{id: 'passage.rename', scope: 'dialog'},
+	// `dialog` is resolved inside every dialog, including the ones with a scope of their
+	// own, so only commands that belong to any dialog live here. `dialog.maximize` also
+	// carries an element guard, so the key reaches the card that has focus and no other.
+
 	{id: 'dialog.maximize', scope: 'dialog'},
 
+	{id: 'passage.rename', scope: 'passage-editor'},
 	{id: 'scene.edit', scope: 'passage-editor'},
 	{id: 'scene.assets', scope: 'passage-editor'},
 
