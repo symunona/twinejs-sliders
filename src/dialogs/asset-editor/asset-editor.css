@@ -266,3 +266,51 @@ offering another thing to do, and a control-height button would read as one.
 .asset-editor-canvas.picking canvas {
 	cursor: cell;
 }
+
+/*
+The bar across the top: what to do with the edit, then which tool is being used.
+It does not scroll with the controls -- the two buttons that end the dialog were
+previously the last section of a pane deep enough to hide them.
+*/
+
+.asset-editor-toolbar {
+	border-bottom: 1px solid var(--light-gray);
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-editor-toolbar-row {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--control-inner-padding);
+}
+
+/* Pushes the tools to the far end, away from the saves: the two groups do
+   unrelated things and one gesture should never be mistaken for the other. */
+
+.asset-editor-tools {
+	display: flex;
+	gap: calc(var(--control-inner-padding) / 2);
+	margin-left: auto;
+}
+
+/*
+Whether there is anything to save. It sits beside the save buttons rather than
+in them because it also answers the question they cannot: a disabled Save could
+mean "nothing to write" or "still busy".
+*/
+
+.asset-editor-dirty {
+	color: var(--gray);
+	font-size: 85%;
+	white-space: nowrap;
+}
+
+.asset-editor-dirty.dirty {
+	color: var(--dark-yellow);
+	font-weight: 700;
+}

@@ -351,7 +351,24 @@
 			"renameUsed_plural": "{{count}} scenes write “{{old}}”. Rename And Update rewrites them; Rename alone leaves them asking for art that no longer exists.",
 			"renameUpdateScenes": "Rename And Update {{count}} Scene",
 			"renameUpdateScenes_plural": "Rename And Update {{count}} Scenes",
-			"renameChange": "rename asset {{name}}"
+			"renameChange": "rename asset {{name}}",
+			"unsavedChanges": "Unsaved changes",
+			"noChanges": "No changes yet",
+			"toolsLabel": "Tool",
+			"tool": {
+				"adjust": "Color",
+				"background": "Background",
+				"size": "Sizing"
+			},
+			"toolHint": {
+				"adjust": "Color \u2014 brightness, contrast and gamma.",
+				"background": "Background \u2014 cut the subject out of its background.",
+				"size": "Sizing \u2014 anchor, resize and crop."
+			},
+			"generateWith": "Generate From This",
+			"generateWithHint": "Opens the image generator with this asset attached as context.",
+			"generateWithDirtyHint": "Opens the image generator with this asset attached as context \u2014 the version in the library, not the unsaved edit in front of you.",
+			"sizeToolHint": "Cropping and the anchor live in the Sizing tool."
 		},
 		"passageEdit": {
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",

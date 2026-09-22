@@ -34,7 +34,14 @@ import {SaveTarget, saveGeneration} from './save-generation';
 import {refreshGenerations, useGenerations} from './use-generations';
 import './asset-generator.css';
 
-export type AssetGeneratorDialogProps = DialogComponentProps;
+export interface AssetGeneratorDialogProps extends DialogComponentProps {
+	/**
+	 * Assets to start with in the attachment picker. Set by whoever opened the generator
+	 * on something specific -- the asset editor's Generate button -- so that "the same
+	 * thing, but at night" does not begin with a hunt through the picker.
+	 */
+	attach?: AssetId[];
+}
 
 /**
  * Where an unsent prompt waits.
@@ -75,7 +82,9 @@ export const AssetGeneratorDialog: React.FC<
 	const store = useAssetStore();
 	const history = useGenerations();
 	const cancel = React.useRef<AbortController>();
-	const [attachments, setAttachments] = React.useState<AssetId[]>([]);
+	const [attachments, setAttachments] = React.useState<AssetId[]>(
+		props.attach ?? []
+	);
 	const [busy, setBusy] = React.useState(false);
 	const [error, setError] = React.useState<string>();
 	const [notice, setNotice] = React.useState<string>();

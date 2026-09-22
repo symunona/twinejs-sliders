@@ -32,6 +32,12 @@ import {
 	PromptValidationResponse
 } from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
+// Imported from the module rather than the barrel: the generator opens this dialog to
+// edit a generation, so the two files are a cycle either way, and going through
+// `../asset-generator` would drag the whole generator barrel into that cycle. Only
+// referenced inside a handler, so it is resolved long after both modules have run.
+import {AssetGeneratorDialog} from '../asset-generator/asset-generator';
+import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
@@ -58,6 +64,7 @@ import {
 } from './engine-types';
 import {NoteBody, NoteButton, useNote} from './editor-note';
 import {EditorSection} from './editor-section';
+import {EditorToolbar, ToolId, TOOL_IDS} from './editor-toolbar';
 import {
 	anchorAfterCrop,
 	canvasBlob,
@@ -143,6 +150,7 @@ function elapsedLabel(seconds: number): string {
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId, source: sourceImage} = props;
 	const store = useAssetStore();
+	const {dispatch} = useDialogsContext();
 	// Which passages write this asset's name, so the rename prompt can offer to carry them
 	// along -- the same list the asset browser's tiles show.
 	const usage = useAssetUsage();
@@ -188,6 +196,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 */
 	const [taken, setTaken] = React.useState<Set<string>>(new Set());
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
+	/**
+	 * Which control panel the right pane is showing. Colour first: it is the only tool
+	 * that is safe to open on, because it changes nothing until a slider moves, where
+	 * arriving in Sizing arms a crop drag on the very first click.
+	 */
+	const [tool, setTool] = React.useState<ToolId>('adjust');
 	const {t} = useTranslation();
 
 	/** Passages whose scenes write this asset's name. Empty while it has no name yet. */
@@ -433,6 +447,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		};
 	}
 
+	/**
+	 * Switching tools disarms anchor picking. It is a one-shot mode that only the Sizing
+	 * panel can turn on, so leaving that panel with it still armed would put a cursor on
+	 * the image that nothing onscreen explains.
+	 */
+	function selectTool(next: ToolId) {
+		setPicking(false);
+		setTool(next);
+	}
+
 	function handlePointerDown(event: React.PointerEvent) {
 		const point = imagePoint(event);
 
@@ -447,6 +471,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				roundAnchor({x: point.x / source.width, y: point.y / source.height})
 			);
 			setPicking(false);
+			return;
+		}
+
+		// Otherwise the drag is a crop, which belongs to the Sizing tool. Left live in
+		// every tool it was a trap: a drag meant as "scrub that slider" that started a
+		// pixel inside the image cropped instead, with no crop control in sight.
+		if (tool !== 'size') {
 			return;
 		}
 
@@ -575,6 +606,29 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			cancel.current = undefined;
 			setProgress(undefined);
 		}
+	}
+
+	/**
+	 * Opens the generator with this asset already attached, so "the same thing, but at
+	 * night" is one click rather than a close, a reopen and a hunt through the picker.
+	 *
+	 * What gets attached is the asset as the library holds it. The generator reads
+	 * bytes by id, and an edit that is still only in this dialog has no id--hence the
+	 * warning on the button whenever there is one.
+	 */
+	function handleGenerate() {
+		if (!meta) {
+			return;
+		}
+
+		// NOT maximized. Opening a maximized dialog un-maximizes every other one, and
+		// this editor is normally the maximized one -- losing that swaps the wrapper
+		// element React renders it in, so it remounts and the edit in progress is gone.
+		dispatch({
+			type: 'addDialog',
+			component: AssetGeneratorDialog,
+			props: {attach: [meta.id]}
+		});
 	}
 
 	/** The edited pixels, as a file the asset store will take. */
@@ -806,15 +860,19 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const anchorChanged =
 		!detached && !sameAnchor(origin, meta?.origin ?? DEFAULT_ANCHOR);
 
-	// Nothing to write yet if the image is untouched, which is the same test
-	// the two save buttons make.
-	const saveDisabled =
-		busy ||
-		!source ||
-		!edits ||
-		(!backgroundRemoved &&
-			!anchorChanged &&
-			isUnedited(edits, source.width, source.height));
+	/**
+	 * Something has been done to the image that no save has written down. Drives both
+	 * the save buttons and the toolbar's readout, from one test--a readout that could
+	 * say "unsaved" while the save buttons were greyed out would be worse than none.
+	 */
+	const dirty =
+		source !== undefined &&
+		edits !== undefined &&
+		(backgroundRemoved ||
+			anchorChanged ||
+			!isUnedited(edits, source.width, source.height));
+
+	const saveDisabled = busy || !source || !edits || !dirty;
 
 	useCommand({
 		enabled: !busy && !backgroundRemoved && !!background?.engine,
@@ -866,6 +924,55 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		run: () => setReplaceOpen(true),
 		scope: 'asset-editor'
 	});
+
+	/**
+	 * What the edit can become. Detached editing has one destination--back to whoever
+	 * opened the dialog--where a library asset has two, and the difference between them
+	 * is the whole reason both buttons say what they replace.
+	 */
+	const saveActions = detached ? (
+		<IconButton
+			commandId="assetEditor.saveAsNew"
+			disabled={saveDisabled}
+			icon={<IconDeviceFloppy />}
+			label={t('dialogs.assetEditor.apply')}
+			onClick={handleApply}
+			variant="create"
+		/>
+	) : (
+		<>
+			<PromptButton
+				commandId="assetEditor.saveAsNew"
+				disabled={saveDisabled}
+				icon={<IconFilePlus />}
+				label={t('dialogs.assetEditor.saveAsNew')}
+				onChange={event => setName(event.target.value)}
+				onChangeOpen={setSaveAsOpen}
+				onSubmit={handleSave}
+				open={saveAsOpen}
+				prompt={t('dialogs.assetEditor.saveAsPrompt')}
+				submitIcon={<IconFilePlus />}
+				submitLabel={t('dialogs.assetEditor.saveAsSubmit')}
+				submitVariant="create"
+				validate={validateSaveName}
+				value={name}
+			/>
+			<ConfirmButton
+				commandId="assetEditor.replace"
+				confirmVariant="danger"
+				disabled={saveDisabled}
+				icon={<IconDeviceFloppy />}
+				label={t('dialogs.assetEditor.replace')}
+				onChangeOpen={setReplaceOpen}
+				onConfirm={handleReplace}
+				open={replaceOpen}
+				prompt={t('dialogs.assetEditor.replacePrompt', {
+					name: meta?.name ?? ''
+				})}
+				variant="create"
+			/>
+		</>
+	);
 
 	return (
 		<DialogCard
@@ -927,316 +1034,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				</p>
 			)}
 			{source && edits ? (
-				<div className="asset-editor">
-					<div className="asset-editor-stage">
-						<div
-							className={classNames('asset-editor-canvas', {picking})}
-							onPointerDown={handlePointerDown}
-							onPointerMove={handlePointerMove}
-							onPointerUp={handlePointerUp}
-							ref={canvasBox}
-						>
-							<canvas ref={preview} />
-							{!detached && (
-								<AnchorOverlay
-									art={preview}
-									container={canvasBox}
-									label={t('components.anchorSelect.readout', {
-										x: origin.x.toFixed(3),
-										y: origin.y.toFixed(3)
-									})}
-									origin={origin}
-								/>
-							)}
-						</div>
-						<p className="asset-editor-hint">
-							{t(
-								picking
-									? 'dialogs.assetEditor.anchorHint'
-									: 'dialogs.assetEditor.cropHint'
-							)}
-						</p>
-					</div>
-					<div className="asset-editor-controls">
-						<EditorSection
-							icon={<IconAdjustments />}
-							note={adjustNote}
-							title={t('dialogs.assetEditor.adjust')}
-						>
-							<NoteBody kind="info" note={adjustNote}>
-								{t('dialogs.assetEditor.adjustNote')}
-							</NoteBody>
-							<AdjustSlider
-								label={t('dialogs.assetEditor.brightness')}
-								max={LEVEL_RANGE.max}
-								min={LEVEL_RANGE.min}
-								onChange={brightness => changeEdits({brightness})}
-								resetLabel={t('dialogs.assetEditor.reset')}
-								resetTo={0}
-								step={LEVEL_RANGE.step}
-								value={edits.brightness}
-							/>
-							<AdjustSlider
-								label={t('dialogs.assetEditor.contrast')}
-								max={LEVEL_RANGE.max}
-								min={LEVEL_RANGE.min}
-								onChange={contrast => changeEdits({contrast})}
-								resetLabel={t('dialogs.assetEditor.reset')}
-								resetTo={0}
-								step={LEVEL_RANGE.step}
-								value={edits.contrast}
-							/>
-							<AdjustSlider
-								label={t('dialogs.assetEditor.gamma')}
-								max={GAMMA_RANGE.max}
-								min={GAMMA_RANGE.min}
-								onChange={gamma => changeEdits({gamma})}
-								resetLabel={t('dialogs.assetEditor.reset')}
-								resetTo={1}
-								step={GAMMA_RANGE.step}
-								value={edits.gamma}
-							/>
-						</EditorSection>
-						<EditorSection
-							detail={`${edits.width}×${edits.height}`}
-							icon={<IconResize />}
-							note={sizeNote}
-							title={t('dialogs.assetEditor.size')}
-						>
-							<NoteBody kind="info" note={sizeNote}>
-								{t('dialogs.assetEditor.sizeNote')}
-							</NoteBody>
-							<div className="asset-editor-size">
-								<label className="asset-editor-number">
-									<span>{t('dialogs.assetEditor.width')}</span>
-									<input
-										min={1}
-										onChange={event => changeWidth(Number(event.target.value))}
-										type="number"
-										value={edits.width}
-									/>
-								</label>
-								<label className="asset-editor-number">
-									<span>{t('dialogs.assetEditor.height')}</span>
-									<input
-										min={1}
-										onChange={event => changeHeight(Number(event.target.value))}
-										type="number"
-										value={edits.height}
-									/>
-								</label>
-							</div>
-							<ButtonBar>
-								<CheckboxButton
-									icon={<IconLink />}
-									label={t('dialogs.assetEditor.lockAspect')}
-									onChange={setLockAspect}
-									value={lockAspect}
-								/>
-								<IconButton
-									disabled={
-										edits.width === edits.crop.w && edits.height === edits.crop.h
-									}
-									icon={<IconResize />}
-									label={t('dialogs.assetEditor.resetSize')}
-									onClick={() =>
-										changeEdits({height: edits.crop.h, width: edits.crop.w})
-									}
-								/>
-							</ButtonBar>
-						</EditorSection>
-						<EditorSection
-							detail={t('dialogs.assetEditor.cropDetail', {
-								height: edits.crop.h,
-								width: edits.crop.w,
-								x: edits.crop.x,
-								y: edits.crop.y
-							})}
-							icon={<IconCrop />}
-							title={t('dialogs.assetEditor.crop')}
-						>
-							<ButtonBar>
-								<IconButton
-									commandId="assetEditor.resetCrop"
-									disabled={!cropped}
-									icon={<IconCrop />}
-									label={t('dialogs.assetEditor.resetCrop')}
-									onClick={resetCrop}
-								/>
-							</ButtonBar>
-						</EditorSection>
-						{!detached && (
-							<EditorSection
-								icon={<IconTarget />}
-								note={anchorNote}
-								title={t('dialogs.assetEditor.anchor')}
-							>
-								<NoteBody kind="info" note={anchorNote}>
-									{t('dialogs.assetEditor.anchorNote')}
-								</NoteBody>
-								<AnchorSelect
-									disabled={busy}
-									onChange={setOrigin}
-									onChangePicking={setPicking}
-									origin={origin}
-									pickHint={t('dialogs.assetEditor.anchorHint')}
-									picking={picking}
-								/>
-							</EditorSection>
+				<>
+					<EditorToolbar
+						actions={saveActions}
+						dirty={dirty}
+						generateHint={t(
+							dirty
+								? 'dialogs.assetEditor.generateWithDirtyHint'
+								: 'dialogs.assetEditor.generateWithHint'
 						)}
-						<EditorSection
-							icon={<IconWand />}
-							title={t('dialogs.assetEditor.background')}
-						>
-							<ButtonBar>
-								<IconButton
-									commandId="assetEditor.removeBackground"
-									disabled={busy || backgroundRemoved || !background?.engine}
-									icon={<IconWand />}
-									label={t('dialogs.assetEditor.removeBackground')}
-									onClick={handleRemoveBackground}
-								/>
-								{onCpu && (
-									<span data-testid="asset-editor-cpu-warning">
-										<NoteButton
-											kind="warning"
-											label={t('dialogs.assetEditor.background')}
-											note={cpuNote}
-										/>
-									</span>
-								)}
-								<NoteButton
-									kind="info"
-									label={t('dialogs.assetEditor.background')}
-									note={engineNote}
-								/>
-								{progress && (
-									<IconButton
-										icon={<IconX />}
-										label={t('common.cancel')}
-										onClick={() => cancel.current?.abort()}
-									/>
-								)}
-								{backgroundRemoved && !progress && (
-									<IconButton
-										commandId="assetEditor.restoreBackground"
-										disabled={busy}
-										icon={<IconEraser />}
-										label={t('dialogs.assetEditor.restoreBackground')}
-										onClick={() => {
-											setAlpha(undefined);
-											setSource(original);
-										}}
-									/>
-								)}
-							</ButtonBar>
-							{onCpu && (
-								<NoteBody kind="warning" note={cpuNote}>
-									{t('dialogs.assetEditor.cpuWarning', {
-										reason: t(
-											background?.gpuReasonKey ??
-												'dialogs.assetEditor.needsWebGpu'
-										),
-										size: megabytes(background?.engine?.bytes ?? 0)
-									})}
-								</NoteBody>
-							)}
-							<NoteBody kind="info" note={engineNote}>
-								{background?.engine
-									? t(
-											onCpu
-												? 'dialogs.assetEditor.cpuEngineNote'
-												: 'dialogs.assetEditor.engineNote',
-											{
-												gpu:
-													webGpuDescription() ??
-													t('dialogs.assetEditor.unknownGpu'),
-												license: background.engine.license,
-												name: background.engine.label,
-												resolution: background.engine.resolution,
-												size: megabytes(background.engine.bytes)
-											}
-									  )
-									: background &&
-									  t(
-											background.support.reasonKey ??
-												'dialogs.assetEditor.needsWebGpu'
-									  )}
-							</NoteBody>
-							{alpha && !progress && (
-								<>
-									<AdjustSlider
-										label={t('dialogs.assetEditor.threshold')}
-										max={0.95}
-										min={0.05}
-										onChange={threshold => retune({...tuning, threshold})}
-										resetLabel={t('dialogs.assetEditor.reset')}
-										resetTo={DEFAULT_TUNING.threshold}
-										step={0.01}
-										value={tuning.threshold}
-									/>
-									<AdjustSlider
-										label={t('dialogs.assetEditor.softness')}
-										max={1}
-										min={0.02}
-										onChange={softness => retune({...tuning, softness})}
-										resetLabel={t('dialogs.assetEditor.reset')}
-										resetTo={DEFAULT_TUNING.softness}
-										step={0.02}
-										value={tuning.softness}
-									/>
-									<p className="asset-editor-detail">
-										{t('dialogs.assetEditor.tuningNote')}
-									</p>
-								</>
-							)}
-							{progress && (
-								<div className="asset-editor-progress" aria-busy>
-									<div
-										className={classNames('asset-editor-progress-track', {
-											indeterminate: progress.progress === undefined
-										})}
-									>
-										<div
-											className="asset-editor-progress-bar"
-											style={
-												progress.progress === undefined
-													? undefined
-													: {width: `${Math.round(progress.progress * 100)}%`}
-											}
-										/>
-									</div>
-									<p className="asset-editor-detail" role="status">
-										<span className="asset-editor-step">
-											{t('dialogs.assetEditor.step', {
-												step: STAGE_STEPS[progress.stage],
-												steps: STAGE_COUNT
-											})}
-										</span>{' '}
-										{t(stageKey(progress, onCpu), {
-											percent: Math.round((progress.progress ?? 0) * 100)
-										})}{' '}
-										<span className="asset-editor-elapsed">
-											{elapsedLabel(elapsed)}
-										</span>
-									</p>
-									{elapsed >= SLOW_SECONDS && (
-										<p className="asset-editor-detail">
-											{t(
-												onCpu
-													? 'dialogs.assetEditor.cpuSlowNote'
-													: 'dialogs.assetEditor.slowNote'
-											)}
-										</p>
-									)}
-								</div>
-							)}
-						</EditorSection>
-						<EditorSection
-							icon={<IconDeviceFloppy />}
-							note={saveNote}
-							title={t('dialogs.assetEditor.save')}
-						>
+						note={
 							<NoteBody kind="info" note={saveNote}>
 								{detached
 									? t('dialogs.assetEditor.applyNote', {
@@ -1248,54 +1055,351 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 											width: edits.width
 									  })}
 							</NoteBody>
-							<ButtonBar>
-								{detached ? (
-									<IconButton
-										commandId="assetEditor.saveAsNew"
-										disabled={saveDisabled}
-										icon={<IconDeviceFloppy />}
-										label={t('dialogs.assetEditor.apply')}
-										onClick={handleApply}
-										variant="create"
+						}
+						noteButton={
+							<NoteButton
+								kind="info"
+								label={t('dialogs.assetEditor.save')}
+								note={saveNote}
+							/>
+						}
+						onGenerate={detached ? undefined : handleGenerate}
+						onSelectTool={selectTool}
+						tool={tool}
+						tools={TOOL_IDS}
+					/>
+					<div className="asset-editor">
+						<div className="asset-editor-stage">
+							<div
+								className={classNames('asset-editor-canvas', {picking})}
+								onPointerDown={handlePointerDown}
+								onPointerMove={handlePointerMove}
+								onPointerUp={handlePointerUp}
+								ref={canvasBox}
+							>
+								<canvas ref={preview} />
+								{!detached && (
+									<AnchorOverlay
+										art={preview}
+										container={canvasBox}
+										label={t('components.anchorSelect.readout', {
+											x: origin.x.toFixed(3),
+											y: origin.y.toFixed(3)
+										})}
+										origin={origin}
 									/>
-								) : (
-									<>
-										<ConfirmButton
-											commandId="assetEditor.replace"
-											confirmVariant="danger"
-											disabled={saveDisabled}
-											icon={<IconDeviceFloppy />}
-											label={t('dialogs.assetEditor.replace')}
-											onChangeOpen={setReplaceOpen}
-											onConfirm={handleReplace}
-											open={replaceOpen}
-											prompt={t('dialogs.assetEditor.replacePrompt', {
-												name: meta?.name ?? ''
-											})}
-											variant="create"
-										/>
-										<PromptButton
-											commandId="assetEditor.saveAsNew"
-											disabled={saveDisabled}
-											icon={<IconFilePlus />}
-											label={t('dialogs.assetEditor.saveAsNew')}
-											onChange={event => setName(event.target.value)}
-											onChangeOpen={setSaveAsOpen}
-											onSubmit={handleSave}
-											open={saveAsOpen}
-											prompt={t('dialogs.assetEditor.saveAsPrompt')}
-											submitIcon={<IconFilePlus />}
-											submitLabel={t('dialogs.assetEditor.saveAsSubmit')}
-											submitVariant="create"
-											validate={validateSaveName}
-											value={name}
-										/>
-									</>
 								)}
-							</ButtonBar>
-						</EditorSection>
+							</div>
+							<p className="asset-editor-hint">
+								{t(
+									picking
+										? 'dialogs.assetEditor.anchorHint'
+										: tool === 'size'
+										? 'dialogs.assetEditor.cropHint'
+										: 'dialogs.assetEditor.sizeToolHint'
+								)}
+							</p>
+						</div>
+						<div className="asset-editor-controls">
+							{tool === 'adjust' && (
+								<EditorSection
+									icon={<IconAdjustments />}
+									note={adjustNote}
+									title={t('dialogs.assetEditor.adjust')}
+								>
+									<NoteBody kind="info" note={adjustNote}>
+										{t('dialogs.assetEditor.adjustNote')}
+									</NoteBody>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.brightness')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={brightness => changeEdits({brightness})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.brightness}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.contrast')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={contrast => changeEdits({contrast})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.contrast}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.gamma')}
+										max={GAMMA_RANGE.max}
+										min={GAMMA_RANGE.min}
+										onChange={gamma => changeEdits({gamma})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={1}
+										step={GAMMA_RANGE.step}
+										value={edits.gamma}
+									/>
+								</EditorSection>
+							)}
+							{tool === 'size' && (
+								<>
+									<EditorSection
+										detail={`${edits.width}×${edits.height}`}
+										icon={<IconResize />}
+										note={sizeNote}
+										title={t('dialogs.assetEditor.size')}
+									>
+										<NoteBody kind="info" note={sizeNote}>
+											{t('dialogs.assetEditor.sizeNote')}
+										</NoteBody>
+										<div className="asset-editor-size">
+											<label className="asset-editor-number">
+												<span>{t('dialogs.assetEditor.width')}</span>
+												<input
+													min={1}
+													onChange={event =>
+														changeWidth(Number(event.target.value))
+													}
+													type="number"
+													value={edits.width}
+												/>
+											</label>
+											<label className="asset-editor-number">
+												<span>{t('dialogs.assetEditor.height')}</span>
+												<input
+													min={1}
+													onChange={event =>
+														changeHeight(Number(event.target.value))
+													}
+													type="number"
+													value={edits.height}
+												/>
+											</label>
+										</div>
+										<ButtonBar>
+											<CheckboxButton
+												icon={<IconLink />}
+												label={t('dialogs.assetEditor.lockAspect')}
+												onChange={setLockAspect}
+												value={lockAspect}
+											/>
+											<IconButton
+												disabled={
+													edits.width === edits.crop.w &&
+													edits.height === edits.crop.h
+												}
+												icon={<IconResize />}
+												label={t('dialogs.assetEditor.resetSize')}
+												onClick={() =>
+													changeEdits({
+														height: edits.crop.h,
+														width: edits.crop.w
+													})
+												}
+											/>
+										</ButtonBar>
+									</EditorSection>
+									<EditorSection
+										detail={t('dialogs.assetEditor.cropDetail', {
+											height: edits.crop.h,
+											width: edits.crop.w,
+											x: edits.crop.x,
+											y: edits.crop.y
+										})}
+										icon={<IconCrop />}
+										title={t('dialogs.assetEditor.crop')}
+									>
+										<ButtonBar>
+											<IconButton
+												commandId="assetEditor.resetCrop"
+												disabled={!cropped}
+												icon={<IconCrop />}
+												label={t('dialogs.assetEditor.resetCrop')}
+												onClick={resetCrop}
+											/>
+										</ButtonBar>
+									</EditorSection>
+									{!detached && (
+										<EditorSection
+											icon={<IconTarget />}
+											note={anchorNote}
+											title={t('dialogs.assetEditor.anchor')}
+										>
+											<NoteBody kind="info" note={anchorNote}>
+												{t('dialogs.assetEditor.anchorNote')}
+											</NoteBody>
+											<AnchorSelect
+												disabled={busy}
+												onChange={setOrigin}
+												onChangePicking={setPicking}
+												origin={origin}
+												pickHint={t('dialogs.assetEditor.anchorHint')}
+												picking={picking}
+											/>
+										</EditorSection>
+									)}
+								</>
+							)}
+							{tool === 'background' && (
+								<EditorSection
+									icon={<IconWand />}
+									title={t('dialogs.assetEditor.background')}
+								>
+									<ButtonBar>
+										<IconButton
+											commandId="assetEditor.removeBackground"
+											disabled={
+												busy || backgroundRemoved || !background?.engine
+											}
+											icon={<IconWand />}
+											label={t('dialogs.assetEditor.removeBackground')}
+											onClick={handleRemoveBackground}
+										/>
+										{onCpu && (
+											<span data-testid="asset-editor-cpu-warning">
+												<NoteButton
+													kind="warning"
+													label={t('dialogs.assetEditor.background')}
+													note={cpuNote}
+												/>
+											</span>
+										)}
+										<NoteButton
+											kind="info"
+											label={t('dialogs.assetEditor.background')}
+											note={engineNote}
+										/>
+										{progress && (
+											<IconButton
+												icon={<IconX />}
+												label={t('common.cancel')}
+												onClick={() => cancel.current?.abort()}
+											/>
+										)}
+										{backgroundRemoved && !progress && (
+											<IconButton
+												commandId="assetEditor.restoreBackground"
+												disabled={busy}
+												icon={<IconEraser />}
+												label={t('dialogs.assetEditor.restoreBackground')}
+												onClick={() => {
+													setAlpha(undefined);
+													setSource(original);
+												}}
+											/>
+										)}
+									</ButtonBar>
+									{onCpu && (
+										<NoteBody kind="warning" note={cpuNote}>
+											{t('dialogs.assetEditor.cpuWarning', {
+												reason: t(
+													background?.gpuReasonKey ??
+														'dialogs.assetEditor.needsWebGpu'
+												),
+												size: megabytes(background?.engine?.bytes ?? 0)
+											})}
+										</NoteBody>
+									)}
+									<NoteBody kind="info" note={engineNote}>
+										{background?.engine
+											? t(
+													onCpu
+														? 'dialogs.assetEditor.cpuEngineNote'
+														: 'dialogs.assetEditor.engineNote',
+													{
+														gpu:
+															webGpuDescription() ??
+															t('dialogs.assetEditor.unknownGpu'),
+														license: background.engine.license,
+														name: background.engine.label,
+														resolution: background.engine.resolution,
+														size: megabytes(background.engine.bytes)
+													}
+											  )
+											: background &&
+											  t(
+													background.support.reasonKey ??
+														'dialogs.assetEditor.needsWebGpu'
+											  )}
+									</NoteBody>
+									{alpha && !progress && (
+										<>
+											<AdjustSlider
+												label={t('dialogs.assetEditor.threshold')}
+												max={0.95}
+												min={0.05}
+												onChange={threshold => retune({...tuning, threshold})}
+												resetLabel={t('dialogs.assetEditor.reset')}
+												resetTo={DEFAULT_TUNING.threshold}
+												step={0.01}
+												value={tuning.threshold}
+											/>
+											<AdjustSlider
+												label={t('dialogs.assetEditor.softness')}
+												max={1}
+												min={0.02}
+												onChange={softness => retune({...tuning, softness})}
+												resetLabel={t('dialogs.assetEditor.reset')}
+												resetTo={DEFAULT_TUNING.softness}
+												step={0.02}
+												value={tuning.softness}
+											/>
+											<p className="asset-editor-detail">
+												{t('dialogs.assetEditor.tuningNote')}
+											</p>
+										</>
+									)}
+									{progress && (
+										<div className="asset-editor-progress" aria-busy>
+											<div
+												className={classNames('asset-editor-progress-track', {
+													indeterminate: progress.progress === undefined
+												})}
+											>
+												<div
+													className="asset-editor-progress-bar"
+													style={
+														progress.progress === undefined
+															? undefined
+															: {
+																	width: `${Math.round(
+																		progress.progress * 100
+																	)}%`
+															  }
+													}
+												/>
+											</div>
+											<p className="asset-editor-detail" role="status">
+												<span className="asset-editor-step">
+													{t('dialogs.assetEditor.step', {
+														step: STAGE_STEPS[progress.stage],
+														steps: STAGE_COUNT
+													})}
+												</span>{' '}
+												{t(stageKey(progress, onCpu), {
+													percent: Math.round((progress.progress ?? 0) * 100)
+												})}{' '}
+												<span className="asset-editor-elapsed">
+													{elapsedLabel(elapsed)}
+												</span>
+											</p>
+											{elapsed >= SLOW_SECONDS && (
+												<p className="asset-editor-detail">
+													{t(
+														onCpu
+															? 'dialogs.assetEditor.cpuSlowNote'
+															: 'dialogs.assetEditor.slowNote'
+													)}
+												</p>
+											)}
+										</div>
+									)}
+								</EditorSection>
+							)}
+						</div>
 					</div>
-				</div>
+				</>
 			) : (
 				!error && (
 					<p className="sliders-empty">{t('dialogs.assetEditor.loading')}</p>
