@@ -119,10 +119,16 @@ each body makes that answerable rather than mysterious: `POST /restore` returns
 
 ### In the UI
 
-**History…** in the story-edit route menu. One list, newest first: *when*, *who*, passage
-count, size, and a **Restore** button per row; the current version sits at the top marked
-*now*. Restore asks once ("Restore the version from 10:12 by mira? The current version
-stays in history."), then the story updates in place. No diffing, no branching.
+**History…** in the story-edit route menu. One list, newest first: *when*, *who*, the
+version's words, passage count, size, and a **Restore** button per row; the current version
+sits at the top marked *now*. Restore asks once ("Restore the version from 10:12 by mira?
+The current version stays in history."), then the story updates in place. No diffing, no
+branching.
+
+The words are the `label` if a human typed one, else the client's `summary`, else nothing.
+A pencil per row edits the label — an empty submit clears it and the row falls back to the
+summary — and a pin toggle marks the row and takes it out of the prune. Both work on the
+top row too. A `revmeta` on the bus makes an open dialog re-list.
 
 ### Labels, pins and summaries
 

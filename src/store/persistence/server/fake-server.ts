@@ -36,7 +36,7 @@
  *
  * # What it is NOT
  *
- * No auth, no revision history bodies, no size limits, no gzip, no disk. Add those here
+ * No auth, no revision BODIES, no size limits, no gzip, no disk. Add those here
  * when a test needs them rather than reaching for the real server — a test that needs the
  * real server should be an e2e spec.
  */
@@ -53,6 +53,9 @@ import type {
 	PingResponse,
 	PutStoryResponse,
 	RestoreResponse,
+	RevisionEntry,
+	RevisionMetaRequest,
+	RevisionMetaResponse,
 	RevisionsResponse,
 	ServerMessage,
 	StoryIndexEntry,
@@ -75,6 +78,22 @@ interface StoredStory {
 	assetRev: number;
 	assets: AssetManifestBody;
 	blobs: Map<string, {bytes: number; hash: string; blob: Blob}>;
+	/**
+	 * Rows for versions that have been replaced, newest first. No bodies — the real
+	 * server keeps `revs/<rev>.json.gz` beside each of these and nothing here reads one.
+	 */
+	revisions: RevisionEntry[];
+	/**
+	 * Label, pin and summary for the CURRENT version.
+	 *
+	 * Kept apart from the rows because that is where the real server keeps them:
+	 * `meta.json` holds the current version's three fields, and they move onto a row the
+	 * moment that version is replaced. Labelling the top row of the History dialog is the
+	 * case this exists for.
+	 */
+	currentMeta: {label: string; pinned: boolean; summary: string};
+	/** Set when the CURRENT version was itself produced by a restore. */
+	currentRestoredFrom?: number;
 }
 
 export interface FakeServerOptions {
@@ -89,9 +108,18 @@ export interface FakeServerOptions {
 	notify?: (message: ServerMessage, by: FakeOrigin) => void;
 	/** Frozen clock, so `updatedAt` is assertable. Defaults to a fixed instant. */
 	now?: () => string;
+	/** `PINNED_MAX`. Lowered in a test that wants to reach the cap in two clicks. */
+	pinnedMax?: number;
 }
 
 const DEFAULT_NOW = '2026-01-01T00:00:00.000Z';
+
+/**
+ * Written as escapes on purpose: a literal control byte in a source string makes git call
+ * the file binary while every test keeps passing. See `.claude/TRAPS.md`.
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/g;
 
 function clone<T>(value: T): T {
 	return JSON.parse(JSON.stringify(value)) as T;
@@ -111,7 +139,19 @@ export interface FakeServer {
 	/** A `ServerClient` bound to this store. Call twice for two clients. */
 	client(options?: {id?: string; name?: string}): ServerClient;
 	/** Put a story in without going through a client. For arranging a test. */
-	seed(story: Story, options?: {rev?: number; lastClient?: string}): void;
+	seed(
+		story: Story,
+		options?: {
+			rev?: number;
+			lastClient?: string;
+			/**
+			 * Rows for versions already replaced, newest first. Arranging a history
+			 * through writes means one whole story body per row, which says nothing a
+			 * test about the History dialog is asking.
+			 */
+			revisions?: RevisionEntry[];
+		}
+	): void;
 	/** The story as the server holds it, or undefined. */
 	stored(id: string): Story | undefined;
 	revOf(id: string): number;
@@ -145,6 +185,7 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 	let failures = 0;
 	let failureError: ServerError | undefined;
 
+	const pinnedMax = options.pinnedMax ?? 50;
 	const notify = (message: ServerMessage, by: FakeOrigin) =>
 		options.notify?.(message, by);
 
@@ -195,10 +236,65 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 			assets: {assets: [], characters: [], version: 1},
 			blobs: new Map(),
 			body: onTheWire(story),
+			currentMeta: {label: '', pinned: false, summary: ''},
 			deleted: false,
 			lastClient: '',
 			rev: 0,
+			revisions: [],
 			updatedAt: now()
+		};
+	}
+
+	/**
+	 * Move the current version onto a row, the way the real server gzips the previous
+	 * body into `revs/<oldRev>.json.gz` and rewrites `revs/index.json` on the way past.
+	 *
+	 * The three meta fields travel with it: they lived on `meta.json` while that version
+	 * was current, and land on its row now that it is not. `hash` is a stand-in — nothing
+	 * here stores bodies, so there is nothing to hash and nothing reads it.
+	 */
+	function archiveCurrent(entry: StoredStory): void {
+		if (entry.rev === 0) {
+			return;
+		}
+
+		entry.revisions.unshift({
+			at: entry.updatedAt,
+			bytes: JSON.stringify(entry.body).length,
+			client: entry.lastClient,
+			hash: `fake-${entry.rev}`,
+			passages: entry.body.passages.length,
+			rev: entry.rev,
+			...(entry.currentMeta.label ? {label: entry.currentMeta.label} : {}),
+			...(entry.currentMeta.pinned ? {pinned: true} : {}),
+			...(entry.currentMeta.summary ? {summary: entry.currentMeta.summary} : {}),
+			...(entry.currentRestoredFrom === undefined
+				? {}
+				: {restoredFrom: entry.currentRestoredFrom})
+		});
+	}
+
+	/**
+	 * The current version as a row.
+	 *
+	 * It has no entry in `revs/index.json` on the real server either — it is assembled
+	 * from `meta.json` every time the list is asked for, which is exactly why its label
+	 * and pin have to live somewhere other than the rows.
+	 */
+	function currentRow(entry: StoredStory): RevisionEntry {
+		return {
+			at: entry.updatedAt,
+			bytes: JSON.stringify(entry.body).length,
+			client: entry.lastClient,
+			hash: `fake-${entry.rev}`,
+			passages: entry.body.passages.length,
+			rev: entry.rev,
+			...(entry.currentMeta.label ? {label: entry.currentMeta.label} : {}),
+			...(entry.currentMeta.pinned ? {pinned: true} : {}),
+			...(entry.currentMeta.summary ? {summary: entry.currentMeta.summary} : {}),
+			...(entry.currentRestoredFrom === undefined
+				? {}
+				: {restoredFrom: entry.currentRestoredFrom})
 		};
 	}
 
@@ -206,7 +302,8 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 		story: Story,
 		ifMatch: number | undefined,
 		by: FakeOrigin,
-		revive: boolean
+		revive: boolean,
+		summary?: string
 	): PutStoryResponse {
 		const existing = stories.get(story.id);
 
@@ -231,6 +328,9 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 
 		const entry = existing ?? blank(story);
 
+		archiveCurrent(entry);
+		entry.currentMeta = {label: '', pinned: false, summary: summary ?? ''};
+		entry.currentRestoredFrom = undefined;
 		entry.body = onTheWire(story);
 		// Always. Rev is the write counter, not a content version: an autosave that
 		// changed nothing still moves it, and a fake that skipped the bump would hide
@@ -318,18 +418,20 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 
 			async putStory(
 				story: Story,
-				ifMatch?: number
+				ifMatch?: number,
+				putOptions: {summary?: string} = {}
 			): Promise<PutStoryResponse> {
 				record('putStory', story.id);
 				maybeFail();
 
-				return write(story, ifMatch, by, false);
+				return write(story, ifMatch, by, false, putOptions.summary);
 			},
 
 			async patchStory(
 				id: string,
 				patch: StoryPatch,
-				ifMatch: number
+				ifMatch: number,
+				patchOptions: {summary?: string} = {}
 			): Promise<PatchStoryResponse> {
 				record('patchStory', id);
 				maybeFail();
@@ -373,7 +475,13 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 
 				patches.push({bytes: body.length, by: by.id, id, patch: wire});
 
-				return write(applyPassageDiff(entry.body, wire), ifMatch, by, false);
+				return write(
+					applyPassageDiff(entry.body, wire),
+					ifMatch,
+					by,
+					false,
+					patchOptions.summary
+				);
 			},
 
 			async reviveStory(story: Story): Promise<PutStoryResponse> {
@@ -501,8 +609,16 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 
 			async listRevisions(id: string): Promise<RevisionsResponse> {
 				record('listRevisions', id);
+				maybeFail();
 
-				return {current: require(id).rev, revisions: []};
+				const entry = require(id);
+
+				// Newest first, with the CURRENT version as the first row — the real
+				// list is built the same way, from `meta.json` plus `revs/index.json`.
+				return clone({
+					current: entry.rev,
+					revisions: [currentRow(entry), ...entry.revisions]
+				});
 			},
 
 			async getRevision(id: string): Promise<Story> {
@@ -516,16 +632,103 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 				rev: number
 			): Promise<RestoreResponse> {
 				record('restoreRevision', id);
+				maybeFail();
 
 				const entry = require(id);
 
+				// An ordinary write on the real server: the version being replaced
+				// becomes a row of its own, so a restore never destroys anything. No
+				// body is copied here because this fake keeps none.
+				archiveCurrent(entry);
+				entry.currentMeta = {label: '', pinned: false, summary: ''};
+				entry.currentRestoredFrom = rev;
 				entry.rev += 1;
+				entry.updatedAt = now();
+				entry.lastClient = by.name;
+
+				notify({by: by.name, id, rev: entry.rev, t: 'story'}, by);
 
 				return {
 					id,
 					missingAssets: [],
 					restoredFrom: rev,
 					rev: entry.rev
+				};
+			},
+
+			async setRevisionMeta(
+				id: string,
+				rev: number,
+				meta: RevisionMetaRequest
+			): Promise<RevisionMetaResponse> {
+				record('setRevisionMeta', id);
+				maybeFail();
+
+				// Neither field is nothing to do, and the real handler says so before it
+				// touches the store.
+				if (
+					(meta.label === undefined || meta.label === null) &&
+					(meta.pinned === undefined || meta.pinned === null)
+				) {
+					throw new ServerError(
+						'body must carry `label`, `pinned` or both',
+						{code: 'bad_request', status: 400}
+					);
+				}
+
+				const entry = require(id);
+				const row =
+					rev === entry.rev
+						? entry.currentMeta
+						: entry.revisions.find(revision => revision.rev === rev);
+
+				if (!row) {
+					throw new ServerError(`no revision ${rev}`, {
+						code: 'not_found',
+						status: 404
+					});
+				}
+
+				const was = {
+					label: row.label ?? '',
+					pinned: row.pinned ?? false
+				};
+				const label =
+					meta.label === undefined || meta.label === null
+						? was.label
+						: [...meta.label.replace(CONTROL_CHARS, '')].slice(0, 120).join('');
+				const pinned =
+					meta.pinned === undefined || meta.pinned === null
+						? was.pinned
+						: meta.pinned;
+
+				// The cap counts what the story holds now, current version included, and
+				// only bites when this call would ADD one. Unpinning is never refused.
+				const pins =
+					(entry.currentMeta.pinned ? 1 : 0) +
+					entry.revisions.filter(revision => revision.pinned).length;
+
+				if (pinned && !was.pinned && pins >= pinnedMax) {
+					throw new ServerError(
+						`story already has ${pins} pinned revisions (PINNED_MAX); ` +
+							'unpin one before pinning another',
+						{code: 'bad_request', status: 400}
+					);
+				}
+
+				row.label = label;
+				row.pinned = pinned;
+
+				notify({id, rev, t: 'revmeta'}, by);
+
+				return {
+					id,
+					label,
+					pinned,
+					pinnedMax,
+					pins: pins + (pinned === was.pinned ? 0 : pinned ? 1 : -1),
+					rev,
+					summary: row.summary ?? ''
 				};
 			}
 		};
@@ -554,6 +757,9 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 
 			entry.rev = seedOptions?.rev ?? 1;
 			entry.lastClient = seedOptions?.lastClient ?? 'seed';
+			entry.revisions = (seedOptions?.revisions ?? []).map(revision => ({
+				...revision
+			}));
 			stories.set(story.id, entry);
 		},
 		stored: id => {

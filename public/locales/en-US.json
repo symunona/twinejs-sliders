@@ -902,7 +902,15 @@
 			"restoring": "Restoring…",
 			"restoreConfirm": "Restore the version from {{date}} by {{client}}? The current version stays in history.",
 			"restoreError": "That version couldn't be restored: {{message}}",
-			"missingAssets": "{{count}} pictures from that version are no longer on the server."
+			"missingAssets": "{{count}} pictures from that version are no longer on the server.",
+			"label": "Label",
+			"labelPlaceholder": "What happened in this version?",
+			"editLabel": "Edit label",
+			"saveLabel": "Save label",
+			"pin": "Pin this version",
+			"unpin": "Unpin this version",
+			"pinned": "pinned",
+			"metaError": "That version couldn't be updated:"
 		}
 	},
 	"electron": {
