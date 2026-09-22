@@ -395,13 +395,15 @@
 				"adjust": "Color",
 				"background": "Background",
 				"mask": "Mask",
-				"size": "Sizing"
+				"size": "Sizing",
+				"effect": "Effect"
 			},
 			"toolHint": {
 				"adjust": "Color \u2014 brightness, contrast and gamma.",
 				"background": "Background \u2014 cut the subject out of its background.",
 				"mask": "Mask \u2014 cut holes by hand, where no model is going to find the edge for you.",
-				"size": "Sizing \u2014 anchor, resize and crop."
+				"size": "Sizing \u2014 anchor, resize and crop.",
+				"effect": "Effect \u2014 a live look drawn over the asset. Changes no pixels."
 			},
 			"generateWith": "Generate From This",
 			"generateWithHint": "Opens the image generator with this asset attached as context.",

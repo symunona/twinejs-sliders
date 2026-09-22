@@ -115,7 +115,8 @@ resolves against the DOCUMENT and the published player is one HTML file.
 | Consumer | How |
 |---|---|
 | Asset editor preview | `EffectPreview` copies the preview canvas to a data URL, `syncEffect`. |
-| Renderer / player | `DomRenderer.applyEffect`, overlay inside the sprite box. |
+| Renderer, entity | `DomRenderer.applyEffect`, overlay inside the sprite box. |
+| Renderer, backdrop | `DomRenderer.syncBgEffect`, own element in the bg layer. |
 
 Same `syncEffect`, same generated CSS, same layers. What the author approves IS what the
 reader sees — the rule from `.claude/ARCHITECTURE.md`.
@@ -129,6 +130,15 @@ Renderer notes:
 - `pointer-events: none`, invisible to `measure()`, `rectOf` and the visual editor's hit
   tests. A tear that moved an anchor would drag every speech bubble with it.
 - A placeholder gets no overlay — no pixels to tear.
+
+Backdrop is a SEPARATE path. `bg:` is not an entity: it is the stage, `object-fit: cover`,
+with a twin sliding behind it for the scrolling motions, and an `<img>` is a replaced element
+so nothing can be parented to it. So the overlay is its own element, last in the bg layer,
+always `cover`. `resolveAll` primes the bg's meta alongside its url, because `setBackdrop` is
+synchronous and an awaited effect would land a frame after its picture.
+
+Not cross-faded with the backdrop swap. A tear fading in over a picture that is itself fading
+in is one muddy dissolve; the effect is cheap to simply cut.
 
 ## Accessibility
 
@@ -147,6 +157,8 @@ two phases sampled to prove bands move independently.
 ## Not done
 
 - Scene YAML cannot set or override an effect. Asset-wide only.
+- Changing an asset's effect does not re-draw a backdrop already on screen: `setBackdrop`
+  early-returns on the same id. Swap scenes, or reload.
 - One effect per asset.
 - No second effect family. `EffectKind` is a discriminant so adding one does not reshape
   `AssetEffect`.

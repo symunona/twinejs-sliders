@@ -197,3 +197,65 @@ describe('entity effects', () => {
 		expect(layer.style.objectPosition).toBe(img.style.objectPosition);
 	});
 });
+
+describe('backdrop effects', () => {
+	beforeEach(() => {
+		document.head.innerHTML = '';
+		document.body.innerHTML = '';
+	});
+
+	function bgFx(mount: HTMLElement): HTMLElement | null {
+		return mount.querySelector(
+			".sliders-layer[data-layer='bg'] .sliders-fx"
+		);
+	}
+
+	function bgStage(bg: string): Stage {
+		return {...stage([]), bg};
+	}
+
+	it('draws the effect a bg asset carries', async () => {
+		// `bg:` is a backdrop, not an entity, so it goes down a different path entirely --
+		// and it is the case a glitch is most often wanted for.
+		const {mount, renderer} = await mounted({
+			assets: {street: {effect: GLITCH}}
+		});
+
+		await renderer.apply(bgStage('street'), []);
+
+		const fx = bgFx(mount);
+
+		expect(fx).not.toBeNull();
+		expect(fx!.dataset.fxFit).toBe('cover');
+		expect(fx!.querySelectorAll('.sliders-fx-layer').length).toBeGreaterThan(0);
+	});
+
+	it('leaves a plain backdrop alone', async () => {
+		const {mount, renderer} = await mounted();
+
+		await renderer.apply(bgStage('street'), []);
+		expect(bgFx(mount)).toBeNull();
+	});
+
+	it('takes the overlay away when the backdrop changes to a plain one', async () => {
+		const {mount, renderer} = await mounted({
+			assets: {street: {effect: GLITCH}, field: {}}
+		});
+
+		await renderer.apply(bgStage('street'), []);
+		expect(bgFx(mount)).not.toBeNull();
+
+		await renderer.apply(bgStage('field'), []);
+		expect(bgFx(mount)).toBeNull();
+	});
+
+	it('draws nothing behind a missing backdrop placeholder', async () => {
+		const {mount, renderer} = await mounted({
+			assets: {street: {effect: GLITCH}},
+			missing: ['street']
+		});
+
+		await renderer.apply(bgStage('street'), []);
+		expect(bgFx(mount)).toBeNull();
+	});
+});
