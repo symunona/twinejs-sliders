@@ -1,0 +1,17 @@
+.nav-confirm-backdrop {
+	align-items: center;
+	background: rgba(0, 0, 0, 0.35);
+	bottom: 0;
+	display: flex;
+	justify-content: center;
+	left: 0;
+	position: fixed;
+	right: 0;
+	top: 0;
+	/* Above .main-content-grab-listener, the highest thing in the app. */
+	z-index: 100000;
+}
+
+.nav-confirm {
+	max-width: 30rem;
+}

@@ -14,6 +14,7 @@ import {
 	useCreateLinkedPassage,
 	useUndoableStoriesContext
 } from '../../store/undoable-stories';
+import {LeaveStoryPrompt} from './leave-story-prompt';
 import {MarqueeablePassageMap} from './marqueeable-passage-map';
 import {PassageFuzzyFinder} from './passage-fuzzy-finder';
 import {ScenePreviewAutoOpen} from './scene-preview-auto-open';
@@ -140,6 +141,7 @@ export const StoryEditRoute: React.FC = () => {
 	return (
 		<AssetScopeProvider storyId={storyId}>
 			<UndoableStoriesContextProvider>
+				<LeaveStoryPrompt />
 				<ScenePreviewSourceProvider>
 					<DialogsContextProvider>
 						<InnerStoryEditRoute />

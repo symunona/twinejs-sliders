@@ -17,6 +17,7 @@ import {onStoryPulled} from '../persistence/server';
 
 export const UndoableStoriesContext =
 	React.createContext<UndoableStoriesContextProps>({
+		changeCount: 0,
 		dispatch: () => {},
 		stories: []
 	});
@@ -85,6 +86,7 @@ export const UndoableStoriesContextProvider: React.FC = props => {
 	return (
 		<UndoableStoriesContext.Provider
 			value={{
+				changeCount: state.changes.length,
 				dispatch: dispatchAndRecordStoryAction,
 				redo,
 				redoLabel,

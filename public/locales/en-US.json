@@ -954,6 +954,10 @@
 		}
 	},
 	"routes": {
+		"navConfirm": {
+			"leave": "Go Back to Stories",
+			"stay": "Keep Editing"
+		},
 		"storyEdit": {
 			"buildInfo": {
 				"daysAgo": "build from {{value}}d ago",
@@ -995,7 +999,8 @@
 			"presence": {
 				"editingPassage": "{{name}} is editing this passage",
 				"inStory": "Also in this story: {{names}}"
-			}
+			},
+			"leaveConfirm": "Go back to your stories? Your changes are saved, but the undo history for this session will be lost."
 		},
 		"storyList": {
 			"library": "Library",

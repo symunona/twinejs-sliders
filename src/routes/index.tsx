@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {HashRouter, Route, Switch} from 'react-router-dom';
 import {usePrefsContext} from '../store/prefs';
+import {NavConfirm, useNavConfirm} from './nav-confirm';
 import {StoryEditRoute} from './story-edit';
 import {StoryListRoute} from './story-list';
 import {StoryPlayRoute} from './story-play';
@@ -10,6 +11,7 @@ import {WelcomeRoute} from './welcome';
 
 export const Routes: React.FC = () => {
 	const {prefs} = usePrefsContext();
+	const {getUserConfirmation, request} = useNavConfirm();
 
 	// A <HashRouter> is used to make our lives easier--to load local story
 	// formats, we need the document HREF to reflect where the HTML file is.
@@ -17,7 +19,8 @@ export const Routes: React.FC = () => {
 	// differ between web and Electron contexts.
 
 	return (
-		<HashRouter>
+		<HashRouter getUserConfirmation={getUserConfirmation}>
+			<NavConfirm request={request} />
 			{prefs.welcomeSeen ? (
 				<Switch>
 					<Route exact path="/">
