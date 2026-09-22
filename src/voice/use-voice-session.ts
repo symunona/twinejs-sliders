@@ -10,6 +10,7 @@
 import * as React from 'react';
 import {useUndoableStoriesContext} from '../store/undoable-stories';
 import {createToolRunner} from './runner';
+import type {ToolRunner} from './runner';
 import {voiceToolsByName} from './tools';
 import type {ToolResult, TranscriptRow, VoiceToolEnv} from './voice.types';
 
@@ -84,15 +85,19 @@ export interface VoiceSession {
 export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 	const [rows, setRows] = React.useState<TranscriptRow[]>([]);
 	const {undo, undoLabel} = useUndoableStoriesContext();
-	// One runner per session, so the `read before write` gate is per session — which is
-	// what it is for. Rebuilding it on an env change would silently re-arm every write.
-	const runner = React.useRef(createToolRunner(env));
-	const envRef = React.useRef(env);
+	/*
+	 * One runner per session, so the `read before write` gate is per session — which is
+	 * what it is for. Rebuilding it would silently re-arm every write.
+	 *
+	 * It therefore captures `env` ONCE, which is safe only because `useVoiceToolEnv`
+	 * returns a stable object that reads the editor through refs. See the comment there:
+	 * an env captured at mount takes a stale `dispatch` with it, and a stale dispatch
+	 * computes undo against a story that no longer exists.
+	 */
+	const runner = React.useRef<ToolRunner>();
 
-	// The runner captured the env object; keep it pointing at the live one without
-	// throwing away `seen`.
-	if (envRef.current !== env) {
-		envRef.current = env;
+	if (!runner.current) {
+		runner.current = createToolRunner(env);
 	}
 
 	// A tool call is async and the panel can be closed while one is in flight — a socket
@@ -120,7 +125,7 @@ export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 
 	const call = React.useCallback(
 		async (name: string, args: Record<string, unknown>) => {
-			const result = await runner.current.run(name, args);
+			const result = await runner.current!.run(name, args);
 
 			append({
 				args,
@@ -144,7 +149,7 @@ export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 	return {
 		call,
 		clear: React.useCallback(() => setRows([]), []),
-		endTurn: React.useCallback(() => runner.current.endTurn(), []),
+		endTurn: React.useCallback(() => runner.current!.endTurn(), []),
 		rows,
 		say,
 		undo,
