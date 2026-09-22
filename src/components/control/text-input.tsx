@@ -8,6 +8,14 @@ export interface TextInputProps {
 	disabled?: boolean;
 	id?: string;
 	list?: string;
+	/**
+	 * Bounds and increment for `type="number"`, which is also what its spinner arrows step
+	 * by. Only meaningful there, and left off everywhere else so a text field cannot
+	 * accidentally grow a `min` the browser would validate against.
+	 */
+	max?: number;
+	min?: number;
+	step?: number;
 	onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
 	onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 	onInput?: (event: React.FormEvent<HTMLInputElement>) => void;
@@ -34,6 +42,9 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
 						disabled={props.disabled}
 						id={props.id}
 						list={props.list}
+						max={props.max}
+						min={props.min}
+						step={props.step}
 						onBlur={props.onBlur}
 						onChange={props.onChange}
 						onInput={props.onInput}

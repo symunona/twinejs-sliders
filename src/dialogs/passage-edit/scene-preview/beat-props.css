@@ -55,3 +55,9 @@
 .scene-preview-beat-props-dur input {
 	width: 5em;
 }
+
+/* A multiplier is one or three characters and it carries spinner arrows, so it needs a
+   little more room than the Hold field and nothing like a full-width input. */
+.scene-preview-beat-props-size input {
+	width: 5.5em;
+}

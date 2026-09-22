@@ -422,3 +422,105 @@ describe('<BeatProps> bubble colours', () => {
 		expect(clear[0]).toBeDisabled();
 	});
 });
+
+/**
+ * The type multiplier, offered only beside a `manual` box.
+ *
+ * Found by position for the reason every other control here is: i18n is not initialised
+ * under jest. Hold is the first spinbutton in the row and Size, when it is there at all, is
+ * the second.
+ */
+function sizeField(): HTMLInputElement {
+	return screen.getAllByRole('spinbutton')[1] as HTMLInputElement;
+}
+
+describe('<BeatProps> bubble size', () => {
+	/*
+	 * `auto` grows the box to fit the words, so there is no rectangle to set type against,
+	 * and `absolute` scales the words to fill the box itself -- a multiplier there is a
+	 * number that changes nothing.
+	 */
+	it('is absent while the bubble sizes itself', () => {
+		renderProps(sayStyled({}));
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+	});
+
+	it('is absent on an absolute box, which sizes its own type', () => {
+		renderProps(sayStyled({sizing: 'absolute'}));
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+	});
+
+	it('is offered on a manual box', () => {
+		renderProps(sayStyled({sizing: 'manual'}));
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+	});
+
+	// A scene that says `sizing: manual` once at the top draws every bubble that way.
+	it('is offered when the sizing is inherited rather than stated', () => {
+		renderProps(say(0.6), true, {inherited: {sizing: 'manual'}});
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+	});
+
+	it('shows the multiplier the beat names', () => {
+		renderProps(sayStyled({size: 1.4, sizing: 'manual'}));
+		expect(sizeField().value).toBe('1.4');
+	});
+
+	// Empty means "whatever the layer above says", so the box has to say what that is.
+	it('names the size it would inherit when it is empty', () => {
+		renderProps(sayStyled({sizing: 'manual'}), true, {
+			inherited: {size: 0.8}
+		});
+
+		expect(sizeField().value).toBe('');
+		expect(sizeField()).toHaveAttribute('placeholder', '0.8');
+	});
+
+	it('falls back to the plain stage size when nothing above it says one', () => {
+		renderProps(sayStyled({sizing: 'manual'}));
+		expect(sizeField()).toHaveAttribute('placeholder', '1');
+	});
+
+	/*
+	 * The arrows are the point of the field: an author nudges the type up a tenth and
+	 * watches the bubble. A value that only landed on blur would leave the stage a press
+	 * behind the box.
+	 */
+	it('writes as the value changes, so the arrows reach the stage', () => {
+		const {onSetBubble} = renderProps(sayStyled({size: 1, sizing: 'manual'}));
+
+		fireEvent.change(sizeField(), {target: {value: '1.1'}});
+		expect(onSetBubble).toHaveBeenCalledWith('size', 1.1);
+	});
+
+	it('steps by a tenth, the whole useful range being about half to double', () => {
+		renderProps(sayStyled({sizing: 'manual'}));
+		expect(sizeField()).toHaveAttribute('step', '0.1');
+		expect(sizeField()).toHaveAttribute('min', '0.1');
+	});
+
+	// Passing through "" or "0." on the way to "0.8" is not a value to write down.
+	it('writes nothing for a half-typed multiplier', () => {
+		const {onSetBubble} = renderProps(sayStyled({sizing: 'manual'}));
+
+		fireEvent.change(sizeField(), {target: {value: ''}});
+		fireEvent.change(sizeField(), {target: {value: '0'}});
+		expect(onSetBubble).not.toHaveBeenCalled();
+	});
+
+	// Clearing means "back to whatever the scene says", which is a removal.
+	it('removes the key when the box is emptied and left', () => {
+		const {onSetBubble} = renderProps(sayStyled({size: 1.4, sizing: 'manual'}));
+
+		fireEvent.change(sizeField(), {target: {value: ''}});
+		fireEvent.blur(sizeField());
+		expect(onSetBubble).toHaveBeenCalledWith('size', null);
+	});
+
+	it('removes nothing when a box that was already empty is left', () => {
+		const {onSetBubble} = renderProps(sayStyled({sizing: 'manual'}));
+
+		fireEvent.blur(sizeField());
+		expect(onSetBubble).not.toHaveBeenCalled();
+	});
+});

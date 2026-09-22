@@ -101,6 +101,17 @@ const INHERIT = '';
  */
 const PER_KIND = '\u0000per-kind';
 
+/**
+ * What one press of the Size field's arrows is worth.
+ *
+ * A tenth: `size` is a multiplier of the stage's own type size, so the whole useful range
+ * is roughly half to double and a step of 1 would cross it in one press.
+ */
+const SIZE_STEP = 0.1;
+
+/** The smallest multiplier the field offers. The parser refuses zero and below outright. */
+const SIZE_MIN = 0.1;
+
 /** What unchecking Auto puts in the box, in seconds: the pace the beat already ran at. */
 function defaultHold(autoAdvanceMs: number | undefined): number {
 	return (autoAdvanceMs ?? AUTO_ADVANCE_MS) / 1000;
@@ -163,9 +174,23 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 * stack and reparse the scene three times. `undefined` means "show what the text says".
 	 */
 	const [draft, setDraft] = React.useState<string>();
+	/**
+	 * The Size box while it is being typed in, kept apart from `draft` so a half-typed
+	 * multiplier and a half-typed hold cannot overwrite each other.
+	 *
+	 * Unlike `dur`, this one commits as it changes rather than on blur: the arrows are the
+	 * point of the field — an author nudges the type up a tenth and watches the bubble on
+	 * the stage — and a value that only landed on blur would leave the preview a press
+	 * behind the box. The draft is only here so a box being emptied, or holding something
+	 * that is not yet a number, shows what was typed instead of snapping back.
+	 */
+	const [sizeDraft, setSizeDraft] = React.useState<string>();
 
 	// Whatever the author was typing is stale the moment the scrubber moves on.
-	React.useEffect(() => setDraft(undefined), [beat]);
+	React.useEffect(() => {
+		setDraft(undefined);
+		setSizeDraft(undefined);
+	}, [beat]);
 
 	if (!editable || beatCount === 0) {
 		return null;
@@ -202,6 +227,19 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 * whole-object — is the same one.
 	 */
 	const merged = {...inherited, ...style};
+	/**
+	 * Whether this beat's bubble is a hand-composed box whose type is still the scene's own
+	 * size — the one sizing where a multiplier is the author's to set.
+	 *
+	 * Read off the MERGED sizing, not the beat's own: a scene that says `sizing: manual`
+	 * once at the top draws every bubble that way, and the field has to be there for those
+	 * too. `absolute` scales the words to fill the box itself, so a multiplier there would
+	 * be a number that changes nothing, and `auto` grows the box to fit whatever size the
+	 * words are — there is no rectangle to set type against.
+	 */
+	const manual = merged.sizing === 'manual';
+	const size =
+		sizeDraft ?? (style?.size === undefined ? '' : String(style.size));
 	const emptyKey = emptyReasonKey(beat, beatNumber);
 	// The one genuinely disabled control here. Its reason lives on the field itself as well
 	// as on the checkbox that causes it: an author who notices the grey box looks at the
@@ -230,6 +268,40 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 		}
 
 		onSetKey('dur', next);
+	}
+
+	/**
+	 * Take what is in the Size box, if it is a size.
+	 *
+	 * Silent about anything else: the box is typed in a character at a time, and "" or "0."
+	 * on the way to "0.8" is a state the author is passing through, not one to write down
+	 * or complain about. Emptying it on purpose is caught by `clearSize` on blur instead,
+	 * where it can be told apart from an empty box halfway to a number.
+	 */
+	function commitSize(text: string) {
+		setSizeDraft(text);
+
+		const next = Number(text.trim());
+
+		if (
+			text.trim() === '' ||
+			!Number.isFinite(next) ||
+			next <= 0 ||
+			next === style?.size
+		) {
+			return;
+		}
+
+		onSetBubble('size', next);
+	}
+
+	/** An emptied box means "back to whatever the scene says", which is a removal. */
+	function clearSize() {
+		if (sizeDraft?.trim() === '' && style?.size !== undefined) {
+			onSetBubble('size', null);
+		}
+
+		setSizeDraft(undefined);
 	}
 
 	return (
@@ -452,6 +524,43 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							>
 								{t('dialogs.passageEdit.beatProps.sizing')}
 							</TextSelect>
+							{manual && (
+								/*
+									Only beside a `manual` box, and directly after the select
+									that made it one, so the pair reads as the one decision it
+									is: the author stated the rectangle, and this is the type
+									they are setting inside it.
+
+									The arrows are the whole control. `size` is a multiplier,
+									so the useful move is almost always "a bit bigger" rather
+									than a number an author could name, and a step of a tenth
+									makes that a press.
+								*/
+								<span className="scene-preview-beat-props-size">
+									<TextInput
+										min={SIZE_MIN}
+										onChange={event => commitSize(event.target.value)}
+										onBlur={clearSize}
+										onKeyDown={event => {
+											if (event.key === 'Enter') {
+												clearSize();
+											}
+
+											if (event.key === 'Escape') {
+												setSizeDraft(undefined);
+											}
+										}}
+										// What the box would be drawn at if it said nothing:
+										// the scene's own multiplier, or the plain stage size.
+										placeholder={String(inherited?.size ?? 1)}
+										step={SIZE_STEP}
+										type="number"
+										value={size}
+									>
+										{t('dialogs.passageEdit.beatProps.size')}
+									</TextInput>
+								</span>
+							)}
 							<TextSelect
 								onChange={event =>
 									onSetBubble('anchor', event.target.value || null)
