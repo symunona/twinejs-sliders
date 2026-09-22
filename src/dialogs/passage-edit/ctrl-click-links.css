@@ -1,0 +1,11 @@
+/*
+The affordance for ctrl/cmd-click navigation (see use-ctrl-click-links.ts). Only ever
+visible while the modifier is held, so nothing here competes with the mode's own
+highlighting the rest of the time.
+*/
+
+.CodeMirror.sliders-ctrl-link-armed .sliders-ctrl-link {
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}

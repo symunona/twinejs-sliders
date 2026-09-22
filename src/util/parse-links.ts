@@ -6,13 +6,17 @@ e.g. those pointing to other passages in a story, not to an external web site.
 import uniq from 'lodash/uniq';
 
 // The top level regular expression to catch links -- i.e. [[link]].
-const extractLinkTags = (text: string) => text.match(/\[\[.*?\]\]/g) || [];
+const LINK_TAG_RE = /\[\[.*?\]\]/g;
 
 // Links _not_ starting with a protocol, e.g. abcd://.
 const internalLinks = (link: string) => !/^\w+:\/\/\/?\w/i.test(link);
 
-// Links with some text in them.
-const nonEmptyLinks = (link: string) => link !== '';
+/**
+ * Does this target name a passage rather than a web site? Exported because three other
+ * places asked the same question and each wrote the regexp out again -- the story map's
+ * scan, the scene-aware scan, and ctrl-click navigation.
+ */
+export const isInternalLink = internalLinks;
 
 // Setter is the second [] block if exists.
 const removeSetters = (link: string) => {
@@ -57,19 +61,60 @@ const extractLink = (tagContent: string) => {
 	);
 };
 
+/** One `[[…]]` tag, and where it was written. */
+export interface LinkSpan {
+	/**
+	 * True when the tag was `[[name]]` -- no `->`, `<-` or `|`. That is the only form
+	 * whose text may name an entry in a scene's `links:` block instead of a passage.
+	 */
+	bare: boolean;
+	/** Offset just past the `]]`. */
+	end: number;
+	/** Offset of the `[[` within the scanned text. */
+	start: number;
+	/** The target, exactly as {@link parseLinks} reports it -- untrimmed, unresolved. */
+	target: string;
+}
+
+/**
+ * Every `[[…]]` in the text, with its offsets.
+ *
+ * {@link parseLinks} is derived from this rather than scanning a second time: a gesture
+ * that navigates by one reading of the syntax while the map draws arrows by another is a
+ * link the author can see but not follow.
+ */
+export function parseLinkSpans(text: string): LinkSpan[] {
+	const out: LinkSpan[] = [];
+
+	LINK_TAG_RE.lastIndex = 0;
+
+	let match: RegExpExecArray | null;
+
+	while ((match = LINK_TAG_RE.exec(text)) !== null) {
+		// Link matching ignores setter components, should they exist.
+		const body = removeSetters(removeEnclosingBrackets(match[0]));
+		const target = extractLink(body);
+
+		if (target === '') {
+			continue;
+		}
+
+		out.push({
+			bare: target === body,
+			end: match.index + match[0].length,
+			start: match.index,
+			target
+		});
+	}
+
+	return out;
+}
+
 /**
  * Returns a list of unique links in passage source code.
  */
 export function parseLinks(text: string, internalOnly?: boolean) {
-	// Link matching regexps ignore setter components, should they exist.
-
-	let result = uniq(
-		extractLinkTags(text)
-			.map(removeEnclosingBrackets)
-			.map(removeSetters)
-			.map(extractLink)
-			.filter(nonEmptyLinks)
-	);
+	let result = uniq(parseLinkSpans(text).map(span => span.target));
 
 	if (internalOnly) {
 		result = result.filter(internalLinks);

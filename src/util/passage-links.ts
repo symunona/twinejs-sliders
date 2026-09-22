@@ -14,10 +14,7 @@ import {
 	sceneEntityLinkTargets,
 	sceneLinkTargets
 } from '@sliders/scene-schema';
-import {parseLinks} from './parse-links';
-
-// Links _not_ starting with a protocol, e.g. abcd://. Same test parse-links.ts applies.
-const internalLink = (link: string) => !/^\w+:\/\/\/?\w/i.test(link);
+import {isInternalLink, parseLinks} from './parse-links';
 
 /**
  * Returns a list of unique links in passage source code, optionally internal ones only.
@@ -43,7 +40,7 @@ export function passageLinks(text: string, internalOnly?: boolean): string[] {
 	const sceneLinks = [
 		...sceneLinkTargets(block.text).values(),
 		...sceneEntityLinkTargets(block.text)
-	].filter(target => target !== '' && (!internalOnly || internalLink(target)));
+	].filter(target => target !== '' && (!internalOnly || isInternalLink(target)));
 
 	return uniq([...parseLinks(text, internalOnly), ...sceneLinks]);
 }
