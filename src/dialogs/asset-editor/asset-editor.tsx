@@ -1368,7 +1368,6 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * a value that compares unequal.
 	 */
 	const previewRev = React.useRef(0);
-	// eslint-disable-next-line react-hooks/exhaustive-deps
 	const previewRevision = React.useMemo(
 		() => ++previewRev.current,
 		[edits, effective, maskMode, source]
