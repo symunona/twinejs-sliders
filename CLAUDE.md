@@ -31,6 +31,7 @@ did not just write.
   for unpicking a peer's lines and for the private-index recipe.
 - **Never `npx prettier --write` a file you did not create.**
 - **Deploy and `build:format` only from a clean worktree at the pushed head.**
+- Check feature branches after each work session, warn if there are left behind!
 
 ## Loop
 

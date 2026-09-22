@@ -13,6 +13,11 @@ module.exports = {
 		// which jest can't parse. Pin it to the CJS build.
 		'^yaml$': '<rootDir>/node_modules/yaml/dist/index.js'
 	},
+	// Shared 4-core dev boxes: the default (cores - 1) workers at ~900MB each
+	// OOM'd a 8GB pod when three runs overlapped. Cap workers and recycle any
+	// that bloat.
+	maxWorkers: 2,
+	workerIdleMemoryLimit: '1GB',
 	preset: 'ts-jest/presets/js-with-ts',
 	resetMocks: true,
 	roots: [
