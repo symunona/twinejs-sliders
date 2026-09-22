@@ -20,6 +20,7 @@ type Config struct {
 	MaxAssetBytes int64
 	MaxStoryBytes int64
 	RevKeep       int
+	PinnedMax     int
 	OrphanTTL     time.Duration
 	TombstoneTTL  time.Duration
 }
@@ -36,6 +37,7 @@ func defaultConfig() Config {
 		MaxAssetBytes: 67108864, // 64 MB
 		MaxStoryBytes: 33554432, // 32 MB
 		RevKeep:       20,
+		PinnedMax:     50,
 		OrphanTTL:     168 * time.Hour,  // 7 days
 		TombstoneTTL:  2160 * time.Hour, // 90 days
 	}
@@ -132,6 +134,9 @@ func LoadConfig(envPath string) (Config, error) {
 	if cfg.RevKeep, err = envInt(get, "REV_KEEP", cfg.RevKeep); err != nil {
 		return cfg, err
 	}
+	if cfg.PinnedMax, err = envInt(get, "PINNED_MAX", cfg.PinnedMax); err != nil {
+		return cfg, err
+	}
 	if cfg.OrphanTTL, err = envDuration(get, "ORPHAN_TTL", cfg.OrphanTTL); err != nil {
 		return cfg, err
 	}
@@ -151,6 +156,9 @@ func (c Config) Validate() error {
 	}
 	if c.RevKeep < 1 {
 		return fmt.Errorf("REV_KEEP must be at least 1, got %d", c.RevKeep)
+	}
+	if c.PinnedMax < 1 {
+		return fmt.Errorf("PINNED_MAX must be at least 1, got %d", c.PinnedMax)
 	}
 	if c.MaxStoryBytes < 1 || c.MaxAssetBytes < 1 {
 		return errors.New("MAX_STORY_BYTES and MAX_ASSET_BYTES must be positive")

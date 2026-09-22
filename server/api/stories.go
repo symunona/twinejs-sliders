@@ -56,6 +56,9 @@ func (s *server) getStory(w http.ResponseWriter, r *http.Request) {
 type putStoryRequest struct {
 	Story  json.RawMessage `json:"story"`
 	Client string          `json:"client"`
+	// Summary is the client's one-line description of this write, stored on the rev this
+	// write creates. Optional, never trusted — see store.RevisionEntry.Summary.
+	Summary string `json:"summary"`
 }
 
 func (s *server) putStory(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +84,7 @@ func (s *server) putStory(w http.ResponseWriter, r *http.Request) {
 	res, err := s.st.PutStory(id, req.Story, client, store.PutOptions{
 		IfMatch: ifMatch,
 		Revive:  r.URL.Query().Get("revive") == "1",
+		Summary: req.Summary,
 	})
 	if err != nil {
 		// A write to a tombstone is 409, not 410: the resource is not simply gone, the
@@ -110,6 +114,8 @@ func (s *server) putStory(w http.ResponseWriter, r *http.Request) {
 type patchStoryRequest struct {
 	Client string           `json:"client"`
 	Patch  store.StoryPatch `json:"patch"`
+	// Summary is the same optional field PUT carries, with the same clamps.
+	Summary string `json:"summary"`
 }
 
 // patchStory is the upload half of sync on a bad network: autosave sends the passages that
@@ -134,7 +140,10 @@ func (s *server) patchStory(w http.ResponseWriter, r *http.Request) {
 	// of "no precondition" land in one place.
 
 	client := clientOf(r)
-	res, err := s.st.PatchStory(id, req.Patch, client, ifMatch)
+	res, err := s.st.PatchStory(id, req.Patch, client, store.PatchOptions{
+		IfMatch: ifMatch,
+		Summary: req.Summary,
+	})
 	if err != nil {
 		// Same 409-not-410 rule PUT uses: a write to a tombstone is a choice for the
 		// client to make, not a resource that is merely gone.

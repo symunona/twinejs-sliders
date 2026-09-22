@@ -31,6 +31,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.MaxAssetBytes != 67108864 || cfg.MaxStoryBytes != 33554432 || cfg.RevKeep != 20 {
 		t.Fatalf("limit defaults wrong: %+v", cfg)
 	}
+	if cfg.PinnedMax != 50 {
+		t.Fatalf("PinnedMax default = %d, want 50", cfg.PinnedMax)
+	}
 	if cfg.OrphanTTL != 168*time.Hour || cfg.TombstoneTTL != 2160*time.Hour {
 		t.Fatalf("ttl defaults wrong: %+v", cfg)
 	}
@@ -139,5 +142,20 @@ func TestListenAndAnnouncePrintsThePort(t *testing.T) {
 	}
 	if !strings.Contains(line, ":"+port+"\n") {
 		t.Fatalf("announced %q but bound port %s", line, port)
+	}
+}
+
+func TestPinnedMaxIsReadAndValidated(t *testing.T) {
+	cfg, err := LoadConfig(writeEnv(t, "AUTH_TOKEN=0123456789abcdef\nPINNED_MAX=7\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PinnedMax != 7 {
+		t.Fatalf("PinnedMax = %d, want 7", cfg.PinnedMax)
+	}
+
+	cfg.PinnedMax = 0
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("PINNED_MAX=0 was accepted")
 	}
 }

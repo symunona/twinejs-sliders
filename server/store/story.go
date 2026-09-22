@@ -33,6 +33,14 @@ type Meta struct {
 	// AssetSnapHash is the manifest hash as of the newest revs/*.assets.gz. It answers
 	// "did the manifest change since the last snapshot?" without reading the snapshot.
 	AssetSnapHash string `json:"assetSnapHash,omitempty"`
+
+	// RevLabel, RevPinned and RevSummary are the RevisionEntry fields of the CURRENT
+	// rev. The current version has no row in revs/index.json — it is story.json — so its
+	// label, pin and summary wait here, and snapshotLocked moves them onto the index row
+	// the moment that version is replaced. Same names, same meaning, same clamps.
+	RevLabel   string `json:"revLabel,omitempty"`
+	RevPinned  bool   `json:"revPinned,omitempty"`
+	RevSummary string `json:"revSummary,omitempty"`
 }
 
 // IndexEntry is one row of `GET /stories` — StoryIndexEntry in server.types.ts.
@@ -211,6 +219,16 @@ type PutOptions struct {
 	IfMatch *int
 	// Revive clears a tombstone instead of refusing the write.
 	Revive bool
+	// Summary is the client's one-line description of this write. Stored on the rev this
+	// write creates; see RevisionEntry.Summary for why the client computes it.
+	Summary string
+}
+
+// PatchOptions are PutOptions minus Revive, which a patch cannot ask for: reviving means
+// stating the whole story, and that is a PUT.
+type PatchOptions struct {
+	IfMatch *int
+	Summary string
 }
 
 // PutStory writes a story body. See writeStoryLocked for the ordering.
@@ -237,7 +255,7 @@ func (s *Store) PutStory(id string, raw []byte, c Client, opts PutOptions) (PutR
 	}
 
 	revived := exists && m.Deleted
-	res, err := s.writeStoryLocked(m, body, sum, c, 0)
+	res, err := s.writeStoryLocked(m, body, sum, c, 0, opts.Summary)
 	res.Revived = revived
 	return res, err
 }
@@ -254,7 +272,7 @@ func (s *Store) PutStory(id string, raw []byte, c Client, opts PutOptions) (PutR
 //     body and its history are both on disk.
 //
 // The caller holds the story lock and has already checked If-Match and the tombstone.
-func (s *Store) writeStoryLocked(m Meta, body []byte, sum storySummary, c Client, restoredFrom int) (PutResult, error) {
+func (s *Store) writeStoryLocked(m Meta, body []byte, sum storySummary, c Client, restoredFrom int, summary string) (PutResult, error) {
 	id := m.ID
 	newHash := hashBytes(body)
 
@@ -274,11 +292,22 @@ func (s *Store) writeStoryLocked(m Meta, body []byte, sum storySummary, c Client
 	// An autosave that changed nothing costs nothing: same hash, no snapshot. The rev
 	// still moves, because rev is the write counter and the client is entitled to a
 	// fresh ETag for the write it just made.
-	if prevBody != nil && m.Hash != newHash {
+	snapshotted := prevBody != nil && m.Hash != newHash
+	if snapshotted {
+		// snapshotLocked hands the current rev's label and pin to the index row it
+		// creates, so they stay with the version they were about.
 		if err := s.snapshotLocked(&m, prevBody); err != nil {
 			return PutResult{}, err
 		}
 	}
+
+	// The new rev is a different version, so it starts unlabelled and unpinned — unless
+	// nothing was snapshotted, which means the bytes did not change and the label is
+	// still about exactly this content. The summary always comes from this write.
+	if snapshotted {
+		m.RevLabel, m.RevPinned = "", false
+	}
+	m.RevSummary = clampSummary(summary)
 
 	m.Rev++
 	m.Hash = newHash

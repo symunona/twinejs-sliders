@@ -162,7 +162,7 @@ func passageID(raw json.RawMessage) string {
 // other editor just wrote gets silently resurrected. A missing header is refused with the
 // same ConflictError a stale one gets, so the client has one branch to handle: re-read,
 // re-diff, retry.
-func (s *Store) PatchStory(id string, p StoryPatch, c Client, ifMatch *int) (PutResult, error) {
+func (s *Store) PatchStory(id string, p StoryPatch, c Client, opts PatchOptions) (PutResult, error) {
 	if err := checkID("story", id); err != nil {
 		return PutResult{}, err
 	}
@@ -181,7 +181,7 @@ func (s *Store) PatchStory(id string, p StoryPatch, c Client, ifMatch *int) (Put
 	if m.Deleted {
 		return PutResult{}, &DeletedError{ID: id}
 	}
-	if ifMatch == nil || *ifMatch != m.Rev {
+	if opts.IfMatch == nil || *opts.IfMatch != m.Rev {
 		return PutResult{}, &ConflictError{Rev: m.Rev, UpdatedAt: m.UpdatedAt, LastClient: m.LastClient}
 	}
 
@@ -203,5 +203,5 @@ func (s *Store) PatchStory(id string, p StoryPatch, c Client, ifMatch *int) (Put
 	if err != nil {
 		return PutResult{}, err
 	}
-	return s.writeStoryLocked(m, body, sum, c, 0)
+	return s.writeStoryLocked(m, body, sum, c, 0, opts.Summary)
 }
