@@ -30,6 +30,12 @@
 	overflow: hidden;
 	position: relative;
 	touch-action: none;
+	/* The effect overlay's layers use mix-blend-mode, which blends against everything below
+	   them in the nearest stacking context. Without a context HERE that reaches past the
+	   canvas to the pane's own background, and a `lighten` layer would be judged against the
+	   wrong pixels. Isolating on the box makes the blend group exactly the canvas plus the
+	   overlay, which is what the player's entity box gives for free via its transform. */
+	isolation: isolate;
 }
 
 /* The checkerboard sits on the canvas itself, not the box around it, so that
