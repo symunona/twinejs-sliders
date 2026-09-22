@@ -98,6 +98,10 @@ export function publishStory(
 	// The id of the start passage as it is published (*not* a UUID).
 
 	let startLocalId;
+
+	// Where the story itself starts, which `startId` may be overriding. Same numbering.
+
+	let storyStartLocalId: number | undefined;
 	let passageData = '';
 
 	story.passages.forEach((p, index) => {
@@ -105,6 +109,10 @@ export function publishStory(
 
 		if (p.id === startId) {
 			startLocalId = index + 1;
+		}
+
+		if (story.startPassage && p.id === story.startPassage) {
+			storyStartLocalId = index + 1;
 		}
 	});
 
@@ -125,6 +133,27 @@ export function publishStory(
 			? `data-sliders-start-beat="${escape(Math.trunc(startBeat).toString())}" `
 			: '';
 
+	/*
+	Where the story really begins, when `startnode` no longer says so.
+
+	"Test from here" publishes with `startId` set to the passage the author is standing on,
+	and `startnode` is the only channel every other story format understands -- so the
+	override stays there, and writing it erases the one record of the real start. That
+	record matters to Sliders alone: the story-wide vars (bubble style, autoAdvance,
+	fullScreen, showLinks, mute) live in the start passage's vars section, and Chapbook runs
+	a passage's vars only when that passage renders. Dropped into the middle of a story, a
+	reader would get none of the story's own style layer.
+
+	So the real start rides along as its own attribute and the Sliders runtime applies its
+	vars before the passage it was actually sent to. Absent on a normal play, an archive, or
+	a test from the start passage itself -- nothing was overridden, so there is nothing to
+	remember, and the file stays byte-identical to what it was before this existed.
+	*/
+	const storyStartData =
+		storyStartLocalId !== undefined && storyStartLocalId !== startLocalId
+			? `data-sliders-story-start="${escape(storyStartLocalId.toString())}" `
+			: '';
+
 	return (
 		`<tw-storydata name="${escape(story.name)}" ` +
 		`startnode="${startLocalId || ''}" ` +
@@ -137,6 +166,7 @@ export function publishStory(
 		`tags="${escape(story.tags.join(' '))}" ` +
 		`zoom="${escape(story.zoom.toString())}" ` +
 		startBeatData +
+		storyStartData +
 		`hidden>` +
 		`<style role="stylesheet" id="twine-user-stylesheet" ` +
 		`type="text/twine-css">` +

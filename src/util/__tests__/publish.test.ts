@@ -172,6 +172,52 @@ describe('publishStory()', () => {
 		expect(result.hasAttribute('data-sliders-start-beat')).toBe(false);
 	});
 
+	// "Test from here" hands `startnode` to a mid-story passage, so the start passage --
+	// where the story-wide Sliders vars live -- has to be remembered somewhere else. See
+	// the comment in `src/util/publish.ts`.
+	describe('when the starting passage is overridden', () => {
+		it('marks where the story really starts', () => {
+			const result = toDOM(
+				publish.publishStory(story, appInfo, {startId: story.passages[1].id})
+			);
+
+			const realStart = result.querySelector(
+				`tw-passagedata[name="${story.passages[0].name}"]`
+			);
+
+			expect(result.getAttribute('data-sliders-story-start')).toBe(
+				realStart?.getAttribute('pid')
+			);
+			expect(result.getAttribute('data-sliders-story-start')).not.toBe(
+				result.getAttribute('startnode')
+			);
+		});
+
+		it("doesn't mark one when the story starts normally", () => {
+			const result = toDOM(publish.publishStory(story, appInfo));
+
+			expect(result.hasAttribute('data-sliders-story-start')).toBe(false);
+		});
+
+		it("doesn't mark one when the override is the start passage", () => {
+			const result = toDOM(
+				publish.publishStory(story, appInfo, {startId: story.startPassage})
+			);
+
+			expect(result.hasAttribute('data-sliders-story-start')).toBe(false);
+		});
+
+		it("doesn't mark one when the story has no start passage", () => {
+			(story.startPassage as any) = undefined;
+
+			const result = toDOM(
+				publish.publishStory(story, appInfo, {startOptional: true})
+			);
+
+			expect(result.hasAttribute('data-sliders-story-start')).toBe(false);
+		});
+	});
+
 	it('throws an error if the story has no starting point and one is not overridden', () => {
 		(story.startPassage as any) = undefined;
 		expect(() => publish.publishStory(story, appInfo)).toThrow();
