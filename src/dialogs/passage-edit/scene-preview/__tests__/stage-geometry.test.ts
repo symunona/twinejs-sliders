@@ -1,4 +1,5 @@
 import {computeStageBox} from '@sliders/render-dom';
+import type {Rect} from '@sliders/render-dom';
 import {LAYER_BASELINE} from '@sliders/scene-types';
 import type {Camera, Vec2} from '@sliders/scene-types';
 import {
@@ -11,6 +12,10 @@ import {
 	hitTest,
 	mountToScene,
 	nearestSnap,
+	normalizeDegrees,
+	rotFrom,
+	rotateHandlePoint,
+	ROT_SNAP_DEGREES,
 	roundCoord,
 	scaleFrom,
 	sceneToMount,
@@ -703,6 +708,114 @@ describe('scaleFrom', () => {
 
 	it('clamps a start scale that was already out of bounds', () => {
 		expect(scaleFrom('nw', 40, rect, feet, {x: 200, y: 500}, nw)).toBe(10);
+	});
+});
+
+describe('rotateHandlePoint', () => {
+	it('sits in the middle of the top edge', () => {
+		expect(rotateHandlePoint({left: 10, top: 20, width: 100, height: 200})).toEqual({
+			x: 60,
+			y: 20
+		});
+	});
+
+	it('is total', () => {
+		expect(
+			rotateHandlePoint({
+				left: NaN,
+				top: undefined as unknown as number,
+				width: -40,
+				height: Infinity
+			})
+		).toEqual({x: 0, y: 0});
+		expect(rotateHandlePoint(undefined as unknown as Rect)).toEqual({
+			x: 0,
+			y: 0
+		});
+	});
+});
+
+describe('normalizeDegrees', () => {
+	it('folds a wound-up angle into (-180, 180]', () => {
+		expect(normalizeDegrees(0)).toBe(0);
+		expect(normalizeDegrees(90)).toBe(90);
+		expect(normalizeDegrees(-90)).toBe(-90);
+		expect(normalizeDegrees(370)).toBe(10);
+		expect(normalizeDegrees(-370)).toBe(-10);
+		expect(normalizeDegrees(740)).toBe(20);
+	});
+
+	it('spells the half turn one way', () => {
+		expect(normalizeDegrees(180)).toBe(180);
+		expect(normalizeDegrees(-180)).toBe(180);
+		expect(normalizeDegrees(540)).toBe(180);
+	});
+
+	it('is total', () => {
+		expect(normalizeDegrees(NaN)).toBe(0);
+		expect(normalizeDegrees(Infinity)).toBe(0);
+		expect(normalizeDegrees(undefined as unknown as number)).toBe(0);
+	});
+});
+
+describe('rotFrom', () => {
+	const pivot = {x: 100, y: 100};
+	// Straight up from the pivot in MOUNT px, which is where the rotate handle starts.
+	const above = {x: 100, y: 40};
+
+	it('turns clockwise when the pointer swings clockwise, like CSS rotate does', () => {
+		// Up -> right is a quarter turn clockwise on a screen whose y points down.
+		expect(rotFrom(0, pivot, above, {x: 160, y: 100})).toBe(90);
+		// Up -> left is the same turn the other way.
+		expect(rotFrom(0, pivot, above, {x: 40, y: 100})).toBe(-90);
+	});
+
+	it('adds to the tilt the entity already had rather than aiming at the pointer', () => {
+		expect(rotFrom(30, pivot, above, {x: 160, y: 100})).toBe(120);
+		expect(rotFrom(-30, pivot, above, {x: 40, y: 100})).toBe(-120);
+	});
+
+	it('folds a turn past the half circle instead of writing a wound-up angle', () => {
+		// 170 already tilted, plus a quarter turn, is 260 -- which draws as -100.
+		expect(rotFrom(170, pivot, above, {x: 160, y: 100})).toBe(-100);
+	});
+
+	it('is whole degrees, so no gesture writes a number with a tail', () => {
+		const rot = rotFrom(0, pivot, above, {x: 137, y: 61});
+
+		expect(Number.isInteger(rot)).toBe(true);
+	});
+
+	it('snaps to the step grid only when asked', () => {
+		const pointer = {x: 152, y: 66};
+		const free = rotFrom(0, pivot, above, pointer);
+		const snapped = rotFrom(0, pivot, above, pointer, {snap: true});
+
+		expect(free % ROT_SNAP_DEGREES).not.toBe(0);
+		expect(snapped % ROT_SNAP_DEGREES).toBe(0);
+		expect(Math.abs(snapped - free)).toBeLessThanOrEqual(ROT_SNAP_DEGREES / 2);
+	});
+
+	it('keeps the start rotation when the press landed on the pivot itself', () => {
+		expect(rotFrom(12, pivot, pivot, {x: 160, y: 100})).toBe(12);
+	});
+
+	it('is total', () => {
+		const nope = {x: NaN, y: 3};
+
+		expect(rotFrom(12, nope, above, {x: 160, y: 100})).toBe(12);
+		expect(rotFrom(12, pivot, nope, {x: 160, y: 100})).toBe(12);
+		expect(rotFrom(12, pivot, above, nope)).toBe(12);
+		expect(
+			rotFrom(
+				undefined as unknown as number,
+				pivot,
+				above,
+				undefined as unknown as Vec2
+			)
+		).toBe(0);
+		// A start rotation nobody folded still comes back folded.
+		expect(rotFrom(400, pivot, above, above)).toBe(40);
 	});
 });
 

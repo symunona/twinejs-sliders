@@ -249,6 +249,7 @@ lifts the whole entity a layer instead. Brackets stay bound as well — a keyboa
 |---|---|
 | drag a sprite | move it |
 | drag a corner handle | uniform `scale:` about the origin |
+| drag the rotate dot | `rot:` in whole degrees, about the same origin; `shift` snaps to 15° |
 | drag empty stage, or middle-drag | pan the camera |
 | `ctrl`/`cmd` + wheel | zoom the camera about the pointer, 0.2–8 |
 | drag an asset tile onto the stage | new `cast:` / `props:` entry, or `bg:` for a backdrop |
@@ -263,14 +264,16 @@ read as broken. `ctrl`+wheel is also what a trackpad pinch reports, so pinch-to-
 While a move or a resize is running — and only then — the stage says what it is doing:
 
 - **The readout**, pinned above the sprite rect (below it when the sprite is at the top of
-  the frame). A move shows the absolute `at`; a resize shows `×scale`. Both show the drawn
+  the frame). A move shows the absolute `at`; a resize shows `×scale`; a rotate shows
+  degrees. All show the drawn
   **size** in px with the camera's zoom divided back out, so scrolling the wheel never
   changes the number. A multi-select move reports the entity that was grabbed plus `+n`.
 - **The ref point**, lit orange: the point `at:` is measured from and the point a resize
   pivots on. Resting origins stay green, so in a group move the one the numbers are about
   is the one that changed colour. Alt-resize pivots on the rect centre instead, and the
   orange marker moves there, dashed — the marker follows the maths, it does not describe
-  an intention.
+  an intention. A rotate lights the same orange marker: it IS the centre of the turn, and
+  showing it is the whole of "where does this pivot".
 
 Full screen is the same overlay, so both appear there too.
 

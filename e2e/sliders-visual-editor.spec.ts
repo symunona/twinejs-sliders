@@ -117,12 +117,14 @@ test.describe('visual scene editor', () => {
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 		await page.waitForTimeout(300);
 
+		// Four corners plus the rotate dot.
 		const handles = page.locator('[data-handle]');
 
-		await expect(handles).toHaveCount(4);
+		await expect(handles).toHaveCount(5);
 
 		const beforeResize = await cmText(page);
-		const handle = (await handles.first().boundingBox())!;
+		// Pinned to a corner: the rotate dot is a `[data-handle]` too, and this is a resize.
+		const handle = (await page.locator('[data-handle="nw"]').boundingBox())!;
 
 		await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
 		await page.mouse.down();
@@ -168,11 +170,13 @@ test.describe('visual scene editor', () => {
 
 		await dragEntity(page, 'mira', 100, 0);
 
+		// Four corners plus the rotate dot.
 		const handles = page.locator('[data-handle]');
 
-		await expect(handles).toHaveCount(4);
+		await expect(handles).toHaveCount(5);
 
-		const handle = (await handles.first().boundingBox())!;
+		// Pinned to a corner: the rotate dot is a `[data-handle]` too, and this is a resize.
+		const handle = (await page.locator('[data-handle="nw"]').boundingBox())!;
 
 		await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
 		await page.mouse.down();
@@ -214,7 +218,7 @@ test.describe('visual scene editor', () => {
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 		await page.waitForTimeout(300);
 
-		// No resize handles, because there is nothing to resize into.
+		// No resize or rotate handles, because there is nothing to write into.
 		await expect(page.locator('[data-handle]')).toHaveCount(0);
 
 		await dragEntity(page, 'mira', 120, 0);

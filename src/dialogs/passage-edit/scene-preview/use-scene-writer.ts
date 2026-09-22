@@ -635,7 +635,7 @@ export function writeSceneEdits(
 
 /** Values held locally while a gesture runs and until the parse catches up. */
 export interface StagePatch {
-	[id: string]: {at?: {x: number; y: number}; scale?: number};
+	[id: string]: {at?: {x: number; y: number}; rot?: number; scale?: number};
 }
 
 /**
@@ -664,6 +664,7 @@ export function applyStagePatch(stage: Stage, patch: StagePatch): Stage {
 		entities[id] = {
 			...entity,
 			...(patch[id].at ? {at: patch[id].at as Vec2} : {}),
+			...(patch[id].rot === undefined ? {} : {rot: patch[id].rot as number}),
 			...(patch[id].scale === undefined
 				? {}
 				: {scale: patch[id].scale as number})
@@ -713,7 +714,7 @@ export const PATCH_TIMEOUT_MS = 900;
 
 function agrees(
 	patched: StagePatch[string],
-	actual: {at: {x: number; y: number}; scale: number} | undefined
+	actual: {at: {x: number; y: number}; rot?: number; scale: number} | undefined
 ): boolean {
 	if (!actual) {
 		return false;
@@ -727,6 +728,16 @@ function agrees(
 		return false;
 	}
 
+	// Absent and 0 are the same rotation, so a patch that levelled a sprite has to settle
+	// against an entity that simply has no `rot` key any more — which is exactly what the
+	// write produces, since coming back to 0 deletes it.
+	if (
+		patched.rot !== undefined &&
+		Math.abs(patched.rot - (actual.rot ?? 0)) > AGREE_EPSILON
+	) {
+		return false;
+	}
+
 	return !(
 		patched.scale !== undefined &&
 		Math.abs(patched.scale - actual.scale) > AGREE_EPSILON
@@ -736,7 +747,10 @@ function agrees(
 /** Drop the patch entries the freshly parsed stage now agrees with. */
 export function settlePatch(
 	patch: StagePatch,
-	entities: Record<string, {at: {x: number; y: number}; scale: number}>
+	entities: Record<
+		string,
+		{at: {x: number; y: number}; rot?: number; scale: number}
+	>
 ): StagePatch {
 	const next: StagePatch = {};
 	let changed = false;

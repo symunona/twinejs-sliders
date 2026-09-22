@@ -15,6 +15,7 @@
 
 import classNames from 'classnames';
 import * as React from 'react';
+import {useTranslation} from 'react-i18next';
 import type {
 	Camera,
 	EntityId,
@@ -42,6 +43,8 @@ import {
 	hitTest,
 	mountToScene,
 	nearestSnap,
+	rotFrom,
+	rotateHandlePoint,
 	roundCoord,
 	scaleFrom,
 	sceneToMount,
@@ -123,7 +126,7 @@ const READOUT_GAP_PX = 8;
 const READOUT_HEIGHT_PX = 30;
 
 interface Gesture {
-	kind: 'move' | 'scale' | 'pan';
+	kind: 'move' | 'scale' | 'pan' | 'rot';
 	pointerId: number;
 	/** Frame position in client px, read once: a drag must not thrash layout every frame. */
 	frame: {left: number; top: number};
@@ -132,6 +135,16 @@ interface Gesture {
 	startAt: Record<EntityId, Vec2>;
 	ids: EntityId[];
 	startScale: number;
+	/** The tilt the entity already had when a rotate began. Degrees, never accumulated. */
+	startRot: number;
+	/**
+	 * What a rotate turns about, MOUNT px — the entity's origin, read once.
+	 *
+	 * The pivot is where `at` lands on the mount, so a live patch that moves `at` would move
+	 * it mid-gesture and the sprite would chase its own handle. Fixed at pointerdown for the
+	 * same reason `startCamera` is.
+	 */
+	pivot?: Vec2;
 	/** The camera a pan started from. Fixed, or the pan would chase itself. */
 	startCamera: Camera;
 	rect?: Rect;
@@ -373,6 +386,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		selection,
 		stage
 	} = props;
+	const {t} = useTranslation();
 	const frameRef = React.useRef<HTMLDivElement>(null);
 	const gestureRef = React.useRef<Gesture>();
 	const [rects, setRects] = React.useState<Map<EntityId, Rect>>(new Map());
@@ -589,7 +603,34 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			let snappedX: SnapTarget | undefined;
 			let snappedY: SnapTarget | undefined;
 
-			if (gesture.kind === 'scale') {
+			if (gesture.kind === 'rot') {
+				const id = gesture.ids[0];
+				const entity = current.stage.entities?.[id];
+
+				if (entity && gesture.pivot) {
+					const rot = rotFrom(
+						gesture.startRot,
+						gesture.pivot,
+						gesture.start,
+						pointer,
+						{snap: event.shiftKey}
+					);
+
+					patch[id] = {rot};
+					writes.push({
+						id,
+						kind: entity.kind,
+						key: 'rot',
+						ref: entity.ref,
+						// Same bargain `scale` makes: absent and 0 are the same rotation, so
+						// coming back to level deletes the key on the entry rather than
+						// writing a default out. A beat has to say it, because a beat
+						// inherits every key it does not mention.
+						reset: 0,
+						value: rot === 0 ? undefined : rot
+					});
+				}
+			} else if (gesture.kind === 'scale') {
 				const id = gesture.ids[0];
 				const entity = current.stage.entities?.[id];
 
@@ -832,9 +873,11 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			rect,
 			start: {x: event.clientX - frame.left, y: event.clientY - frame.top},
 			startAt,
+			pivot: primary && box ? originPoint(box, camera, primary) : undefined,
 			// A pan mid-burst continues from what the wheel left behind, not from the
 			// camera the debounced parse is still holding.
 			startCamera: cameraRef.current ?? camera,
+			startRot: primary?.rot ?? 0,
 			startScale: primary?.scale ?? 1
 		};
 	}
@@ -1066,12 +1109,21 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	const singleRot = singleEntity?.rot ?? 0;
 	const singlePivot =
 		box && singleEntity ? originPoint(box, camera, singleEntity) : undefined;
+	// Turned the same way the corners are, so the dot stays on the top edge of the box the
+	// author can see rather than on the axis-aligned rect underneath it.
+	const rotateHandle = singleRect
+		? singlePivot
+			? rotatePoint(rotateHandlePoint(singleRect), singlePivot, singleRot)
+			: rotateHandlePoint(singleRect)
+		: undefined;
 
 	// The entity a live move or resize is speaking for. A multi-select move reports the one
 	// that was grabbed first rather than four stacked readouts, and a pan reports nothing —
 	// the camera moved, the scene did not.
 	const readoutId =
-		active === 'move' || active === 'scale' ? selection[0] : undefined;
+		active === 'move' || active === 'scale' || active === 'rot'
+			? selection[0]
+			: undefined;
 	const readoutEntity =
 		readoutId === undefined ? undefined : stage.entities?.[readoutId];
 	const readoutRect = readoutId === undefined ? undefined : rects.get(readoutId);
@@ -1086,7 +1138,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				'camera-locked': cameraLocked,
 				dragging,
 				'drop-active': dropActive,
-				'over-entity': !!hover
+				'over-entity': !!hover,
+				// A drag leaves the handle behind on its first pixel, and the frame's own
+				// `grabbing` would take the cursor over from there. Turning is not grabbing.
+				rotating: active === 'rot'
 			})}
 			data-testid="stage-editor"
 			onDoubleClick={handleDoubleClick}
@@ -1245,7 +1300,11 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							transform: readoutAbove ? 'translateY(-100%)' : undefined
 						}}
 					>
-						{active === 'scale' ? (
+						{active === 'rot' ? (
+							<span className="rot">
+								{Math.round(readoutEntity.rot ?? 0)}&deg;
+							</span>
+						) : active === 'scale' ? (
 							<span className="scale">
 								&times;{roundCoord(readoutEntity.scale ?? 1)}
 							</span>
@@ -1291,6 +1350,34 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						/>
 						);
 					})}
+				{/* The fifth dot, and the only one that is not a corner: rotation has no
+				    direction to be dragged in, so it gets the middle of the top edge and
+				    rides round with the box like the corners do. The sprite's ORIGIN is
+				    what it turns about — a character's feet, a prop's pinned anchor —
+				    which is the point the green cross has always marked and which lights
+				    orange for the duration, so the author can see the centre of the turn
+				    without a second draggable thing to keep in sync. Moving that centre is
+				    the character/asset editor's business; there is no per-scene pivot. */}
+				{editable && single !== undefined && rotateHandle && (
+					<div
+						aria-label={t('dialogs.passageEdit.scenePreview.rotate')}
+						className="stage-editor-handle rot"
+						data-handle="rot"
+						data-testid="stage-editor-rotate"
+						onPointerDown={event => {
+							event.stopPropagation();
+							event.preventDefault();
+							frameRef.current?.focus();
+							beginGesture(event, 'rot', [single]);
+						}}
+						role="button"
+						style={{
+							left: rotateHandle.x,
+							top: rotateHandle.y
+						}}
+						title={t('dialogs.passageEdit.scenePreview.rotate')}
+					/>
+				)}
 			</div>
 		</div>
 	);

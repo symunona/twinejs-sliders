@@ -517,6 +517,119 @@ export function scaleFrom(
 }
 
 // ---------------------------------------------------------------------------
+// Rotate handle
+// ---------------------------------------------------------------------------
+
+/**
+ * How far apart a shift-drag's rotations land, in degrees.
+ *
+ * Twenty-four steps round the circle, which is the clock face every other editor's rotate
+ * snap uses. It is the coarsest step that still contains the angles an author actually aims
+ * at — 30, 45, 60 and 90 are all multiples of it — so the snap never stands between the
+ * author and the tilt they meant.
+ */
+export const ROT_SNAP_DEGREES = 15;
+
+/** The rotate handle's position in MOUNT px: the middle of the rect's top edge. */
+export function rotateHandlePoint(rect: Rect): Vec2 {
+	const left = finite(rect?.left);
+
+	return {
+		x: left + Math.max(0, finite(rect?.width)) / 2,
+		y: finite(rect?.top)
+	};
+}
+
+/**
+ * Degrees folded into `(-180, 180]`.
+ *
+ * A wrist that keeps turning would otherwise wind `rot` up past a full turn, which draws
+ * exactly the same and which the schema warns about — the author would get a lint they did
+ * not ask for out of a gesture that looked right on screen. `-180` comes back as `180` so
+ * there is one spelling of the half turn.
+ */
+export function normalizeDegrees(n: number): number {
+	if (!Number.isFinite(n)) {
+		return 0;
+	}
+
+	const wrapped = ((n % 360) + 360) % 360;
+
+	return wrapped > 180 ? wrapped - 360 : wrapped;
+}
+
+export interface RotOptions {
+	/** Shift-rotate. Snaps the RESULT to `ROT_SNAP_DEGREES`. Defaults to false. */
+	snap?: boolean;
+}
+
+/**
+ * The new `rot` for a rotate drag, in whole degrees.
+ *
+ * The angle is the pointer's bearing from the pivot NOW minus its bearing when the drag
+ * began, added to the rotation the entity already had — so grabbing the handle does not
+ * snap the sprite to point at the cursor, exactly as `dragTo` carries the entity's own
+ * start position rather than deriving it from the pointer.
+ *
+ * MOUNT px has y pointing DOWN, so `atan2(dy, dx)` grows clockwise — the same sense CSS
+ * `rotate()` turns in. No sign flip anywhere, which is the whole reason the pivot and both
+ * pointers are taken in this space rather than in scene units.
+ *
+ * Whole degrees: a hand cannot aim finer than that, and `rot: -8.237` is a number the author
+ * has to look at forever. Snapping is OFF by default, the opposite of a move's — a tilt is
+ * usually small (`rot: -8` is what the format docs show someone writing) and a 15 degree
+ * grid would put every one of those out of reach.
+ */
+export function rotFrom(
+	startRot: number,
+	pivot: Vec2,
+	startPointer: Vec2,
+	pointer: Vec2,
+	options: RotOptions = {}
+): number {
+	const base = normalizeDegrees(finite(startRot));
+
+	if (
+		!Number.isFinite(pivot?.x) ||
+		!Number.isFinite(pivot?.y) ||
+		!Number.isFinite(startPointer?.x) ||
+		!Number.isFinite(startPointer?.y) ||
+		!Number.isFinite(pointer?.x) ||
+		!Number.isFinite(pointer?.y)
+	) {
+		return base;
+	}
+
+	const sx = startPointer.x - pivot.x;
+	const sy = startPointer.y - pivot.y;
+
+	// Grabbed exactly on the pivot: there is no bearing to measure a turn against.
+	if (!(Math.hypot(sx, sy) > 0)) {
+		return base;
+	}
+
+	const turned =
+		(Math.atan2(pointer.y - pivot.y, pointer.x - pivot.x) -
+			Math.atan2(sy, sx)) *
+		(180 / Math.PI);
+
+	if (!Number.isFinite(turned)) {
+		return base;
+	}
+
+	const next = base + turned;
+
+	// 360 is a whole number of steps, so folding a snapped angle leaves it on the grid and
+	// the two operations commute — the order below is the readable one, not a load-bearing
+	// one.
+	return normalizeDegrees(
+		options.snap === true
+			? Math.round(next / ROT_SNAP_DEGREES) * ROT_SNAP_DEGREES
+			: Math.round(next)
+	);
+}
+
+// ---------------------------------------------------------------------------
 // Readout
 // ---------------------------------------------------------------------------
 

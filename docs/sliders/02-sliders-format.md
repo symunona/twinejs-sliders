@@ -248,6 +248,7 @@ beats:
 |---|---|
 | Unit | degrees, clockwise. |
 | Pivot | the entity's **own origin** — a character's feet, a prop's anchor. Pin that anchor in the asset editor or character editor; there is no per-scene pivot key. |
+| Editor | rotate dot on the middle of the selection box's top edge. Drag to tilt, Shift snaps to 15°. Whole degrees, one undo per drag. The origin marker lights orange for the turn. |
 | Absent vs `rot: 0` | the same rotation. A beat gaining `rot: 0` produces no transition. |
 | With `flip` | the mirror is applied FIRST, so a positive `rot` leans the same way on screen whichever way the sprite faces. |
 | Past 360 | accepted with a warning — it draws as `rot % 360`. A spin is a frame cycle, not a pose. |

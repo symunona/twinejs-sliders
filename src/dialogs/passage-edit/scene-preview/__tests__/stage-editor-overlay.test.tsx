@@ -557,9 +557,159 @@ describe('<StageEditorOverlay>', () => {
 		});
 	});
 
+	// `at: -0.4` on a 640x360 box puts mira's feet -- her origin, and so the centre of any
+	// turn -- at (192, 333). The pointer coordinates below are bearings from that point:
+	// (192, 133) is straight up, (292, 333) straight right, (92, 333) straight left.
+	describe('rotate', () => {
+		const PIVOT = {x: 192, y: 333};
+		const ABOVE = {x: PIVOT.x, y: PIVOT.y - 200};
+
+		function tilted(rot: number) {
+			return parseSceneText(
+				[
+					'[scene]',
+					'cast:',
+					`  mira: {at: -0.4, rot: ${rot}}`,
+					'props:',
+					'  candle: {at: 0.4, layer: front}'
+				].join('\n')
+			).states[0];
+		}
+
+		it('writes rot for a drag round the origin, clockwise like CSS', () => {
+			const {onCommit, onPatch} = renderOverlay({selection: ['mira']});
+			const handle = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(handle, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', PIVOT.x + 100, PIVOT.y));
+
+			// Up to the right is a quarter turn clockwise on a y-down screen.
+			expect(onPatch.mock.calls[onPatch.mock.calls.length - 1][0]).toEqual({
+				mira: {rot: 90}
+			});
+			expect(onCommit).not.toHaveBeenCalled();
+
+			fireEvent(window, pointer('pointerup', PIVOT.x + 100, PIVOT.y));
+
+			expect(onCommit.mock.calls[0][0]).toEqual([
+				{id: 'mira', key: 'rot', kind: 'cast', ref: 'mira', reset: 0, value: 90}
+			]);
+		});
+
+		it('adds to the tilt the entity already had', () => {
+			const {onCommit} = renderOverlay({selection: ['mira'], stage: tilted(30)});
+			const handle = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(handle, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', PIVOT.x + 100, PIVOT.y));
+			fireEvent(window, pointer('pointerup', PIVOT.x + 100, PIVOT.y));
+
+			expect(onCommit.mock.calls[0][0][0]).toMatchObject({key: 'rot', value: 120});
+		});
+
+		// Absent and `rot: 0` are the same rotation, so levelling a sprite deletes the key
+		// rather than writing a default into a hand-edited file.
+		it('deletes the key when the sprite comes back to level', () => {
+			const {onCommit} = renderOverlay({selection: ['mira'], stage: tilted(90)});
+			const handle = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(handle, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', PIVOT.x - 100, PIVOT.y));
+			fireEvent(window, pointer('pointerup', PIVOT.x - 100, PIVOT.y));
+
+			expect(onCommit.mock.calls[0][0]).toEqual([
+				{
+					id: 'mira',
+					key: 'rot',
+					kind: 'cast',
+					ref: 'mira',
+					reset: 0,
+					value: undefined
+				}
+			]);
+		});
+
+		// Free by default, unlike a move: a tilt is usually small, and a 15 degree grid
+		// would put every small one out of reach.
+		it('snaps to 15 degree steps only while shift is held', () => {
+			const off = {x: PIVOT.x + 100, y: PIVOT.y - 20};
+			const {onCommit, update} = renderOverlay({selection: ['mira']});
+			const handle = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(handle, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', off.x, off.y));
+			fireEvent(window, pointer('pointerup', off.x, off.y));
+
+			expect(onCommit.mock.calls[0][0][0]).toMatchObject({value: 79});
+
+			onCommit.mockClear();
+			update({});
+
+			const again = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(again, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', off.x, off.y, {shiftKey: true}));
+			fireEvent(window, pointer('pointerup', off.x, off.y, {shiftKey: true}));
+
+			expect(onCommit.mock.calls[0][0][0]).toMatchObject({value: 75});
+		});
+
+		it('lights the origin the turn is about', () => {
+			renderOverlay({selection: ['mira']});
+			const handle = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(handle, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', PIVOT.x + 100, PIVOT.y));
+
+			expect(screen.getByTestId('stage-editor-origin-active')).toHaveClass(
+				'active'
+			);
+		});
+
+		// The dot rides round with the box it belongs to, like the corner handles do.
+		it('sits on the turned top edge of a sprite that is already tilted', () => {
+			const {update} = renderOverlay({selection: ['mira']});
+
+			const level = screen.getByTestId('stage-editor-rotate');
+
+			// mira's rect is 80..200 x 60..360, so the middle of its top edge is (140, 60).
+			expect(parseFloat(level.style.left)).toBeCloseTo(140, 6);
+			expect(parseFloat(level.style.top)).toBeCloseTo(60, 6);
+
+			update({stage: tilted(90)});
+
+			const turned = screen.getByTestId('stage-editor-rotate');
+
+			// (140, 60) turned a quarter clockwise about (192, 333).
+			expect(parseFloat(turned.style.left)).toBeCloseTo(465, 6);
+			expect(parseFloat(turned.style.top)).toBeCloseTo(281, 6);
+		});
+
+		it('does not offer the dot for a multi-select', () => {
+			renderOverlay({selection: ['mira', 'candle']});
+			expect(screen.queryByTestId('stage-editor-rotate')).toBeNull();
+		});
+
+		it('writes nothing for a press that never became a drag', () => {
+			const {onCommit, onPatch} = renderOverlay({selection: ['mira']});
+			const handle = screen.getByTestId('stage-editor-rotate');
+
+			fireEvent(handle, pointer('pointerdown', ABOVE.x, ABOVE.y));
+			fireEvent(window, pointer('pointermove', ABOVE.x + 2, ABOVE.y));
+			fireEvent(window, pointer('pointerup', ABOVE.x + 2, ABOVE.y));
+
+			expect(onPatch).not.toHaveBeenCalled();
+			expect(onCommit).not.toHaveBeenCalled();
+		});
+	});
+
 	it('draws handles only for a single selection', () => {
 		renderOverlay({selection: ['mira']});
-		expect(document.querySelectorAll('.stage-editor-handle')).toHaveLength(4);
+		// Four corners to resize by, plus the rotate dot on the top edge.
+		expect(document.querySelectorAll('.stage-editor-handle')).toHaveLength(5);
+		expect(document.querySelectorAll('.stage-editor-handle.rot')).toHaveLength(
+			1
+		);
 	});
 
 	it('draws no handles for a multi-select', () => {

@@ -39,6 +39,10 @@ renderer layer would start the argument again.
 /* Empty ground pans the camera, so the ground advertises itself as grabbable. Over a
    sprite the cursor becomes a move cross instead, which is the same signal in reverse. */
 .stage-editor {
+	/* The rotate cursor, defined once and inherited by the dot and by the frame while a
+	   turn is running. CSS has no rotate keyword, so it is an inline SVG with a keyword
+	   fallback for a browser that refuses the image. */
+	--stage-rotate-cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cg%20fill='none'%20stroke='%23000'%20stroke-opacity='.55'%20stroke-width='4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%205a7%207%200%201%201-4.9%202'/%3E%3Cpath%20d='M11%201.6%2015%205l-4%203.4z'/%3E%3C/g%3E%3Cpath%20d='M11%201.6%2015%205l-4%203.4z'%20fill='%23000'%20fill-opacity='.55'%20stroke='%23000'%20stroke-opacity='.55'%20stroke-width='4'%20stroke-linejoin='round'/%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%205a7%207%200%201%201-4.9%202'/%3E%3C/g%3E%3Cpath%20d='M11%201.6%2015%205l-4%203.4z'%20fill='%23fff'/%3E%3C/svg%3E") 12 12, crosshair;
 	cursor: grab;
 }
 
@@ -249,6 +253,27 @@ renderer layer would start the argument again.
 .stage-editor-handle.ne,
 .stage-editor-handle.sw {
 	cursor: nesw-resize;
+}
+
+/* The rotate dot: the fifth handle, and the only one that is not a corner. Round rather
+   than square so it is told apart from a resize handle by shape and not only by where it
+   sits, and it keeps the selection box's cyan because it belongs to that box. */
+.stage-editor-handle.rot {
+	border-radius: 50%;
+	cursor: var(--stage-rotate-cursor);
+}
+
+/* A drag leaves the dot behind on its first pixel and the frame takes the cursor over from
+   there, so `.dragging`'s `grabbing` has to be beaten for the length of the turn. The rule
+   sits after it in the file, at equal specificity, which is what wins. */
+.stage-editor.rotating {
+	cursor: var(--stage-rotate-cursor);
+}
+
+/* Degrees wear the ref point's colour, like the other numbers about it: the turn is about
+   that cross, and the cross is orange while it happens. */
+.stage-editor-readout .rot {
+	color: #ff9d5c;
 }
 
 /* The measuring grid. Sits at the bottom of the marker layer — selection boxes, guides and
