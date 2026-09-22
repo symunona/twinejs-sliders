@@ -303,6 +303,8 @@
 			"height": "Height",
 			"hideFrame": "Hide “{{name}}” behind this frame",
 			"hideNote": "Hide the note about {{about}}",
+			"invertCutout": "Invert Cutout",
+			"invertNote": "“Invert cutout” swaps the two sides over: the background is kept and the subject is dropped, along the same edge the sliders describe. Shapes drawn by hand are not flipped with it—a hole cut by hand stays a hole. Use “Save as new” to keep both halves as separate assets.",
 			"loadError": "Could not open this asset.",
 			"loading": "Opening…",
 			"lockAspect": "Lock Aspect",
@@ -1233,6 +1235,7 @@
 			"assetEditor": {
 				"removeBackground": "Remove Background",
 				"restoreBackground": "Restore Background",
+				"invertCutout": "Invert Cutout",
 				"resetCrop": "Reset Crop",
 				"cycleMaskMode": "Cycle Preview",
 				"clearMask": "Clear Mask",

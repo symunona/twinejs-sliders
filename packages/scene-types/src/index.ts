@@ -1265,6 +1265,17 @@ export interface CutoutTuning {
 	 * edge; wide leaves the model's own soft alpha almost untouched.
 	 */
 	softness: number;
+	/**
+	 * Swap what the cutout keeps for what it cut: the background survives and the
+	 * subject goes. Applied after `threshold` and `softness`, so the edge it leaves is
+	 * the same edge those two describe, read from the other side.
+	 *
+	 * Optional and absent when off, because it rides `AssetMeta` into sync — and it
+	 * describes the model's alpha ALONE. Hand-drawn shapes are not touched by it; a
+	 * shape that cut a hole still cuts one, which is what keeps the two halves of the
+	 * mask independent.
+	 */
+	invert?: boolean;
 }
 
 /** Whether a hand-drawn shape forces its area transparent or forces it opaque. */

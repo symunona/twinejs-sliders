@@ -1,5 +1,7 @@
 import {
 	BackgroundTimeoutError,
+	DEFAULT_TUNING,
+	tunedAlpha,
 	withStageWatchdog
 } from '../background-engine';
 
@@ -166,5 +168,51 @@ describe('backgroundSupport', () => {
 
 		expect(engine).toBeUndefined();
 		expect(result.supported).toBe(false);
+	});
+});
+
+describe('tunedAlpha', () => {
+	// Well outside the soft band either side of the threshold, so these assert the
+	// tuning's decision rather than the shape of its edge.
+	const alpha = new Float32Array([0, 0.5, 1]);
+
+	it('leaves the tuning alone when invert is off', () => {
+		const tuned = tunedAlpha(alpha, DEFAULT_TUNING);
+
+		expect(tuned[0]).toBeCloseTo(0);
+		expect(tuned[2]).toBeCloseTo(1);
+		expect(tunedAlpha(alpha, {...DEFAULT_TUNING, invert: false})).toEqual(tuned);
+	});
+
+	it('swaps kept for cut when invert is on', () => {
+		const inverted = tunedAlpha(alpha, {...DEFAULT_TUNING, invert: true});
+
+		expect(inverted[0]).toBeCloseTo(1);
+		expect(inverted[2]).toBeCloseTo(0);
+	});
+
+	it('inverts after the edge contrast, so the sliders keep their meaning', () => {
+		// Inverting the raw alpha FIRST would read the threshold from the other end: a
+		// pixel just inside the kept side would land just inside the cut side instead of
+		// being the same edge seen from behind. One flip of the finished curve is the
+		// only reading where `1 - plain` holds for every pixel.
+		const tuning = {softness: 0.4, threshold: 0.6};
+		const middling = new Float32Array([0.1, 0.45, 0.55, 0.62, 0.9]);
+		const plain = tunedAlpha(middling, tuning);
+		const inverted = tunedAlpha(middling, {...tuning, invert: true});
+
+		plain.forEach((value, index) =>
+			expect(inverted[index]).toBeCloseTo(1 - value)
+		);
+	});
+
+	it('does not write back into the alpha it was handed', () => {
+		// The editor keeps one model alpha and re-tunes it on every slider drag. An
+		// in-place invert would flip that cached map itself, so the second drag would be
+		// tuning an already-inverted picture.
+		const source = new Float32Array([0, 0.5, 1]);
+
+		tunedAlpha(source, {...DEFAULT_TUNING, invert: true});
+		expect(Array.from(source)).toEqual([0, 0.5, 1]);
 	});
 });

@@ -2,6 +2,7 @@ import {AssetId, AssetMask, AssetMeta, Frac2, MaskOp} from '@sliders/scene-types
 import classNames from 'classnames';
 import {
 	IconAdjustments,
+	IconContrast,
 	IconCrop,
 	IconDeviceFloppy,
 	IconEraser,
@@ -837,6 +838,26 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setTuning(next);
 	}
 
+	/**
+	 * Swaps the cutout over: the background is kept and the subject is dropped.
+	 *
+	 * Deletes the key rather than writing `false`, so an asset nobody inverted carries no
+	 * trace of the toggle into sync. `sameTuning` reads absent and `false` as one thing,
+	 * which is what keeps turning it on and off again from counting as an unsaved edit.
+	 */
+	function toggleInvert(value: boolean) {
+		const next: CutoutTuning = {
+			softness: tuning.softness,
+			threshold: tuning.threshold
+		};
+
+		if (value) {
+			next.invert = true;
+		}
+
+		retune(next);
+	}
+
 	async function handleRemoveBackground() {
 		// The model runs on the ORIGINAL, never on what is on screen. A mask already
 		// drawn has cut holes in `source`, and feeding those back in would bake a hand
@@ -1231,6 +1252,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		// shapes were still on the meta and still in the save, but the preview no longer
 		// showed them. The recomposite effect redraws whatever is left.
 		run: () => setAlpha(undefined),
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		enabled: hasCutout && !progress,
+		id: 'assetEditor.invertCutout',
+		label: t('hotkeys.commands.assetEditor.invertCutout'),
+		run: () => toggleInvert(!tuning.invert),
 		scope: 'asset-editor'
 	});
 
@@ -1669,13 +1698,23 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 											/>
 										)}
 										{hasCutout && !progress && (
-											<IconButton
-												commandId="assetEditor.restoreBackground"
-												disabled={busy}
-												icon={<IconEraser />}
-												label={t('dialogs.assetEditor.restoreBackground')}
-												onClick={() => setAlpha(undefined)}
-											/>
+											<>
+												<CheckboxButton
+													commandId="assetEditor.invertCutout"
+													disabled={busy}
+													icon={<IconContrast />}
+													label={t('dialogs.assetEditor.invertCutout')}
+													onChange={toggleInvert}
+													value={!!tuning.invert}
+												/>
+												<IconButton
+													commandId="assetEditor.restoreBackground"
+													disabled={busy}
+													icon={<IconEraser />}
+													label={t('dialogs.assetEditor.restoreBackground')}
+													onClick={() => setAlpha(undefined)}
+												/>
+											</>
 										)}
 									</ButtonBar>
 									{onCpu && (
@@ -1735,6 +1774,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 											/>
 											<p className="asset-editor-detail">
 												{t('dialogs.assetEditor.tuningNote')}
+											</p>
+											<p className="asset-editor-detail">
+												{t('dialogs.assetEditor.invertNote')}
 											</p>
 										</>
 									)}

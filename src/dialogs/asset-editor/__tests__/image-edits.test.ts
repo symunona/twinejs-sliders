@@ -217,4 +217,19 @@ describe('sameTuning', () => {
 		expect(sameTuning(undefined, tuning)).toBe(false);
 		expect(sameTuning(tuning, {...tuning})).toBe(true);
 	});
+
+	it('notices the cutout being inverted', () => {
+		const tuning = {softness: 0.3, threshold: 0.5};
+
+		expect(sameTuning(tuning, {...tuning, invert: true})).toBe(false);
+	});
+
+	it('reads an absent invert and a false one as the same cutout', () => {
+		// Only one of the two is ever written: the toggle deletes the key rather than
+		// storing `false`. A saved asset meets its unsaved self here, and calling those
+		// two different would light up the save buttons on an untouched edit.
+		const tuning = {softness: 0.3, threshold: 0.5};
+
+		expect(sameTuning(tuning, {...tuning, invert: false})).toBe(true);
+	});
 });

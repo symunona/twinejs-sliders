@@ -171,6 +171,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'story.stylesheet': {bindings: []},
 	'assetEditor.resetCrop': {bindings: []},
 	'assetEditor.restoreBackground': {bindings: []},
+	'assetEditor.invertCutout': {bindings: []},
 	'assetEditor.cycleMaskMode': {bindings: []},
 	'assetEditor.clearMask': {bindings: []},
 

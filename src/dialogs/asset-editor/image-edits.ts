@@ -276,7 +276,13 @@ export function sameTuning(a?: CutoutTuning, b?: CutoutTuning): boolean {
 		return !a && !b;
 	}
 
-	return a.threshold === b.threshold && a.softness === b.softness;
+	// `!!` on both sides: absent and false are the same cutout, and only one of them is
+	// ever written to the meta.
+	return (
+		a.threshold === b.threshold &&
+		a.softness === b.softness &&
+		!!a.invert === !!b.invert
+	);
 }
 
 /** Three decimals, the same precision the character editor's handles write. */

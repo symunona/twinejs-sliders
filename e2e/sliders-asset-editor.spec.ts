@@ -177,15 +177,32 @@ test.describe('Sliders asset editor', () => {
 		await shot(page, '23-asset-editor-background-removed');
 
 		// The cutout has transparent pixels where the flat background was.
-		const cornerAlpha = await editor.locator('canvas').evaluate(node => {
-			const canvas = node as HTMLCanvasElement;
+		const cornerAlpha = () =>
+			editor.locator('canvas').evaluate(node => {
+				const canvas = node as HTMLCanvasElement;
 
-			return canvas
-				.getContext('2d')!
-				.getImageData(1, 1, 1, 1).data[3];
-		});
+				return canvas
+					.getContext('2d')!
+					.getImageData(1, 1, 1, 1).data[3];
+			});
 
-		expect(cornerAlpha).toBeLessThan(32);
+		expect(await cornerAlpha()).toBeLessThan(32);
+
+		// Inverting swaps the two sides over, so the corner that was cut comes back
+		// opaque. Read from the preview rather than from the toggle, because the whole
+		// point of the feature is which pixels survive it.
+		const invert = editor.getByRole('checkbox', {name: 'Invert Cutout'});
+
+		await invert.click();
+		await expect(invert).toBeChecked();
+		await expect.poll(cornerAlpha, {timeout: 15000}).toBeGreaterThan(223);
+		await shot(page, '23-asset-editor-cutout-inverted');
+
+		// And off again: the toggle has to be a way of looking at the cutout, not a
+		// one-way door out of it. What gets saved below is the cutout itself.
+		await invert.click();
+		await expect(invert).not.toBeChecked();
+		await expect.poll(cornerAlpha, {timeout: 15000}).toBeLessThan(32);
 
 		await editor.getByRole('button', {name: 'Save As New Asset'}).click();
 		await expect(editor).toBeHidden({timeout: 30000});

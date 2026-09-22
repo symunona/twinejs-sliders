@@ -265,12 +265,26 @@ export function tunedAlpha(
 	tuning: CutoutTuning = DEFAULT_TUNING
 ): Float32Array {
 	const half = Math.max(0.001, tuning.softness) / 2;
-
-	return applyEdgeContrast(
+	const tuned = applyEdgeContrast(
 		alpha,
 		tuning.threshold - half,
 		tuning.threshold + half
 	);
+
+	if (!tuning.invert) {
+		return tuned;
+	}
+
+	// After the edge contrast, never before it. Inverting the raw alpha first would
+	// leave `threshold` measuring from the other end -- so the slider would jump the
+	// moment the toggle was hit, and the soft band would sit somewhere else. Flipping
+	// the finished curve keeps the edge exactly where the two sliders put it and only
+	// swaps which side of it survives.
+	for (let index = 0; index < tuned.length; index++) {
+		tuned[index] = 1 - tuned[index];
+	}
+
+	return tuned;
 }
 
 /**
