@@ -1,7 +1,10 @@
 import * as React from 'react';
 import {AssetStore} from '@sliders/asset-store';
 import {AssetId, AssetMeta, AssetResolver, Character} from '@sliders/scene-types';
-import {useAssetStore} from '../../sliders-assets/asset-store-context';
+import {
+	onAssetLibraryChange,
+	useAssetStore
+} from '../../sliders-assets/asset-store-context';
 
 /**
  * Bridges the gap between how authors write scenes and how the store keys things.
@@ -70,13 +73,21 @@ export function usePreviewResolver(): AssetResolver {
 	const store = useAssetStore();
 	const resolver = React.useMemo(() => createNamedResolver(store), [store]);
 
-	// Uploads happen in another dialog, so drop the name index when the window regains
-	// focus rather than trying to observe the store.
+	// The library signal is the real one: the asset dialogs are dialogs, in this same
+	// window, so editing an asset over the top of the preview fires no focus event at all
+	// and the index below would stay stale until the author alt-tabbed away and back.
+	//
+	// Focus is kept as well, and deliberately: a bundle import or a sync pull can land art
+	// without going through a dialog, and an index dropped twice costs one `list()`.
 	React.useEffect(() => {
-		const onFocus = () => resolver.invalidate();
+		const drop = () => resolver.invalidate();
+		const stop = onAssetLibraryChange(drop);
 
-		window.addEventListener('focus', onFocus);
-		return () => window.removeEventListener('focus', onFocus);
+		window.addEventListener('focus', drop);
+		return () => {
+			stop();
+			window.removeEventListener('focus', drop);
+		};
 	}, [resolver]);
 
 	return resolver;

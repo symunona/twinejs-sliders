@@ -259,6 +259,67 @@ describe('<MaskTool>', () => {
 		expect(onChangeOp).not.toHaveBeenCalled();
 	});
 
+	// Invert has no default to route to: which side a NEW shape acts on comes from the
+	// direction it was drawn in, so the toggle is only ever about a picked shape.
+
+	it('turns the picked shape inside out', () => {
+		const onChange = jest.fn();
+
+		renderTool({mask: THREE, onChange, selected: 'shape-2'});
+
+		const toggle = screen.getByRole('button', {
+			name: 'dialogs.assetEditor.maskInvert'
+		});
+
+		expect(toggle).toHaveAttribute('aria-pressed', 'false');
+		fireEvent.click(toggle);
+
+		const [next] = onChange.mock.calls[0] as [AssetMask];
+
+		expect(next.shapes[1].invert).toBe(true);
+		expect(next.shapes[0].invert).toBeUndefined();
+	});
+
+	it('turns an inverted shape back the right way out', () => {
+		const onChange = jest.fn();
+		const mask = {shapes: [{...shape('shape-1'), invert: true}]};
+
+		renderTool({mask, onChange, selected: 'shape-1'});
+
+		const toggle = screen.getByRole('button', {
+			name: 'dialogs.assetEditor.maskInvert'
+		});
+
+		expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		fireEvent.click(toggle);
+		expect((onChange.mock.calls[0][0] as AssetMask).shapes[0].invert).toBe(
+			false
+		);
+	});
+
+	it('offers the gesture instead when no shape is picked', () => {
+		renderTool({mask: THREE});
+		expect(
+			screen.getByRole('button', {name: 'dialogs.assetEditor.maskInvert'})
+		).toBeDisabled();
+	});
+
+	it('says in the list which shapes act on the outside', () => {
+		renderTool({
+			mask: {shapes: [shape('shape-1'), {...shape('shape-2'), invert: true}]}
+		});
+
+		const rows = screen.getAllByTestId('mask-row');
+
+		expect(rows[0]).not.toHaveAttribute('data-invert');
+		expect(rows[1]).toHaveAttribute('data-invert', 'true');
+		expect(
+			within(rows[1]).getByRole('button', {
+				name: 'dialogs.assetEditor.maskShapeOutsideLabel'
+			})
+		).toBeInTheDocument();
+	});
+
 	it('routes op to the next shape when none is picked', () => {
 		const onChange = jest.fn();
 		const onChangeOp = jest.fn();

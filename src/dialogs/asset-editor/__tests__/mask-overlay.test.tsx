@@ -143,6 +143,61 @@ describe('<MaskOverlay>', () => {
 		expect(next.shapes[0]).toMatchObject({feather: 0.04, op: 'keep'});
 	});
 
+	// Which way round the gesture went is the ONLY thing that sets `invert`, and it is
+	// set once, at commit. Everything after that is the pane's toggle.
+
+	it('leaves a clockwise shape acting on its inside', () => {
+		const onChange = jest.fn();
+
+		renderOverlay({onChange});
+		// Right along the top, then down: clockwise on a screen whose y points down.
+		click(100, 20);
+		click(200, 20);
+		click(200, 100);
+		fireEvent.keyDown(window, {key: 'Enter'});
+
+		const [next] = onChange.mock.calls[0] as [AssetMask];
+
+		// Absent, not `false`: the flag is only ever written when it is on.
+		expect('invert' in next.shapes[0]).toBe(false);
+	});
+
+	it('inverts a shape drawn anticlockwise', () => {
+		const onChange = jest.fn();
+
+		renderOverlay({onChange});
+		// The same three corners, walked the other way round.
+		click(100, 20);
+		click(200, 100);
+		click(200, 20);
+		fireEvent.keyDown(window, {key: 'Enter'});
+
+		const [next] = onChange.mock.calls[0] as [AssetMask];
+
+		expect(next.shapes[0].invert).toBe(true);
+	});
+
+	it('draws the picture’s edge as the far side of an inverted shape', () => {
+		renderOverlay({
+			mask: {shapes: [TRIANGLE, {...OTHER, invert: true}]}
+		});
+
+		const frames = screen.getAllByTestId('mask-invert-frame');
+
+		// One frame, on the inverted shape only — an outline on its own says nothing
+		// about which of the two sides the shape is acting on.
+		expect(frames).toHaveLength(1);
+		expect(frames[0]).toHaveAttribute('width', String(WIDTH));
+		expect(frames[0]).toHaveAttribute('height', String(HEIGHT));
+		expect(screen.getAllByTestId('mask-shape')[1]).toHaveAttribute(
+			'data-invert',
+			'true'
+		);
+		expect(screen.getAllByTestId('mask-shape')[0]).not.toHaveAttribute(
+			'data-invert'
+		);
+	});
+
 	it('closes a polygon on a click back at its first vertex', () => {
 		const onChange = jest.fn();
 

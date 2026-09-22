@@ -1298,6 +1298,21 @@ export interface MaskShape {
 	 */
 	feather: number;
 	/**
+	 * Which side of the ring the shape acts on: absent or false for the inside, true for
+	 * everything else in the image.
+	 *
+	 * An inverted `cut` is how an author keeps one region and drops the whole rest of the
+	 * picture — the common case a plain cut needs four shapes to spell out. It pairs with
+	 * `op` rather than replacing it: `op` is add-or-subtract, this is which area.
+	 *
+	 * Stored, not derived from the winding of `points`, even though drawing anticlockwise
+	 * is what sets it. Winding is a property the author can destroy by accident: dragging
+	 * one vertex across the shape reverses the signed area, and a mask that silently
+	 * turned itself inside out under a corner drag would be unusable. It also keeps every
+	 * shape drawn before this existed meaning exactly what it did.
+	 */
+	invert?: boolean;
+	/**
 	 * Fractions of the SOURCE image, rounded to three decimals like an anchor. The
 	 * polygon closes itself — the last point is not repeated.
 	 */
@@ -1401,6 +1416,19 @@ export interface GlitchEffect {
 	kind: 'glitch';
 	/** How far a band slides, 0 (still) to 100 (a quarter of the art's width). */
 	amount: number;
+	/**
+	 * How far a band twists while it is torn, in DEGREES, 0 (flat) to 30.
+	 *
+	 * The one parameter here that is not unitless, and deliberately so: the reason every
+	 * distance is a fraction of the art's width is that the same asset is drawn at a dozen
+	 * sizes, and an angle already survives that — ten degrees is ten degrees on a thumbnail
+	 * and on a 4K stage.
+	 *
+	 * Defaults to 0, which is also what every asset written before this key existed reads
+	 * as. A tear that slides and does not twist is the analogue-video look the rest of these
+	 * parameters are tuned for; twisting is the digital-corruption one, so it is opt-in.
+	 */
+	rotate: number;
 	/** How many horizontal slices the picture is torn into, 1..12. */
 	bands: number;
 	/** Steps per second of the tear clock, 1..50. Low reads as mechanical, high as electrical. */

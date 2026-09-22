@@ -264,3 +264,77 @@ describe('effectCss', () => {
 		expect(css).not.toMatch(/NaN|Infinity|undefined/);
 	});
 });
+
+describe('rotate', () => {
+	it('is off by default, so an asset saved before the key existed looks unchanged', () => {
+		expect(GLITCH_DEFAULTS.rotate).toBe(0);
+		expect(normalizeGlitch({}).rotate).toBe(0);
+	});
+
+	it('leaves the class name alone while it is at zero', () => {
+		// The class is also the SEED. If adding a parameter moved the hash, every glitch an
+		// author had already tuned would come back with a different pseudo-random tear.
+		const {rotate, ...without} = glitch();
+
+		expect(effectClass(without as GlitchEffect)).toBe(effectClass(glitch()));
+		expect(effectClass(glitch({rotate: 0}))).toBe(effectClass(glitch()));
+	});
+
+	it('changes the class name once it is set', () => {
+		expect(effectClass(glitch({rotate: 8}))).not.toBe(effectClass(glitch()));
+	});
+
+	it('writes no rotate declaration while it is at zero', () => {
+		expect(effectCss(glitch())).not.toContain('rotate:');
+	});
+
+	it('gives every band a rotation alongside its slide', () => {
+		const css = effectCss(glitch({bands: 2, burst: 100, rotate: 10}));
+
+		for (const name of keyframeNames(css).filter(n => n.includes('-band-'))) {
+			const block = css.slice(css.indexOf(`@keyframes ${name}`));
+
+			expect(block.slice(0, block.indexOf('\n}'))).toMatch(
+				/translate: [-\d.]+% 0; rotate: [-\d.]+deg;/
+			);
+		}
+	});
+
+	it('stays inside the angle the author asked for', () => {
+		const css = effectCss(glitch({burst: 100, rotate: 6}));
+
+		for (const match of css.matchAll(/rotate: ([-\d.]+)deg/g)) {
+			expect(Math.abs(Number(match[1]))).toBeLessThanOrEqual(6);
+		}
+	});
+
+	it('tears on its own, with no sideways slide at all', () => {
+		// A twist with `amount` at zero is a strip of the picture lifting off and coming
+		// back — a real look, and the reason the band gate asks for either knob rather than
+		// for `amount` alone.
+		const twisted = glitch({amount: 0, noise: 0, rotate: 12, scanlines: 0, split: 0});
+
+		expect(effectIsIdle(twisted)).toBe(false);
+		expect(effectLayers(twisted).map(layer => layer.role)).toEqual([
+			'band',
+			'band',
+			'band',
+			'band',
+			'band'
+		]);
+		expect(effectCss(twisted)).toContain('rotate:');
+	});
+
+	it('draws nothing when nothing is ever corrupted', () => {
+		// `burst` gates the twist the same way it gates the slide: no burst, no tear.
+		expect(
+			effectIsIdle(
+				glitch({amount: 0, burst: 0, noise: 0, rotate: 12, scanlines: 0, split: 0})
+			)
+		).toBe(true);
+	});
+
+	it('is a real change to sameEffect', () => {
+		expect(sameEffect(glitch(), glitch({rotate: 10}))).toBe(false);
+	});
+});

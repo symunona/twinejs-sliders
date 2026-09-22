@@ -1,6 +1,7 @@
 import {AssetMask, MaskOp} from '@sliders/scene-types';
 import {
 	IconClearAll,
+	IconLayersDifference,
 	IconLayersSubtract,
 	IconLayersUnion,
 	IconPointer,
@@ -102,7 +103,11 @@ export const MaskTool: React.FC<MaskToolProps> = props => {
 		: t('dialogs.assetEditor.maskDefaults');
 	const scopeOp = current?.op ?? op;
 
-	function editSelected(change: {feather?: number; op?: MaskOp}) {
+	function editSelected(change: {
+		feather?: number;
+		invert?: boolean;
+		op?: MaskOp;
+	}) {
 		onChange({
 			shapes: shapes.map(shape =>
 				shape.id === selected ? {...shape, ...change} : shape
@@ -115,6 +120,18 @@ export const MaskTool: React.FC<MaskToolProps> = props => {
 			editSelected({op: next});
 		} else {
 			onChangeOp(next);
+		}
+	}
+
+	/**
+	 * Unlike op and feather, this has no default to fall back on: which side a new shape
+	 * acts on comes from the direction it was drawn in, so there is nothing to set until
+	 * there is a shape. Drawing picks the shape it just made, so the button is live the
+	 * moment a stroke finishes — see the disabled hint for the gesture itself.
+	 */
+	function toggleInvert() {
+		if (current) {
+			editSelected({invert: !current.invert});
 		}
 	}
 
@@ -197,6 +214,22 @@ export const MaskTool: React.FC<MaskToolProps> = props => {
 						/>
 					))}
 				</div>
+				{/* Outside the radiogroup on purpose: cut and keep are a choice of one,
+				    and this is a toggle on top of whichever of them is picked. */}
+				<IconButton
+					disabled={disabled || !current}
+					icon={<IconLayersDifference />}
+					iconOnly
+					label={t('dialogs.assetEditor.maskInvert')}
+					onClick={toggleInvert}
+					selectable
+					selected={!!current?.invert}
+					tooltipLabel={t(
+						current
+							? 'dialogs.assetEditor.maskInvertHint'
+							: 'dialogs.assetEditor.maskInvertDrawHint'
+					)}
+				/>
 				<AdjustSlider
 					disabled={disabled}
 					label={t('dialogs.assetEditor.maskFeather')}
@@ -221,6 +254,7 @@ export const MaskTool: React.FC<MaskToolProps> = props => {
 							className={classNames('asset-editor-mask-row', {
 								selected: shape.id === selected
 							})}
+							data-invert={shape.invert ? 'true' : undefined}
 							data-op={shape.op}
 							data-shape-id={shape.id}
 							data-testid="mask-row"
@@ -229,9 +263,15 @@ export const MaskTool: React.FC<MaskToolProps> = props => {
 							<IconButton
 								disabled={disabled}
 								icon={OP_ICONS[shape.op]}
-								label={t('dialogs.assetEditor.maskShapeLabel', {
-									index: index + 1
-								})}
+								// A different string, not a suffix on the same one: which
+								// side a shape acts on is the thing hardest to read off
+								// the stage, and it is the only place the list says it.
+								label={t(
+									shape.invert
+										? 'dialogs.assetEditor.maskShapeOutsideLabel'
+										: 'dialogs.assetEditor.maskShapeLabel',
+									{index: index + 1}
+								)}
 								// Clicking the picked row puts it down again: there is no
 								// other way back to "these controls set the next shape".
 								onClick={() =>

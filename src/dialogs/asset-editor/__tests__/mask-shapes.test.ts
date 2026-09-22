@@ -6,6 +6,7 @@ import {
 	MASK_MODES,
 	MASK_TOOL_IDS,
 	VERTEX_RADIUS,
+	drawnInverted,
 	emptyMask,
 	hitShape,
 	hitVertex,
@@ -13,6 +14,7 @@ import {
 	mergeAlpha,
 	newShapeId,
 	rasterizeMask,
+	ringArea,
 	roundPoint,
 	roundShape,
 	sameMask,
@@ -266,6 +268,57 @@ function at(alpha: Float32Array, width: number, x: number, y: number) {
 	return alpha[y * width + x];
 }
 
+/** The same shape drawn the other way round. */
+function reversed(source: MaskShape): MaskShape {
+	return {...source, points: [...source.points].reverse()};
+}
+
+describe('ringArea', () => {
+	it('is positive for a ring drawn clockwise on screen', () => {
+		// Image coordinates: y grows DOWNWARDS, so right-then-down-then-left is
+		// clockwise to look at, and the shoelace sign is the opposite way round from the
+		// one every maths textbook quotes.
+		expect(ringArea(square('s1', 0.25).points)).toBeGreaterThan(0);
+		expect(ringArea(reversed(square('s1', 0.25)).points)).toBeLessThan(0);
+	});
+
+	it('does not care where the ring starts, only which way it goes', () => {
+		const points = square('s1', 0.25).points;
+		const rolled = [...points.slice(2), ...points.slice(0, 2)];
+
+		expect(ringArea(rolled)).toBeCloseTo(ringArea(points), 10);
+	});
+
+	it('is zero for a ring with no area', () => {
+		expect(
+			ringArea([
+				{x: 0.1, y: 0.1},
+				{x: 0.5, y: 0.5},
+				{x: 0.9, y: 0.9}
+			])
+		).toBeCloseTo(0, 10);
+	});
+});
+
+describe('drawnInverted', () => {
+	it('inverts an anticlockwise gesture and nothing else', () => {
+		expect(drawnInverted(square('s1', 0.25).points)).toBe(false);
+		expect(drawnInverted(reversed(square('s1', 0.25)).points)).toBe(true);
+	});
+
+	it('leaves a ring with no area alone', () => {
+		// Guessing "inverted" here would cut the entire image on a stroke that covers
+		// nothing — the loudest possible answer to the most ambiguous gesture.
+		expect(
+			drawnInverted([
+				{x: 0.1, y: 0.1},
+				{x: 0.5, y: 0.5},
+				{x: 0.9, y: 0.9}
+			])
+		).toBe(false);
+	});
+});
+
 describe('the constants the tools are built on', () => {
 	it('names the three previews and the three tools', () => {
 		expect([...MASK_MODES]).toEqual(['rendered', 'paint', 'alpha']);
@@ -312,6 +365,16 @@ describe('roundPoint and roundShape', () => {
 
 	it('stores a point that is not a number as the origin, never as NaN', () => {
 		expect(roundPoint({x: NaN, y: Infinity})).toEqual({x: 0, y: 0});
+	});
+
+	it('keeps an inverted flag and drops an off one', () => {
+		const base = square('s1', 0.1);
+
+		expect(roundShape({...base, invert: true}).invert).toBe(true);
+		// Not `false` — the key is absent, so the flag costs nothing on the dozens of
+		// shapes that do not have it and shapes drawn before it existed still match.
+		expect('invert' in roundShape({...base, invert: false})).toBe(false);
+		expect('invert' in roundShape(base)).toBe(false);
 	});
 
 	it('round trips a shape: what is written is what is read back', () => {
@@ -441,6 +504,19 @@ describe('sameMask', () => {
 			sameMask(base, {shapes: [square('s1', 0.1), square('s2', 0.2)]})
 		).toBe(false);
 		expect(sameMask(base, undefined)).toBe(false);
+	});
+
+	it('sees a shape turned inside out', () => {
+		const base = {shapes: [square('s1', 0.1)]};
+
+		expect(
+			sameMask(base, {shapes: [{...square('s1', 0.1), invert: true}]})
+		).toBe(false);
+		// An absent flag and an explicit `false` store the same shape, so `dirty` must
+		// not light up over the difference between them.
+		expect(
+			sameMask(base, {shapes: [{...square('s1', 0.1), invert: false}]})
+		).toBe(true);
 	});
 
 	it('sees a reordered mask — order is which shape is on top', () => {
@@ -652,6 +728,68 @@ describe('rasterizeMask', () => {
 		expect(at(effective, width, 16, 16)).toBe(0);
 		expect(at(effective, width, 1, 1)).toBe(1);
 		expect(at(effective, width, 30, 30)).toBe(1);
+	});
+
+	it('inverted cut: keeps the ring and drops the whole rest of the picture', () => {
+		const width = 32;
+		const height = 32;
+		const shapes = rasterizeMask(
+			{shapes: [{...square('s1', 0.25), invert: true}]},
+			width,
+			height
+		);
+		const effective = mergeAlpha(
+			new Float32Array(width * height).fill(1),
+			shapes,
+			width * height
+		)!;
+
+		// Exactly the other way up from the plain cut above.
+		expect(at(effective, width, 16, 16)).toBe(1);
+		expect(at(effective, width, 1, 1)).toBe(0);
+		expect(at(effective, width, 30, 30)).toBe(0);
+	});
+
+	it('inverted keep: adds everywhere except the ring', () => {
+		const width = 32;
+		const height = 32;
+		const shapes = rasterizeMask(
+			{shapes: [{...square('s1', 0.25, 'keep'), invert: true}]},
+			width,
+			height
+		);
+		const effective = mergeAlpha(
+			new Float32Array(width * height),
+			shapes,
+			width * height
+		)!;
+
+		expect(at(effective, width, 16, 16)).toBe(0);
+		expect(at(effective, width, 1, 1)).toBe(1);
+	});
+
+	it('feathers an inverted shape across the same edge, the other way up', () => {
+		const width = 48;
+		const height = 48;
+		const shapes = rasterizeMask(
+			{shapes: [{...square('s1', 0.25, 'cut', 0.06), invert: true}]},
+			width,
+			height
+		)!;
+		const across = [];
+
+		for (let x = 4; x <= 24; x++) {
+			across.push(at(shapes, width, x, 24));
+		}
+
+		// Fully cut out at the edge of the picture, untouched in the middle of the ring,
+		// and never a step back on the way — a blurred inverse is still a blur.
+		expect(across[0]).toBeCloseTo(-1, 5);
+		expect(across[across.length - 1]).toBeCloseTo(0, 5);
+
+		for (let index = 1; index < across.length; index++) {
+			expect(across[index]).toBeGreaterThanOrEqual(across[index - 1] - 1e-6);
+		}
 	});
 
 	it('patches: a keep shape adds where the model found nothing', () => {

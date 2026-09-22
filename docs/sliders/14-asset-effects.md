@@ -28,12 +28,14 @@ Same reason `importAsset` strips `edits`/`mask`/`tuning`/`sidecars` and **keeps*
 
 ## Parameters
 
-All 0..100 and unitless, except `bands`, `speed`, `period`. No pixels anywhere: the same asset
-draws at a dozen sizes, so every distance is a fraction of the art's own width.
+All 0..100 and unitless, except `bands`, `speed`, `period`, `rotate`. No pixels anywhere: the
+same asset draws at a dozen sizes, so every distance is a fraction of the art's own width. An
+angle already survives that, so `rotate` is plain degrees.
 
 | Key | Range | Means |
 |---|---|---|
 | `amount` | 0..100 | Tear distance. 100 = a quarter of the width. |
+| `rotate` | 0..30 | Band twist during a tear, DEGREES. Default 0. |
 | `bands` | 1..12 | Horizontal slices the art is torn into. |
 | `speed` | 1..50 | Steps per second of the tear clock. |
 | `split` | 0..100 | Colour channel separation. 100 = 2% of width each way. |
@@ -47,6 +49,13 @@ Source of truth: `GLITCH_RANGES` + `GLITCH_DEFAULTS` in
 
 `burst` is most of the effect. Permanently torn reads as a broken file; the clean stretch is
 what makes it read as interference.
+
+Bands draw when `burst > 0` AND (`amount > 0` OR `rotate > 0`). Either knob alone is a tear:
+sliding is the analogue look, twisting is the digital one.
+
+`rotate` defaults to 0, and has to. It is left OUT of the class hash while it is zero
+(`LATE_KEYS`), because the class is also the SEED — a hash that moved would re-roll the tear
+on every effect an author already tuned. Same for any parameter added later.
 
 Presets in `src/dialogs/asset-editor/effect-tool.tsx`: Weak Signal, Broken Sign, VHS, Corrupt.
 
@@ -92,11 +101,14 @@ after the last change.
 
 ### Properties it is allowed to touch
 
-`translate`, `clip-path`, `opacity`, `filter`, `background-position`. Nothing else.
+`translate`, `rotate`, `clip-path`, `opacity`, `filter`, `background-position`. Nothing else.
 
 `applyFrameFit` and `layout` own `transform`, `transform-origin`, `object-fit`,
-`object-position`. `translate` is its own longhand and COMPOSES with `transform`, so an effect
-layers onto a mirrored, tilted, origin-pinned sprite with no fight.
+`object-position`. `translate` and `rotate` are their own longhands and COMPOSE with
+`transform`, so an effect layers onto a mirrored, tilted, origin-pinned sprite with no fight.
+
+A band is clipped BEFORE it is transformed, so `rotate` turns the torn strip rather than a
+wedge of the whole picture. The host's `overflow: hidden` keeps a tilted band in frame.
 
 ### Why `lighten` and not `screen`
 
@@ -109,6 +121,22 @@ Displace it and only the difference shows — red fringe one side, cyan the othe
 Channel isolation needs `filter: url(#…)` — CSS alone cannot touch one channel. The two
 `feColorMatrix` filters are injected as an inline `<svg><defs>`, because a fragment reference
 resolves against the DOCUMENT and the published player is one HTML file.
+
+## Staying current
+
+An asset's bytes change UNDER a stable id — the editor writes an edit back over the original
+and the store revokes the object URL. No scene text changed, so no parse reaches the stage.
+
+| Link | Does |
+|---|---|
+| `refreshAssetLibrary()` | Fired by every asset dialog that writes. The only signal. |
+| `usePreviewResolver` | Drops its name index on it. Focus too, for bundle import / sync. |
+| `SceneStage assetRevision` | `renderer.invalidate()` + re-apply, snapped. Not on mount. |
+| `DomRenderer.invalidate()` | Clears url/meta/char caches AND forgets `bgId`. |
+
+`syncBg` early-returns on an unchanged id — right for a keystroke, wrong after an invalidate,
+hence `forgetBg()`. `setContent` still bails per entity when the URL comes back the same, so
+one edited asset does not restart every animated WebP on stage.
 
 ## Where it is drawn
 
@@ -157,8 +185,6 @@ two phases sampled to prove bands move independently.
 ## Not done
 
 - Scene YAML cannot set or override an effect. Asset-wide only.
-- Changing an asset's effect does not re-draw a backdrop already on screen: `setBackdrop`
-  early-returns on the same id. Swap scenes, or reload.
 - One effect per asset.
 - No second effect family. `EffectKind` is a discriminant so adding one does not reshape
   `AssetEffect`.

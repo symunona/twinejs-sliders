@@ -18,6 +18,20 @@ import {diffStages, easeTransitions, timeTransitions} from '@sliders/scene-core'
 export interface SceneStageProps {
 	assets: AssetResolver;
 	stage: Stage;
+	/**
+	 * Bumped whenever the asset library changes, which makes the renderer drop what it
+	 * cached about the assets on stage and resolve them again.
+	 *
+	 * Needed because the renderer caches a URL and a meta per asset id, and an asset's
+	 * bytes can change UNDER a stable id — the asset editor writes an edit back over the
+	 * original, and the store revokes the old object URL when it does. Without this the
+	 * preview keeps a revoked URL on the sprite: the stage does not merely show the old
+	 * picture, it shows a broken image, and it does so until the passage is reopened.
+	 *
+	 * A number rather than a callback so it reaches the effect as a dependency, the way
+	 * `EffectPreview` takes its own revision.
+	 */
+	assetRevision?: number;
 	/** The beat that produced this stage, if any. Drives bubbles and the narration box. */
 	beat?: Beat;
 	/** When true, play the derived transitions. When false, snap. */
@@ -69,6 +83,7 @@ export interface SceneStageProps {
  */
 export const SceneStage: React.FC<SceneStageProps> = ({
 	animate,
+	assetRevision,
 	assets,
 	beat,
 	bubbleDefaults,
@@ -193,6 +208,36 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		prevStageRef.current = stage;
 		void renderer.apply(stage, transitions);
 	}, [animate, beatDur, easeKey, ready, stage]);
+
+	/**
+	 * Re-resolve every asset on stage after the library moved.
+	 *
+	 * Re-applied with the stage it already has and no transitions: nothing about the SCENE
+	 * changed, only the pixels behind a name, so this is a redraw rather than a beat and
+	 * must not animate. `setContent` still bails per entity when the URL comes back the
+	 * same, so an edit to one asset does not restart the animated WebP on any other.
+	 *
+	 * Skipped on mount — the first `apply` is already resolving everything from an empty
+	 * cache, and invalidating it mid-flight would be one wasted `list()` per passage
+	 * opened.
+	 */
+	const lastRevision = React.useRef(assetRevision);
+
+	React.useEffect(() => {
+		const renderer = rendererRef.current;
+		const stage = prevStageRef.current;
+
+		if (!renderer || !ready || lastRevision.current === assetRevision) {
+			return;
+		}
+
+		lastRevision.current = assetRevision;
+		renderer.invalidate();
+
+		if (stage) {
+			void renderer.apply(stage, []);
+		}
+	}, [assetRevision, ready]);
 
 	React.useEffect(() => {
 		if (ready) {
