@@ -11,6 +11,7 @@ scene or prose.
 | ← | previous line | previous passage, opened at its **last** line |
 | ↑ / ↓ | — (links still held) | move between ways out |
 | Enter | — | follow the focused way out; or the only one if nothing focused |
+| Shift+R | start over | same |
 
 Modified arrows (ctrl/alt/cmd) untouched — browser history. Typing in an input untouched.
 
@@ -28,6 +29,10 @@ Modified arrows (ctrl/alt/cmd) untouched — browser history. Typing in an input
 - **Held links are not reachable.** `[data-pending]` filtered out of link collection.
 - **Selection is DOM focus.** No highlight state. Agrees with Tab, works for screen
   readers, survives re-render.
+- **Shift+R = `restart()`** — clears state, reloads. No confirm, same as the footer link.
+  Needed because PLAY restores the saved trail on a plain reload, and a scene hides the
+  footer (`sliders.css`, `body.sliders-cinema #page > footer`). Ctrl+Shift+R left to the
+  browser.
 
 ## Passage history
 

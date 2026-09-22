@@ -15,6 +15,12 @@ jest.mock('../../state', () => ({
 	}
 }));
 
+// The real `restart()` reloads the window, which jsdom answers with a "not implemented"
+// error rather than a navigation. What this suite can say is which key reaches it.
+const mockRestart = jest.fn();
+
+jest.mock('../../actions', () => ({restart: () => mockRestart()}));
+
 import {clearResume} from '../history';
 import {initKeyboard} from '../keyboard';
 
@@ -78,6 +84,7 @@ function link(name: string) {
 
 beforeEach(() => {
 	clearResume();
+	mockRestart.mockClear();
 	store.trail = ['Start', 'Hall'];
 	document.body.innerHTML = '';
 });
@@ -224,6 +231,49 @@ describe('enter', () => {
 		document.querySelector('passage-link')!.addEventListener('click', click);
 		expect(press('Enter').defaultPrevented).toBe(true);
 		expect(click).toHaveBeenCalled();
+	});
+});
+
+describe('shift+R', () => {
+	it('starts the story over', () => {
+		passage('<sliders-stage></sliders-stage>' + link('Cellar'));
+
+		expect(press('R', {shiftKey: true}).defaultPrevented).toBe(true);
+		expect(mockRestart).toHaveBeenCalled();
+	});
+
+	// Shift+R reaches us as "R" on a normal layout and as "r" with caps lock on. Both are
+	// the reader pressing the same two keys.
+	it('starts over with caps lock on too', () => {
+		passage('<p>Just prose.</p>');
+
+		press('r', {shiftKey: true});
+		expect(mockRestart).toHaveBeenCalled();
+	});
+
+	it('leaves an unshifted R alone', () => {
+		passage('<p>Just prose.</p>');
+
+		expect(press('r').defaultPrevented).toBe(false);
+		expect(mockRestart).not.toHaveBeenCalled();
+	});
+
+	// Ctrl+Shift+R is the browser's hard reload, and a reader who wants that means it.
+	it("leaves the browser's own reload alone", () => {
+		passage('<p>Just prose.</p>');
+
+		expect(
+			press('R', {ctrlKey: true, shiftKey: true}).defaultPrevented
+		).toBe(false);
+		expect(mockRestart).not.toHaveBeenCalled();
+	});
+
+	it('leaves a capital R being typed alone', () => {
+		passage('<input type="text">');
+		document.querySelector('input')!.focus();
+
+		expect(press('R', {shiftKey: true}).defaultPrevented).toBe(false);
+		expect(mockRestart).not.toHaveBeenCalled();
 	});
 });
 

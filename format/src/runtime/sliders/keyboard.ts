@@ -2,7 +2,8 @@
  * Reading a story with the keyboard.
  *
  * Four keys, and they mean what they mean on a remote control: Right is "on", Left is
- * "back", Up and Down pick between the ways out, Enter takes the one that is picked.
+ * "back", Up and Down pick between the ways out, Enter takes the one that is picked. Plus
+ * Shift+R, which starts the story over.
  *
  * | key | in a scene | when the scene is over |
  * |---|---|---|
@@ -10,6 +11,7 @@
  * | Left | previous line, then out of the passage | out of the passage |
  * | Up / Down | move between the ways out | same |
  * | Enter | follow the picked way out | same |
+ * | Shift+R | start over | same |
  *
  * The selection is the DOM's own focus rather than a highlight this file tracks. Every
  * link in the player is already a focusable element that activates itself on Enter — a
@@ -24,6 +26,7 @@
  * scene, and should not have to.
  */
 
+import {restart} from '../actions';
 import {stepBackPassage} from './history';
 
 /**
@@ -55,7 +58,12 @@ const LINKS = [
 	'[data-sliders-link]'
 ].join(',');
 
-/** Keys we take over. Everything else, including Tab and Space, is left to the browser. */
+/**
+ * Keys we take over. Everything else, including Tab and Space, is left to the browser.
+ *
+ * Shift+R is not in here: it is handled before this set is consulted, because the arrows
+ * deliberately do not look at Shift and adding it to this table would have to.
+ */
 const HANDLED = new Set([
 	'ArrowDown',
 	'ArrowLeft',
@@ -154,9 +162,21 @@ function onKeyDown(event: KeyboardEvent): void {
 		event.altKey ||
 		event.ctrlKey ||
 		event.metaKey ||
-		!HANDLED.has(event.key) ||
 		isTyping(event.target)
 	) {
+		return;
+	}
+
+	// Start over. The footer's restart link is the only other way back to the first
+	// passage, and a scene hides the footer, so in a full-screen story this key is it —
+	// a plain reload restores the saved trail rather than clearing it.
+	if (event.shiftKey && (event.key === 'R' || event.key === 'r')) {
+		event.preventDefault();
+		restart();
+		return;
+	}
+
+	if (!HANDLED.has(event.key)) {
 		return;
 	}
 
