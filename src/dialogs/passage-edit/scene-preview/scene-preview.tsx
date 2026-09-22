@@ -60,6 +60,7 @@ import {
 import {requestAssetFocus} from '../../sliders-assets/focus-request';
 import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
 import {useDialogsContext} from '../../context';
+import {useStoryLaunch} from '../../../store/use-story-launch';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
@@ -132,6 +133,12 @@ export interface ScenePreviewProps {
 	 * and the first tells the scrubber to go back to the scene's opening beat.
 	 */
 	passageId?: string;
+	/**
+	 * The story the scene belongs to. Only "test from this beat" needs it — launching the
+	 * player is a story-level act, and the preview otherwise knows nothing above the
+	 * passage.
+	 */
+	storyId: string;
 	/**
 	 * Covering the whole window, toolbar included. The one state the dialog system does
 	 * not provide, so it is the one state that is still ours: normal and maximized are
@@ -276,6 +283,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	parse,
 	passageId,
 	passages,
+	storyId,
 	stylesheet,
 	text
 }) => {
@@ -286,6 +294,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// that the art moved; the stage re-resolves on it.
 	const libraryVersion = useLibraryVersion();
 	const {dispatch} = useDialogsContext();
+	const {testStory} = useStoryLaunch();
 	// The author's own preference. What actually gates the gestures is `locked`/`cameraLocked`
 	// below, which is this with the scene's own `locked:` laid over it.
 	const [storedLocked, setLocked] = React.useState(
@@ -1322,6 +1331,36 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// enabled. The dispatcher skips disabled commands before it looks at bindings, which
 	// makes this deterministic rather than a race between registration orders — and
 	// Escape, by clearing the selection, is how the arrows go back to the scrubber.
+
+	/**
+	 * Test the story from the beat on the stage.
+	 *
+	 * The scrubber counts STATES and the player counts beats that have run, which happen
+	 * to be the same number: state N is the stage after N beats. State 0 means "before
+	 * anything", i.e. an ordinary play, so nothing is sent for it.
+	 *
+	 * Registered in the passage editor's scope as well as the preview's, because the
+	 * author's hands are usually in the scene text — the same reason Alt+P and Alt+A are
+	 * chords. `allowInInput` for the same reason again: the caret is in CodeMirror.
+	 */
+	const handleTestFromBeat = React.useCallback(() => {
+		if (!passageId) {
+			return;
+		}
+
+		void testStory(storyId, passageId, beat > 0 ? beat : undefined);
+	}, [beat, passageId, storyId, testStory]);
+
+	const testCommand = {
+		allowInInput: true,
+		enabled: !!passageId,
+		id: 'scene.test',
+		label: t('hotkeys.commands.scene.test'),
+		run: handleTestFromBeat
+	};
+
+	useCommand({...testCommand, scope: 'scene-preview'});
+	useCommand({...testCommand, scope: 'passage-editor'});
 
 	useCommand({
 		allowRepeat: true,

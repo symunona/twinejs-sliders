@@ -58,6 +58,24 @@ describe('useStoryLaunch', () => {
 				['#/stories/mock-story-id/test', '_blank']
 			]);
 		});
+
+		it('adds the start beat to the URL when testing from a beat', () => {
+			const {result} = renderHook(() => useStoryLaunch());
+
+			result.current.testStory('mock-story-id', 'mock-passage-id', 3);
+			expect(openSpy.mock.calls).toEqual([
+				['#/stories/mock-story-id/test/mock-passage-id?beat=3', '_blank']
+			]);
+		});
+
+		it('leaves the URL alone when the start beat is the scene opening', () => {
+			const {result} = renderHook(() => useStoryLaunch());
+
+			result.current.testStory('mock-story-id', 'mock-passage-id', 0);
+			expect(openSpy.mock.calls).toEqual([
+				['#/stories/mock-story-id/test/mock-passage-id', '_blank']
+			]);
+		});
 	});
 
 	describe('in an Electron context', () => {

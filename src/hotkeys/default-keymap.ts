@@ -81,6 +81,9 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 
 	'scene.edit': {bindings: ['alt+p']},
 	'scene.assets': {bindings: ['alt+a']},
+	// Test from the beat on the stage. Alt+T rather than the map's bare `t`, for the same
+	// reason as the two above: focus is in CodeMirror, where a bare letter types.
+	'scene.test': {bindings: ['alt+t']},
 
 	// Scene preview. Viewer keys, so they only fire once focus is inside the
 	// preview--pressing left in the passage text still moves the cursor.

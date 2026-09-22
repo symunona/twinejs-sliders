@@ -1326,6 +1326,7 @@
 				"play": "Play or Pause Scene",
 				"fullScreen": "Full Screen Scene",
 				"toggleLock": "Lock or Unlock Scene Stage",
+					"test": "Test From This Beat",
 				"deselect": "Deselect Entity",
 				"nudgeLeft": "Nudge Entity Left",
 				"nudgeRight": "Nudge Entity Right",

@@ -5,7 +5,15 @@ import {TwineElectronWindow} from '../electron/shared';
 export interface UseStoryLaunchProps {
 	playStory: (storyId: string) => Promise<void>;
 	proofStory: (storyId: string) => Promise<void>;
-	testStory: (storyId: string, startPassageId?: string) => Promise<void>;
+	/**
+	 * `startBeat` is the Sliders "test from this beat" (Alt+T): the number of beats of the
+	 * start passage's scene that have already run. Other formats ignore it.
+	 */
+	testStory: (
+		storyId: string,
+		startPassageId?: string,
+		startBeat?: number
+	) => Promise<void>;
 }
 
 /**
@@ -37,10 +45,11 @@ export function useStoryLaunch(): UseStoryLaunchProps {
 					`proof-${storyId}.html`
 				);
 			},
-			testStory: async (storyId, startPassageId) => {
+			testStory: async (storyId, startPassageId, startBeat) => {
 				twineElectron.openWithScratchFile(
 					await publishStory(storyId, {
 						formatOptions: 'debug',
+						startBeat,
 						startId: startPassageId
 					}),
 					`test-${storyId}.html`
@@ -56,10 +65,15 @@ export function useStoryLaunch(): UseStoryLaunchProps {
 		proofStory: async storyId => {
 			window.open(`#/stories/${storyId}/proof`, '_blank');
 		},
-		testStory: async (storyId, startPassageId) => {
+		testStory: async (storyId, startPassageId, startBeat) => {
+			// The beat rides in the query rather than as another path segment, so the route
+			// itself is untouched and a link written before this existed still works.
+			const beat =
+				startPassageId && startBeat ? `?beat=${Math.trunc(startBeat)}` : '';
+
 			window.open(
 				startPassageId
-					? `#/stories/${storyId}/test/${startPassageId}`
+					? `#/stories/${storyId}/test/${startPassageId}${beat}`
 					: `#/stories/${storyId}/test`,
 				'_blank'
 			);

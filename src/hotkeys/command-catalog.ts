@@ -103,6 +103,11 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'passage.rename', scope: 'passage-editor'},
 	{id: 'scene.edit', scope: 'passage-editor'},
 	{id: 'scene.assets', scope: 'passage-editor'},
+	// Registered in both scopes by the preview, because the beat it launches from is the
+	// one on its stage whether the author is typing in the passage text or standing in
+	// the preview itself. Same shape as `passage.rename`, which is also two rows.
+	{id: 'scene.test', scope: 'passage-editor'},
+	{id: 'scene.test', scope: 'scene-preview'},
 
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},

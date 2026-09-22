@@ -17,6 +17,13 @@ export interface PublishOptions {
 	startId?: string;
 
 	/**
+	 * Beat the Sliders player should open the first scene on, counted the way the scene
+	 * preview's scrubber counts: the number of beats that have already run. Set by
+	 * "test from this beat" (Alt+T) and ignored by every other format.
+	 */
+	startBeat?: number;
+
+	/**
 	 * If true, publishing will proceed even if the story has no starting passage
 	 * set and one wasn't set manually.
 	 */
@@ -68,7 +75,7 @@ export function publishPassage(passage: Passage, localId: number) {
 export function publishStory(
 	story: Story,
 	appInfo: AppInfo,
-	{formatOptions, startId, startOptional}: PublishOptions = {}
+	{formatOptions, startBeat, startId, startOptional}: PublishOptions = {}
 ) {
 	startId = startId ?? story.startPassage;
 
@@ -110,6 +117,14 @@ export function publishStory(
 		''
 	);
 
+	// Only when asked for. A story published without one must be byte-identical to what it
+	// was before this option existed -- an archive, an export and a play are all this
+	// function, and none of them wants a debugging attribute in the file.
+	const startBeatData =
+		typeof startBeat === 'number' && Number.isFinite(startBeat) && startBeat > 0
+			? `data-sliders-start-beat="${escape(Math.trunc(startBeat).toString())}" `
+			: '';
+
 	return (
 		`<tw-storydata name="${escape(story.name)}" ` +
 		`startnode="${startLocalId || ''}" ` +
@@ -120,7 +135,9 @@ export function publishStory(
 		`ifid="${escape(story.ifid)}" ` +
 		`options="${escape(formatOptions)}" ` +
 		`tags="${escape(story.tags.join(' '))}" ` +
-		`zoom="${escape(story.zoom.toString())}" hidden>` +
+		`zoom="${escape(story.zoom.toString())}" ` +
+		startBeatData +
+		`hidden>` +
 		`<style role="stylesheet" id="twine-user-stylesheet" ` +
 		`type="text/twine-css">` +
 		story.stylesheet +
@@ -142,7 +159,7 @@ export function publishStoryWithFormat(
 	story: Story,
 	formatSource: string,
 	appInfo: AppInfo,
-	{formatOptions, startId}: PublishOptions = {}
+	{formatOptions, startBeat, startId}: PublishOptions = {}
 ) {
 	if (!formatSource) {
 		throw new Error('Story format source cannot be empty.');
@@ -155,7 +172,7 @@ export function publishStoryWithFormat(
 
 	output = output.replace(/{{STORY_NAME}}/g, () => escape(story.name));
 	output = output.replace(/{{STORY_DATA}}/g, () =>
-		publishStory(story, appInfo, {formatOptions, startId})
+		publishStory(story, appInfo, {formatOptions, startBeat, startId})
 	);
 
 	return output;

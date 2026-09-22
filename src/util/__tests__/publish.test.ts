@@ -150,6 +150,28 @@ describe('publishStory()', () => {
 		);
 	});
 
+	// The Sliders player reads this on boot and opens the first scene on that beat--see
+	// `format/src/runtime/sliders/start-beat.ts`. Every other format ignores it.
+	it('marks the beat to start on when one is given', () => {
+		const result = toDOM(
+			publish.publishStory(story, appInfo, {startBeat: 4})
+		);
+
+		expect(result.getAttribute('data-sliders-start-beat')).toBe('4');
+	});
+
+	it('marks no start beat by default', () => {
+		const result = toDOM(publish.publishStory(story, appInfo));
+
+		expect(result.hasAttribute('data-sliders-start-beat')).toBe(false);
+	});
+
+	it('marks no start beat for the scene opening, which is an ordinary play', () => {
+		const result = toDOM(publish.publishStory(story, appInfo, {startBeat: 0}));
+
+		expect(result.hasAttribute('data-sliders-start-beat')).toBe(false);
+	});
+
 	it('throws an error if the story has no starting point and one is not overridden', () => {
 		(story.startPassage as any) = undefined;
 		expect(() => publish.publishStory(story, appInfo)).toThrow();

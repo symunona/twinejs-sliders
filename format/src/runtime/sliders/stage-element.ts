@@ -48,6 +48,7 @@ import {
 import {currentPassage, resumeAtEnd} from './history';
 import {holdLinkList, holdLinkListAgain, releaseLinkList} from './link-list';
 import {stageFrom} from './scene-graph';
+import {takeStartBeat} from './start-beat';
 
 const {warn} = createLoggers('scene');
 
@@ -292,6 +293,23 @@ export class SlidersStage extends CustomElement {
 		publishStage(entry);
 		this.addEventListener('click', this.handleClick);
 		this.listenForGesture();
+
+		// Alt+T in the editor: open on the beat the author was staging. Asked before the
+		// back-step below because a story that has just been launched has no trail to walk
+		// back along, so the two can never both answer.
+		const start = takeStartBeat();
+
+		if (start !== undefined) {
+			const stop = currentStop(this.stops(), start);
+
+			// SCENE_START means the request lands before the scene's first line, which is
+			// exactly what a normal play shows — so play, rather than snap to a picture the
+			// reader would never otherwise stand on.
+			if (stop !== SCENE_START) {
+				void this.showStop(stop);
+				return;
+			}
+		}
 
 		// A reader who walked BACK into this passage arrives at the end of the scene, where
 		// they left it, instead of watching it play out a second time.

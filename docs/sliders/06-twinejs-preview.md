@@ -88,6 +88,22 @@ than edited:
 | Double click does **not** leave full screen | two page turns are two page turns; Esc and `⛶` are the way out |
 | Corner navigator, bottom right, faint until hovered | steps both ways without laying chrome across the scene |
 
+## Test from this beat (Alt+T)
+
+Launch Twine's Test on the passage in the preview, **standing on the beat the scrubber is
+on**. Author eight lines into a scene does not click through eight lines to see it play.
+
+| | |
+|---|---|
+| Key | `Alt+T` — scopes `scene-preview` and `passage-editor` (hands are in the text) |
+| Beat 0 | ordinary Test, no beat sent |
+| Channel | `data-sliders-start-beat` on `<tw-storydata>` (`src/util/publish.ts`) |
+| Web | `#/stories/<id>/test/<pid>?beat=N` |
+| Electron | same attribute, scratch file — no URL to read |
+| Player | `format/src/runtime/sliders/start-beat.ts`, **one-shot**: first stage takes it |
+| Lands on | last STOP before the beat (`currentStop`). Not a stop → nearest before it |
+| Before first line | plays from the top, no snap — reader never stands on the opening stage |
+
 ## Out of scope
 
 Playing the actual story (that's Twine's Play/Test). Audio. Save/load. Multi-passage flow.

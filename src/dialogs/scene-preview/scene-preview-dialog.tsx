@@ -122,6 +122,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					parse={parse}
 					passageId={source?.passageId ?? fallback?.id}
 					passages={story.passages}
+					storyId={story.id}
 					stylesheet={story.stylesheet}
 					text={source?.text ?? fallback?.text ?? ''}
 				/>
