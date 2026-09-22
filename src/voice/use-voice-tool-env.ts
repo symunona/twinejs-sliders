@@ -109,12 +109,25 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 	const {client} = useServerSyncContext();
 	const libraryVersion = useLibraryVersion();
 
-	// Mirrors, so every callback below can be memoised on nothing and still read the
-	// current story. Capturing `story` instead would rebuild the whole env — and, through
-	// it, the tool runner and its `seen` set — on every keystroke in the map.
+	/*
+	 * Mirrors. Everything below reads `.current`, so the env object itself is STABLE and
+	 * the tool runner — created once, because its `seen` set is the session's write gate —
+	 * keeps working against the live editor.
+	 *
+	 * `dispatch` is in here for a reason that cost a crash. `UndoableStoriesContextProvider`
+	 * memoises its dispatch on the stories state, and that dispatch computes each change's
+	 * REVERSE action against the state it closed over. A dispatch captured when the panel
+	 * opened therefore undoes against the story as it was then: create a passage, write to
+	 * it, and `reverseAction` looks up a passage its snapshot has never heard of and throws
+	 * through the error boundary. Always the live one.
+	 */
 	const storyRef = React.useRef(story);
+	const dispatchRef = React.useRef(dispatch);
+	const dialogsDispatchRef = React.useRef(dialogsDispatch);
 
 	storyRef.current = story;
+	dispatchRef.current = dispatch;
+	dialogsDispatchRef.current = dialogsDispatch;
 
 	const libraryRef = React.useRef(libraryVersion);
 
@@ -239,7 +252,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 				// reducer, which takes the whole story route down with it.
 				const id = uuid();
 
-				dispatch(
+				dispatchRef.current(
 					{
 						props: {
 							...placed.props,
@@ -258,7 +271,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			},
 
 			deletePassage: id =>
-				dispatch(deletePassage(storyRef.current, passageById(id)), DESC.delete),
+				dispatchRef.current(deletePassage(storyRef.current, passageById(id)), DESC.delete),
 
 			findReplace: (search, replace, passageIds) => {
 				const current = storyRef.current;
@@ -273,13 +286,13 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 						passage.text.includes(search)
 					).length;
 
-					dispatch(replaceInStory(current, search, replace, flags), DESC.replace);
+					dispatchRef.current(replaceInStory(current, search, replace, flags), DESC.replace);
 
 					return hits;
 				}
 
 				for (const id of passageIds) {
-					dispatch(
+					dispatchRef.current(
 						replaceInPassage(current, passageById(id), search, replace, flags),
 						DESC.replace
 					);
@@ -291,7 +304,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			goto: id => {
 				const passage = passageById(id);
 
-				dispatch(selectPassage(storyRef.current, passage, true));
+				dispatchRef.current(selectPassage(storyRef.current, passage, true));
 				setCenter({
 					left: passage.left + passage.width / 2,
 					top: passage.top + passage.height / 2
@@ -299,7 +312,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			},
 
 			highlight: ids =>
-				dispatch(highlightPassages(storyRef.current, ids)),
+				dispatchRef.current(highlightPassages(storyRef.current, ids)),
 
 			lint: async (): Promise<LintFinding[]> =>
 				lintStory({
@@ -317,14 +330,14 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 				}),
 
 			openPassageEditor: id =>
-				dialogsDispatch(addPassageEditors(storyRef.current.id, [id])),
+				dialogsDispatchRef.current(addPassageEditors(storyRef.current.id, [id])),
 
 			openPreview: (id, beat) => {
 				const passage = passageById(id);
 
 				// Selecting first is what makes the dialog show THIS passage: with no
 				// editor open the preview follows the map's solo selection.
-				dispatch(selectPassage(storyRef.current, passage, true));
+				dispatchRef.current(selectPassage(storyRef.current, passage, true));
 
 				if (beat !== undefined) {
 					// Placed before the dialog mounts on purpose — the request waits for a
@@ -333,7 +346,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 				}
 
 				setScenePreviewDismissed(false);
-				dialogsDispatch({
+				dialogsDispatchRef.current({
 					type: 'addDialog',
 					component: ScenePreviewDialog,
 					props: {storyId: storyRef.current.id}
@@ -343,7 +356,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			screenshot,
 
 			renamePassage: (id, name) =>
-				dispatch(
+				dispatchRef.current(
 					updatePassage(storyRef.current, passageById(id), {name}),
 					DESC.rename
 				),
@@ -368,14 +381,14 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 
 			tagPassage: (id, add, remove) => {
 				for (const tag of add) {
-					dispatch(
+					dispatchRef.current(
 						addPassageTag(storyRef.current, passageById(id), tag),
 						DESC.tag
 					);
 				}
 
 				for (const tag of remove) {
-					dispatch(
+					dispatchRef.current(
 						removePassageTag(storyRef.current, passageById(id), tag),
 						DESC.untag
 					);
@@ -383,17 +396,17 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			},
 
 			writePassage: (id, text, reason) =>
-				dispatch(
+				dispatchRef.current(
 					updatePassage(storyRef.current, passageById(id), {text}),
 					reason === 'scene' ? DESC.scene : DESC.text
 				)
 		}),
+		// No `dispatch` and no `dialogsDispatch`: both are refs above, deliberately, so
+		// this object stays stable across the renders those identities churn on.
 		[
 			assetStore,
 			catalog,
 			client,
-			dialogsDispatch,
-			dispatch,
 			getCenter,
 			passageById,
 			scenesOf,
