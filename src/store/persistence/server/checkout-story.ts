@@ -470,6 +470,12 @@ export async function checkoutAssets(options: {
 	missingSidecars: string[];
 	/** LOCAL ids whose edit settings or sidecars this run brought over. */
 	provenanceApplied: string[];
+	/**
+	 * LOCAL ids the library actually gained. A subset of `downloaded`: the plan drops an
+	 * incoming asset whose name is taken by different bytes, and reuses one whose bytes
+	 * are already here.
+	 */
+	stored: string[];
 	warnings: string[];
 }> {
 	const {client, onProgress, store, storyId} = options;
@@ -491,6 +497,7 @@ export async function checkoutAssets(options: {
 			missingAssets,
 			missingSidecars,
 			provenanceApplied: [],
+			stored: [],
 			warnings: [messageOf(error)]
 		};
 	}
@@ -565,6 +572,22 @@ export async function checkoutAssets(options: {
 	}
 
 	const warnings: string[] = [];
+	/**
+	 * What the library actually GAINED, which is not what came down the wire.
+	 *
+	 * `planBundle` can decide an incoming asset does not get stored: `kept-existing` when
+	 * the name is taken by different bytes, `reused` when the bytes are already here under
+	 * another id. `applyBundlePlan` writes only `imported` and `new-id`, so those two are
+	 * the whole of it.
+	 *
+	 * Counting the download instead cost real data. A pull that fetched bytes the plan
+	 * then dropped still reported a change, which fires `refreshAssetLibrary`, which
+	 * schedules a push — and that push writes THIS library's manifest over the one the
+	 * other editor just published, edit and all. The provenance half is careful to read
+	 * `changed` off what the store holds rather than off what the pull intended; this is
+	 * the same rule, and the bytes half was still reporting the intention.
+	 */
+	const stored: string[] = [];
 
 	if (contents.length > 0 || (manifest.characters ?? []).length > 0) {
 		const plan = await planBundle(store, {
@@ -574,6 +597,13 @@ export async function checkoutAssets(options: {
 
 		await applyBundlePlan(store, plan);
 		warnings.push(...plan.warnings);
+		stored.push(
+			...plan.assets
+				.filter(
+					item => item.outcome === 'imported' || item.outcome === 'new-id'
+				)
+				.map(item => item.targetId)
+		);
 	}
 
 	// `missing` again: the server has already said it holds no bytes for these, so their
@@ -591,6 +621,7 @@ export async function checkoutAssets(options: {
 		missingAssets,
 		missingSidecars,
 		provenanceApplied,
+		stored,
 		warnings
 	};
 }

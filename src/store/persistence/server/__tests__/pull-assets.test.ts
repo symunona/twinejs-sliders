@@ -13,7 +13,10 @@ import type {
 	ImageEdits,
 	SidecarEntry
 } from '@sliders/scene-types';
-import {webpBytes} from '../../../../../packages/asset-store/src/test-fixtures';
+import {
+	jpegBytes,
+	webpBytes
+} from '../../../../../packages/asset-store/src/test-fixtures';
 import type {ServerClient} from '../client';
 import {pullStoryAssets} from '../pull-assets';
 import type {AssetManifest} from '../server.types';
@@ -543,6 +546,43 @@ describe('pullStoryAssets', () => {
 
 		expect(second.changed).toBe(false);
 		expect(second.skipped).toBe(true);
+	});
+
+	it('reports no change when the plan drops the bytes it fetched', async () => {
+		// A name clash: the library already has `tavern/night`, holding different bytes.
+		// `planBundle` settles that `kept-existing` -- the local asset stays, the incoming
+		// one is dropped -- so the download happened and the library gained nothing.
+		const store = newStore();
+		const local = webpBytes(320, 240);
+
+		await store.importAsset(
+			await meta(local, {hash: await contentHash(local), id: 'a_local'}),
+			new Blob([local])
+		);
+
+		const incoming = jpegBytes();
+		const {client} = fakeClient({
+			blob: new Blob([incoming], {type: 'image/jpeg'}),
+			manifest: {
+				assets: [
+					await meta(incoming, {
+						hash: await contentHash(incoming),
+						id: 'a_far',
+						mime: 'image/jpeg',
+						name: 'tavern/night'
+					})
+				],
+				rev: 9
+			}
+		});
+
+		const result = await pullStoryAssets({client, store, storyId: 'story-1'});
+
+		// Reported as a change, this fires `refreshAssetLibrary`, which schedules a push,
+		// and that push writes THIS library's older manifest over the one the other editor
+		// just published -- their edit gone from the server, silently.
+		expect(result.changed).toBe(false);
+		expect(result.warnings.length).toBeGreaterThan(0);
 	});
 
 	it('reports progress while art comes down', async () => {

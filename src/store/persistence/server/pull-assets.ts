@@ -190,6 +190,7 @@ export async function pullStoryAssets(
 		missingAssets,
 		missingSidecars,
 		provenanceApplied,
+		stored,
 		warnings
 	} = await checkoutAssets({
 		client,
@@ -206,12 +207,18 @@ export async function pullStoryAssets(
 	});
 
 	return {
-		// `provenanceApplied` and not "provenance differed": a sidecar the server would not
-		// hand over leaves a difference this pull cannot close, and reporting that as a
-		// change would push a manifest, wake the other client, and be back here on the next
-		// rev with the same unfetchable blob. The difference stands and the pull says so in
-		// `missingSidecars` instead.
-		changed: downloaded.length > 0 || provenanceApplied.length > 0 || castMoved,
+		// `stored` and `provenanceApplied`, never "we fetched something" or "something
+		// differed". Both are read off what the library HOLDS once the pull is done.
+		//
+		// A fetched asset the plan then dropped -- its name taken locally by different
+		// bytes -- used to count here, and it cost the other editor their work: the
+		// change fired a refresh, the refresh scheduled a push, and the push wrote this
+		// library's older manifest over the one they had just published. A sidecar the
+		// server will not hand over is the same shape of mistake with a slower fuse: the
+		// difference cannot be closed by any pull, so reporting it would push, wake the
+		// peer, and arrive back here on the next rev with the same unfetchable blob. Both
+		// stand unreported here and are named in `missingSidecars` and `warnings` instead.
+		changed: stored.length > 0 || provenanceApplied.length > 0 || castMoved,
 		downloaded,
 		missing: missingAssets,
 		missingSidecars,
