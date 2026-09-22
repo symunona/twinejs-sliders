@@ -1221,6 +1221,62 @@ export function isVisualKind(kind: AssetKind): boolean {
 	return kind !== 'sound';
 }
 
+/** A crop rectangle, in source image pixels. */
+export interface CropRect {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+/**
+ * What the asset editor's adjustment controls were set to when an asset was last saved.
+ *
+ * Stored on the asset rather than baked-and-forgotten so that re-opening an edited asset
+ * finds its sliders where they were left, and so a second pass re-renders from the
+ * original pixels instead of stacking on top of an already-baked, already-re-encoded
+ * picture.
+ */
+export interface ImageEdits {
+	/** -100 to 100. 0 leaves the image alone. */
+	brightness: number;
+	/** -100 to 100. 0 leaves the image alone. */
+	contrast: number;
+	/** 0.1 to 3. 1 leaves the image alone; above 1 lifts the midtones. */
+	gamma: number;
+	crop: CropRect;
+	/** Output size in pixels. Starts out as the crop size. */
+	width: number;
+	height: number;
+}
+
+/**
+ * The two knobs the cutout editor exposes, applied to a cached alpha map rather than to
+ * the model, so re-tuning costs a composite instead of another two passes.
+ */
+export interface CutoutTuning {
+	/**
+	 * Where the line between keep and drop sits, 0 to 1. Lower keeps more of a
+	 * hesitant mask; higher cuts more aggressively.
+	 */
+	threshold: number;
+	/**
+	 * How wide the transition around that line is. Near zero is a hard, jagged
+	 * edge; wide leaves the model's own soft alpha almost untouched.
+	 */
+	softness: number;
+}
+
+/**
+ * An extra blob an asset owns, stored beside its current bytes.
+ *
+ * `source` is the pixels an edit started from; `cutout` is the alpha map a background
+ * removal produced. Both exist so an edit can be re-opened and redone rather than only
+ * stacked on, and neither is ever read by the renderer — the asset's own bytes are
+ * always the finished picture.
+ */
+export type SidecarKind = 'source' | 'cutout';
+
 export interface AssetMeta {
 	id: AssetId;
 	name: string;
@@ -1251,6 +1307,27 @@ export interface AssetMeta {
 	 * and never as timing the player depends on.
 	 */
 	duration?: number;
+	/**
+	 * What the asset editor's controls were set to when these bytes were baked.
+	 *
+	 * Present means the bytes are a render of the `source` sidecar through these settings,
+	 * so re-opening the editor can restore the controls and redo the render from the
+	 * original pixels. Absent means the bytes are simply what was uploaded.
+	 */
+	edits?: ImageEdits;
+	/**
+	 * What the cutout controls were set to. Meaningful only alongside a `cutout` sidecar,
+	 * which holds the alpha the tuning is applied to.
+	 */
+	tuning?: CutoutTuning;
+	/**
+	 * Which extra blobs this asset owns. An explicit list rather than a probe, so that
+	 * `remove` can delete them without any backend having to scan for keys by prefix.
+	 *
+	 * Local to this device: sidecars are deliberately left out of sync and of bundles,
+	 * because a reader never needs the pixels an edit started from.
+	 */
+	sidecars?: SidecarKind[];
 }
 
 /** Resolves asset ids to something a renderer can draw. */

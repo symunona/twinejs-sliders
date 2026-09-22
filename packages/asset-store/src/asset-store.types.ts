@@ -4,7 +4,10 @@ import type {
 	AssetMeta,
 	AssetResolver,
 	Character,
-	Frac2
+	CutoutTuning,
+	Frac2,
+	ImageEdits,
+	SidecarKind
 } from '@sliders/scene-types';
 
 /** Which persistence layer ended up being used. Surfaced in the UI for support reasons. */
@@ -34,6 +37,38 @@ export interface PutAssetOptions {
 	sourceAsset?: AssetId;
 	/** Where the art is pinned, as a fraction. Defaults to bottom centre when absent. */
 	origin?: Frac2;
+	/** What the asset editor baked these bytes with, so the edit can be re-opened. */
+	edits?: ImageEdits;
+	/** What the cutout controls were set to. Only meaningful with `cutout`. */
+	tuning?: CutoutTuning;
+	/** The pixels the edit started from, stored as the `source` sidecar. */
+	source?: Blob;
+	/** The alpha map a background removal produced, stored as the `cutout` sidecar. */
+	cutout?: Blob;
+}
+
+/**
+ * What an edit wants remembered alongside the bytes it just baked.
+ *
+ * All of it is optional and all of it is additive: a `replace` that passes none of this
+ * behaves exactly as it always did, which is what keeps the bundle importer and the
+ * character editor out of the sidecar business.
+ */
+export interface ReplaceAssetOptions {
+	/** What the adjustment controls were set to. Cleared when absent. */
+	edits?: ImageEdits;
+	/** What the cutout controls were set to. Cleared when absent. */
+	tuning?: CutoutTuning;
+	/**
+	 * The pixels this edit started from.
+	 *
+	 * Written ONCE. An asset that already has a `source` sidecar keeps the one it has,
+	 * because that is the un-edited picture and what is being offered here is only the
+	 * base of the current round — which was itself rendered from that sidecar.
+	 */
+	source?: Blob;
+	/** The alpha map, replacing whatever was stored before. */
+	cutout?: Blob;
 }
 
 export interface PutAssetResult {
@@ -90,7 +125,18 @@ export interface AssetStore extends AssetResolver {
 	 * pointing at it follows along. Its name, kind, tags and character
 	 * ownership survive; everything measured from the bytes is re-derived.
 	 */
-	replace(id: AssetId, file: File): Promise<AssetMeta>;
+	replace(
+		id: AssetId,
+		file: File,
+		options?: ReplaceAssetOptions
+	): Promise<AssetMeta>;
+	/**
+	 * An asset's extra blob, or undefined when it has none of that kind.
+	 *
+	 * Only the asset editor asks. Nothing that draws, syncs or exports a story has any
+	 * business here: the asset's own bytes are always the finished picture.
+	 */
+	sidecar(id: AssetId, kind: SidecarKind): Promise<Blob | undefined>;
 	/**
 	 * Edits metadata in place. A `name` that another asset or character already answers to
 	 * THROWS rather than being quietly numbered: a rename is a deliberate act, and an author

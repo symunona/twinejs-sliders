@@ -1,12 +1,15 @@
 import {
 	anchorAfterCrop,
+	anchorBeforeCrop,
 	applyLut,
 	buildLut,
 	clampCrop,
 	cropFromDrag,
 	defaultEdits,
 	isNeutral,
-	isUnedited
+	isUnedited,
+	sameEdits,
+	sameTuning
 } from '../image-edits';
 
 describe('buildLut', () => {
@@ -145,5 +148,73 @@ describe('anchorAfterCrop', () => {
 		expect(
 			anchorAfterCrop({x: 0.25, y: 0.75}, {h: 0, w: 0, x: 0, y: 0}, 320, 240)
 		).toEqual({x: 0.25, y: 0.75});
+	});
+});
+
+describe('anchorBeforeCrop', () => {
+	it('undoes anchorAfterCrop, so a reopened edit does not re-apply its crop', () => {
+		const crop = {h: 400, w: 300, x: 100, y: 200};
+		// Inside the crop: 200,500 of the source is 100..400 x 200..600 of the picture the
+		// author will actually see.
+		const origin = {x: 0.25, y: 0.5};
+		const stored = anchorAfterCrop(origin, crop, 800, 1000);
+
+		expect(anchorBeforeCrop(stored, crop, 800, 1000)).toEqual(origin);
+	});
+
+	it('leaves an uncropped anchor alone', () => {
+		const crop = {h: 1000, w: 800, x: 0, y: 0};
+
+		expect(anchorBeforeCrop({x: 0.25, y: 0.9}, crop, 800, 1000)).toEqual({
+			x: 0.25,
+			y: 0.9
+		});
+	});
+
+	it('cannot recover an anchor that was clamped away', () => {
+		// The point was outside the crop, so saving it recorded an edge and the original
+		// position is genuinely gone. It comes back on that edge rather than wandering.
+		const crop = {h: 100, w: 100, x: 0, y: 0};
+		const stored = anchorAfterCrop({x: 0.9, y: 0.9}, crop, 800, 1000);
+
+		expect(stored).toEqual({x: 1, y: 1});
+		expect(anchorBeforeCrop(stored, crop, 800, 1000)).toEqual({
+			x: 0.125,
+			y: 0.1
+		});
+	});
+});
+
+describe('sameEdits', () => {
+	it('sees through a fresh object with the same numbers', () => {
+		expect(sameEdits(defaultEdits(300, 150), defaultEdits(300, 150))).toBe(true);
+	});
+
+	it('notices a moved crop', () => {
+		const edits = defaultEdits(300, 150);
+
+		expect(
+			sameEdits(edits, {...edits, crop: {...edits.crop, x: 1}})
+		).toBe(false);
+	});
+
+	it('notices a slider', () => {
+		const edits = defaultEdits(300, 150);
+
+		expect(sameEdits(edits, {...edits, gamma: 1.2})).toBe(false);
+	});
+});
+
+describe('sameTuning', () => {
+	it('counts absent on both sides as the same', () => {
+		expect(sameTuning(undefined, undefined)).toBe(true);
+	});
+
+	it('counts a cutout appearing or going away as a change', () => {
+		const tuning = {softness: 0.3, threshold: 0.5};
+
+		expect(sameTuning(tuning, undefined)).toBe(false);
+		expect(sameTuning(undefined, tuning)).toBe(false);
+		expect(sameTuning(tuning, {...tuning})).toBe(true);
 	});
 });

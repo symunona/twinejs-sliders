@@ -1,7 +1,18 @@
-import type {AssetId} from '@sliders/scene-types';
+import type {AssetId, SidecarKind} from '@sliders/scene-types';
 
 const ID_ALPHABET = '0123456789abcdef';
 const ID_LENGTH = 4;
+
+/**
+ * Where an asset's extra blobs live: `a_8f21#src`, `a_8f21#cutout`.
+ *
+ * Backends key blobs by an opaque string, so a sidecar needs nothing new from them. `#`
+ * is what makes that safe — `randomAssetId` emits `a_` and hex, and every name that
+ * reaches a key is slugged to `[a-z0-9/_-]`, so no asset can ever own a sidecar's key.
+ */
+export function sidecarKey(id: AssetId, kind: SidecarKind): string {
+	return `${id}#${kind === 'source' ? 'src' : 'cutout'}`;
+}
 
 function webCrypto(): Crypto {
 	const crypto = globalThis.crypto;

@@ -65,12 +65,15 @@ import {
 	cropFromDrag,
 	defaultEdits,
 	drawCropOverlay,
+	anchorBeforeCrop,
 	drawEdited,
 	GAMMA_RANGE,
 	ImageEdits,
-	isUnedited,
-	LEVEL_RANGE
+	LEVEL_RANGE,
+	sameEdits,
+	sameTuning
 } from './image-edits';
+import {decodeCutout, encodeCutout} from './cutout-map';
 import './asset-editor.css';
 
 /** Longest edge the live preview is drawn at. Full size is only used on save. */
@@ -188,6 +191,20 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 */
 	const [taken, setTaken] = React.useState<Set<string>>(new Set());
 	const [source, setSource] = React.useState<HTMLCanvasElement>();
+	/**
+	 * The bytes `original` was decoded from, kept so a save can store them as the asset's
+	 * `source` sidecar -- the base every later edit of it is re-rendered from.
+	 */
+	const [baseBlob, setBaseBlob] = React.useState<Blob>();
+	/**
+	 * The settings this asset opened with. Re-opening an edit restores its controls, and
+	 * without a baseline to compare against that restored state would read as unsaved work
+	 * and light up both save buttons before the author had touched anything.
+	 */
+	const [saved, setSaved] = React.useState<{
+		edits?: ImageEdits;
+		tuning?: CutoutTuning;
+	}>({});
 	const {t} = useTranslation();
 
 	/** Passages whose scenes write this asset's name. Empty while it has no name yet. */
@@ -276,9 +293,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		async function load() {
 			// Two ways in: an asset id, or raw bytes that no asset owns yet. Only the
 			// first has metadata, and everything that needs metadata is guarded on it.
-			const [assetMeta, blob] = assetId
-				? await Promise.all([store.meta(assetId), store.get(assetId)])
-				: [undefined, sourceImage?.blob];
+			const assetMeta = assetId ? await store.meta(assetId) : undefined;
+			// What an edit is redone FROM: the pixels the first edit started with when this
+			// asset has been edited before, its own bytes otherwise. Re-rendering from the
+			// base is what stops a second pass stacking on an already-baked, already
+			// re-encoded picture.
+			const base = assetId ? await store.sidecar(assetId, 'source') : undefined;
+			const blob = assetId ? base ?? (await store.get(assetId)) : sourceImage?.blob;
 
 			if (!current) {
 				return;
@@ -309,13 +330,55 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				return;
 			}
 
+			// Settings are only meaningful over the pixels they were rendered from. Without
+			// that base the asset's own bytes ARE the edit, and re-applying it would
+			// brighten what is already bright and crop what is already cropped.
+			const restored = base ? assetMeta?.edits : undefined;
+			const stored = assetMeta?.origin ?? DEFAULT_ANCHOR;
+
 			setMeta(assetMeta);
 			setName(assetMeta ? `${assetMeta.name}-edit` : sourceImage?.name ?? '');
 			setRenameName(assetMeta?.name ?? '');
-			setOrigin(assetMeta?.origin ?? DEFAULT_ANCHOR);
+			// A stored anchor is written against the CROPPED picture; what is on screen is
+			// the whole original, so it has to come back out of the crop it went into.
+			setOrigin(
+				restored
+					? anchorBeforeCrop(
+							stored,
+							restored.crop,
+							canvas.width,
+							canvas.height
+					  )
+					: stored
+			);
+			setBaseBlob(blob);
 			setOriginal(canvas);
 			setSource(canvas);
-			setEdits(defaultEdits(canvas.width, canvas.height));
+			setEdits(restored ?? defaultEdits(canvas.width, canvas.height));
+			setSaved({edits: restored, tuning: assetMeta?.tuning});
+
+			// A stored cutout goes back through the path a fresh one takes, so its two
+			// sliders keep working without the model having to run for a second time.
+			const storedMap =
+				base && assetMeta?.sidecars?.includes('cutout')
+					? await store.sidecar(assetMeta.id, 'cutout')
+					: undefined;
+			const map = storedMap ? await decodeCutout(storedMap) : undefined;
+
+			if (!current) {
+				return;
+			}
+
+			// A map whose size doesn't match is one stored against different pixels. It
+			// cannot be composited, and a silent drop beats a crash: the asset still opens,
+			// with its background-removal button live again.
+			if (map && map.alpha.length === canvas.width * canvas.height) {
+				const tuning = assetMeta?.tuning ?? DEFAULT_TUNING;
+
+				setAlpha(map.alpha);
+				setTuning(tuning);
+				setSource(applyTuning(canvas, map.alpha, tuning));
+			}
 		}
 
 		load().catch(loadError => {
@@ -577,6 +640,29 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 	}
 
+	/**
+	 * What the store should remember alongside the bytes, so this edit can be re-opened.
+	 *
+	 * The base blob rides along on every save. `replace` only writes it the first time --
+	 * after that the asset already holds the pixels this edit was rendered from, and the
+	 * blob offered here is that same picture read back.
+	 */
+	async function editOptions() {
+		if (!edits || !original) {
+			return {};
+		}
+
+		return {
+			cutout:
+				alpha && backgroundRemoved
+					? await encodeCutout(alpha, original.width, original.height)
+					: undefined,
+			edits,
+			source: baseBlob,
+			tuning: backgroundRemoved ? tuning : undefined
+		};
+	}
+
 	/** The edited pixels, as a file the asset store will take. */
 	async function editedFile(fileName: string) {
 		const canvas = document.createElement('canvas');
@@ -626,7 +712,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setSaving(true);
 
 		try {
-			await store.replace(meta.id, await editedFile(meta.name));
+			await store.replace(meta.id, await editedFile(meta.name), await editOptions());
 
 			// Metadata, so it rides a second call rather than the bytes. Cropping moves the
 			// anchor even when nobody touched it, which is why this compares rather than
@@ -706,6 +792,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// `ownerCharacter` rides along, or a character frame edited here would land
 			// in the library as a loose asset while the character kept the old one.
 			const saved = await store.putAsset(await editedFile(saveName), {
+				...(await editOptions()),
 				kind: meta.kind,
 				name: saveName,
 				origin: savedAnchor(),
@@ -806,15 +893,24 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const anchorChanged =
 		!detached && !sameAnchor(origin, meta?.origin ?? DEFAULT_ANCHOR);
 
-	// Nothing to write yet if the image is untouched, which is the same test
-	// the two save buttons make.
-	const saveDisabled =
-		busy ||
-		!source ||
-		!edits ||
-		(!backgroundRemoved &&
-			!anchorChanged &&
-			isUnedited(edits, source.width, source.height));
+	/** The cutout as it would be saved: absent once an author has undone the removal. */
+	const savedTuning = backgroundRemoved ? tuning : undefined;
+
+	// Nothing to write yet if nothing has moved since the asset opened. Compared against
+	// the state it opened WITH, not against a pristine image: re-opening an edited asset
+	// restores its controls, and measuring that against zero would offer to save an edit
+	// that is already saved.
+	const changed =
+		!!edits &&
+		!!source &&
+		(anchorChanged ||
+			!sameTuning(savedTuning, saved.tuning) ||
+			!sameEdits(
+				edits,
+				saved.edits ?? defaultEdits(source.width, source.height)
+			));
+
+	const saveDisabled = busy || !source || !edits || !changed;
 
 	useCommand({
 		enabled: !busy && !backgroundRemoved && !!background?.engine,

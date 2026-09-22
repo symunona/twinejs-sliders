@@ -1,7 +1,8 @@
 import type {
 	AssetId,
 	AssetMeta,
-	Character
+	Character,
+	SidecarKind
 } from '@sliders/scene-types';
 import {
 	AssetFilter,
@@ -10,11 +11,18 @@ import {
 	BackendKind,
 	PutAssetOptions,
 	PutAssetResult,
+	ReplaceAssetOptions,
 	StorageBackend
 } from './asset-store.types';
 import {blobBytes} from './blob-bytes';
 import {migrateCharacter} from './characters';
-import {contentHash, nameFromFilename, uniqueAssetId, uniqueName} from './ids';
+import {
+	contentHash,
+	nameFromFilename,
+	sidecarKey,
+	uniqueAssetId,
+	uniqueName
+} from './ids';
 import {prepareUpload} from './transcode';
 
 /**
@@ -180,6 +188,9 @@ export class BackedAssetStore implements AssetStore {
 				ownerCharacter: options.ownerCharacter,
 				sourceAsset: options.sourceAsset,
 				origin: options.origin,
+				edits: options.edits,
+				tuning: options.tuning,
+				sidecars: await this.writeSidecars(id, [], options),
 				...(prepared.duration !== undefined
 					? {duration: prepared.duration}
 					: {})
@@ -201,7 +212,17 @@ export class BackedAssetStore implements AssetStore {
 				? uniqueAssetId(Object.keys(manifest.assets))
 				: meta.id;
 			const copy = JSON.parse(JSON.stringify(meta)) as AssetMeta;
-			const stored: AssetMeta = {...copy, id};
+			// Sidecars are local to the device that made the edit and never travel in a
+			// bundle, so the settings that describe them cannot come in either. Kept, they
+			// would tell the editor to render a stored edit over bytes that are already
+			// that edit -- brightness applied twice, the crop taken twice.
+			const stored: AssetMeta = {
+				...copy,
+				edits: undefined,
+				id,
+				sidecars: undefined,
+				tuning: undefined
+			};
 
 			await this.storage.writeBlob(id, blob);
 			manifest.assets[id] = stored;
@@ -251,7 +272,68 @@ export class BackedAssetStore implements AssetStore {
 			.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
-	async replace(id: AssetId, file: File): Promise<AssetMeta> {
+	async sidecar(id: AssetId, kind: SidecarKind): Promise<Blob | undefined> {
+		const meta = (await this.load()).assets[id];
+
+		// The manifest is the index. Asking the backend for a key that was never written
+		// is not an error anywhere, but it is a round trip, and `remove` already relies
+		// on this list being the truth about what exists.
+		if (!meta?.sidecars?.includes(kind)) {
+			return undefined;
+		}
+
+		return await this.storage.readBlob(sidecarKey(id, kind));
+	}
+
+	/** Deletes every sidecar an asset owns. */
+	private async dropSidecars(id: AssetId, kinds: SidecarKind[] = []) {
+		for (const kind of kinds) {
+			await this.storage.deleteBlob(sidecarKey(id, kind));
+		}
+	}
+
+	/**
+	 * Writes an edit's sidecars and reports which kinds the asset ends up owning.
+	 *
+	 * `source` is write-once: the first edit's base is the unedited picture, and every
+	 * later edit is rendered from it, so a later base is never worth storing.
+	 *
+	 * A call that mentions none of this is a RE-UPLOAD, not an edit, and it takes the old
+	 * sidecars down with it. They describe pixels that have just been thrown away, and
+	 * leaving them would hand the editor a base belonging to a different picture.
+	 */
+	private async writeSidecars(
+		id: AssetId,
+		existing: SidecarKind[] = [],
+		options: ReplaceAssetOptions = {}
+	): Promise<SidecarKind[] | undefined> {
+		if (!options.source && !options.cutout && !options.edits && !options.tuning) {
+			await this.dropSidecars(id, existing);
+			return undefined;
+		}
+
+		const kinds = new Set(existing);
+
+		if (options.source && !kinds.has('source')) {
+			await this.storage.writeBlob(sidecarKey(id, 'source'), options.source);
+			kinds.add('source');
+		}
+
+		if (options.cutout) {
+			await this.storage.writeBlob(sidecarKey(id, 'cutout'), options.cutout);
+			kinds.add('cutout');
+		}
+
+		// Undefined rather than an empty array, so an asset that has never been edited
+		// keeps a manifest entry identical to the one it had before this existed.
+		return kinds.size ? [...kinds] : undefined;
+	}
+
+	async replace(
+		id: AssetId,
+		file: File,
+		options: ReplaceAssetOptions = {}
+	): Promise<AssetMeta> {
 		const prepared = await prepareUpload(file);
 		const hash = await contentHash(await blobBytes(prepared.blob));
 		const updated = await this.mutate(async manifest => {
@@ -260,6 +342,8 @@ export class BackedAssetStore implements AssetStore {
 			if (!existing) {
 				throw new Error(`There is no asset with ID ${id}.`);
 			}
+
+			const sidecars = await this.writeSidecars(id, existing.sidecars, options);
 
 			// Identity--id, name, kind, tags, owner--is the author's. Everything
 			// else describes the bytes, and the bytes just changed.
@@ -270,7 +354,13 @@ export class BackedAssetStore implements AssetStore {
 				h: prepared.height,
 				hash,
 				mime: prepared.mime,
-				w: prepared.width
+				w: prepared.width,
+				// Settings describe the bytes too, so they are overwritten rather than
+				// merged: a replace naming none of them says these bytes are not a render
+				// of anything--a re-upload, not an edit.
+				edits: options.edits,
+				sidecars,
+				tuning: options.tuning
 			};
 
 			await this.storage.writeBlob(id, prepared.blob);
@@ -311,6 +401,9 @@ export class BackedAssetStore implements AssetStore {
 
 	async remove(id: AssetId): Promise<void> {
 		await this.mutate(async manifest => {
+			// Read before the delete: the sidecar list lives on the meta being removed.
+			const sidecars = manifest.assets[id]?.sidecars;
+
 			delete manifest.assets[id];
 
 			for (const character of Object.values(manifest.characters)) {
@@ -321,6 +414,7 @@ export class BackedAssetStore implements AssetStore {
 				}
 			}
 
+			await this.dropSidecars(id, sidecars);
 			await this.storage.deleteBlob(id);
 		});
 

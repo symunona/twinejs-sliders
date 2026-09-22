@@ -2,28 +2,17 @@
  * The pixel side of the asset editor. Kept free of React and of the DOM where
  * possible so the maths can be tested on its own.
  */
-import {Frac2} from '@sliders/scene-types';
+import type {
+	CropRect,
+	CutoutTuning,
+	Frac2,
+	ImageEdits
+} from '@sliders/scene-types';
 
-/** A crop rectangle, in source image pixels. */
-export interface CropRect {
-	x: number;
-	y: number;
-	w: number;
-	h: number;
-}
-
-export interface ImageEdits {
-	/** -100 to 100. 0 leaves the image alone. */
-	brightness: number;
-	/** -100 to 100. 0 leaves the image alone. */
-	contrast: number;
-	/** 0.1 to 3. 1 leaves the image alone; above 1 lifts the midtones. */
-	gamma: number;
-	crop: CropRect;
-	/** Output size in pixels. Starts out as the crop size. */
-	width: number;
-	height: number;
-}
+// The shapes live in scene-types because `AssetMeta` carries them: an edited asset stores
+// what it was edited with, so the editor can re-open it. Re-exported here because this is
+// where everything that acts on them lives.
+export type {CropRect, ImageEdits};
 
 export const GAMMA_RANGE = {max: 3, min: 0.1, step: 0.05};
 export const LEVEL_RANGE = {max: 100, min: -100, step: 1};
@@ -236,6 +225,58 @@ export function anchorAfterCrop(
 		x: clampFraction((origin.x * sourceWidth - crop.x) / crop.w),
 		y: clampFraction((origin.y * sourceHeight - crop.y) / crop.h)
 	};
+}
+
+/**
+ * The inverse of `anchorAfterCrop`: a stored anchor put back into the source image's
+ * coordinates.
+ *
+ * Re-opening an edit shows the WHOLE original again with the crop drawn over it, but what
+ * was saved is an anchor against the cropped picture. Without this the editor would place
+ * the anchor as if the crop had never happened and then fold the crop in a second time on
+ * the way out, walking the anchor further into the corner with every round trip.
+ *
+ * Not loss-free: an anchor that was clamped to a crop edge stays on that edge, because
+ * the point it originally named is genuinely no longer recorded anywhere.
+ */
+export function anchorBeforeCrop(
+	stored: Frac2,
+	crop: CropRect,
+	sourceWidth: number,
+	sourceHeight: number
+): Frac2 {
+	if (!(sourceWidth > 0) || !(sourceHeight > 0)) {
+		return stored;
+	}
+
+	return {
+		x: clampFraction((crop.x + stored.x * crop.w) / sourceWidth),
+		y: clampFraction((crop.y + stored.y * crop.h) / sourceHeight)
+	};
+}
+
+/** True when two edits would render the same picture. */
+export function sameEdits(a: ImageEdits, b: ImageEdits): boolean {
+	return (
+		a.brightness === b.brightness &&
+		a.contrast === b.contrast &&
+		a.gamma === b.gamma &&
+		a.width === b.width &&
+		a.height === b.height &&
+		a.crop.x === b.crop.x &&
+		a.crop.y === b.crop.y &&
+		a.crop.w === b.crop.w &&
+		a.crop.h === b.crop.h
+	);
+}
+
+/** True when two tunings would composite the same cutout. Absent on both sides counts. */
+export function sameTuning(a?: CutoutTuning, b?: CutoutTuning): boolean {
+	if (!a || !b) {
+		return !a && !b;
+	}
+
+	return a.threshold === b.threshold && a.softness === b.softness;
 }
 
 /** Three decimals, the same precision the character editor's handles write. */

@@ -1,3 +1,4 @@
+import type {CutoutTuning} from '@sliders/scene-types';
 import {
 	applyEdgeContrast,
 	maskBounds,
@@ -239,19 +240,9 @@ export async function backgroundSupport(): Promise<BackgroundSupport> {
  * through it. Both are applied to a cached alpha channel, so dragging either
  * costs a composite and not another two model passes.
  */
-export interface CutoutTuning {
-	/**
-	 * Where the line between keep and drop sits, 0 to 1. Lower keeps more of a
-	 * hesitant mask; higher cuts more aggressively.
-	 */
-	threshold: number;
-	/**
-	 * How wide the transition around that line is. Near zero is a hard, jagged
-	 * edge; wide leaves the model's own soft alpha almost untouched, which is
-	 * what saves translucency and interiors.
-	 */
-	softness: number;
-}
+// Lives in scene-types because `AssetMeta` carries it: an asset whose background was cut
+// out stores the tuning beside the alpha map, so re-opening it restores both knobs.
+export type {CutoutTuning};
 
 export const DEFAULT_TUNING: CutoutTuning = {softness: 0.3, threshold: 0.5};
 
