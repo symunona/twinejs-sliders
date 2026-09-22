@@ -1,4 +1,4 @@
-import {Editor} from 'codemirror';
+import CodeMirror, {Editor, Position} from 'codemirror';
 import {AssetMeta, Character} from '@sliders/scene-types';
 import {AssetLibrary} from '../../sliders-assets/asset-store-context';
 import {sceneCompletion} from '../use-scene-hints';
@@ -84,6 +84,48 @@ function names(passage: string, lib?: Library) {
 	return completeAt(passage, lib)?.list.map(one => one.displayText);
 }
 
+/**
+ * An editor that only remembers what was written to it.
+ *
+ * A `hint` callback is the half of a completion that `text` cannot show: multi-line writes
+ * and where the cursor lands afterwards both happen here and nowhere else, and neither is
+ * worth mounting a real CodeMirror for.
+ */
+function recordingEditor() {
+	const replaced: {from: Position; text: string; to: Position}[] = [];
+	const selected: {from: Position; to: Position}[] = [];
+
+	return {
+		cm: {
+			replaceRange: (text: string, from: Position, to: Position) =>
+				replaced.push({from, text, to}),
+			setSelection: (from: Position, to: Position) =>
+				selected.push({from, to})
+		} as unknown as Editor,
+		replaced,
+		selected
+	};
+}
+
+/**
+ * The `pick` listener `sceneCompletion` put on a completion, ready to call.
+ *
+ * `CodeMirror.on` is a bare `jest.fn` in the mock, so a listener registered through it is
+ * never fired -- but it is recorded, which is enough to drive it by hand.
+ */
+function pickHandlerOf(completion: object) {
+	const calls = (CodeMirror.on as jest.Mock).mock.calls;
+	const registered = calls.find(
+		([target, event]) => target === completion && event === 'pick'
+	);
+
+	if (!registered) {
+		throw new Error('sceneCompletion() registered no pick listener');
+	}
+
+	return registered[2] as (picked: {displayText: string}) => void;
+}
+
 /** The range a pick would overwrite, on the line the cursor is on. */
 function range(passage: string) {
 	const completion = completeAt(passage)!;
@@ -106,8 +148,9 @@ describe('sceneCompletion()', () => {
 		]);
 	});
 
-	it('offers objects first under props:', () => {
+	it('offers objects first under props:, behind the plane snippet', () => {
 		expect(names('[scene]\nprops:\n  |')).toEqual([
+			'plane {fit: cover}',
 			'candle',
 			'table',
 			'street',
@@ -293,6 +336,118 @@ describe('sceneCompletion()', () => {
 				'candle',
 				'table'
 			]);
+		});
+	});
+
+	describe('the plane snippet', () => {
+		it('is pinned above the names, and only under props:', () => {
+			expect(names('[scene]\nprops:\n  |')![0]).toBe('plane {fit: cover}');
+			expect(names('[scene]\ncast:\n  |')).not.toContain('plane {fit: cover}');
+			expect(names('[scene]\nbg: |')).not.toContain('plane {fit: cover}');
+		});
+
+		it('is offered when the library has nothing to put on stage', () => {
+			// The one moment an author is most likely to be asking what goes here.
+			expect(names('[scene]\nprops:\n  |', {all: [], characters: []})).toEqual([
+				'plane {fit: cover}'
+			]);
+		});
+
+		it('narrows to it on plane, fit or cover alike', () => {
+			for (const typed of ['plane', 'fit', 'cover']) {
+				expect(names(`[scene]\nprops:\n  ${typed}|`)).toContain(
+					'plane {fit: cover}'
+				);
+			}
+		});
+
+		it('is gone once the name has a body after it', () => {
+			// `pl` here is an id being renamed, and the line has no room for a second body.
+			expect(names('[scene]\nprops:\n  pl|: {at: 0}')).not.toContain(
+				'plane {fit: cover}'
+			);
+		});
+
+		it('writes the entity line and selects the placeholder id', () => {
+			const completion = completeAt('[scene]\nprops:\n  |')!;
+			const editor = recordingEditor();
+
+			completion.list[0].hint!(editor.cm, completion, completion);
+
+			expect(editor.replaced).toEqual([
+				{from: {ch: 2, line: 2}, text: 'name: {fit: cover}', to: {ch: 2, line: 2}}
+			]);
+			expect(editor.selected).toEqual([
+				{from: {ch: 2, line: 2}, to: {ch: 6, line: 2}}
+			]);
+		});
+
+		it('writes no z: -- the parser seeds one and the useful value is unguessable', () => {
+			expect(completeAt('[scene]\nprops:\n  |')!.list[0].text).toBe(
+				'name: {fit: cover}'
+			);
+		});
+
+		it('is not remembered as a recently used name', () => {
+			const completion = completeAt('[scene]\nprops:\n  |')!;
+
+			// The mocked CodeMirror registers listeners and fires nothing, so the handler
+			// is called the way show-hint would call it: off the registration itself.
+			pickHandlerOf(completion)(completion.list[0]);
+
+			expect(names('[scene]\nprops:\n  |')).toEqual([
+				'plane {fit: cover}',
+				'candle',
+				'table',
+				'street',
+				'tavern-night'
+			]);
+		});
+	});
+
+	describe('picking props from the scene key list', () => {
+		it('writes the block and its first member, two lines', () => {
+			expect(
+				completeAt('[scene]\npro|')!.list.find(
+					one => one.displayText === 'props'
+				)!.text
+			).toBe('props:\n  name: {fit: cover}');
+		});
+
+		it('selects the placeholder id on the second line', () => {
+			const completion = completeAt('[scene]\npro|')!;
+			const picked = completion.list.find(one => one.displayText === 'props')!;
+			const editor = recordingEditor();
+
+			picked.hint!(editor.cm, completion, completion);
+
+			expect(editor.replaced).toEqual([
+				{
+					from: {ch: 0, line: 1},
+					text: 'props:\n  name: {fit: cover}',
+					to: {ch: 3, line: 1}
+				}
+			]);
+			expect(editor.selected).toEqual([
+				{from: {ch: 2, line: 2}, to: {ch: 6, line: 2}}
+			]);
+		});
+
+		it('indents the member from the key, not from column zero', () => {
+			// A scene block written inside something else still puts its member one level
+			// in from `props:` rather than two spaces from the margin.
+			expect(
+				completeAt('[scene]\n    pro|')!.list.find(
+					one => one.displayText === 'props'
+				)!.text
+			).toBe('props:\n      name: {fit: cover}');
+		});
+
+		it('leaves every other key half a line', () => {
+			const list = completeAt('[scene]\n|')!.list;
+
+			expect(list.find(one => one.displayText === 'cast')!.text).toBe('cast: ');
+			expect(list.find(one => one.displayText === 'bg')!.text).toBe('bg: ');
 		});
 	});
 

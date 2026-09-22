@@ -386,6 +386,18 @@ Visual editor: a plane is not draggable and takes no clicks — its rect is the 
 so hit-testing it would swallow every press meant for the cast. Select it from its YAML
 line.
 
+Ctrl-Space writes one. Two ways in, since a plane is the half of `props:` nobody finds by
+reading the key name:
+
+| Where | Pick | Writes |
+|---|---|---|
+| scene root | `props` | `props:` **and** a plane member under it, two lines |
+| under `props:` | `plane {fit: cover}`, pinned above the asset names | the member line alone |
+
+Placeholder id is selected — type over it. Narrows on `plane`, `fit` or `cover`. No `z:`:
+the parser seeds `-1`, and the value worth having (art in FRONT of the cast) is the
+author's call, not a guess.
+
 No parallax. A plane does not counter-translate with the camera (yet).
 
 ## Beats
