@@ -4,7 +4,7 @@ import {MemoryBackend} from '../backends/memory-backend';
 import {blobBytes} from '../blob-bytes';
 import {sidecarKey} from '../ids';
 import {migrateSidecars} from '../migrate-sidecars';
-import {BackedAssetStore} from '../store';
+import {BackedAssetStore, sidecarSyncs} from '../store';
 import {jpegBytes, pngBytes} from '../test-fixtures';
 
 // jsdom ships getRandomValues but not SubtleCrypto.
@@ -529,5 +529,212 @@ describe('importAsset', () => {
 		expect(stored.edits).toBeUndefined();
 		expect(stored.tuning).toBeUndefined();
 		expect(stored.sidecars).toBeUndefined();
+	});
+});
+
+describe('sidecarSyncs', () => {
+	it('answers per kind, and denies by default', () => {
+		expect(sidecarSyncs('cutout')).toBe(true);
+		// The un-edited original: routinely 16 MB, wanted by nothing but this device.
+		expect(sidecarSyncs('src')).toBe(false);
+		// Opting in is a deliberate act, so a kind somebody adds next year cannot
+		// quietly start pushing megabytes off every author's machine.
+		expect(sidecarSyncs('depth')).toBe(false);
+	});
+});
+
+describe('applySyncedProvenance', () => {
+	/** An asset that has been edited here: a local `src`, a local `cutout`, settings. */
+	async function edited() {
+		const backend = new MemoryBackend();
+		const store = new BackedAssetStore(backend);
+		const id = await store.put(file(pngBytes(), 'tavern.png', 'image/png'), {
+			kind: 'bg'
+		});
+
+		await store.replace(id, file(jpegBytes(), 'tavern.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {
+				cutout: new Blob(['local mask'], {type: 'image/png'}),
+				src: new Blob([pngBytes()], {type: 'image/png'})
+			},
+			tuning: {softness: 0.3, threshold: 0.5}
+		});
+
+		return {backend, id, store};
+	}
+
+	it('lands the far side’s settings without touching the bytes', async () => {
+		const {id, store} = await edited();
+		const before = await store.meta(id);
+		const incoming = edits({brightness: 25, gamma: 1.4});
+
+		const meta = await store.applySyncedProvenance(id, {
+			edits: incoming,
+			origin: {x: 0.25, y: 0.75},
+			tuning: {softness: 0.1, threshold: 0.9}
+		});
+
+		expect(meta.edits).toEqual(incoming);
+		expect(meta.tuning).toEqual({softness: 0.1, threshold: 0.9});
+		expect(meta.origin).toEqual({x: 0.25, y: 0.75});
+
+		// The precondition of the whole call: these bytes were already right, which is
+		// why provenance may land on them at all.
+		expect(meta.hash).toBe(before?.hash);
+		expect(meta.bytes).toBe(before?.bytes);
+		expect(await blobBytes((await store.get(id))!)).toEqual(
+			await blobBytes(new Blob([jpegBytes()]))
+		);
+		expect(await store.meta(id)).toEqual(meta);
+	});
+
+	it('writes an arriving cutout and measures it like any other', async () => {
+		const {id, store} = await edited();
+		const cutout = new Blob(['their mask'], {type: 'image/png'});
+
+		const meta = await store.applySyncedProvenance(id, {
+			sidecars: {cutout},
+			tuning: {softness: 0.2, threshold: 0.4}
+		});
+
+		// Same `{bytes, hash, mime, sync}` a local save records -- sync diffs sidecars
+		// on exactly that pair, so a landed one has to be diffable too.
+		expect(meta.sidecars?.cutout).toEqual({
+			bytes: cutout.size,
+			hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+			mime: 'image/png',
+			sync: true
+		});
+		expect(await blobBytes((await store.sidecar(id, 'cutout'))!)).toEqual(
+			await blobBytes(cutout)
+		);
+	});
+
+	it('deletes a cutout the pull no longer carries, blob and entry', async () => {
+		const {backend, id, store} = await edited();
+
+		// What arrives once the author undid the background removal on the other
+		// machine. Omission is the only way that fact can travel.
+		const meta = await store.applySyncedProvenance(id, {edits: edits()});
+
+		expect(meta.sidecars?.cutout).toBeUndefined();
+		expect(await store.sidecar(id, 'cutout')).toBeUndefined();
+		// Straight at the backend: `sidecar()` reads the manifest, so it would report
+		// success over a leaked blob.
+		expect(await backend.readBlob(sidecarKey(id, 'cutout'))).toBeUndefined();
+	});
+
+	it('keeps a hashless cutout the far side has never seen', async () => {
+		const {backend, id, store} = await edited();
+
+		// A migrated entry: `migrateSidecars` names the blob and nothing else, because
+		// nothing ever measured it. Without a hash it cannot be diffed, so it has never
+		// crossed the wire and the sender cannot have meant to drop it.
+		await store.update(id, {
+			sidecars: {...(await store.meta(id))?.sidecars, cutout: {}}
+		});
+
+		// A pull about something else entirely -- the settings moved, the cutout was
+		// never mentioned either way.
+		const meta = await store.applySyncedProvenance(id, {
+			edits: edits({brightness: 25})
+		});
+
+		expect(meta.sidecars?.cutout).toEqual({});
+		expect(await backend.readBlob(sidecarKey(id, 'cutout'))).toBeDefined();
+		// Still hashless, so still invisible to the compare: landing this twice cannot
+		// mint a difference for the next round to chase.
+		expect(meta.sidecars?.cutout?.hash).toBeUndefined();
+	});
+
+	it('leaves the local src alone through every one of those', async () => {
+		const {id, store} = await edited();
+		const src = await blobBytes((await store.sidecar(id, 'src'))!);
+		const before = (await store.meta(id))?.sidecars?.src;
+
+		// A landing cutout, a cutout deletion, and a bare settings change in turn. None
+		// of them says anything about `src`: its blob has `sync: false` and therefore
+		// never crossed the wire, so the sender could neither have sent it nor have
+		// meant to drop it. Claiming or dropping it here is what makes this device's
+		// next push disagree with its own manifest forever.
+		await store.applySyncedProvenance(id, {
+			sidecars: {cutout: new Blob(['theirs'], {type: 'image/png'})}
+		});
+		await store.applySyncedProvenance(id, {edits: edits()});
+		const meta = await store.applySyncedProvenance(id, {});
+
+		expect(meta.sidecars?.src).toEqual(before);
+		expect(await blobBytes((await store.sidecar(id, 'src'))!)).toEqual(src);
+	});
+
+	it('ignores a src somebody offered anyway', async () => {
+		const {id, store} = await edited();
+		const src = await blobBytes((await store.sidecar(id, 'src'))!);
+
+		// A non-syncable kind cannot have come off the wire, so one turning up here is
+		// a mistake upstream -- and writing it would overwrite this device's un-edited
+		// original with another picture's base.
+		await store.applySyncedProvenance(id, {
+			sidecars: {src: new Blob([jpegBytes()], {type: 'image/jpeg'})}
+		});
+
+		expect(await blobBytes((await store.sidecar(id, 'src'))!)).toEqual(src);
+	});
+
+	it('drops the manifest entry entirely when only syncable kinds were there', async () => {
+		const backend = new MemoryBackend();
+		const store = new BackedAssetStore(backend);
+		const id = await store.put(file(pngBytes(), 'tavern.png', 'image/png'), {
+			kind: 'bg'
+		});
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			sidecars: {cutout: new Blob(['mask'], {type: 'image/png'})},
+			tuning: {softness: 0.3, threshold: 0.5}
+		});
+
+		// Undefined rather than an empty record, so an asset carrying nothing reads the
+		// same as one that never had a sidecar at all.
+		expect(
+			(await store.applySyncedProvenance(id, {})).sidecars
+		).toBeUndefined();
+	});
+
+	it('clears settings the pull does not carry', async () => {
+		const {id, store} = await edited();
+
+		await store.update(id, {origin: {x: 0.5, y: 1}});
+
+		// Wholesale, the way `replace` treats them: absent means the far side cleared
+		// it, not that it said nothing.
+		const meta = await store.applySyncedProvenance(id, {});
+
+		expect(meta.edits).toBeUndefined();
+		expect(meta.tuning).toBeUndefined();
+		expect(meta.origin).toBeUndefined();
+	});
+
+	it('keeps the author’s own identity fields', async () => {
+		const {id, store} = await edited();
+
+		await store.update(id, {name: 'tavern-night', tags: ['night']});
+
+		const meta = await store.applySyncedProvenance(id, {edits: edits()});
+
+		// Name, kind and tags are the library compare's business, not provenance's.
+		expect(meta.name).toBe('tavern-night');
+		expect(meta.tags).toEqual(['night']);
+		expect(meta.kind).toBe('bg');
+	});
+
+	it('throws on an id nothing answers to', async () => {
+		const {store} = await edited();
+
+		// Same as `update` and `replace`: the bytes being already here is the
+		// precondition, so a missing asset is a caller bug, not a silent insert.
+		await expect(
+			store.applySyncedProvenance('a_0000', {edits: edits()})
+		).rejects.toThrow('a_0000');
 	});
 });

@@ -26,6 +26,7 @@
 | 1 | React 16 derives `onPointerEnter/Leave` from the pointerover/out pair. | Fire `pointerOver`/`pointerOut`; a dispatched `pointerenter` does not bubble. |
 | 1 | `clientWidth` lives on Element, not HTMLElement — nothing to restore after shadowing. | `delete` the shadow. |
 | 1 | `codemirror` resolves to a build whose default export is not the constructor. | Drive `mode()` over a hand-made `StringStream`. |
+| 1 | `marqueeable-passage-map.test.tsx` "overrides the selected state … while dragging" fails under load, passes 6/6 alone. Seen on two branches, so not yours. | Re-run the one file before believing it. |
 
 ## agent-browser / manual verification
 

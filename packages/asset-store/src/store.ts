@@ -3,6 +3,7 @@ import type {
 	AssetMeta,
 	Character,
 	SidecarEntries,
+	SidecarEntry,
 	SidecarKind
 } from '@sliders/scene-types';
 import {
@@ -13,7 +14,8 @@ import {
 	PutAssetOptions,
 	PutAssetResult,
 	ReplaceAssetOptions,
-	StorageBackend
+	StorageBackend,
+	SyncedProvenance
 } from './asset-store.types';
 import {blobBytes} from './blob-bytes';
 import {migrateCharacter} from './characters';
@@ -39,6 +41,18 @@ import {prepareUpload} from './transcode';
  * adds next year cannot quietly start pushing megabytes off every author's machine.
  */
 const SIDECAR_SYNC: Record<string, boolean> = {cutout: true, src: false};
+
+/**
+ * Whether this kind's blob travels to the server.
+ *
+ * The table stays private and this is the whole public surface, because the pull path
+ * needs the ANSWER, not the ability to add to it: a caller holding the record could opt
+ * a kind in from outside, and the default-deny above exists precisely so that cannot
+ * happen by accident.
+ */
+export function sidecarSyncs(kind: SidecarKind): boolean {
+	return SIDECAR_SYNC[kind] ?? false;
+}
 
 /**
  * A character with spec 04's defaults: origin at the feet, and no frames yet.
@@ -333,11 +347,32 @@ export class BackedAssetStore implements AssetStore {
 	}
 
 	/**
-	 * Writes an edit's sidecars and reports what the asset ends up owning.
+	 * What the manifest records about one sidecar blob.
 	 *
-	 * Each entry is measured as it is written: `{bytes, hash}` is the same pair sync
-	 * already diffs assets on, so a sidecar extends that diff instead of growing a
-	 * second one beside it. `mime` because the backends store no type of their own.
+	 * Measured as it is written: `{bytes, hash}` is the same pair sync already diffs
+	 * assets on, so a sidecar extends that diff instead of growing a second one beside
+	 * it. `mime` because the backends store no type of their own.
+	 *
+	 * One copy, deliberately. Two paths write entries now — an edit saving its own
+	 * sidecars, and a pull landing another device's — and a second measurement beside
+	 * this one would drift from the numbers the diff is taken on.
+	 */
+	private async sidecarEntry(
+		kind: SidecarKind,
+		blob: Blob
+	): Promise<SidecarEntry> {
+		return {
+			bytes: blob.size,
+			hash: await contentHash(await blobBytes(blob)),
+			// Empty when the caller built the blob without one. Recording '' would
+			// send the server a Content-Type it cannot use.
+			mime: blob.type || undefined,
+			sync: sidecarSyncs(kind)
+		};
+	}
+
+	/**
+	 * Writes an edit's sidecars and reports what the asset ends up owning.
 	 *
 	 * `src` is write-once: the first edit's base is the unedited picture, and every
 	 * later edit is rendered from it, so a later base is never worth storing.
@@ -391,14 +426,7 @@ export class BackedAssetStore implements AssetStore {
 			}
 
 			await this.storage.writeBlob(sidecarKey(id, kind), blob);
-			sidecars[kind] = {
-				bytes: blob.size,
-				hash: await contentHash(await blobBytes(blob)),
-				// Empty when the caller built the blob without one. Recording '' would
-				// send the server a Content-Type it cannot use.
-				mime: blob.type || undefined,
-				sync: SIDECAR_SYNC[kind] ?? false
-			};
+			sidecars[kind] = await this.sidecarEntry(kind, blob);
 		}
 
 		// Undefined rather than an empty record, so an asset that has never been edited
@@ -448,6 +476,80 @@ export class BackedAssetStore implements AssetStore {
 		// The cached object URL still points at the old bytes.
 		this.revoke(id);
 		return updated;
+	}
+
+	async applySyncedProvenance(
+		id: AssetId,
+		incoming: SyncedProvenance
+	): Promise<AssetMeta> {
+		// Only the syncable kinds, whatever the caller offered. A `src` cannot have come
+		// off the wire, so one appearing here is a mistake upstream, and writing it would
+		// overwrite this device's own un-edited original with something else's base.
+		const arriving = Object.entries(incoming.sidecars ?? {}).filter(
+			([kind, blob]) => blob && sidecarSyncs(kind)
+		) as [SidecarKind, Blob][];
+		const arrived = new Set(arriving.map(([kind]) => kind));
+
+		return await this.mutate(async manifest => {
+			const existing = manifest.assets[id];
+
+			if (!existing) {
+				throw new Error(`There is no asset with ID ${id}.`);
+			}
+
+			const sidecars: SidecarEntries = {...existing.sidecars};
+
+			// A syncable kind the pull did not carry is GONE, not merely unmentioned --
+			// that is how an undone background removal reaches this machine.
+			//
+			// Two kinds are exempt, for the same reason in two shapes: the sender could
+			// not have sent them, so their absence is not a decision to drop them.
+			//
+			// - A non-syncable kind (`src`) was never on the wire to omit. A manifest
+			//   disagreeing with the blobs this device can actually produce would report
+			//   the same key as missing on every push, forever.
+			// - A HASHLESS entry is one `migrateSidecars` carried over from the days
+			//   before entries were measured. Without a hash it cannot be diffed, so it
+			//   has never synced and no other machine has ever seen it. Deleting it would
+			//   cost the author an alpha map the model has to be re-run to rebuild, on a
+			//   pull they asked for about something else entirely.
+			//
+			// Keeping it does not perturb the fixpoint: a hashless entry is invisible to
+			// the library compare, and nothing here re-measures it -- only a kind whose
+			// blob ARRIVED is written, and an exempt one by definition did not.
+			for (const [kind, entry] of Object.entries(sidecars)) {
+				if (sidecarSyncs(kind) && !arrived.has(kind) && entry?.hash) {
+					await this.storage.deleteBlob(sidecarKey(id, kind));
+					delete sidecars[kind];
+				}
+			}
+
+			// Never an entry for a kind whose blob did not arrive: the index has to name
+			// only what this device can hand back, or its own next push claims a blob it
+			// cannot produce.
+			for (const [kind, blob] of arriving) {
+				await this.storage.writeBlob(sidecarKey(id, kind), blob);
+				sidecars[kind] = await this.sidecarEntry(kind, blob);
+			}
+
+			// Bytes, `hash` and everything else measured from them are the precondition
+			// here, not the payload -- this call is only ever made once the two sides
+			// agree on the pixels. Provenance replaces wholesale, the way `replace`
+			// treats it: absent means the far side cleared it, not that it said nothing.
+			const meta: AssetMeta = {
+				...existing,
+				edits: incoming.edits,
+				origin: incoming.origin,
+				sidecars: Object.keys(sidecars).length ? sidecars : undefined,
+				tuning: incoming.tuning
+			};
+
+			manifest.assets[id] = meta;
+
+			// No revoke(): the asset's own bytes did not move, so a cached object URL
+			// still points at the right picture.
+			return meta;
+		});
 	}
 
 	async update(id: AssetId, changes: Partial<AssetMeta>): Promise<AssetMeta> {

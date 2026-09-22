@@ -361,7 +361,7 @@ describe('syncStoryAssets sidecars', () => {
 	 */
 	async function storeWithSidecar(
 		entry: Record<string, unknown>,
-		{blob = true}: {blob?: boolean} = {}
+		{blob = true, kind = 'cutout'}: {blob?: boolean; kind?: string} = {}
 	) {
 		const bytes = webpBytes();
 		const backend = new MemoryBackend();
@@ -369,11 +369,11 @@ describe('syncStoryAssets sidecars', () => {
 
 		await store.importAsset(await meta(bytes), new Blob([bytes]));
 		await store.update('a_8f21', {
-			sidecars: {cutout: entry}
+			sidecars: {[kind]: entry}
 		} as unknown as Partial<AssetMeta>);
 
 		if (blob) {
-			await backend.writeBlob('a_8f21.cutout', new Blob([CUTOUT]));
+			await backend.writeBlob(`a_8f21.${kind}`, new Blob([CUTOUT]));
 		}
 
 		return {bytes, store};
@@ -429,8 +429,10 @@ describe('syncStoryAssets sidecars', () => {
 		expect(result.uploaded).toEqual([]);
 	});
 
-	it('never offers a sidecar that has not opted into sync', async () => {
-		const {store} = await storeWithSidecar(await cutoutEntry({sync: false}));
+	it('never offers a kind whose policy is not to sync', async () => {
+		// `src` is the un-edited original -- routinely 16 MB, and wanted by nothing but
+		// the device that made the edit.
+		const {store} = await storeWithSidecar(await cutoutEntry(), {kind: 'src'});
 		const {client, diffAssets, putAssetBlob} = fakeClient({
 			present: ['a_8f21']
 		});
@@ -439,6 +441,18 @@ describe('syncStoryAssets sidecars', () => {
 
 		expect(offered(diffAssets)).toEqual(['a_8f21']);
 		expect(putAssetBlob).not.toHaveBeenCalled();
+	});
+
+	it('offers a syncable kind whose entry was stamped before the policy said so', async () => {
+		// `sync` on the entry is a record of what was true when it was WRITTEN. The
+		// policy is `sidecarSyncs`, and it is the one that decides -- otherwise opting a
+		// kind in would silently skip every entry that already existed.
+		const {store} = await storeWithSidecar(await cutoutEntry({sync: false}));
+		const {client, diffAssets} = fakeClient({present: ['a_8f21']});
+
+		await syncStoryAssets({client, story: storyReferencing(), store});
+
+		expect(offered(diffAssets)).toEqual(['a_8f21', 'a_8f21.cutout']);
 	});
 
 	it('never offers a sidecar with no hash, which would re-upload on every push', async () => {

@@ -12,7 +12,7 @@
  * the last blob has landed anyway.
  */
 
-import {sidecarKey} from '@sliders/asset-store';
+import {sidecarKey, sidecarSyncs} from '@sliders/asset-store';
 import type {AssetStore} from '@sliders/asset-store';
 import type {
 	AssetId,
@@ -26,6 +26,7 @@ import {
 } from '../../../util/sliders-bundle';
 import type {Story} from '../../stories';
 import type {ServerClient} from './client';
+import {stable} from './stable-json';
 
 export interface AssetSyncProgress {
 	phase: 'scan' | 'diff' | 'upload' | 'manifest';
@@ -82,28 +83,6 @@ export interface SyncStoryAssetsOptions {
 }
 
 /**
- * Stable JSON, so the fingerprint does not move when a store implementation happens to
- * hand its keys back in a different order.
- */
-function stable(value: unknown): string {
-	if (Array.isArray(value)) {
-		return `[${value.map(stable).join(',')}]`;
-	}
-
-	if (value && typeof value === 'object') {
-		const entries = Object.entries(value as Record<string, unknown>)
-			.filter(([, item]) => item !== undefined)
-			.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-
-		return `{${entries
-			.map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`)
-			.join(',')}}`;
-	}
-
-	return JSON.stringify(value) ?? 'null';
-}
-
-/**
  * One blob the server may need: an asset's own bytes, or a sidecar an asset owns.
  *
  * Both go through the same diff and the same upload loop, because to the server they are
@@ -125,12 +104,17 @@ interface UploadRow {
 /**
  * Every blob worth offering the server, assets first.
  *
- * A sidecar joins only when its entry opts in with `sync` AND carries a `hash`. Both
- * halves matter and for different reasons: `sync` is the size policy — `src` is the
- * un-edited original, routinely 16 MB, and wanted by nothing but the device that made
- * the edit — while the hash is what `diffAssets` compares. Offering a hashless row would
- * ask the server to vouch for bytes nobody measured, and it answers `stale` to that, so
- * the blob would re-upload on every single push.
+ * A sidecar joins only when its kind syncs AND its entry carries a `hash`. Both halves
+ * matter and for different reasons. The kind is the size policy — `src` is the un-edited
+ * original, routinely 16 MB, and wanted by nothing but the device that made the edit.
+ * The hash is what `diffAssets` compares: offering a hashless row would ask the server to
+ * vouch for bytes nobody measured, it answers `stale` to that, and the blob re-uploads on
+ * every single push.
+ *
+ * `sidecarSyncs(kind)` and NOT `entry.sync`. The field records what the policy was when
+ * the entry was written; the predicate is what it is now. They agree today, and the day
+ * they stop — a kind opted in after entries for it already existed — reading the field
+ * would quietly keep every one of those out of the push, with nothing to show for it.
  */
 function uploadRows(assets: AssetMeta[]): UploadRow[] {
 	const rows: UploadRow[] = [];
@@ -147,7 +131,7 @@ function uploadRows(assets: AssetMeta[]): UploadRow[] {
 
 	for (const meta of assets) {
 		for (const [kind, entry] of Object.entries(meta.sidecars ?? {})) {
-			if (!entry?.sync || !entry.hash) {
+			if (!sidecarSyncs(kind) || !entry?.hash) {
 				continue;
 			}
 
