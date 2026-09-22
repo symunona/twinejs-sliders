@@ -6,6 +6,11 @@
  * `<sliders-stage>` element plus — when the beats leave the reader nowhere to click — the
  * scene's links as ordinary Chapbook links, so there is always somewhere to go even if the
  * custom element never upgrades, and link styling stays the story's.
+ *
+ * Unless the scene wrote a `linkList:` block, which moves the list INSIDE the stage box and
+ * hands the drawing to `<sliders-stage>`. Then no markup is emitted at all: Chapbook renders
+ * it into `#page` flow under the element, where the block's `at:` cannot reach it, and a
+ * list drawn in both places is every choice shown twice.
  */
 
 import {beatsOfferLinks, parseScene} from '@sliders/scene-schema';
@@ -84,20 +89,33 @@ export const sceneModifier: Modifier = {
 		// promise a way out the reader cannot take.
 		pruneEntityLinks(scene);
 
+		// Asked with the links that survived `if:`, and after `pruneEntityLinks`, so a beat
+		// whose only link is gated off this time round does not count as a way out and the
+		// list is drawn after all.
+		const offered = beatsOfferLinks(scene, new Set(links.map(link => link.name)));
+		const drawn =
+			links.length > 0 && showSceneLinks(offered, scene.linkList?.show);
+
 		const payload = encodePayload({
+			drawLinks: drawn && Boolean(scene.linkList),
 			errors: get('config.testing') ? messages : undefined,
 			links: Object.fromEntries(links.map(link => [link.name, link.to])),
+			// The names travel as a list as well as a map, because in a menu the order IS
+			// the content and a map cannot carry it: an integer-like key sits at the FRONT
+			// of an object whatever position it was written in, before JSON is even
+			// involved. This list is what the stage draws from.
+			//
+			// It carries the order the PARSER handed over, which for a scene that names
+			// its links `1`, `2`, `3` is already not the YAML's — `Scene.links` is a map
+			// too, so that one is lost upstream of here and cannot be recovered downstream
+			// of it. What this fixes is the transport losing any more of it.
+			linkOrder: links.map(link => link.name),
 			scene
 		});
 
 		let html = `<sliders-stage data-index="${count}" scene="${payload}"></sliders-stage>`;
 
-		// Asked with the links that survived `if:`, and after `pruneEntityLinks`, so a beat
-		// whose only link is gated off this time round does not count as a way out and the
-		// list is drawn after all.
-		const offered = beatsOfferLinks(scene, new Set(links.map(link => link.name)));
-
-		if (links.length > 0 && showSceneLinks(offered)) {
+		if (drawn && !scene.linkList) {
 			html +=
 				'\n\n' + links.map(link => `> [[${link.name}->${link.to}]]`).join('\n') + '\n';
 		}

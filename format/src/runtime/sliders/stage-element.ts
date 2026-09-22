@@ -16,7 +16,13 @@ import {
 	runBeats,
 	timeTransitions
 } from '@sliders/scene-core';
-import {DialogueLayer, DomRenderer, mergeBubbleStyle} from '@sliders/render-dom';
+import {
+	DialogueLayer,
+	DomRenderer,
+	LinkListLayer,
+	mergeBubbleStyle
+} from '@sliders/render-dom';
+import type {LinkListEntry} from '@sliders/render-dom';
 import type {Beat, Scene, SceneError, Stage} from '@sliders/scene-types';
 import {go} from '../actions';
 import {createLoggers} from '../logger';
@@ -45,11 +51,46 @@ import {stageFrom} from './scene-graph';
 
 const {warn} = createLoggers('scene');
 
+/**
+ * `navigator.userActivation`, which the DOM lib of the TypeScript this repo pins does not
+ * know about yet.
+ *
+ * Stated here rather than left to the lib because the root `tsconfig.json` does not cover
+ * `format/src/runtime` at all: the gap is invisible to the build and to the bundler, and
+ * surfaces only under ts-jest — where it failed the compile of every test that so much as
+ * imports this file. See `listenForGesture`.
+ */
+interface ActivationNavigator extends Navigator {
+	userActivation?: {hasBeenActive: boolean};
+}
+
 /** What the `[scene]` modifier packs into the element's `scene` attribute. */
 export interface StagePayload {
 	scene: Scene;
 	/** Link name -> passage name, with `if:` already evaluated. */
 	links?: Record<string, string>;
+	/**
+	 * The same names, in the order the list is to be drawn in.
+	 *
+	 * In a menu the order is the content, and `links` cannot carry it: an integer-like key
+	 * sits at the FRONT of an object whatever position it was written in. The map is for
+	 * lookup by name and nothing else; this is the order.
+	 *
+	 * It is the order the PARSER produced, which is the YAML's for every ordinary link
+	 * name. `Scene.links` is a map as well, so a scene that names its links `1`, `2`, `3`
+	 * has already lost the author's order before the modifier sees it — not something this
+	 * end can recover, only something it can stop compounding.
+	 */
+	linkOrder?: string[];
+	/**
+	 * Draw the list inside the stage box rather than expecting Chapbook markup under it.
+	 *
+	 * Set by the modifier, which is the one place that can read story state and so the one
+	 * place that can answer `show:` (`showSceneLinks`). True means the scene wrote a
+	 * `linkList:` block AND the list is to be shown; either half missing and the element
+	 * draws nothing, because the markup path has it covered or nobody wanted it.
+	 */
+	drawLinks?: boolean;
 	/** Only sent when `config.testing` is on. */
 	errors?: string[];
 }
@@ -67,6 +108,38 @@ function decodePayload(raw: string): StagePayload | undefined {
 	}
 }
 
+/**
+ * The entries the stage draws, in the scene's own order.
+ *
+ * `links` is the modifier's map, already filtered by `if:`, so a gated link that failed its
+ * condition is absent here and never reaches the menu — the same pruning the bubbles and
+ * the clickable entities get, and the reason a name in `linkOrder` may have no target.
+ *
+ * `icon:` and `transition:` are merged from the block's defaults HERE rather than at parse
+ * time, because the parser leaves them apart on purpose: a scene that inherits its links
+ * through `from:` would otherwise inherit the other scene's list style baked into them.
+ */
+export function linkEntries(
+	payload: StagePayload,
+	links: Record<string, string>
+): LinkListEntry[] {
+	const style = payload.scene.linkList;
+	const order = payload.linkOrder ?? Object.keys(links);
+
+	return order
+		.filter(name => links[name])
+		.map(name => {
+			const link = payload.scene.links?.[name];
+
+			return {
+				name,
+				to: links[name],
+				icon: link?.icon ?? style?.icon,
+				transition: link?.transition ?? style?.transition
+			};
+		});
+}
+
 /** Publishes the stage so a story can read `{sliders.stage}` — debugging, mostly. */
 function publishStage(stage: Stage): void {
 	set(STAGE_VAR, JSON.stringify(stage));
@@ -79,7 +152,11 @@ export class SlidersStage extends CustomElement {
 	private scene?: Scene;
 	private links: Record<string, string> = {};
 	private beatIndex = 0;
+	/** The Chapbook fork under the stage — only a scene WITHOUT `linkList:` has one. */
 	private linkList?: HTMLElement;
+	/** The list drawn inside the stage box — only a scene WITH `linkList:` has one. */
+	private linkListLayer?: LinkListLayer;
+	private linkListEntries: LinkListEntry[] = [];
 	private timer?: number;
 	private cinema = false;
 
@@ -190,6 +267,22 @@ export class SlidersStage extends CustomElement {
 		this.dialogue = new DialogueLayer({onLink: this.followLink});
 		this.dialogue.mount(this, this.renderer);
 
+		if (payload.drawLinks) {
+			// The SAME `followLink` the bubbles and the clickable entities get, so a name
+			// cannot resolve one way in a bubble and another in the menu.
+			this.linkListLayer = new LinkListLayer({onLink: this.followLink});
+			this.linkListLayer.mount(this, this.renderer);
+			this.linkListEntries = linkEntries(payload, this.links);
+
+			// Revealed on the same beat as the markup list (`link-list.ts`): a scene with
+			// beats keeps its choices back until they are done, or the menu answers the
+			// question before the line that poses it has been read. A scene with no beats
+			// has nothing to spoil, so it draws at once.
+			if ((payload.scene.beats?.length ?? 0) === 0) {
+				this.revealLinkList();
+			}
+		}
+
 		// The scene enters FROM the stage it inherited, so a character already on stage in
 		// the previous scene slides instead of popping.
 		const from = resolveStage(base);
@@ -219,14 +312,7 @@ export class SlidersStage extends CustomElement {
 	 * the document, so a reader who clicked to get here has already paid for it.
 	 */
 	private listenForGesture() {
-		// Cast because the repo's two TypeScript configs disagree about it: the format's own
-		// `lib` knows `userActivation`, the root one — which is what ts-jest compiles with,
-		// so any jest suite that ever imports this file compiles it — does not.
-		const activation = (
-			navigator as Navigator & {userActivation?: {hasBeenActive: boolean}}
-		).userActivation;
-
-		if (activation?.hasBeenActive) {
+		if ((navigator as ActivationNavigator).userActivation?.hasBeenActive) {
 			this.unlockSound();
 			return;
 		}
@@ -258,9 +344,26 @@ export class SlidersStage extends CustomElement {
 		document.removeEventListener('keydown', this.handleGesture);
 		window.clearTimeout(this.timer);
 		this.dialogue?.destroy();
+		this.linkListLayer?.destroy();
 		this.renderer?.destroy();
 		this.dialogue = undefined;
+		this.linkListLayer = undefined;
 		this.renderer = undefined;
+	}
+
+	/** Hand the entries to the layer. Safe to call twice; a scene without one does nothing. */
+	private revealLinkList() {
+		this.linkListLayer?.set(this.linkListEntries, this.scene?.linkList);
+	}
+
+	/**
+	 * Take them away again — the reader stepped BACK into the beats.
+	 *
+	 * An empty list is how the layer clears itself, and the style still goes with it so a
+	 * later reveal draws the same menu rather than a differently shaped one.
+	 */
+	private hideLinkList() {
+		this.linkListLayer?.set([], this.scene?.linkList);
 	}
 
 	private renderErrors(errors: string[]) {
@@ -338,6 +441,7 @@ export class SlidersStage extends CustomElement {
 		// (see `waitForReader`), and the click that used to do nothing but clear the beat
 		// marker now brings the list up.
 		releaseLinkList(this.linkList);
+		this.revealLinkList();
 	}
 
 	/**
@@ -420,12 +524,17 @@ export class SlidersStage extends CustomElement {
 		// No auto advance is re-armed here. The reader has taken the wheel; a timer that
 		// pulled them forward out of the beat they just stepped back into would make Left
 		// look broken on any scene with an `autoAdvance:`.
+		// Both lists, always together: the Chapbook one under the stage and the layer drawn
+		// inside it are the same choices in two markups, and a step that moved one without
+		// the other would either spoil the scene or strand the reader in it.
 		if (this.beatIndex < beats.length) {
 			this.setAttribute('data-waiting', 'beat');
 			holdLinkListAgain(this.linkList);
+			this.hideLinkList();
 		} else {
 			this.removeAttribute('data-waiting');
 			releaseLinkList(this.linkList);
+			this.revealLinkList();
 		}
 	}
 
