@@ -11,6 +11,7 @@ import {setDefaults} from '../state';
 import {defineElements} from '../util/custom-element';
 import {resetManifests} from './assets';
 import {slidersDefaults} from './config';
+import {initKeyboard} from './keyboard';
 import {initSceneIndex} from './scene-graph';
 import {SlidersStage} from './stage-element';
 
@@ -22,4 +23,5 @@ export function initSliders(): void {
 	resetManifests();
 	initSceneIndex();
 	defineElements({'sliders-stage': SlidersStage});
+	initKeyboard();
 }
