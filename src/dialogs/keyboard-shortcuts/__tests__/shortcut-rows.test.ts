@@ -31,7 +31,7 @@ describe('shortcutRows()', () => {
 		const rename = result.filter(row => row.id === 'passage.rename');
 
 		expect(rename).toHaveLength(1);
-		expect(rename[0].scopes).toEqual(['story-map', 'dialog']);
+		expect(rename[0].scopes).toEqual(['story-map', 'passage-editor']);
 	});
 
 	it('marks rows the user has changed', () => {

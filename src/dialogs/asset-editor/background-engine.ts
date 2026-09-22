@@ -253,6 +253,59 @@ export interface Cutout {
 }
 
 /**
+ * The tuning applied to a model alpha, WITHOUT compositing.
+ *
+ * Split out of `applyTuning` because a hand-drawn mask has to be added to the model's
+ * alpha *before* anything is drawn through it: composite first and the shapes would be
+ * cutting holes in already-cut pixels, where the two are meant to be independent. Callers
+ * that only want the finished picture still want `applyTuning`.
+ */
+export function tunedAlpha(
+	alpha: Float32Array,
+	tuning: CutoutTuning = DEFAULT_TUNING
+): Float32Array {
+	const half = Math.max(0.001, tuning.softness) / 2;
+
+	return applyEdgeContrast(
+		alpha,
+		tuning.threshold - half,
+		tuning.threshold + half
+	);
+}
+
+/**
+ * Draw `source` through an explicit alpha channel: one value per pixel, multiplied into
+ * whatever transparency the image already had. Returns a new canvas--the source is left
+ * alone so the author can undo.
+ */
+export function compositeAlpha(
+	source: HTMLCanvasElement,
+	alpha: Float32Array
+): HTMLCanvasElement {
+	const result = document.createElement('canvas');
+
+	result.width = source.width;
+	result.height = source.height;
+
+	const context = result.getContext('2d');
+
+	if (!context) {
+		throw new Error('Could not get a 2D context to cut the background out.');
+	}
+
+	context.drawImage(source, 0, 0);
+
+	const image = context.getImageData(0, 0, result.width, result.height);
+
+	for (let index = 0; index < alpha.length; index++) {
+		image.data[index * 4 + 3] = image.data[index * 4 + 3] * alpha[index];
+	}
+
+	context.putImageData(image, 0, 0);
+	return result;
+}
+
+/**
  * Re-applies the tuning to an already-computed alpha channel. Milliseconds,
  * because the model and the edge refinement have both already happened.
  */
@@ -261,16 +314,7 @@ export function applyTuning(
 	alpha: Float32Array,
 	tuning: CutoutTuning = DEFAULT_TUNING
 ): HTMLCanvasElement {
-	const half = Math.max(0.001, tuning.softness) / 2;
-
-	return composite(
-		source,
-		applyEdgeContrast(
-			alpha,
-			tuning.threshold - half,
-			tuning.threshold + half
-		)
-	);
+	return compositeAlpha(source, tunedAlpha(alpha, tuning));
 }
 
 export interface RemoveBackgroundOptions extends MaskOptions {
@@ -375,34 +419,6 @@ function flattenTransparency(source: HTMLCanvasElement): HTMLCanvasElement {
 	context.fillRect(0, 0, flat.width, flat.height);
 	context.drawImage(source, 0, 0);
 	return flat;
-}
-
-/** Multiplies the image's alpha by the mask, leaving what was already transparent alone. */
-function composite(
-	source: HTMLCanvasElement,
-	alpha: Float32Array
-): HTMLCanvasElement {
-	const result = document.createElement('canvas');
-
-	result.width = source.width;
-	result.height = source.height;
-
-	const context = result.getContext('2d');
-
-	if (!context) {
-		throw new Error('Could not get a 2D context to cut the background out.');
-	}
-
-	context.drawImage(source, 0, 0);
-
-	const image = context.getImageData(0, 0, result.width, result.height);
-
-	for (let index = 0; index < alpha.length; index++) {
-		image.data[index * 4 + 3] = image.data[index * 4 + 3] * alpha[index];
-	}
-
-	context.putImageData(image, 0, 0);
-	return result;
 }
 
 /**

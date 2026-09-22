@@ -31,7 +31,7 @@ describe('<StoryTagsDialog>', () => {
 				value={{prefs, dispatch: jest.fn(), ...prefsContext}}
 			>
 				<UndoableStoriesContext.Provider
-					value={{dispatch: jest.fn(), stories: [story], ...storiesContext}}
+					value={{changeCount: 0, dispatch: jest.fn(), stories: [story], ...storiesContext}}
 				>
 					<StoryTagsDialog
 						collapsed={false}

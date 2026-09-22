@@ -171,6 +171,8 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'story.stylesheet': {bindings: []},
 	'assetEditor.resetCrop': {bindings: []},
 	'assetEditor.restoreBackground': {bindings: []},
+	'assetEditor.cycleMaskMode': {bindings: []},
+	'assetEditor.clearMask': {bindings: []},
 
 	// Fuzzy finder. These are the keys the finder has always used; they're here
 	// so that they show up in the shortcuts dialog like everything else.

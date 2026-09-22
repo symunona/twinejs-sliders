@@ -14,6 +14,7 @@ import {
 	useCreateLinkedPassage,
 	useUndoableStoriesContext
 } from '../../store/undoable-stories';
+import {LeaveStoryPrompt} from './leave-story-prompt';
 import {MarqueeablePassageMap} from './marqueeable-passage-map';
 import {PassageFuzzyFinder} from './passage-fuzzy-finder';
 import {ScenePreviewAutoOpen} from './scene-preview-auto-open';
@@ -81,19 +82,18 @@ export const InnerStoryEditRoute: React.FC = () => {
 	useInitialPassageCreation(story, getCenter);
 
 	return (
-		<div className="story-edit-route">
+		// The scope covers the toolbar as well as the map: the shortcuts that open the
+		// asset manager, the character editor and the scene preview are all on toolbar
+		// buttons, and clicking one of those leaves focus there. With the scope on the
+		// map alone, the next keystroke resolves to `global` and the key looks dead.
+		<div className="story-edit-route" data-hotkey-scope="story-map">
 			<DocumentTitle title={story.name} />
 			<StoryEditToolbar
 				getCenter={getCenter}
 				onOpenFuzzyFinder={() => setFuzzyFinderOpen(true)}
 				story={story}
 			/>
-			<MainContent
-				data-hotkey-scope="story-map"
-				grabbable
-				padded={false}
-				ref={mainContent}
-			>
+			<MainContent grabbable padded={false} ref={mainContent}>
 				<MarqueeablePassageMap
 					container={mainContent}
 					errorCounts={sceneErrorCounts}
@@ -141,6 +141,7 @@ export const StoryEditRoute: React.FC = () => {
 	return (
 		<AssetScopeProvider storyId={storyId}>
 			<UndoableStoriesContextProvider>
+				<LeaveStoryPrompt />
 				<ScenePreviewSourceProvider>
 					<DialogsContextProvider>
 						<InnerStoryEditRoute />

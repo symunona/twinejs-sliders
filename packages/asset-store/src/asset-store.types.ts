@@ -1,6 +1,7 @@
 import type {
 	AssetId,
 	AssetKind,
+	AssetMask,
 	AssetMeta,
 	AssetResolver,
 	Character,
@@ -42,6 +43,11 @@ export interface PutAssetOptions {
 	/** What the cutout controls were set to. Only meaningful with a `cutout` sidecar. */
 	tuning?: CutoutTuning;
 	/**
+	 * The shapes drawn by hand into these bytes. Metadata, not a sidecar — but only
+	 * re-appliable while the `src` sidecar it was drawn against is still there.
+	 */
+	mask?: AssetMask;
+	/**
 	 * Extra blobs to keep beside the bytes, by kind — `src` for the pixels the edit
 	 * started from, `cutout` for the alpha map a background removal produced.
 	 *
@@ -64,6 +70,12 @@ export interface ReplaceAssetOptions {
 	edits?: ImageEdits;
 	/** What the cutout controls were set to. Cleared when absent. */
 	tuning?: CutoutTuning;
+	/**
+	 * The shapes drawn by hand into these bytes. Cleared when absent — a replace that
+	 * names none of the settings is a re-upload, and the old holes belong to the picture
+	 * it just threw away.
+	 */
+	mask?: AssetMask;
 	/**
 	 * Extra blobs to keep beside the new bytes, by kind. A blob replaces what was stored
 	 * under that kind. `null` DELETES it. A kind this call does not name — or names as
@@ -93,6 +105,8 @@ export interface ReplaceAssetOptions {
  */
 export interface SyncedProvenance {
 	edits?: ImageEdits;
+	/** The hand-drawn holes. Metadata, so it travels with the manifest and not as a blob. */
+	mask?: AssetMask;
 	tuning?: CutoutTuning;
 	origin?: Frac2;
 	/**

@@ -1,4 +1,9 @@
-import type {AssetId, AssetMeta, ImageEdits} from '@sliders/scene-types';
+import type {
+	AssetId,
+	AssetMask,
+	AssetMeta,
+	ImageEdits
+} from '@sliders/scene-types';
 import {AssetManifest} from '../asset-store.types';
 import {MemoryBackend} from '../backends/memory-backend';
 import {blobBytes} from '../blob-bytes';
@@ -37,6 +42,24 @@ function edits(overrides: Partial<ImageEdits> = {}): ImageEdits {
 		height: 150,
 		width: 300,
 		...overrides
+	};
+}
+
+function mask(overrides: Partial<AssetMask['shapes'][number]> = {}): AssetMask {
+	return {
+		shapes: [
+			{
+				feather: 0.02,
+				id: 'm1',
+				op: 'cut',
+				points: [
+					{x: 0.1, y: 0.1},
+					{x: 0.9, y: 0.12},
+					{x: 0.5, y: 0.8}
+				],
+				...overrides
+			}
+		]
 	};
 }
 
@@ -316,6 +339,84 @@ describe('editing sidecars', () => {
 		expect((await store.meta(id))?.sidecars).toBeUndefined();
 	});
 
+	it('carries the hand mask onto a newly uploaded asset', async () => {
+		const store = newStore();
+		const drawn = mask();
+		const saved = await store.putAsset(
+			file(jpegBytes(), 'tavern-hole.jpg', 'image/jpeg'),
+			{
+				edits: edits(),
+				kind: 'bg',
+				mask: drawn,
+				sidecars: {src: new Blob([pngBytes()], {type: 'image/png'})}
+			}
+		);
+
+		// Metadata, so it comes back off the manifest rather than out of a sidecar.
+		expect(saved.meta.mask).toEqual(drawn);
+		expect((await store.meta(saved.id))?.mask).toEqual(drawn);
+	});
+
+	it('overwrites the hand mask on a replace, and clears it on a re-upload', async () => {
+		const {id, store} = await seeded();
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			mask: mask(),
+			sidecars: {src: new Blob([pngBytes()], {type: 'image/png'})}
+		});
+
+		expect((await store.meta(id))?.mask).toEqual(mask());
+
+		const moved = mask({
+			op: 'keep',
+			points: [
+				{x: 0.2, y: 0.2},
+				{x: 0.8, y: 0.2},
+				{x: 0.5, y: 0.7}
+			]
+		});
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			mask: moved,
+			sidecars: {src: new Blob([pngBytes()], {type: 'image/png'})}
+		});
+
+		expect((await store.meta(id))?.mask).toEqual(moved);
+
+		// Same rule as `edits` and `tuning`: a replace naming none of them is a
+		// re-upload, and holes drawn on the old picture do not belong on this one.
+		await store.replace(id, file(pngBytes(), 'different.png', 'image/png'));
+
+		expect((await store.meta(id))?.mask).toBeUndefined();
+	});
+
+	it('keeps the base sidecar for a save that carries nothing but a mask', async () => {
+		const {id, store} = await seeded();
+		const base = new Blob([pngBytes()], {type: 'image/png'});
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {src: base}
+		});
+
+		// A mask is metadata, not a sidecar -- but its points are fractions OF the base.
+		// Treating this as a re-upload would drop the base and leave holes that can only
+		// ever be re-cut into bytes that already have them.
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			mask: mask()
+		});
+
+		const meta = await store.meta(id);
+
+		expect(meta?.mask).toEqual(mask());
+		expect(Object.keys(meta?.sidecars ?? {})).toEqual(['src']);
+		expect(await blobBytes((await store.sidecar(id, 'src'))!)).toEqual(
+			await blobBytes(base)
+		);
+	});
+
 	it('gives a saved-as-new asset its own base', async () => {
 		const store = newStore();
 		const saved = await store.putAsset(
@@ -514,6 +615,7 @@ describe('importAsset', () => {
 				hash: 'deadbeef',
 				id: 'a_8f21',
 				kind: 'bg',
+				mask: mask(),
 				mime: 'image/png',
 				name: 'tavern',
 				sidecars: {src: {hash: 'a'.repeat(64)}},
@@ -529,6 +631,8 @@ describe('importAsset', () => {
 		expect(stored.edits).toBeUndefined();
 		expect(stored.tuning).toBeUndefined();
 		expect(stored.sidecars).toBeUndefined();
+		// The mask for the same reason: the bundle's bytes already have the hole in them.
+		expect(stored.mask).toBeUndefined();
 	});
 });
 
@@ -563,6 +667,22 @@ describe('applySyncedProvenance', () => {
 
 		return {backend, id, store};
 	}
+
+	it('lands the far side’s hand-drawn mask, and clears one they erased', async () => {
+		const {id, store} = await edited();
+		const drawn = mask();
+
+		// A mask is metadata, so it rides the manifest rather than a blob -- but only
+		// because it is in the compared surface. Left out, the far side would draw a
+		// hole and this machine would never hear about it.
+		expect((await store.applySyncedProvenance(id, {mask: drawn})).mask).toEqual(
+			drawn
+		);
+
+		// Absent means erased, the same as every other field here: provenance replaces
+		// wholesale rather than merging.
+		expect((await store.applySyncedProvenance(id, {})).mask).toBeUndefined();
+	});
 
 	it('lands the far side’s settings without touching the bytes', async () => {
 		const {id, store} = await edited();

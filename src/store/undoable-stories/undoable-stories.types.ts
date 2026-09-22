@@ -43,6 +43,12 @@ export type UndoableStoriesState = {
 export type StoriesUndoDispatch = React.Dispatch<UndoableStoriesAction>;
 
 export interface UndoableStoriesContextProps {
+	/**
+	 * How many changes have been recorded since this context was created. Zero
+	 * means the author has changed nothing in this session--what the navigation
+	 * guard asks about before leaving the story.
+	 */
+	changeCount: number;
 	dispatch: (actionOrThunk: StoriesActionOrThunk, annotation?: string) => void;
 	redo?: () => void;
 	redoLabel?: string;

@@ -90,6 +90,21 @@ describe('<PassageEditStack>', () => {
 		).toBeInTheDocument();
 	});
 
+	// Regression: the scope used to be declared on the editor contents, so the scene
+	// shortcuts stopped resolving as soon as focus left the text--which is where the
+	// card's own Escape handler sends it. It belongs on the card, together with the
+	// generic `dialog` scope the card's maximize command needs.
+
+	it('declares the passage editor hotkey scope on the front dialog card', () => {
+		const story = fakeStory(1);
+
+		renderComponent({stories: [story]});
+		expect(screen.getByRole('dialog')).toHaveAttribute(
+			'data-hotkey-scope',
+			'passage-editor dialog'
+		);
+	});
+
 	it('displays a tag grid for each passage', () => {
 		const story = fakeStory(2);
 

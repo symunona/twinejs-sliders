@@ -105,21 +105,21 @@ export const StoryFormatToolbar: React.FC<StoryFormatToolbarProps> = props => {
 	// Not the format's own commands, but the two things an author reaches for while
 	// writing a scene, so they sit beside the Scene menu rather than a toolbar tab away
 	// behind the dialog. A format with no Scene menu gets them at the end of the bar.
+	//
+	// `hotkeyScope={null}`: this whole toolbar is behind three preferences, and a key
+	// that only exists while its button is on screen is not a key. `PassageEditContents`
+	// registers both commands instead, and these are the buttons for them--the key chip
+	// comes from the keymap, so it shows either way.
 
 	const sceneButtons = (
 		<>
 			<ScenePreviewButton
-				allowInInput
 				commandId="scene.edit"
-				hotkeyScope="passage-editor"
+				hotkeyScope={null}
 				label={t('dialogs.passageEdit.editScene')}
 				story={story}
 			/>
-			<SlidersAssetsButton
-				allowInInput
-				commandId="scene.assets"
-				hotkeyScope="passage-editor"
-			/>
+			<SlidersAssetsButton commandId="scene.assets" hotkeyScope={null} />
 		</>
 	);
 	const hasSceneMenu = toolbarItems.some(

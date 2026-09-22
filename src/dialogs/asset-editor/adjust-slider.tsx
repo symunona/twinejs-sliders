@@ -4,6 +4,8 @@ import {IconButton} from '../../components/control/icon-button';
 import './adjust-slider.css';
 
 export interface AdjustSliderProps {
+	/** Greys the whole control out. The reset button follows it. */
+	disabled?: boolean;
 	/**
 	 * Lets the value be typed as well as dragged, and accepts numbers past the slider's own
 	 * ends. Use it where the range is a comfortable default rather than a real limit.
@@ -22,8 +24,18 @@ export interface AdjustSliderProps {
 
 /** One labelled adjustment slider, with the reset the sliders all need. */
 export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
-	const {editable, label, max, min, onChange, resetLabel, resetTo, step, value} =
-		props;
+	const {
+		disabled,
+		editable,
+		label,
+		max,
+		min,
+		onChange,
+		resetLabel,
+		resetTo,
+		step,
+		value
+	} = props;
 	/**
 	 * What is in the box while it is being typed in. Half-written numbers like `1.` or `-`
 	 * are not values yet, and echoing the committed number back would fight the typing.
@@ -49,6 +61,7 @@ export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 						<input
 							aria-label={label}
 							className="adjust-slider-number"
+							disabled={disabled}
 							onBlur={() => setDraft(undefined)}
 							onChange={event => handleTyped(event.target.value)}
 							step={step}
@@ -60,6 +73,7 @@ export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 					)}
 				</span>
 				<input
+					disabled={disabled}
 					max={max}
 					min={min}
 					onChange={event => {
@@ -72,7 +86,7 @@ export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 				/>
 			</label>
 			<IconButton
-				disabled={value === resetTo}
+				disabled={disabled || value === resetTo}
 				icon={<IconArrowBackUp />}
 				iconOnly
 				label={resetLabel}

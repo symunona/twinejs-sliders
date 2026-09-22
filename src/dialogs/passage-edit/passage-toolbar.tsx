@@ -117,7 +117,9 @@ export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
 			/>
 			<RenamePassageButton
 				disabled={disabled}
-				hotkeyScope="dialog"
+				// Not `dialog`: that scope now resolves inside every other dialog too, and
+				// F2 there would rename whatever passage happens to be open behind it.
+				hotkeyScope="passage-editor"
 				onRename={handleRename}
 				passage={passage}
 				story={story}

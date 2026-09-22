@@ -161,6 +161,11 @@ const InnerPassageEditStack: React.FC<PassageEditStackProps> = props => {
 						<DialogCard
 							{...managementProps}
 							headerControls={toolbarToggle}
+							// Scene commands belong to writing a scene, not to every dialog,
+							// but they have to survive focus sitting on the card's own chrome
+							// --which is where Escape out of the text puts it. Background
+							// cards are disabled, so only the front one declares it.
+							hotkeyScope="passage-editor"
 							// The title of the editor in front renames the passage when
 							// clicked. Background cards keep a plain title--a click there
 							// raises that editor, which is the only thing it can mean.

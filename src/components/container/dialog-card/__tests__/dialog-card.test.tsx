@@ -339,5 +339,39 @@ describe('<DialogCard>', () => {
 			pressMaximizeKey(within(screen.getByRole('dialog')).getByRole('textbox'));
 			expect(onChangeMaximized.mock.calls).toEqual([[true]]);
 		});
+
+		it('runs in a dialog that has a hotkey scope of its own', () => {
+			const onChangeMaximized = jest.fn();
+
+			render(
+				<FakeStateProvider>
+					{dialog({hotkeyScope: 'asset-editor', onChangeMaximized})}
+				</FakeStateProvider>
+			);
+			pressMaximizeKey(screen.getByText('mock-child'));
+			expect(onChangeMaximized.mock.calls).toEqual([[true]]);
+		});
+	});
+
+	describe('the hotkey scope', () => {
+		it('is dialog by default', () => {
+			renderComponent();
+			expect(screen.getByRole('dialog')).toHaveAttribute(
+				'data-hotkey-scope',
+				'dialog'
+			);
+		});
+
+		// The card is the outermost thing a dialog owns, and it is where Escape parks
+		// focus. A scope declared on its contents instead stops resolving the moment
+		// the user steps out of the text field.
+
+		it('keeps dialog alongside a scope the dialog sets itself', () => {
+			renderComponent({hotkeyScope: 'passage-editor'});
+			expect(screen.getByRole('dialog')).toHaveAttribute(
+				'data-hotkey-scope',
+				'passage-editor dialog'
+			);
+		});
 	});
 });

@@ -25,6 +25,7 @@ import {sidecarKey, sidecarSyncs} from '@sliders/asset-store';
 import type {AssetStore} from '@sliders/asset-store';
 import type {
 	AssetId,
+	AssetMask,
 	AssetMeta,
 	CutoutTuning,
 	Frac2,
@@ -138,6 +139,12 @@ export interface AssetProvenance {
 	edits?: ImageEdits;
 	tuning?: CutoutTuning;
 	origin?: Frac2;
+	/**
+	 * The hand-drawn holes. Metadata like `edits`, compared for the same reason: two
+	 * libraries can hold the same finished pixels and disagree about the shapes that
+	 * produced them, and the far side cannot move one corner of a polygon it never got.
+	 */
+	mask?: AssetMask;
 	/** Syncable, hashed sidecar kinds only, by content hash. */
 	sidecars: Record<string, string>;
 }
@@ -159,6 +166,7 @@ export function syncableSidecarHashes(meta: AssetMeta): Record<string, string> {
 export function provenanceOf(meta: AssetMeta): AssetProvenance {
 	return {
 		edits: meta.edits,
+		mask: meta.mask,
 		origin: meta.origin,
 		sidecars: syncableSidecarHashes(meta),
 		tuning: meta.tuning
@@ -353,6 +361,7 @@ async function landProvenance(options: {
 		try {
 			const stored = await store.applySyncedProvenance(local.id, {
 				edits: target.edits,
+				mask: target.mask,
 				origin: target.origin,
 				sidecars: blobs,
 				tuning: target.tuning

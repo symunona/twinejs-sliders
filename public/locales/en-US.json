@@ -306,6 +306,42 @@
 			"loadError": "Could not open this asset.",
 			"loading": "Opening…",
 			"lockAspect": "Lock Aspect",
+			"mask": "Mask",
+			"maskClear": "Clear All Shapes",
+			"maskDefaults": "Next shape you draw",
+			"maskDelete": "Delete Shape",
+			"maskEmpty": "Nothing drawn yet. Draw on the image and the shape turns up here.",
+			"maskFeather": "Edge feather",
+			"maskHint": "Drawing needs one of the transparency previews—the rendered one takes no gestures at all. Click out a polygon's corners, or drag to trace one freehand; Enter or a double click closes it, Esc gives up on it.",
+			"maskNote": "Holes cut by hand, for the times no model is going to find the edge for you—a prop's screen, a window, a gap under an arch. They are stored as shapes on the asset rather than burnt into the pixels, so a corner can still be dragged a week later and a later crop or resize leaves them exactly where they were. Cut takes area away, Keep puts it back, and both are added to whatever the background tool produced rather than replacing it.",
+			"maskOp": {
+				"cut": "Cut",
+				"keep": "Keep"
+			},
+			"maskShapeLabel": "Shape {{index}}",
+			"maskShapes": "Shapes drawn",
+			"maskTool": {
+				"edit": "Edit Points",
+				"freehand": "Freehand",
+				"polygon": "Polygon"
+			},
+			"maskToolHint": {
+				"edit": "Edit points — drag a corner to move it. Delete removes the whole shape.",
+				"freehand": "Freehand — drag to trace a shape; it closes itself when you let go.",
+				"polygon": "Polygon — click each corner. Click the first one again, press Enter, or double click to close the shape."
+			},
+			"maskToolsLabel": "Drawing tool",
+			"mode": {
+				"alpha": "Alpha",
+				"paint": "Transparency",
+				"rendered": "Rendered"
+			},
+			"modeHint": {
+				"alpha": "Alpha — what is kept and what is cut, as white and black. The quickest way to see what the background tool actually decided, before you start correcting it by hand.",
+				"paint": "Transparency — the cutout over a checkerboard, with the shapes drawn on top of it. This is the preview you draw in; the adjustments and the crop are left off so nothing disguises the edge you are judging.",
+				"rendered": "Rendered — the picture as it will be saved, adjustments and crop and all."
+			},
+			"modeLabel": "Preview",
 			"nameEmpty": "Give the new asset a name.",
 			"needsRealGpu": "Your browser is running WebGPU on a software renderer (SwiftShader), not on your graphics card. Turn on “Use graphics acceleration when available” in your browser settings, and if it is already on, check chrome://gpu to see why your card was rejected.",
 			"needsWebGpu": "Removing the background needs WebGPU, which this browser doesn't have. Try a recent Chrome or Edge.",
@@ -362,11 +398,13 @@
 			"tool": {
 				"adjust": "Color",
 				"background": "Background",
+				"mask": "Mask",
 				"size": "Sizing"
 			},
 			"toolHint": {
 				"adjust": "Color \u2014 brightness, contrast and gamma.",
 				"background": "Background \u2014 cut the subject out of its background.",
+				"mask": "Mask \u2014 cut holes by hand, where no model is going to find the edge for you.",
 				"size": "Sizing \u2014 anchor, resize and crop."
 			},
 			"generateWith": "Generate From This",
@@ -920,6 +958,10 @@
 		}
 	},
 	"routes": {
+		"navConfirm": {
+			"leave": "Go Back to Stories",
+			"stay": "Keep Editing"
+		},
 		"storyEdit": {
 			"buildInfo": {
 				"daysAgo": "build from {{value}}d ago",
@@ -961,7 +1003,8 @@
 			"presence": {
 				"editingPassage": "{{name}} is editing this passage",
 				"inStory": "Also in this story: {{names}}"
-			}
+			},
+			"leaveConfirm": "Go back to your stories? Your changes are saved, but the undo history for this session will be lost."
 		},
 		"storyList": {
 			"library": "Library",
@@ -1195,6 +1238,8 @@
 				"removeBackground": "Remove Background",
 				"restoreBackground": "Restore Background",
 				"resetCrop": "Reset Crop",
+				"cycleMaskMode": "Cycle Preview",
+				"clearMask": "Clear Mask",
 				"saveAsNew": "Save as New Asset",
 				"replace": "Overwrite Original"
 			},

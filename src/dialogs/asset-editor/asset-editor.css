@@ -314,3 +314,173 @@ mean "nothing to write" or "still busy".
 	color: var(--dark-yellow);
 	font-weight: 700;
 }
+
+/* ======================================================================
+   Mask — the hand-drawn cutout editor. Everything below this line belongs
+   to `mask-overlay.tsx` and `mask-tool.tsx`. Nothing above it does.
+   ====================================================================== */
+
+/*
+The drawing surface. Laid over the art at its measured rect, in source-image
+coordinates: the viewBox does the scaling, so nothing here is sized in image
+pixels.
+
+`pointer-events` is also set inline, by the mode. Both, not one: the inline
+value is the one that has to be right, and the rule keeps a stray class from
+arming a sheet that the rendered preview needs to be able to click through.
+*/
+
+.mask-overlay {
+	overflow: visible;
+	pointer-events: none;
+	position: absolute;
+	touch-action: none;
+}
+
+.mask-overlay.live {
+	pointer-events: auto;
+}
+
+/* The gesture the next press will make, named by the cursor -- the art
+   underneath already shows a crosshair for cropping, so drawing must not. */
+
+.mask-overlay.live.tool-polygon,
+.mask-overlay.live.tool-freehand {
+	cursor: crosshair;
+}
+
+.mask-overlay.live.tool-edit {
+	cursor: pointer;
+}
+
+/*
+Outlines only, never a fill: the point of the paint and alpha previews is the
+pixels underneath, and a wash over them hides the edge being judged.
+
+Stroke widths are screen pixels, not image pixels -- `non-scaling-stroke` on
+every stroked element keeps a 1.5px line 1.5px thick whether the source is 300
+or 3000 wide.
+*/
+
+.mask-shape {
+	fill: none;
+	stroke-width: 1.5;
+}
+
+/* cut = the hole. Red, and dashed, so the two ops stay apart for a reader who
+   cannot tell the colours apart. */
+
+.mask-shape.cut {
+	stroke: var(--red);
+	stroke-dasharray: 6 4;
+}
+
+/* keep = the patch put back. Green, solid. */
+
+.mask-shape.keep {
+	stroke: var(--green);
+}
+
+.mask-shape.selected {
+	stroke-width: 2.5;
+}
+
+/*
+Vertex handles. Radius is `VERTEX_RADIUS` of the short edge, in image
+coordinates, so the handle is exactly as big as the area that grabs it -- a
+handle smaller than its hit box is a miss that looks like a bug.
+*/
+
+.mask-vertex {
+	fill: var(--white);
+	stroke: var(--dark-gray);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+}
+
+.mask-vertex.start {
+	fill: var(--orange);
+}
+
+/* The shape being drawn. Open, in the op it will be committed with, so the
+   colour does not change under the hand at the moment it closes. */
+
+.mask-draft {
+	fill: none;
+	stroke-dasharray: 4 3;
+	stroke-width: 1.5;
+}
+
+.mask-draft.cut {
+	stroke: var(--red);
+}
+
+.mask-draft.keep {
+	stroke: var(--green);
+}
+
+/* One row of radio buttons. Wraps: the pane is 300px and three groups of them
+   do not fit a line on a narrow dialog. */
+
+.asset-editor-mask-group {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--control-inner-padding) / 2);
+}
+
+/*
+Op and feather change either the picked shape or the next one drawn. The box
+and its caption are the only thing saying which, so they are drawn as a box --
+without the border the two controls read as more of the section above them.
+*/
+
+.asset-editor-mask-scope {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding);
+}
+
+.asset-editor-mask-scope.shape {
+	border-color: var(--blue);
+}
+
+.asset-editor-mask-scope-label {
+	color: var(--gray);
+	font-size: 85%;
+}
+
+.asset-editor-mask-scope.shape .asset-editor-mask-scope-label {
+	color: var(--dark-blue);
+	font-weight: 700;
+}
+
+.asset-editor-mask-list {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--control-inner-padding) / 2);
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+/* The name grows, the delete button does not. `min-width: 0` so a long label
+   truncates instead of pushing the delete button off the pane. */
+
+.asset-editor-mask-row {
+	align-items: center;
+	display: flex;
+	gap: calc(var(--control-inner-padding) / 2);
+}
+
+.asset-editor-mask-row > :first-child {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.asset-editor-mask-row.selected {
+	background: var(--light-blue-translucent);
+	border-radius: var(--corner-round);
+}

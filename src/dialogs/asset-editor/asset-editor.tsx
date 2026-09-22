@@ -1,4 +1,4 @@
-import {AssetId, AssetMeta, Frac2} from '@sliders/scene-types';
+import {AssetId, AssetMask, AssetMeta, Frac2, MaskOp} from '@sliders/scene-types';
 import classNames from 'classnames';
 import {
 	IconAdjustments,
@@ -53,14 +53,15 @@ import {useAssetUsage} from '../sliders-assets/use-asset-usage';
 import {useSceneRefRename} from '../sliders-assets/use-scene-ref-rename';
 import {AdjustSlider} from './adjust-slider';
 import {
-	applyTuning,
 	BackgroundSupport,
 	backgroundSupport,
 	BackgroundTimeoutError,
 	BackgroundUnsupportedError,
+	compositeAlpha,
 	CutoutTuning,
 	DEFAULT_TUNING,
-	removeBackground
+	removeBackground,
+	tunedAlpha
 } from './background-engine';
 import {
 	BackgroundOnCpuError,
@@ -87,10 +88,110 @@ import {
 	sameTuning
 } from './image-edits';
 import {decodeCutout, encodeCutout} from './cutout-map';
+import {MaskOverlay} from './mask-overlay';
+import {
+	DEFAULT_FEATHER,
+	MASK_MODES,
+	MaskMode,
+	MaskToolId,
+	emptyMask,
+	mergeAlpha,
+	rasterizeMask,
+	sameMask
+} from './mask-shapes';
+import {MaskTool} from './mask-tool';
 import './asset-editor.css';
 
 /** Longest edge the live preview is drawn at. Full size is only used on save. */
 const MAX_PREVIEW = 900;
+
+/** The preview's size on screen, for a source of this size. */
+function previewSize(source: {height: number; width: number}, scale: number) {
+	return {
+		height: Math.max(1, Math.round(source.height * scale)),
+		width: Math.max(1, Math.round(source.width * scale))
+	};
+}
+
+/**
+ * The `paint` preview: the composite, raw.
+ *
+ * No adjustments and no crop wash -- everything that could disguise the edge being judged
+ * is off. The checkerboard the plan asks for is already there: `.asset-editor-canvas
+ * canvas` carries one as a CSS background, so every transparent pixel shows it and a
+ * second one baked into the bitmap would only fight it at a different cell size.
+ */
+function drawComposite(
+	target: HTMLCanvasElement,
+	source: HTMLCanvasElement,
+	scale: number
+) {
+	const {height, width} = previewSize(source, scale);
+	const context = target.getContext('2d');
+
+	if (!context) {
+		return;
+	}
+
+	target.width = width;
+	target.height = height;
+	context.clearRect(0, 0, width, height);
+	context.imageSmoothingQuality = 'high';
+	context.drawImage(source, 0, 0, width, height);
+}
+
+/**
+ * The `alpha` preview: the effective alpha as grayscale, white = opaque.
+ *
+ * Drawn at source size into a scratch canvas and scaled down from there, because the
+ * alpha is one value per SOURCE pixel and there is no cheap way to sample it at preview
+ * size that `drawImage` does not already do better. Fully opaque, so the checkerboard
+ * under the canvas stays out of a picture whose whole subject is transparency.
+ */
+function drawAlpha(
+	target: HTMLCanvasElement,
+	effective: Float32Array | undefined,
+	width: number,
+	height: number,
+	scale: number
+) {
+	const full = document.createElement('canvas');
+
+	full.width = width;
+	full.height = height;
+
+	const scratch = full.getContext('2d');
+	const context = target.getContext('2d');
+
+	if (!scratch || !context) {
+		return;
+	}
+
+	const image = scratch.createImageData(width, height);
+
+	for (let index = 0; index < width * height; index++) {
+		// Absent alpha means nothing is cut: the asset is opaque everywhere, which is
+		// white. Reached when the mode is left on `alpha` for the instant between a
+		// cutout being dropped and the switch falling back to `rendered`.
+		const level = Math.round(
+			Math.min(1, Math.max(0, effective?.[index] ?? 1)) * 255
+		);
+
+		image.data[index * 4] = level;
+		image.data[index * 4 + 1] = level;
+		image.data[index * 4 + 2] = level;
+		image.data[index * 4 + 3] = 255;
+	}
+
+	scratch.putImageData(image, 0, 0);
+
+	const size = previewSize({height, width}, scale);
+
+	target.width = size.width;
+	target.height = size.height;
+	context.imageSmoothingQuality = 'high';
+	context.drawImage(full, 0, 0, size.width, size.height);
+}
 
 export interface AssetEditorDialogProps extends DialogComponentProps {
 	/** The asset being edited. Absent when editing pixels that aren't in the library. */
@@ -263,7 +364,33 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * the store, so the prompt has to know about them too.
 	 */
 	const [taken, setTaken] = React.useState<Set<string>>(new Set());
-	const [source, setSource] = React.useState<HTMLCanvasElement>();
+	/**
+	 * The pixels on screen, and the alpha they were drawn through.
+	 *
+	 * One piece of state, written by one effect. Three things feed the composite -- the
+	 * model's alpha, its tuning, and the hand-drawn shapes -- and when each of them
+	 * composited for itself, a mask and a cutout could each undo the other's work
+	 * depending on which handler ran last. The effect also gets React's batching, which
+	 * matters: a vertex drag fires on every pointermove, and `rasterizeMask` allocates and
+	 * reads back a full-size canvas per shape.
+	 */
+	const [composed, setComposed] = React.useState<{
+		canvas: HTMLCanvasElement;
+		/** `clamp(tuned + shapes, 0, 1)`. Absent when there was nothing to composite. */
+		effective?: Float32Array;
+	}>();
+	const source = composed?.canvas;
+	const effective = composed?.effective;
+	/** The hand-drawn shapes, in fractions of the SOURCE image. */
+	const [mask, setMask] = React.useState<AssetMask>({shapes: []});
+	/** The shape the mask pane's op and feather are editing, and whose handles show. */
+	const [selectedShape, setSelectedShape] = React.useState<string>();
+	const [maskTool, setMaskTool] = React.useState<MaskToolId>('polygon');
+	/** Which of the three previews the stage draws. Not saved: it is a way of looking. */
+	const [maskMode, setMaskMode] = React.useState<MaskMode>('rendered');
+	/** What the NEXT shape drawn starts with, until a shape is picked to edit instead. */
+	const [maskOp, setMaskOp] = React.useState<MaskOp>('cut');
+	const [maskFeather, setMaskFeather] = React.useState(DEFAULT_FEATHER);
 	/**
 	 * The bytes `original` was decoded from, kept so a save can store them as the asset's
 	 * `src` sidecar -- the base every later edit of it is re-rendered from.
@@ -283,6 +410,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 */
 	const [saved, setSaved] = React.useState<{
 		edits?: ImageEdits;
+		mask?: AssetMask;
 		tuning?: CutoutTuning;
 	}>({});
 	/**
@@ -420,6 +548,11 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// that base the asset's own bytes ARE the edit, and re-applying it would
 			// brighten what is already bright and crop what is already cropped.
 			const restored = base ? assetMeta?.edits : undefined;
+			// Same rule, same reason: without the `source` sidecar the asset's own bytes
+			// already have the holes cut in them, and re-applying the shapes would cut the
+			// same hole twice -- softening every feathered edge a second time and darkening
+			// nothing that was not already gone.
+			const restoredMask = base ? assetMeta?.mask : undefined;
 			const stored = assetMeta?.origin ?? DEFAULT_ANCHOR;
 
 			setMeta(assetMeta);
@@ -439,12 +572,17 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			);
 			setBaseBlob(blob);
 			setOriginal(canvas);
-			setSource(canvas);
+			// The recomposite effect will write this again the moment `original` lands.
+			// Set here anyway, so the dialog shows the picture on the same tick it stops
+			// saying "Opening…" rather than one frame later.
+			setComposed({canvas});
 			setEdits(restored ?? defaultEdits(canvas.width, canvas.height));
+			setMask(restoredMask ?? {shapes: []});
 			// Deliberately no `tuning` yet. The manifest may promise a cutout whose map
 			// never reaches the canvas below, and `saved` is a record of what the dialog
-			// is SHOWING -- see the comment on the state itself.
-			setSaved({edits: restored});
+			// is SHOWING -- see the comment on the state itself. `mask` needs no such
+			// guard: `restoredMask` is already what `setMask` just put on screen.
+			setSaved({edits: restored, mask: restoredMask});
 
 			// A stored cutout goes back through the path a fresh one takes, so its two
 			// sliders keep working without the model having to run for a second time.
@@ -462,16 +600,18 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// cannot be composited, and a silent drop beats a crash: the asset still opens,
 			// with its background-removal button live again.
 			if (map && map.alpha.length === canvas.width * canvas.height) {
-				const tuning = assetMeta?.tuning ?? DEFAULT_TUNING;
-
 				setAlpha(map.alpha);
-				setTuning(tuning);
-				setSource(applyTuning(canvas, map.alpha, tuning));
-				// The cutout is on screen, so the tuning is now part of what this dialog
-				// opened with. `tuning` and not `assetMeta.tuning`: an asset that stored a
-				// map but no settings is showing the defaults, and reading the baseline
-				// off the manifest would call those defaults an unsaved change.
-				setSaved(current => ({...current, tuning}));
+				const restoredTuning = assetMeta?.tuning ?? DEFAULT_TUNING;
+
+				setTuning(restoredTuning);
+				// No composite here. The alpha and the tuning are two thirds of what the
+				// recomposite effect is keyed on, and the mask is the third.
+				//
+				// The cutout IS on screen now, so its tuning is part of what this dialog
+				// opened with. `restoredTuning` and not `assetMeta.tuning`: an asset that
+				// stored a map but no settings is showing the defaults, and reading the
+				// baseline off the manifest would call those defaults an unsaved change.
+				setSaved(current => ({...current, tuning: restoredTuning}));
 			}
 		}
 
@@ -490,8 +630,45 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		// whole effect is the reload.
 	}, [assetId, reloads, sourceImage, store, t]);
 
-	// Redraw the preview whenever the source or the adjustments change. The crop
-	// is drawn as an overlay instead, so that it stays possible to re-crop.
+	/**
+	 * The composite, in one place.
+	 *
+	 *     effective = clamp(tuned + keepShapes − cutShapes, 0, 1)
+	 *     source    = compositeAlpha(original, effective)
+	 *
+	 * An effect rather than three handlers, for two reasons. Correctness: the model's
+	 * alpha and the hand-drawn shapes are independent, so each of them has to be added to
+	 * what the other produced rather than painted over it, and only something that sees
+	 * both at once can do that. Speed: a vertex drag calls `onChange` on every
+	 * pointermove, and doing this inline would re-rasterise a 2048px image per frame.
+	 * Here React coalesces the state writes and this runs once per committed render.
+	 */
+	React.useEffect(() => {
+		if (!original) {
+			return;
+		}
+
+		const tuned = alpha ? tunedAlpha(alpha, tuning) : undefined;
+		const shapes = rasterizeMask(mask, original.width, original.height);
+		const effective = mergeAlpha(
+			tuned,
+			shapes,
+			original.width * original.height
+		);
+
+		// Nothing to composite: no cutout, no shapes. The asset's own pixels are already
+		// what the author is looking at, and running them through an all-ones alpha would
+		// re-encode them for no reason.
+		setComposed({
+			canvas: effective ? compositeAlpha(original, effective) : original,
+			effective
+		});
+	}, [alpha, mask, original, tuning]);
+
+	// Redraw the preview whenever the source, the adjustments or the preview mode
+	// change. The crop is drawn as an overlay instead, so that it stays possible to
+	// re-crop. Shape outlines and vertex handles are NOT drawn here--they belong to
+	// `MaskOverlay`, which sits over this canvas in its own coordinate space.
 
 	React.useEffect(() => {
 		const canvas = preview.current;
@@ -504,6 +681,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			1,
 			MAX_PREVIEW / Math.max(source.width, source.height)
 		);
+
+		if (maskMode === 'alpha') {
+			drawAlpha(canvas, effective, source.width, source.height, scale);
+			return;
+		}
+
+		if (maskMode === 'paint') {
+			drawComposite(canvas, source, scale);
+			return;
+		}
 
 		drawEdited(
 			source,
@@ -525,7 +712,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				getComputedStyle(canvas).getPropertyValue('--blue').trim() || '#00a'
 			);
 		}
-	}, [edits, source]);
+	}, [edits, effective, maskMode, source]);
 
 	const busy = saving || progress !== undefined;
 	/**
@@ -534,9 +721,51 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * someone starts one and worth repeating in every line while it runs.
 	 */
 	const onCpu = background?.engine?.cpu === true;
-	const backgroundRemoved = source !== undefined && source !== original;
+	/**
+	 * A cutout exists — the model has run and its alpha is what `source` was composited
+	 * through.
+	 *
+	 * Asked of the alpha rather than of `source !== original`, which is what this used to
+	 * be. That test reads "the pixels on screen are not the ones we opened", and every
+	 * future thing that touches transparency — a hand-drawn mask, first — makes it true
+	 * without a cutout existing. Answered that way it would write a `tuning` describing a
+	 * cutout that was never made, and leave the restore button offering to undo nothing.
+	 */
+	const hasCutout = alpha !== undefined;
+	/**
+	 * Something has been drawn by hand. Its own test, beside `hasCutout` and never folded
+	 * into it: a mask is metadata that survives the model being undone, and a cutout is a
+	 * model run that survives every shape being deleted.
+	 */
+	const hasMask = !emptyMask(mask);
+	/**
+	 * The previews worth offering. `paint` and `alpha` both show transparency, and with
+	 * neither a cutout nor a shape there is none to show--`paint` would be the picture it
+	 * already was and `alpha` a blank white sheet with nothing in it to read.
+	 *
+	 * Unless the mask tool is open, and this is the whole point: drawing only happens in a
+	 * transparency preview, so gating those previews on a shape already existing means the
+	 * FIRST shape can never be drawn. An asset with no cutout is exactly the case this
+	 * feature exists for--a prop's screen, a window--and it was the one case locked out.
+	 */
+	const maskModes: readonly MaskMode[] =
+		hasCutout || hasMask || tool === 'mask' ? MASK_MODES : ['rendered'];
 	/** Editing bytes no asset owns--everything keyed off library metadata is off. */
 	const detached = assetId === undefined;
+
+	// Deleting the last shape, or restoring the background, can leave the stage in a mode
+	// that no longer means anything. Fall back rather than leave the author looking at an
+	// empty checkerboard with the switch that would explain it greyed out.
+	//
+	// Not while the mask tool is open: there the transparency previews are the drawing
+	// surface, and falling back out of one the moment the last shape is deleted would
+	// close the door behind the author the first time they changed their mind.
+
+	React.useEffect(() => {
+		if (!hasCutout && !hasMask && tool !== 'mask') {
+			setMaskMode('rendered');
+		}
+	}, [hasCutout, hasMask, tool]);
 
 	function changeEdits(changes: Partial<ImageEdits>) {
 		setEdits(current => (current ? {...current, ...changes} : current));
@@ -600,6 +829,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	function selectTool(next: ToolId) {
 		setPicking(false);
 		setTool(next);
+
+		// Opening the mask tool means wanting to draw, and drawing does not happen in the
+		// rendered preview -- it takes no gestures at all. Landing there would show a pane
+		// full of greyed-out tools and leave the author to find a second switch first.
+		if (next === 'mask') {
+			setMaskMode(current => (current === 'rendered' ? 'paint' : current));
+		}
 	}
 
 	function handlePointerDown(event: React.PointerEvent) {
@@ -673,19 +909,22 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	}
 
 	/**
-	 * Re-applies the tuning without touching the model: the alpha is already
-	 * computed, so this is one composite over the original pixels.
+	 * Re-applies the tuning without touching the model: the alpha is already computed, so
+	 * the recomposite this sets off is one pass over the original pixels.
+	 *
+	 * It composites nothing itself. Doing so would drop whatever the mask contributes,
+	 * because the tuning only ever describes the model's half of the alpha.
 	 */
 	function retune(next: CutoutTuning) {
 		setTuning(next);
-
-		if (alpha && original) {
-			setSource(applyTuning(original, alpha, next));
-		}
 	}
 
 	async function handleRemoveBackground() {
-		if (!source) {
+		// The model runs on the ORIGINAL, never on what is on screen. A mask already
+		// drawn has cut holes in `source`, and feeding those back in would bake a hand
+		// edge into the model's alpha -- where the two are meant to stay independent, so
+		// that either can be undone without disturbing the other.
+		if (!original) {
 			return;
 		}
 
@@ -696,14 +935,15 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setProgress({stage: 'download'});
 
 		try {
-			const cutout = await removeBackground(source, {
+			const cutout = await removeBackground(original, {
 				onProgress: setProgress,
 				signal: controller.signal,
 				tuning
 			});
 
+			// Only the alpha. `cutout.canvas` is the engine's own composite of it, which
+			// knows nothing about the mask; the recomposite effect makes the picture.
 			setAlpha(cutout.alpha);
-			setSource(cutout.canvas);
 		} catch (removeError) {
 			const failure = removeError as Error;
 
@@ -767,6 +1007,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 		return {
 			edits,
+			// An empty mask is cleared rather than written: a `{shapes: []}` on the meta
+			// of every asset anyone ever opened the mask pane on is noise that syncs.
+			mask: emptyMask(mask) ? undefined : mask,
 			// One shape, always, naming every kind this dialog is responsible for.
 			//
 			// `null` and not `undefined` for a cutout that is not there: the author has
@@ -775,13 +1018,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// alpha map stayed on disk and in the manifest -- and the manifest is what
 			// tells the server's orphan sweep the bytes are still wanted.
 			sidecars: {
-				cutout:
-					alpha && backgroundRemoved
-						? await encodeCutout(alpha, original.width, original.height)
-						: null,
+				cutout: alpha
+					? await encodeCutout(alpha, original.width, original.height)
+					: null,
 				src: baseBlob
 			},
-			tuning: backgroundRemoved ? tuning : undefined
+			tuning: hasCutout ? tuning : undefined
 		};
 	}
 
@@ -1039,7 +1281,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		!detached && !sameAnchor(origin, meta?.origin ?? DEFAULT_ANCHOR);
 
 	/** The cutout as it would be saved: absent once an author has undone the removal. */
-	const savedTuning = backgroundRemoved ? tuning : undefined;
+	const savedTuning = hasCutout ? tuning : undefined;
 
 	/**
 	 * Something has been done to the image that no save has written down. Drives both
@@ -1055,6 +1297,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		edits !== undefined &&
 		(anchorChanged ||
 			!sameTuning(savedTuning, saved.tuning) ||
+			!sameMask(mask, saved.mask) ||
 			!sameEdits(
 				edits,
 				saved.edits ?? defaultEdits(source.width, source.height)
@@ -1154,7 +1397,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	}
 
 	useCommand({
-		enabled: !busy && !backgroundRemoved && !!background?.engine,
+		enabled: !busy && !hasCutout && !!background?.engine,
 		id: 'assetEditor.removeBackground',
 		label: t('hotkeys.commands.assetEditor.removeBackground'),
 		run: handleRemoveBackground,
@@ -1162,12 +1405,36 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	});
 
 	useCommand({
-		enabled: backgroundRemoved && !progress,
+		enabled: hasCutout && !progress,
 		id: 'assetEditor.restoreBackground',
 		label: t('hotkeys.commands.assetEditor.restoreBackground'),
+		// Drops the model's alpha and nothing else. It used to put `original` back on
+		// screen as well, which with a mask drawn threw the holes away silently: the
+		// shapes were still on the meta and still in the save, but the preview no longer
+		// showed them. The recomposite effect redraws whatever is left.
+		run: () => setAlpha(undefined),
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		enabled: maskModes.length > 1,
+		id: 'assetEditor.cycleMaskMode',
+		label: t('hotkeys.commands.assetEditor.cycleMaskMode'),
+		run: () =>
+			setMaskMode(
+				current =>
+					MASK_MODES[(MASK_MODES.indexOf(current) + 1) % MASK_MODES.length]
+			),
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		enabled: hasMask && !busy,
+		id: 'assetEditor.clearMask',
+		label: t('hotkeys.commands.assetEditor.clearMask'),
 		run: () => {
-			setAlpha(undefined);
-			setSource(original);
+			setMask({shapes: []});
+			setSelectedShape(undefined);
 		},
 		scope: 'asset-editor'
 	});
@@ -1357,6 +1624,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									  })}
 							</NoteBody>
 						}
+						mode={maskMode}
+						modes={maskModes}
 						noteButton={
 							<NoteButton
 								kind="info"
@@ -1364,6 +1633,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								note={saveNote}
 							/>
 						}
+						onChangeMode={setMaskMode}
 						onGenerate={detached ? undefined : handleGenerate}
 						onSelectTool={selectTool}
 						tool={tool}
@@ -1390,11 +1660,35 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										origin={origin}
 									/>
 								)}
+								{/* After the anchor marker, so a vertex handle is never buried
+								    under the cross. Nothing fights for the pointer: the marker
+								    is `pointer-events: none`, the overlay returns null under
+								    `rendered`, and the crop drag underneath is already behind a
+								    `tool === 'size'` guard the mask tool does not pass. */}
+								{tool === 'mask' && (
+									<MaskOverlay
+										art={preview}
+										container={canvasBox}
+										disabled={busy}
+										feather={maskFeather}
+										height={source.height}
+										mask={mask}
+										mode={maskMode}
+										onChange={setMask}
+										onSelect={setSelectedShape}
+										op={maskOp}
+										selected={selectedShape}
+										tool={maskTool}
+										width={source.width}
+									/>
+								)}
 							</div>
 							<p className="asset-editor-hint">
 								{t(
 									picking
 										? 'dialogs.assetEditor.anchorHint'
+										: tool === 'mask'
+										? 'dialogs.assetEditor.maskHint'
 										: tool === 'size'
 										? 'dialogs.assetEditor.cropHint'
 										: 'dialogs.assetEditor.sizeToolHint'
@@ -1551,7 +1845,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										<IconButton
 											commandId="assetEditor.removeBackground"
 											disabled={
-												busy || backgroundRemoved || !background?.engine
+												busy || hasCutout || !background?.engine
 											}
 											icon={<IconWand />}
 											label={t('dialogs.assetEditor.removeBackground')}
@@ -1578,16 +1872,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 												onClick={() => cancel.current?.abort()}
 											/>
 										)}
-										{backgroundRemoved && !progress && (
+										{hasCutout && !progress && (
 											<IconButton
 												commandId="assetEditor.restoreBackground"
 												disabled={busy}
 												icon={<IconEraser />}
 												label={t('dialogs.assetEditor.restoreBackground')}
-												onClick={() => {
-													setAlpha(undefined);
-													setSource(original);
-												}}
+												onClick={() => setAlpha(undefined)}
 											/>
 										)}
 									</ButtonBar>
@@ -1697,6 +1988,22 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										</div>
 									)}
 								</EditorSection>
+							)}
+							{tool === 'mask' && (
+								<MaskTool
+									disabled={busy}
+									feather={maskFeather}
+									mask={mask}
+									mode={maskMode}
+									onChange={setMask}
+									onChangeFeather={setMaskFeather}
+									onChangeOp={setMaskOp}
+									onChangeTool={setMaskTool}
+									onSelect={setSelectedShape}
+									op={maskOp}
+									selected={selectedShape}
+									tool={maskTool}
+								/>
 							)}
 						</div>
 					</div>
