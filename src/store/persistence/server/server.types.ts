@@ -71,9 +71,24 @@ export interface StoryIndexResponse {
 	stories: StoryIndexEntry[];
 }
 
+/**
+ * A one-line description of what this write did, for the History dialog.
+ *
+ * Derived on the CLIENT (`patch-summary.ts`), because the client holds both sides of the
+ * comparison already and the server would have to diff a 100 KB story on every five-second
+ * autosave to say the same thing — and because only the client knows a drag from a find &
+ * replace from a voice tool call.
+ *
+ * Display only, and never trusted: the server clamps the length and strips control
+ * characters on the way in. Stored on the revision entry as `summary`, beside — not
+ * instead of — a `label` a human wrote.
+ */
+type StoryWriteSummary = string;
+
 export interface PutStoryRequest {
 	story: Story;
 	client: string;
+	summary?: StoryWriteSummary;
 }
 
 export interface PutStoryResponse {
@@ -152,6 +167,7 @@ export interface StorySnapshot {
 export interface PatchStoryRequest {
 	client: string;
 	patch: StoryPatch;
+	summary?: StoryWriteSummary;
 }
 
 /** Same shape a PUT answers with: PATCH goes through the same write path. */

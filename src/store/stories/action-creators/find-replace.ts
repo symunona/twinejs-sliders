@@ -1,4 +1,5 @@
 import {Thunk} from 'react-hook-thunk-reducer';
+import {noteSyncReason} from '../../persistence/server/sync-reason';
 import {createRegExp, escapeRegExpReplace} from '../../../util/regexp';
 import {updatePassage} from './update-passage';
 import {
@@ -105,6 +106,10 @@ export function replaceInPassage(
 		}
 
 		if (Object.keys(props).length > 0) {
+			// Autosave sees a changed story and nothing else, so a replace across forty
+			// passages reads exactly like typing. Say so before dispatching; the note is
+			// consumed by the push this dispatch causes. See `sync-reason.ts`.
+			noteSyncReason(story.id, 'find-replace');
 			updatePassage(story, passage, props)(dispatch, getState);
 		}
 	};
@@ -131,6 +136,7 @@ export function replaceInStory(
 				const name = replaceText(passage.name, searchFor, replaceWith, flags);
 
 				if (name !== passage.name) {
+					noteSyncReason(story.id, 'find-replace');
 					updatePassage(story, passage, {name})(dispatch, getState);
 				}
 			}
@@ -139,6 +145,7 @@ export function replaceInStory(
 				const text = replaceText(passage.text, searchFor, replaceWith, flags);
 
 				if (text !== passage.text) {
+					noteSyncReason(story.id, 'find-replace');
 					updatePassage(story, passage, {text})(dispatch, getState);
 				}
 			}

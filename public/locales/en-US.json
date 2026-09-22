@@ -1115,6 +1115,23 @@
 		"passageDefaults": {
 			"name": "Untitled Passage"
 		},
+		"patchSummary": {
+			"created": "+ {{name}}",
+			"deleted": "− {{name}}",
+			"edited": "{{name}}",
+			"more": "{{summary}} +{{count}} more",
+			"more_plural": "{{summary}} +{{count}} more",
+			"moved": "moved {{count}} passage",
+			"moved_plural": "moved {{count}} passages",
+			"reason": {
+				"findReplace": "find & replace",
+				"import": "imported",
+				"restore": "restored",
+				"voice": "voice: {{tool}}"
+			},
+			"renamed": "{{from}} renamed → {{to}}",
+			"storySettings": "story settings"
+		},
 		"storyDefaults": {
 			"name": "Untitled Story"
 		},

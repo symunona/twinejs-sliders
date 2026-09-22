@@ -5,6 +5,7 @@ import {
 	Story,
 	UpdateStoryAction
 } from '../stories.types';
+import {noteSyncReason} from '../../persistence/server/sync-reason';
 import {storyFileName} from '../../../electron/shared';
 
 export interface ImportStoriesOptions {
@@ -67,8 +68,18 @@ export function importStories(
 					}));
 				}
 
+				// An import overwrites a whole story at once. Derived from the bytes that
+				// reads as "+ Some Passage +93 more", which says nothing. See
+				// `sync-reason.ts`.
+				noteSyncReason(existingStory.id, 'import');
 				dispatch({props, type: 'updateStory', storyId: existingStory.id});
 			} else {
+				// A new story only has an id here when the bundle importer picked one —
+				// otherwise the reducer mints it and there is nothing yet to label.
+				if (props.id) {
+					noteSyncReason(props.id, 'import');
+				}
+
 				dispatch({props, type: 'createStory'});
 			}
 		});

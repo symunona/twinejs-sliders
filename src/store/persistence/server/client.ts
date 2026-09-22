@@ -203,7 +203,7 @@ export interface ServerClient {
 	putStory(
 		story: Story,
 		ifMatch?: number,
-		options?: {revive?: boolean; keepalive?: boolean}
+		options?: {revive?: boolean; keepalive?: boolean; summary?: string}
 	): Promise<PutStoryResponse>;
 	/**
 	 * Upload only what changed. `ifMatch` is REQUIRED, unlike `putStory`.
@@ -218,7 +218,7 @@ export interface ServerClient {
 		id: string,
 		patch: StoryPatch,
 		ifMatch: number,
-		options?: {keepalive?: boolean}
+		options?: {keepalive?: boolean; summary?: string}
 	): Promise<PatchStoryResponse>;
 	deleteStory(id: string, purge?: boolean): Promise<void>;
 	reviveStory(story: Story): Promise<PutStoryResponse>;
@@ -369,7 +369,7 @@ class FetchServerClient implements ServerClient {
 	async putStory(
 		story: Story,
 		ifMatch?: number,
-		options: {revive?: boolean; keepalive?: boolean} = {}
+		options: {revive?: boolean; keepalive?: boolean; summary?: string} = {}
 	): Promise<PutStoryResponse> {
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json'
@@ -385,6 +385,7 @@ class FetchServerClient implements ServerClient {
 			{
 				body: JSON.stringify({
 					client: this.options.appVersion ?? 'twine-sliders',
+					...(options.summary ? {summary: options.summary} : {}),
 					story: outgoingStory(story)
 				}),
 				headers,
@@ -400,12 +401,13 @@ class FetchServerClient implements ServerClient {
 		id: string,
 		patch: StoryPatch,
 		ifMatch: number,
-		options: {keepalive?: boolean} = {}
+		options: {keepalive?: boolean; summary?: string} = {}
 	): Promise<PatchStoryResponse> {
 		const response = await this.send(`/stories/${encodeURIComponent(id)}`, {
 			body: JSON.stringify({
 				client: this.options.appVersion ?? 'twine-sliders',
-				patch
+				patch,
+				...(options.summary ? {summary: options.summary} : {})
 			}),
 			headers: {
 				'Content-Type': 'application/json',
