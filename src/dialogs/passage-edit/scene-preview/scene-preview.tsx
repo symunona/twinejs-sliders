@@ -50,7 +50,8 @@ import {
 } from './scene-gestures';
 import {
 	refreshAssetLibrary,
-	useAssetStore
+	useAssetStore,
+	useLibraryVersion
 } from '../../sliders-assets/asset-store-context';
 import {
 	characterFromFile,
@@ -279,6 +280,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 }) => {
 	const {t} = useTranslation();
 	const store = useAssetStore();
+	// An asset edited in the asset dialog keeps its id, so nothing about the scene TEXT
+	// changes when its pixels do and no parse reaches the stage. This is the only signal
+	// that the art moved; the stage re-resolves on it.
+	const libraryVersion = useLibraryVersion();
 	const {dispatch} = useDialogsContext();
 	// The author's own preference. What actually gates the gestures is `locked`/`cameraLocked`
 	// below, which is this with the scene's own `locked:` laid over it.
@@ -1636,6 +1641,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		>
 			<SceneStage
 				animate={playing}
+				assetRevision={libraryVersion}
 				assets={assets}
 				beat={drawnBeat}
 				bubbleDefaults={bubbleDefaults}

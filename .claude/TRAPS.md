@@ -31,6 +31,7 @@
 | 1 | `pgrep -af 'bin/jest'` matches a peer's `while pgrep -f 'bin/jest'` waiter loop, so the lock check reports a false positive and an agent waits forever for itself. | Match `node.*bin/jest`. |
 | 1 | `IconButton`'s accessible name is `tooltipLabel` unless `iconOnly` — so a button with a visible label AND a tooltip answers to the HINT key, not the label key. `getByRole(…, {name})` finds nothing. | Query by the hint key, or pass `iconOnly`. |
 | 1 | A non-`editable` `AdjustSlider` puts the value readout inside its `<label>`, so the computed name is `label + current number` and never matches. | Find the `.adjust-slider` row by its label text, then its `input[type="range"]`. |
+| 1 | `resetMocks: true` in `jest.config.js` strips a mock's IMPLEMENTATION before every test, not just its calls. A `jest.fn(() => stub)` used as a constructor in a `jest.mock` factory hands back an empty object from test one — "renderer.mount is not a function", pointing into the component. | Plain `function` in the factory, and re-arm any `mockResolvedValue` in `beforeEach`. |
 
 ## agent-browser / manual verification
 
@@ -53,6 +54,7 @@
 | 1 | The git INDEX is shared too — a peer may have things staged. | Private index: `GIT_INDEX_FILE=… git read-tree HEAD`, add own paths, `write-tree` + `commit-tree` + `update-ref`. |
 | 2 | Deploy and `build:format` build the WORKING TREE, so they ship a peer's half-finished code — or just fail on it (rollup: "X is not exported by Y" when X plainly is). | Build from a clean `git worktree` at the pushed head. A bare re-run often passes, which is the tell. |
 | 1 | `npx prettier --write` on a file you did not create reflows ~53 never-formatted src files and buries your diff. | Re-apply edits by hand. |
+| 1 | `git commit -- <paths>` commits the WORKING TREE at those paths and ignores the index — so the `git apply --cached` hunk split above is silently thrown away and the peer lines you unpicked go in anyway. | `git commit` with no pathspec once the index is right. Pathspec only when the index is untouched. |
 
 ## Misc
 
