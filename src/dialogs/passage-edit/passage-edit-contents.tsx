@@ -24,6 +24,7 @@ import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
 import {SceneErrors} from './scene-errors/scene-errors';
 import {useSceneErrorMarks} from './scene-errors/use-error-marks';
+import {useCtrlClickLinks} from './use-ctrl-click-links';
 import {
 	interceptScenePrefill,
 	sceneLinkSeeds
@@ -136,9 +137,10 @@ export const PassageEditContents: React.FC<
 	React.useEffect(() => setLiveText(undefined), [passage.text]);
 
 	/**
-	 * Ctrl/cmd-click on a link inside a scene bubble. Opens the passage it points at, the
-	 * same editor stack a double click on the story map opens. A link to a passage that does
-	 * not exist yet does nothing — this gesture navigates, it does not author.
+	 * Ctrl/cmd-click on a link, either in a scene bubble in the preview or on the link's own
+	 * text in the editor. Opens the passage it points at, the same editor stack a double
+	 * click on the story map opens. A link to a passage that does not exist yet does nothing
+	 * — this gesture navigates, it does not author.
 	 */
 	const handleOpenPassage = React.useCallback(
 		(name: string) => {
@@ -152,6 +154,8 @@ export const PassageEditContents: React.FC<
 		},
 		[dialogsDispatch, story]
 	);
+
+	useCtrlClickLinks(cmEditor, handleOpenPassage);
 
 	/**
 	 * The fix offered on a link whose target does not exist. Shared with the ghost card on

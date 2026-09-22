@@ -23,9 +23,12 @@ export {
 export {
 	parsePassageReferences,
 	scanLinkTargets,
+	sceneEntityLinkSpans,
 	sceneEntityLinkTargets,
+	sceneLinkTargetSpans,
 	sceneLinkTargets
 } from './references';
+export type {SceneEntityLinkSpan, SceneLinkSpan} from './references';
 export {
 	STORY_BUBBLE_KEYS,
 	STORY_BUBBLE_PREFIX,
