@@ -9,6 +9,7 @@ import {
 	MaskMode,
 	MaskToolId,
 	VERTEX_RADIUS,
+	drawnInverted,
 	hitShape,
 	hitVertex,
 	liveShapes,
@@ -154,11 +155,16 @@ export const MaskOverlay: React.FC<MaskOverlayProps> = props => {
 			return;
 		}
 
+		// Which way round the gesture went is the only place `invert` is ever decided
+		// from geometry. After this it is a stored flag the pane owns, so dragging a
+		// vertex back across the shape does not turn the mask inside out.
+		const invert = drawnInverted(points);
 		const shape: MaskShape = {
 			feather,
 			id: newShapeId(mask.shapes),
 			op,
-			points: points.map(roundPoint)
+			points: points.map(roundPoint),
+			...(invert ? {invert: true} : {})
 		};
 
 		onChange({shapes: [...mask.shapes, shape]});
@@ -424,6 +430,7 @@ export const MaskOverlay: React.FC<MaskOverlayProps> = props => {
 		>
 			{liveShapes(mask).map(shape => (
 				<g
+					data-invert={shape.invert ? 'true' : undefined}
 					data-op={shape.op}
 					data-shape-id={shape.id}
 					data-testid="mask-shape"
@@ -431,10 +438,27 @@ export const MaskOverlay: React.FC<MaskOverlayProps> = props => {
 				>
 					<ShapeOutline
 						className={classNames('mask-shape', shape.op, {
+							invert: shape.invert,
 							selected: shape.id === selected
 						})}
 						path={shapePath(shape, width, height)}
 					/>
+					{/* An inverted shape acts on the band between its ring and the edge of
+					    the picture, and a lone outline says nothing about which of the two
+					    sides that is. Drawing the far edge as well makes the band a band. */}
+					{shape.invert && (
+						<rect
+							className={classNames('mask-shape', 'frame', shape.op, {
+								selected: shape.id === selected
+							})}
+							data-testid="mask-invert-frame"
+							height={height}
+							vectorEffect="non-scaling-stroke"
+							width={width}
+							x={0}
+							y={0}
+						/>
+					)}
 					{/* Handles only on the picked shape: every vertex of every shape at once
 					    is a field of dots with no way to tell which drag does what. */}
 					{shape.id === selected &&

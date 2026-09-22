@@ -62,6 +62,45 @@ export const VERTEX_RADIUS = 0.02;
 const MIN_POINTS = 3;
 
 /**
+ * Twice the signed area of the ring. Positive is CLOCKWISE on screen.
+ *
+ * Clockwise and not anticlockwise for a positive shoelace because these are image
+ * coordinates, where y grows downwards — the same flip that makes `rot` clockwise in
+ * `stage-geometry`. Scaling fractions back to pixels multiplies this by `width * height`,
+ * which is positive, so the sign is the same whatever the image's aspect: no size is
+ * needed to ask which way round a shape was drawn.
+ *
+ * Returned doubled and unnormalised because every caller only wants the sign.
+ */
+export function ringArea(points: Frac2[]): number {
+	let total = 0;
+
+	for (
+		let index = 0, previous = points.length - 1;
+		index < points.length;
+		previous = index++
+	) {
+		total +=
+			points[previous].x * points[index].y - points[index].x * points[previous].y;
+	}
+
+	return total;
+}
+
+/**
+ * What `invert` a shape drawn along these points starts with: anticlockwise means the
+ * outside.
+ *
+ * The gesture IS the control here — there is no modifier to hold and no mode to be in, so
+ * a cut of everything-but-this is one stroke rather than a stroke and a trip to the pane.
+ * A ring with no area at all (three points in a line) is not inverted: it covers nothing
+ * either way, and guessing the other way round would cut the entire image.
+ */
+export function drawnInverted(points: Frac2[]): boolean {
+	return ringArea(points) < 0;
+}
+
+/**
  * Ids are `s1`, `s2`, … rather than uuids: they are only ever unique within one asset's
  * mask, they are what the shape list numbers itself from, and a mask of a dozen shapes
  * rides sync inside `AssetMeta`, where thirty-six characters a shape is real weight.
@@ -99,11 +138,21 @@ export function roundPoint(point: Frac2): Frac2 {
  * come back to a slider that cannot represent it.
  */
 export function roundShape(shape: MaskShape): MaskShape {
-	return {
-		...shape,
+	const {invert, ...rest} = shape;
+	const rounded: MaskShape = {
+		...rest,
 		feather: roundFeather(shape.feather),
 		points: shape.points.map(roundPoint)
 	};
+
+	// Dropped rather than written as `false`. A mask of a dozen shapes rides sync inside
+	// `AssetMeta`, the flag is off on almost all of them, and an absent key is also what
+	// keeps every shape stored before this existed comparing equal to itself.
+	if (invert) {
+		rounded.invert = true;
+	}
+
+	return rounded;
 }
 
 /**
@@ -243,7 +292,14 @@ export function hitVertex(
 	return undefined;
 }
 
-/** Topmost shape containing the point, by even-odd winding. */
+/**
+ * Topmost shape containing the point, by even-odd winding.
+ *
+ * Inside the RING, for an inverted shape too, even though that is the half it does not
+ * act on. Picking is aimed at the outline the author can see; the alternative is that
+ * every click on empty ground selects whichever inverted shape is topmost, and there is
+ * then no gesture left that drops the selection.
+ */
 export function hitShape(
 	shapes: MaskShape[],
 	point: Frac2
@@ -352,7 +408,15 @@ export function rasterizeMask(
 		const sign = shape.op === 'cut' ? -1 : 1;
 
 		for (let index = 0; index < total.length; index++) {
-			total[index] += (sign * pixels[index * 4]) / 255;
+			const coverage = pixels[index * 4] / 255;
+
+			// Inverted by reading the coverage back the other way up, rather than by
+			// filling the ring and the image border together under `evenodd`. Same
+			// region, and it keeps the feather honest at both edges: blurring is a
+			// weighted average, so `1 - blur(ring)` is `blur(1 - ring)`, whereas a border
+			// drawn into the path would pick up a blur of its own and fade the outermost
+			// pixels of an image the shape never went near.
+			total[index] += sign * (shape.invert ? 1 - coverage : coverage);
 		}
 	}
 
@@ -431,6 +495,9 @@ function sameShape(a: MaskShape, b: MaskShape): boolean {
 	return (
 		a.id === b.id &&
 		a.op === b.op &&
+		// Absent and false are the same shape: `roundShape` drops the flag rather than
+		// storing `invert: false` on every shape anyone ever drew.
+		!!a.invert === !!b.invert &&
 		a.feather === b.feather &&
 		a.points.length === b.points.length &&
 		a.points.every(

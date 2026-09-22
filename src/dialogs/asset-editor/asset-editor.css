@@ -391,6 +391,18 @@ or 3000 wide.
 	stroke-width: 2.5;
 }
 
+/* The far edge of an inverted shape: the image border. Same colour as the ring
+   it belongs to, thinner, so it reads as the other side of one shape rather
+   than as a second shape drawn round everything. */
+
+.mask-shape.frame {
+	stroke-width: 1;
+}
+
+.mask-shape.frame.selected {
+	stroke-width: 1.5;
+}
+
 /*
 Vertex handles. Radius is `VERTEX_RADIUS` of the short edge, in image
 coordinates, so the handle is exactly as big as the area that grabs it -- a
