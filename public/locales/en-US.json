@@ -401,18 +401,55 @@
 				"adjust": "Color",
 				"background": "Background",
 				"mask": "Mask",
-				"size": "Sizing"
+				"size": "Sizing",
+				"effect": "Effect"
 			},
 			"toolHint": {
 				"adjust": "Color \u2014 brightness, contrast and gamma.",
 				"background": "Background \u2014 cut the subject out of its background.",
 				"mask": "Mask \u2014 cut holes by hand, where no model is going to find the edge for you.",
-				"size": "Sizing \u2014 anchor, resize and crop."
+				"size": "Sizing \u2014 anchor, resize and crop.",
+				"effect": "Effect \u2014 a live look drawn over the asset. Changes no pixels."
 			},
 			"generateWith": "Generate From This",
 			"generateWithHint": "Opens the image generator with this asset attached as context.",
 			"generateWithDirtyHint": "Opens the image generator with this asset attached as context \u2014 the version in the library, not the unsaved edit in front of you.",
-			"sizeToolHint": "Cropping and the anchor live in the Sizing tool."
+			"sizeToolHint": "Cropping and the anchor live in the Sizing tool.",
+			"effect": "Effect",
+			"effectLabel": "Effect",
+			"effectHint": "The effect runs live over the picture. Nothing here changes the pixels.",
+			"effectNote": "An effect is a look, not an edit. Nothing here touches the image\u2014the settings are saved on the asset and drawn as animation wherever it appears, so the preview beside you is the result. A reader whose system asks for less motion sees the plain picture.",
+			"effectIdle": "Every setting is at zero, so nothing is drawn. Raise Tear or Color split.",
+			"effectKind": {
+				"none": "None",
+				"glitch": "Glitch"
+			},
+			"effectKindHint": {
+				"none": "None \u2014 draw this asset as it is.",
+				"glitch": "Glitch \u2014 bands tear sideways, the colors come apart, and the clean picture returns between bursts."
+			},
+			"effectPreset": {
+				"signal": "Weak Signal",
+				"broken": "Broken Sign",
+				"vhs": "VHS",
+				"corrupt": "Corrupt"
+			},
+			"effectPresetHint": {
+				"signal": "Weak signal \u2014 a narrow shimmer that leaves the subject readable.",
+				"broken": "Broken sign \u2014 wide, fast tears with a hard color split. Good on text and neon.",
+				"vhs": "VHS \u2014 slow drift, scanlines and grain rather than tearing.",
+				"corrupt": "Corrupt \u2014 almost always torn, with snow. Legibility goes; use it for one beat."
+			},
+			"effectParam": {
+				"amount": "Tear",
+				"bands": "Bands",
+				"speed": "Steps/s",
+				"split": "Color split",
+				"period": "Loop (s)",
+				"burst": "Corrupted share",
+				"scanlines": "Scanlines",
+				"noise": "Snow"
+			}
 		},
 		"passageEdit": {
 			"editorCrashed": "Something went wrong with this editor. Try closing it and editing this passage again.",

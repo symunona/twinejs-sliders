@@ -8,6 +8,7 @@
  */
 
 import type {
+	AssetEffect,
 	AssetKind,
 	AssetMeta,
 	AssetResolver,
@@ -22,6 +23,8 @@ export interface StubAssetSpec {
 	/** Any CSS colour. Defaults to a stable colour derived from the id. */
 	color?: string;
 	animated?: boolean;
+	/** The live look this stub asset carries, for exercising the effect overlay. */
+	effect?: AssetEffect;
 }
 
 export interface StubResolverOptions {
@@ -188,7 +191,8 @@ export function createStubResolver(
 				h: spec.h ?? 256,
 				bytes: 0,
 				hash: `stub-${id}`,
-				mime: 'image/svg+xml'
+				mime: 'image/svg+xml',
+				effect: spec.effect
 			};
 		},
 

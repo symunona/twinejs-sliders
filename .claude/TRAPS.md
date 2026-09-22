@@ -29,6 +29,8 @@
 | 2 | `marqueeable-passage-map.test.tsx` marquee tests are FLAKY, rate rising with box load — clean 6/6 alone on an idle box, ~1 in 3 on a busy one, and two different assertions have failed. Seen on three branches including ones that share no commits, so not yours. | Re-run the one file before believing it. `uptime` first: another agent's jest is usually the reason. |
 | 1 | `jest-canvas-mock` is loaded globally, so `getContext('2d')` works and every drawing call is a no-op — `getImageData` returns a BLANK `ImageData` whatever was drawn. A rasteriser tested against it passes while drawing nothing. | Nothing that composites pixels is provable under jest. Test the geometry, stub a real scanline context for the raster, and verify the pixels in a browser. |
 | 1 | `pgrep -af 'bin/jest'` matches a peer's `while pgrep -f 'bin/jest'` waiter loop, so the lock check reports a false positive and an agent waits forever for itself. | Match `node.*bin/jest`. |
+| 1 | `IconButton`'s accessible name is `tooltipLabel` unless `iconOnly` — so a button with a visible label AND a tooltip answers to the HINT key, not the label key. `getByRole(…, {name})` finds nothing. | Query by the hint key, or pass `iconOnly`. |
+| 1 | A non-`editable` `AdjustSlider` puts the value readout inside its `<label>`, so the computed name is `label + current number` and never matches. | Find the `.adjust-slider` row by its label text, then its `input[type="range"]`. |
 
 ## agent-browser / manual verification
 

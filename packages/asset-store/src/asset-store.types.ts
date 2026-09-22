@@ -1,4 +1,5 @@
 import type {
+	AssetEffect,
 	AssetId,
 	AssetKind,
 	AssetMask,
@@ -38,6 +39,8 @@ export interface PutAssetOptions {
 	sourceAsset?: AssetId;
 	/** Where the art is pinned, as a fraction. Defaults to bottom centre when absent. */
 	origin?: Frac2;
+	/** The live look the asset is drawn with. Absent means none. */
+	effect?: AssetEffect;
 	/** What the asset editor baked these bytes with, so the edit can be re-opened. */
 	edits?: ImageEdits;
 	/** What the cutout controls were set to. Only meaningful with a `cutout` sidecar. */

@@ -17,6 +17,8 @@
   "source": [
     {"feature": "The <sliders-stage> element", "find": "sliders-stage"},
     {"feature": "The [scene] modifier", "find": "scene"},
-    {"feature": "Comic bubble webfonts fetched by the player", "find": "fonts.googleapis.com/css2"}
+    {"feature": "Comic bubble webfonts fetched by the player", "find": "fonts.googleapis.com/css2"},
+    {"feature": "Asset effect overlay drawn by the player", "find": "sliders-fx"},
+    {"feature": "Glitch effect channel-split filters", "find": "sliders-fx-chan-a"}
   ]
 }

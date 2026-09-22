@@ -1,5 +1,6 @@
 import {
 	IconAdjustments,
+	IconBolt,
 	IconContrast,
 	IconPhoto,
 	IconResize,
@@ -21,12 +22,21 @@ import {MASK_MODES, MaskMode} from './mask-shapes';
  * groups deep, so the control being reached for was usually below the fold and the
  * one above it was in the way.
  */
-export type ToolId = 'adjust' | 'size' | 'background' | 'mask';
+export type ToolId = 'adjust' | 'size' | 'background' | 'mask' | 'effect';
 
-export const TOOL_IDS: ToolId[] = ['adjust', 'size', 'background', 'mask'];
+// Effect last: it is the only tool that does not bake into the bytes, so it belongs after
+// everything that decides what those bytes are.
+export const TOOL_IDS: ToolId[] = [
+	'adjust',
+	'size',
+	'background',
+	'mask',
+	'effect'
+];
 
 const TOOL_ICONS: Record<ToolId, React.ReactNode> = {
 	adjust: <IconAdjustments />,
+	effect: <IconBolt />,
 	background: <IconWand />,
 	mask: <IconScissors />,
 	size: <IconResize />

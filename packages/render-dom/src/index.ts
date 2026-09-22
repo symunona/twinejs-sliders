@@ -95,3 +95,24 @@ export {
 } from './styles';
 export {SoundDeck} from './sound-deck';
 export type {SoundDeckOptions} from './sound-deck';
+
+export {
+	GLITCH_DEFAULTS,
+	GLITCH_RANGES,
+	effectClass,
+	effectCss,
+	effectIsIdle,
+	effectLayers,
+	normalizeEffect,
+	normalizeGlitch,
+	sameEffect
+} from './effects';
+export type {EffectLayer} from './effects';
+export {
+	FX_CSS,
+	injectEffectCss,
+	injectEffectSupport,
+	pruneEffectCss,
+	syncEffect
+} from './effect-host';
+export type {SyncEffectOptions} from './effect-host';

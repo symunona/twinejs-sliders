@@ -239,6 +239,7 @@ export class BackedAssetStore implements AssetStore {
 				ownerCharacter: options.ownerCharacter,
 				sourceAsset: options.sourceAsset,
 				origin: options.origin,
+				effect: options.effect,
 				edits: options.edits,
 				tuning: options.tuning,
 				mask: options.mask,
@@ -471,6 +472,12 @@ export class BackedAssetStore implements AssetStore {
 				// Settings describe the bytes too, so they are overwritten rather than
 				// merged: a replace naming none of them says these bytes are not a render
 				// of anything--a re-upload, not an edit.
+				//
+				// `effect` is deliberately NOT in this list and has no `ReplaceAssetOptions`
+				// entry. It is the one setting that does not describe the bytes: it says how
+				// to draw whatever they are, so it survives a re-crop the same way the name
+				// does. Adding it here would silently clear an asset's look every time the
+				// character editor or the generator wrote new pixels into it.
 				edits: options.edits,
 				mask: options.mask,
 				sidecars,

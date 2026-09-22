@@ -30,6 +30,12 @@
 	overflow: hidden;
 	position: relative;
 	touch-action: none;
+	/* The effect overlay's layers use mix-blend-mode, which blends against everything below
+	   them in the nearest stacking context. Without a context HERE that reaches past the
+	   canvas to the pane's own background, and a `lighten` layer would be judged against the
+	   wrong pixels. Isolating on the box makes the blend group exactly the canvas plus the
+	   overlay, which is what the player's entity box gives for free via its transform. */
+	isolation: isolate;
 }
 
 /* The checkerboard sits on the canvas itself, not the box around it, so that
@@ -483,4 +489,21 @@ without the border the two controls read as more of the section above them.
 .asset-editor-mask-row.selected {
 	background: var(--light-blue-translucent);
 	border-radius: var(--corner-round);
+}
+
+/*
+The effect overlay's box.
+
+Positioned onto the measured art rect rather than the canvas box: the canvas is letterboxed
+by `max-width`/`max-height` and its own aspect, so a full-box overlay would tear empty
+background beside the picture. The fx host inside it is `inset: 0`, which is why this is a
+wrapper and not the host itself.
+*/
+
+.asset-editor-fx {
+	position: absolute;
+	/* Above the checkerboard and the art, below the anchor marker and the mask handles --
+	   the effect is a look, and a look must never cover a control. */
+	z-index: 1;
+	pointer-events: none;
 }
