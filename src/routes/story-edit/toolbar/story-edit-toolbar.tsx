@@ -13,17 +13,20 @@ import {BuildInfo} from './build-info';
 import {PassageActions} from './passage/passage-actions';
 import {StoryActions} from './story/story-actions';
 import {StoryPresence} from './story-presence';
+import {VoiceModeButton} from './voice-mode-button';
 import {UndoRedoButtons} from './undo-redo-buttons';
 import {ZoomButtons} from './zoom-buttons';
 
 export interface StoryEditToolbarProps {
 	getCenter: () => Point;
 	onOpenFuzzyFinder: () => void;
+	/** Handed to voice mode, whose `goto` has to scroll the map to a passage. */
+	setCenter: (point: Point) => void;
 	story: Story;
 }
 
 export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
-	const {getCenter, onOpenFuzzyFinder, story} = props;
+	const {getCenter, onOpenFuzzyFinder, setCenter, story} = props;
 	const {t} = useTranslation();
 
 	return (
@@ -31,6 +34,11 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 			leadingControls={<SyncStatus story={story} />}
 			pinnedControls={
 				<>
+					<VoiceModeButton
+						getCenter={getCenter}
+						setCenter={setCenter}
+						story={story}
+					/>
 					<ZoomButtons story={story} />
 					<UndoRedoButtons />
 				</>

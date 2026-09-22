@@ -8,6 +8,14 @@
  * `WriteClient`, which is HTTP and nothing else.
  */
 
+/**
+ * The manifest shapes live in `@sliders/story-map`, which is what actually walks them.
+ * Re-exported here so `../types` stays the one import every command reaches for.
+ */
+import type {AssetMetaRow, Manifest} from '@sliders/story-map';
+
+export type {AssetMetaRow, Manifest};
+
 /** The story body as stored: `passages` plus whatever else Twine puts there. */
 export interface StoryBody {
 	id: string;
@@ -42,28 +50,6 @@ export interface StoryMeta {
 	assetCount: number;
 	assetBytes: number;
 	assetRev: number;
-}
-
-export interface AssetMetaRow {
-	id: string;
-	name: string;
-	kind: string;
-	tags: string[];
-	w: number;
-	h: number;
-	bytes: number;
-	hash: string;
-	mime: string;
-	ownerCharacter?: string;
-}
-
-export interface Manifest {
-	version: number;
-	assets: AssetMetaRow[];
-	characters: unknown[];
-	rev: number;
-	/** Manifest entries whose bytes the store does not have. Computed, never stored. */
-	missing: string[];
 }
 
 /**

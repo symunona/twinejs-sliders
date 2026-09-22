@@ -91,6 +91,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 			<StoryEditToolbar
 				getCenter={getCenter}
 				onOpenFuzzyFinder={() => setFuzzyFinderOpen(true)}
+				setCenter={setCenter}
 				story={story}
 			/>
 			<MainContent grabbable padded={false} ref={mainContent}>

@@ -20,6 +20,7 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 12 | [story-cli.md](12-story-cli.md) | `twine-cli` — check a story out as files, edit, lint, push. Local-mode reads. |
 | 13 | [sound.md](13-sound.md) | `music:` and `sfx:`. Sound assets, the deck, muting, autoplay. |
 | 14 | [asset-effects.md](14-asset-effects.md) | Live looks on an asset. Glitch. Generated CSS, shared by editor and player. |
+| 15 | [voice-mode.md](15-voice-mode.md) | Talk to the story. Gemini Live, the tool runner, and the model's eyes. |
 
 ## Open bugs
 

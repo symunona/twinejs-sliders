@@ -343,9 +343,23 @@ function promoteScalarBeat(
 	}
 
 	const source = text.slice(range[0], range[1]);
-	const all = [[textKey, source] as const, ...entries];
+	/*
+	 * An entry for the scalar's OWN key replaces the line rather than joining it.
+	 *
+	 * `- mara: "Sit down."` is `say:` written short, so setting `say` on it is rewriting
+	 * that sentence. Appending instead produced `{say: "Sit down.", say: "Please sit."}` —
+	 * a duplicate key, which is a YAML error and reads back as whichever one the parser
+	 * happened to keep. Unreachable from the visual editor, which only ever sets `at`,
+	 * `frame` and `dur` on a beat; voice mode's `set_beat` is what found it.
+	 */
+	const override = entries.find(([key]) => key === textKey);
+	const body = override ? override[1] : source;
+	const all = [
+		[textKey, body] as const,
+		...entries.filter(([key]) => key !== textKey)
+	];
 
-	if (!flowSafeScalar(source)) {
+	if (!flowSafeScalar(body)) {
 		return promoteToBlock(text, pair, range, all);
 	}
 

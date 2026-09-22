@@ -15,6 +15,7 @@
 | 2 | Flex item will not shrink past its content; ellipsis silently does nothing. | `min-width: 0` on the item that may truncate. |
 | 1 | `<label>` wrapping a number box AND a range gives its name to the FIRST labelable child only. | e2e must target the `spinbutton`, not the slider. |
 | 1 | A parent's ref attaches AFTER its children's layout effects run — first measure sees null. | One-tick `mounted` state. |
+| 1 | `display: none` and `visibility: hidden` give a subtree NO LAYOUT, so anything that rasterises it draws nothing. An offscreen render host that is "hidden" produces a blank PNG and the model describes it confidently. | Park it at `left: -20000px`, which keeps the box measurable. `voice-screenshot-host`. |
 
 ## Tests
 
@@ -32,6 +33,7 @@
 | 1 | `IconButton`'s accessible name is `tooltipLabel` unless `iconOnly` — so a button with a visible label AND a tooltip answers to the HINT key, not the label key. `getByRole(…, {name})` finds nothing. | Query by the hint key, or pass `iconOnly`. |
 | 1 | A non-`editable` `AdjustSlider` puts the value readout inside its `<label>`, so the computed name is `label + current number` and never matches. | Find the `.adjust-slider` row by its label text, then its `input[type="range"]`. |
 | 1 | `resetMocks: true` in `jest.config.js` strips a mock's IMPLEMENTATION before every test, not just its calls. A `jest.fn(() => stub)` used as a constructor in a `jest.mock` factory hands back an empty object from test one — "renderer.mount is not a function", pointing into the component. | Plain `function` in the factory, and re-arm any `mockResolvedValue` in `beforeEach`. |
+| 1 | An i18n key that does not exist does NOT throw — i18next hands back the key, so an undo button reads "Undo undoChange.editPassage" and every test still passes. Three wrong keys shipped through a green suite and a clean build. | Check a new `t()` key against `public/locales/en-US.json`. Only the browser tells you. |
 
 ## agent-browser / manual verification
 
@@ -62,7 +64,10 @@
 |---|---|---|
 | 6 | Scene Help `KeyHelp` tripwire fires and the build goes red. | Working as designed. Document the key. |
 | 1 | Editing any `.css` under `src/` makes vite-plugin-checker lint it as JS → full-screen "Parsing error", blank app. | Restart the dev server. |
+| 1 | `npm run lint` and the build checker both run `eslint src` — `packages/` is NOT linted. Running eslint on a package by hand reports "errors" the build never sees. | Do not "fix" a package file over a rule nothing enforces there. |
 | 1 | `npx vite` after a branch switch loads React twice ("Invalid hook call"), app renders blank. | `rm -rf node_modules/.vite`. |
 | 2 | Files with a literal NUL are BINARY to git AND to grep — `use-scene-parse.ts`, `src/util/sliders-bundle/apply-bundle.ts`. Not a corruption, a join delimiter. | Leave the file. Search it with `grep -a`. |
 | 1 | `grep` in a NUL file prints NOTHING — no "binary file matches", no error, exit 1. Reads as "symbol not here" and sends you looking in the wrong place. | `grep -a`. Suspect it when a symbol you can see in the file will not match. |
+| 1 | `createPassage` in the REDUCER mints the id when `props.id` is absent, so the id is not on the action you dispatched. Reading it back gives `undefined`, and an `updatePassage` on `undefined` THROWS inside the reducer — through the error boundary, whole story route gone. | Mint the uuid at the call site and pass it in `props`. One dispatch, not create-then-update. |
+| 1 | `setBeatKey` promoting a one-line dialogue beat while setting that line's OWN key wrote `{say: "a", say: "b"}` — duplicate key, YAML error, reads back as whichever the parser kept. The visual editor only ever sets `at`/`frame`/`dur`, so it never hit this. | Fixed in `promoteScalarBeat`. Any new caller of a scene-edit writer should ask what it does to the SHORT form. |
 | 1 | `eslint-disable-next-line <rule>` for a rule this repo does not configure (`react-hooks/exhaustive-deps`) is an ERROR, not a no-op. `build:web` prints it mid-log between vite's own chunk lines and exits non-zero, so the deploy stops BEFORE the upload and the tail of the log still reads like a clean build. | Only disable rules `.eslintrc.json` actually loads. Read the deploy log for `Deployed. Live at:` -- its absence is the only signal. |

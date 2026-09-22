@@ -1,0 +1,18 @@
+/* Offscreen, NOT hidden. `display: none` and `visibility: hidden` both give the subtree no
+   layout, and a node with no layout rasterises to nothing at all. Left of the viewport is
+   the oldest trick here and the only one that keeps the box measurable. */
+.voice-screenshot-host {
+	left: -20000px;
+	pointer-events: none;
+	position: fixed;
+	top: 0;
+	z-index: -1;
+}
+
+.voice-screenshot-host .scene-stage {
+	background: #101014;
+	height: 100%;
+	overflow: hidden;
+	position: relative;
+	width: 100%;
+}

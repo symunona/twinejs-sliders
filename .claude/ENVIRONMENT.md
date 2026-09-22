@@ -12,6 +12,7 @@ npm run build:format                         # -> public/story-formats/sliders-0
 
 - Branches `develop` and `sliders` have different deps (sliders adds yaml, fflate,
   onnxruntime-web). `npm install` after a switch or `build:web` fails with TS2307.
+- `voice-mode` adds `html-to-image`. Same rule.
 
 ## Test
 
