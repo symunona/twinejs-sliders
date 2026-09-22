@@ -8,6 +8,7 @@ import {Story} from '../../../store/stories';
 import {Point} from '../../../util/geometry';
 
 export interface VoiceModeButtonProps {
+	getCenter: () => Point;
 	setCenter: (point: Point) => void;
 	story: Story;
 }
@@ -20,7 +21,7 @@ export interface VoiceModeButtonProps {
  * is why this is a plain open/close rather than a mute.
  */
 export const VoiceModeButton: React.FC<VoiceModeButtonProps> = props => {
-	const {setCenter, story} = props;
+	const {getCenter, setCenter, story} = props;
 	const {dialogs, dispatch} = useDialogsContext();
 	const openIndex = dialogs.findIndex(
 		dialog => dialog.component === VoiceModeDialog
@@ -36,10 +37,10 @@ export const VoiceModeButton: React.FC<VoiceModeButtonProps> = props => {
 
 		dispatch({
 			component: VoiceModeDialog,
-			props: {setCenter, storyId: story.id},
+			props: {getCenter, setCenter, storyId: story.id},
 			type: 'addDialog'
 		});
-	}, [dispatch, open, openIndex, setCenter, story.id]);
+	}, [dispatch, getCenter, open, openIndex, setCenter, story.id]);
 
 	return (
 		<IconButton

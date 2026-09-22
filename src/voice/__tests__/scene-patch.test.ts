@@ -129,3 +129,49 @@ describe('patchBeatText', () => {
 		expect(patchBeatText(PASSAGE, 0, '[1, 2]').error).toMatch(/must be a YAML map/);
 	});
 });
+
+describe('patchBeatText on a one-line dialogue beat', () => {
+	const SCALAR = `[scene]
+id: tavern
+cast:
+  mara: {at: 0.3}
+beats:
+  - mara: "Sit down."
+  - box: "The candle gutters."
+`;
+
+	it('REPLACES the line when the patch sets say, rather than duplicating the key', () => {
+		const result = patchBeatText(SCALAR, 0, 'say: "Please sit."');
+
+		expect(result.error).toBeUndefined();
+		// The bug this covers wrote `{say: "Sit down.", say: "Please sit."}` — a duplicate
+		// key, which is a YAML error and reads back as whichever one the parser kept.
+		expect(result.text).not.toContain('Sit down.');
+		expect(result.text).toContain('Please sit.');
+		expect(result.text.match(/say:/g) ?? []).toHaveLength(1);
+	});
+
+	it('does the same for a narration beat, whose scalar key is text', () => {
+		const result = patchBeatText(SCALAR, 1, 'text: "The candle dies."');
+
+		expect(result.error).toBeUndefined();
+		expect(result.text).not.toContain('The candle gutters.');
+		expect(result.text.match(/text:/g) ?? []).toHaveLength(1);
+	});
+
+	it('still promotes the line when the patch sets a DIFFERENT key', () => {
+		const result = patchBeatText(SCALAR, 0, 'dur: 1.5');
+
+		expect(result.error).toBeUndefined();
+		expect(result.text).toContain('Sit down.');
+		expect(result.text).toContain('dur: 1.5');
+	});
+
+	it('keeps the sentence when a promotion carries other keys alongside it', () => {
+		const result = patchBeatText(SCALAR, 0, 'say: "Please sit."\ndur: 2');
+
+		expect(result.text).toContain('Please sit.');
+		expect(result.text).toContain('dur: 2');
+		expect(result.text.match(/say:/g) ?? []).toHaveLength(1);
+	});
+});

@@ -1222,6 +1222,8 @@
 		"deletePassages": "Delete Passages",
 		"movePassage": "Move Passage",
 		"movePassages": "Move Passages",
+		"editPassage": "Edit Passage Text",
+		"patchScene": "Scene Edit",
 		"renamePassage": "Rename Passage",
 		"removeTag": "Remove Tag",
 		"renameTag": "Rename Tag",

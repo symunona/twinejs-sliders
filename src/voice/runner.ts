@@ -495,7 +495,7 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 				return {changed: result.changed, ok: true, unchanged: true};
 			}
 
-			env.writePassage(found.passage.id, result.text);
+			env.writePassage(found.passage.id, result.text, 'scene');
 
 			return {changed: result.changed, ok: true, passage: found.passage.name};
 		},
@@ -525,7 +525,7 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 				return {changed: result.changed, ok: true, unchanged: true};
 			}
 
-			env.writePassage(found.passage.id, result.text);
+			env.writePassage(found.passage.id, result.text, 'scene');
 
 			return {beat, changed: result.changed, ok: true, passage: found.passage.name};
 		},

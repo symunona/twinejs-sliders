@@ -94,7 +94,8 @@ export interface VoiceToolEnv {
 	assetUsage: () => Promise<Record<string, string[]>>;
 
 	// --- writes. Each lands ONE undoable change, described by `description`. -----
-	writePassage: (id: string, text: string) => void;
+	/** `reason` picks the undo label: a scene patch is not 'edit passage text'. */
+	writePassage: (id: string, text: string, reason?: 'text' | 'scene') => void;
 	createPassage: (name: string, text: string, at?: [number, number]) => string;
 	deletePassage: (id: string) => void;
 	renamePassage: (id: string, name: string) => void;

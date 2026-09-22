@@ -26,7 +26,9 @@ import {TranscriptList} from './transcript-list';
 import './voice-mode-dialog.css';
 
 export interface VoiceModeDialogProps extends DialogComponentProps {
-	/** From the route's `useViewCenter`, so `goto` can actually scroll the map. */
+	/** From the route's `useViewCenter`. A created passage lands where the author looks. */
+	getCenter: () => Point;
+	/** Also `useViewCenter`, so `goto` can actually scroll the map. */
 	setCenter: (point: Point) => void;
 	storyId: string;
 }
@@ -42,12 +44,12 @@ export interface VoiceModeDialogProps extends DialogComponentProps {
  * The transcript is the audit trail (§3). Nothing else records what the microphone did.
  */
 export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
-	const {setCenter, storyId, ...other} = props;
+	const {getCenter, setCenter, storyId, ...other} = props;
 	const {prefs} = usePrefsContext();
 	const {stories} = useUndoableStoriesContext();
 	const story = storyWithId(stories, storyId);
 	const {capture, host} = useSceneScreenshot(story);
-	const env = useVoiceToolEnv({screenshot: capture, setCenter, story});
+	const env = useVoiceToolEnv({getCenter, screenshot: capture, setCenter, story});
 	const session = useVoiceSession(env);
 	const [line, setLine] = React.useState('');
 	const [busy, setBusy] = React.useState(false);

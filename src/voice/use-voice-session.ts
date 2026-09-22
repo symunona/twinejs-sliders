@@ -95,7 +95,24 @@ export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 		envRef.current = env;
 	}
 
+	// A tool call is async and the panel can be closed while one is in flight — a socket
+	// frame arriving mid-teardown, or the author shutting the dialog on a slow write.
+	// Appending then is a state update on an unmounted component.
+	const live = React.useRef(true);
+
+	React.useEffect(() => {
+		live.current = true;
+
+		return () => {
+			live.current = false;
+		};
+	}, []);
+
 	const append = React.useCallback((row: Omit<TranscriptRow, 'at' | 'id'>) => {
+		if (!live.current) {
+			return;
+		}
+
 		setRows(current =>
 			[...current, {...row, at: Date.now(), id: nextId()}].slice(-MAX_ROWS)
 		);

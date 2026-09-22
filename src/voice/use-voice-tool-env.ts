@@ -17,6 +17,7 @@ import type {LintFinding, Manifest, StoryMap} from '@sliders/story-map';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
 import type {Scene} from '@sliders/scene-types';
+import {v4 as uuid} from '@lukeed/uuid';
 import * as React from 'react';
 import {resolveSceneAssets} from '@sliders/story-map';
 import {addPassageEditors, useDialogsContext} from '../dialogs';
@@ -44,17 +45,25 @@ import {useUndoableStoriesContext} from '../store/undoable-stories';
 import type {Point} from '../util/geometry';
 import type {VoiceToolEnv} from './voice.types';
 
-/** Undo labels. Keys, because i18n resolves them when the undo button renders. */
+/**
+ * Undo labels. i18n KEYS, resolved when the undo button renders — and they must be keys
+ * that exist. A missing one does not throw: i18next hands back the key itself, so the
+ * undo button reads "Undo undoChange.editPassage" and nobody notices until an author does.
+ */
 const DESC = {
 	create: 'undoChange.newPassage',
 	delete: 'undoChange.deletePassage',
 	rename: 'undoChange.renamePassage',
-	replace: 'undoChange.replaceAll',
-	tag: 'undoChange.addPassageTag',
+	replace: 'undoChange.replaceAllText',
+	scene: 'undoChange.patchScene',
+	tag: 'undoChange.addTag',
+	untag: 'undoChange.removeTag',
 	text: 'undoChange.editPassage'
 } as const;
 
 export interface UseVoiceToolEnvOptions {
+	/** Where the map is looking, so a created passage lands where the author is. */
+	getCenter: () => Point;
 	/**
 	 * Rasterises the scene a passage holds. Absent means no host is mounted, and the
 	 * `screenshot_scene` tool then says so rather than pretending to look.
@@ -93,7 +102,7 @@ function manifestOf(
 }
 
 export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
-	const {screenshot, setCenter, story} = options;
+	const {getCenter, screenshot, setCenter, story} = options;
 	const {dispatch} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const assetStore = useAssetStore();
@@ -209,35 +218,41 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 
 			createPassage: (name, text, at) => {
 				const current = storyRef.current;
-				// The editor's own creator picks a free spot and a unique name; asking it
-				// for an untitled passage and renaming it is how every other caller does
-				// this, and it is why a voice-created passage does not land on top of
-				// another one.
-				const action = createUntitledPassage(
-					current,
-					at ? at[0] : 100,
-					at ? at[1] : 100
+				// The editor's own creator for the SIZE and the overlap walk — a voice
+				// passage must not land on top of another one — but its name is discarded
+				// and its position only used when the model named none.
+				const center = at
+					? {left: at[0], top: at[1]}
+					: (() => {
+							try {
+								return getCenter();
+							} catch {
+								// The map is not in the DOM yet. Anywhere is better than
+								// refusing to create the passage.
+								return {left: 100, top: 100};
+							}
+						})();
+				const placed = createUntitledPassage(current, center.left, center.top);
+				// Minted HERE, not read off the action: `createPassage` in the reducer
+				// mints its own when `props.id` is absent, so reading it back gives
+				// undefined — and an `updatePassage` on `undefined` throws inside the
+				// reducer, which takes the whole story route down with it.
+				const id = uuid();
+
+				dispatch(
+					{
+						props: {
+							...placed.props,
+							...(at ? {left: at[0], top: at[1]} : {}),
+							id,
+							name,
+							text
+						},
+						storyId: current.id,
+						type: 'createPassage'
+					},
+					DESC.create
 				);
-
-				dispatch(action, DESC.create);
-
-				const id = action.props.id as string;
-
-				if (name !== action.props.name || text !== '') {
-					// `dontUpdateOthers` is wrong here: a created passage whose text holds
-					// links should create them, exactly as typing the same text would.
-					dispatch(
-						updatePassage(
-							{
-								...current,
-								passages: [...current.passages, action.props as Passage]
-							},
-							action.props as Passage,
-							{name, text}
-						),
-						DESC.create
-					);
-				}
 
 				return id;
 			},
@@ -362,15 +377,15 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 				for (const tag of remove) {
 					dispatch(
 						removePassageTag(storyRef.current, passageById(id), tag),
-						DESC.tag
+						DESC.untag
 					);
 				}
 			},
 
-			writePassage: (id, text) =>
+			writePassage: (id, text, reason) =>
 				dispatch(
 					updatePassage(storyRef.current, passageById(id), {text}),
-					DESC.text
+					reason === 'scene' ? DESC.scene : DESC.text
 				)
 		}),
 		[
@@ -379,6 +394,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 			client,
 			dialogsDispatch,
 			dispatch,
+			getCenter,
 			passageById,
 			scenesOf,
 			screenshot,

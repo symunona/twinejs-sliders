@@ -34,7 +34,11 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 			leadingControls={<SyncStatus story={story} />}
 			pinnedControls={
 				<>
-					<VoiceModeButton setCenter={setCenter} story={story} />
+					<VoiceModeButton
+						getCenter={getCenter}
+						setCenter={setCenter}
+						story={story}
+					/>
 					<ZoomButtons story={story} />
 					<UndoRedoButtons />
 				</>
