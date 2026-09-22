@@ -157,30 +157,53 @@ export const RENDER_DOM_CSS = `
 .sliders-bg[data-bg-fx='scroll_infinite_up'] { animation-name: sliders-bg-scroll-up; }
 .sliders-bg[data-bg-fx='scroll_infinite_down'] { animation-name: sliders-bg-scroll-down; }
 
-/* Where the trailing copy waits: the frame the leading one is about to vacate. */
-.sliders-bg-tile[data-bg-fx='scroll_infinite_left'] { left: 100%; }
-.sliders-bg-tile[data-bg-fx='scroll_infinite_right'] { left: -100%; }
-.sliders-bg-tile[data-bg-fx='scroll_infinite_up'] { top: 100%; }
-.sliders-bg-tile[data-bg-fx='scroll_infinite_down'] { top: -100%; }
+/*
+ * Where the trailing copy waits: the frame the leading one is about to vacate.
+ *
+ * A pixel short of a whole frame, and that pixel is the whole point. The two copies are
+ * separate elements, so each antialiases its own edge; parked at exactly 100% they share
+ * one boundary, and a stage box is almost never a whole number of DEVICE pixels wide --
+ * computeStageBox divides by an aspect ratio and relayout writes the fraction straight out.
+ * Neither copy then covers the column they meet in, and .sliders-stage-box's own background
+ * showed through it as a hairline down the middle of the picture: measured at 37% of the
+ * backdrop colour on a 1280x700 stage, and on every frame rather than some of them once a
+ * display is at 125% or 150%.
+ *
+ * Overlapping instead of abutting means one copy or the other always covers that column. A
+ * WHOLE pixel of it, not half: each copy carries will-change: transform, so it is its own
+ * composited layer, rasterized at integer device bounds and then sampled at a fractional
+ * offset -- which softens its edge by about a device pixel, more than a half-pixel overlap
+ * can hide. Measured on the same stage, a 0.5px overlap still bled 37%, 19% and 6% at three
+ * consecutive phases; 1px was clean at every phase at dpr 1, 1.25 and 1.5.
+ *
+ * The travel below is shortened by the same pixel. Without that the overlap is paid for
+ * once a lap: the trailing copy would hand off a pixel away from where the leading one
+ * restarts, and the picture would hop. Shortened, the hand-off lands exactly on the restart
+ * and the overlap stays a constant -1px at every phase.
+ */
+.sliders-bg-tile[data-bg-fx='scroll_infinite_left'] { left: calc(100% - 1px); }
+.sliders-bg-tile[data-bg-fx='scroll_infinite_right'] { left: calc(-100% + 1px); }
+.sliders-bg-tile[data-bg-fx='scroll_infinite_up'] { top: calc(100% - 1px); }
+.sliders-bg-tile[data-bg-fx='scroll_infinite_down'] { top: calc(-100% + 1px); }
 
 @keyframes sliders-bg-scroll-left {
 	from { transform: translate3d(0, 0, 0); }
-	to { transform: translate3d(-100%, 0, 0); }
+	to { transform: translate3d(calc(-100% + 1px), 0, 0); }
 }
 
 @keyframes sliders-bg-scroll-right {
 	from { transform: translate3d(0, 0, 0); }
-	to { transform: translate3d(100%, 0, 0); }
+	to { transform: translate3d(calc(100% - 1px), 0, 0); }
 }
 
 @keyframes sliders-bg-scroll-up {
 	from { transform: translate3d(0, 0, 0); }
-	to { transform: translate3d(0, -100%, 0); }
+	to { transform: translate3d(0, calc(-100% + 1px), 0); }
 }
 
 @keyframes sliders-bg-scroll-down {
 	from { transform: translate3d(0, 0, 0); }
-	to { transform: translate3d(0, 100%, 0); }
+	to { transform: translate3d(0, calc(100% - 1px), 0); }
 }
 
 @keyframes sliders-bg-parallax-left {
