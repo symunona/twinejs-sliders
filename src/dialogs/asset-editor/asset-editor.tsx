@@ -95,6 +95,7 @@ import {
 	GAMMA_RANGE,
 	ImageEdits,
 	LEVEL_RANGE,
+	outputSize,
 	sameEdits,
 	sameTuning
 } from './image-edits';
@@ -111,6 +112,7 @@ import {
 	sameMask
 } from './mask-shapes';
 import {MaskTool} from './mask-tool';
+import {TileTool} from './tile-tool';
 import './asset-editor.css';
 
 /** Longest edge the live preview is drawn at. Full size is only used on save. */
@@ -1712,15 +1714,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 						)}
 						note={
 							<NoteBody kind="info" note={saveNote}>
+								{/* `outputSize`, not the sizing fields: a seam overlap comes off
+								    the width on the way out, and the one place that promises a
+								    number has to promise the one that gets saved. */}
 								{detached
-									? t('dialogs.assetEditor.applyNote', {
-											height: edits.height,
-											width: edits.width
-									  })
-									: t('dialogs.assetEditor.saveNote', {
-											height: edits.height,
-											width: edits.width
-									  })}
+									? t('dialogs.assetEditor.applyNote', outputSize(edits))
+									: t('dialogs.assetEditor.saveNote', outputSize(edits))}
 							</NoteBody>
 						}
 						mode={maskMode}
@@ -2113,6 +2112,17 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										</div>
 									)}
 								</EditorSection>
+							)}
+							{tool === 'tile' && (
+								<TileTool
+									disabled={busy}
+									edits={edits}
+									// Back to absent rather than to zero: an overlap of nothing is
+									// not an edit, and a zero written into the meta is a
+									// difference every comparison then has to forgive.
+									onChange={tile => changeEdits({tile: tile || undefined})}
+									source={source}
+								/>
 							)}
 							{tool === 'effect' && (
 								<EffectTool

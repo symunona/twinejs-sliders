@@ -3,6 +3,7 @@ import {
 	IconBolt,
 	IconContrast,
 	IconPhoto,
+	IconRepeat,
 	IconResize,
 	IconScissors,
 	IconVector,
@@ -22,13 +23,22 @@ import {MASK_MODES, MaskMode} from './mask-shapes';
  * groups deep, so the control being reached for was usually below the fold and the
  * one above it was in the way.
  */
-export type ToolId = 'adjust' | 'size' | 'background' | 'mask' | 'effect';
+export type ToolId =
+	| 'adjust'
+	| 'size'
+	| 'tile'
+	| 'background'
+	| 'mask'
+	| 'effect';
 
+// Roughly the order the pixels pass through: Seamless folds the finished picture's right
+// edge over its left, so it sits after the tool that decides how wide that picture is.
 // Effect last: it is the only tool that does not bake into the bytes, so it belongs after
 // everything that decides what those bytes are.
 export const TOOL_IDS: ToolId[] = [
 	'adjust',
 	'size',
+	'tile',
 	'background',
 	'mask',
 	'effect'
@@ -39,7 +49,8 @@ const TOOL_ICONS: Record<ToolId, React.ReactNode> = {
 	effect: <IconBolt />,
 	background: <IconWand />,
 	mask: <IconScissors />,
-	size: <IconResize />
+	size: <IconResize />,
+	tile: <IconRepeat />
 };
 
 const MODE_ICONS: Record<MaskMode, React.ReactNode> = {

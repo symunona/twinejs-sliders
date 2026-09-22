@@ -8,6 +8,7 @@ import type {
 	Frac2,
 	ImageEdits
 } from '@sliders/scene-types';
+import {blendSeam, seamWidth, tiledWidth} from './tile-edits';
 
 // The shapes live in scene-types because `AssetMeta` carries them: an edited asset stores
 // what it was edited with, so the editor can re-open it. Re-exported here because this is
@@ -35,10 +36,24 @@ export function isNeutral(edits: ImageEdits): boolean {
 	);
 }
 
+/**
+ * The size the saved picture actually comes out at.
+ *
+ * `edits.width` is what the sizing controls ask for; a seam overlap then eats into it, so
+ * everything that reports a size to the author has to ask here rather than read the field.
+ */
+export function outputSize(edits: ImageEdits): {height: number; width: number} {
+	return {
+		height: edits.height,
+		width: tiledWidth(edits.width, edits.tile)
+	};
+}
+
 /** True when saving would only re-encode the asset, not change it. */
 export function isUnedited(edits: ImageEdits, width: number, height: number) {
 	return (
 		isNeutral(edits) &&
+		!seamWidth(edits.width, edits.tile) &&
 		edits.crop.x === 0 &&
 		edits.crop.y === 0 &&
 		edits.crop.w === width &&
@@ -155,14 +170,36 @@ export function drawEdited(
 		height
 	);
 
-	if (isNeutral(edits)) {
+	// Measured against the width just drawn, not against `edits.width`: a preview is drawn
+	// at a scale, and an overlap held as a fraction is the same overlap at any of them.
+	const seam = seamWidth(width, edits.tile);
+
+	if (isNeutral(edits) && seam === 0) {
 		return;
 	}
 
 	const image = context.getImageData(0, 0, width, height);
 
-	applyLut(image.data, buildLut(edits.brightness, edits.contrast, edits.gamma));
-	context.putImageData(image, 0, 0);
+	if (!isNeutral(edits)) {
+		applyLut(
+			image.data,
+			buildLut(edits.brightness, edits.contrast, edits.gamma)
+		);
+	}
+
+	if (seam === 0) {
+		context.putImageData(image, 0, 0);
+		return;
+	}
+
+	// The seam is folded in LAST, over the finished picture. Anything else would fold one
+	// edge over the other and then brighten the two of them differently.
+	const tiled = blendSeam(image.data, width, height, seam);
+
+	// Narrowing the canvas clears it, which is exactly what should happen: the strip that
+	// went into the overlap is not part of the picture any more.
+	target.width = tiled.width;
+	context.putImageData(new ImageData(tiled.data, tiled.width, height), 0, 0);
 }
 
 /**
@@ -261,6 +298,9 @@ export function sameEdits(a: ImageEdits, b: ImageEdits): boolean {
 		a.brightness === b.brightness &&
 		a.contrast === b.contrast &&
 		a.gamma === b.gamma &&
+		// Absent and zero are the same picture, and only one of them is ever written to
+		// the meta.
+		(a.tile ?? 0) === (b.tile ?? 0) &&
 		a.width === b.width &&
 		a.height === b.height &&
 		a.crop.x === b.crop.x &&

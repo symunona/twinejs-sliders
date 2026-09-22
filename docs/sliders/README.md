@@ -21,6 +21,7 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 13 | [sound.md](13-sound.md) | `music:` and `sfx:`. Sound assets, the deck, muting, autoplay. |
 | 14 | [asset-effects.md](14-asset-effects.md) | Live looks on an asset. Glitch. Generated CSS, shared by editor and player. |
 | 15 | [voice-mode.md](15-voice-mode.md) | Talk to the story. Gemini Live, the tool runner, and the model's eyes. |
+| 16 | [seamless-loop.md](16-seamless-loop.md) | Folding a backdrop's right edge over its left, so `scroll_infinite_*` has art that tiles. |
 
 ## Open bugs
 
