@@ -348,6 +348,15 @@ func TestDeleteRevivedAndAssetsUseTheDocumentedShapes(t *testing.T) {
 	}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("assets = %v, want %v", got, want)
 	}
+
+	// revmeta carries no `by`: the story did not move, so there is nothing to attribute
+	// and nothing for the listener to pull — it re-lists the history and that is all.
+	f.hub.RevisionMetaChanged("story-1", 3, api.Origin{ID: "c-writer", Name: "mira"})
+	if got, want := waitFor(t, listener, "revmeta"), (map[string]any{
+		"t": "revmeta", "id": "story-1", "rev": float64(3),
+	}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("revmeta = %v, want %v", got, want)
+	}
 }
 
 // ---------------------------------------------------------------------------

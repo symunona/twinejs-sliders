@@ -202,6 +202,10 @@ func (h *Hub) StoryRevived(id string, rev int, by api.Origin) {
 	h.broadcast(storyMessage{T: "revived", ID: id, Rev: rev, By: by.Name}, by.ID)
 }
 
+func (h *Hub) RevisionMetaChanged(id string, rev int, by api.Origin) {
+	h.broadcast(revMetaMessage{T: "revmeta", ID: id, Rev: rev}, by.ID)
+}
+
 func (h *Hub) AssetsChanged(story string, rev int, by api.Origin) {
 	h.broadcast(assetsMessage{T: "assets", Story: story, Rev: rev, By: by.Name}, by.ID)
 }

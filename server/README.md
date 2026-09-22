@@ -38,7 +38,8 @@ Flags override the environment, which overrides `.env`, which overrides the defa
 | `CORS_ORIGINS` | | *(none)* | comma list of editor origins; `*` allows any |
 | `MAX_ASSET_BYTES` | | `67108864` (64 MB) | per-asset upload cap |
 | `MAX_STORY_BYTES` | | `33554432` (32 MB) | per-story body cap |
-| `REV_KEEP` | | `20` | snapshots kept per story |
+| `REV_KEEP` | | `20` | **unpinned** snapshots kept per story |
+| `PINNED_MAX` | | `50` | pinned revisions allowed per story; pins are never pruned |
 | `ORPHAN_TTL` | | `168h` | grace period for unreferenced asset blobs |
 | `TOMBSTONE_TTL` | | `2160h` | how long deleted stories keep their history |
 | | `--env` | `.env` | path to the env file; missing is not an error |
@@ -61,6 +62,7 @@ Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` excep
 | `GET` | `/stories/{id}/revisions` | newest first, plus `current` |
 | `GET` | `/stories/{id}/revisions/{rev}` | that body |
 | `GET` | `/stories/{id}/revisions/{rev}/assets` | the manifest as of that rev |
+| `POST` | `/stories/{id}/revisions/{rev}/label` | `{label?,pinned?}` → the row; not a story write |
 | `POST` | `/stories/{id}/restore` | `{"rev":N}` → `{id,rev,restoredFrom,missingAssets}` |
 | `GET`/`PUT` | `/stories/{id}/assets` | the manifest; own rev, own `If-Match` |
 | `POST` | `/stories/{id}/assets/diff` | → `{missing,present,stale}` |
@@ -116,6 +118,41 @@ Answers the same `{"id","rev","updatedAt","bytes"}` a `PUT` answers, with the sa
   true})`, which the Fetch spec caps at 64 KB of request body. Measured: an 89 KB story is
   a 90,550-byte `PUT` — over the cap, so it silently does not happen — against a
   1,219-byte `PATCH`.
+
+### `POST /stories/{id}/revisions/{rev}/label` — names and pins
+
+```json
+{"label": "before I broke the tavern", "pinned": true}
+```
+
+→ `{"id","rev","label","pinned","summary","pins","pinnedMax"}`, `200`.
+
+- **Not a story write.** No rev bump, no snapshot, no `story` broadcast, no `ETag` on the
+  response. Naming a version you already have does not make it a different version, and a
+  rev bump would send every other editor off to re-pull a body that did not move. What it
+  does broadcast is `{"t":"revmeta","id","rev"}`, which an open History dialog re-lists on.
+- **Omitted or `null` → unchanged. `"label":""` clears, `"pinned":false` unpins.** A body
+  with neither field is a `400`: it asks for nothing.
+- **The current rev can be labelled too.** It has no row in `revs/index.json` — it is
+  `story.json` — so its label and pin wait on `meta.json` and move onto the index row when
+  that version is eventually replaced. This is what a voice-mode `checkpoint(label)` uses.
+- **`label` is clamped to 120 runes, control characters stripped.** It is display text,
+  not data.
+- **Pinned revisions are never pruned**; `REV_KEEP` counts unpinned ones only. `PINNED_MAX`
+  (50) is the bound on disk instead — the pin past it is a `400` naming the limit, not a
+  `412`, which the client reads as a lost `If-Match` race.
+
+### `summary` on `PUT` and `PATCH`
+
+Optional, beside `client`. The client's one-line description of the write ("Tavern Night
++2 more", "find & replace"), stored on the rev that write creates and shown on its History
+row.
+
+The **client** computes it because only the client has both sides of the diff and the
+author's intent: a drag is "moved", a find-replace says so, a voice tool call is its own
+tool name. The server would have to diff a 100 KB story on every autosave to say something
+worse. It is therefore never trusted for anything but display — clamped to 200 bytes on a
+rune boundary, control characters stripped, not validated further.
 
 ### Compression
 
@@ -191,7 +228,8 @@ and `/ping` reports `events` so they know which mode they are in.
 - **`sync` is stripped on write and never returned.** Whether a story pushes itself is
   each editor's local decision.
 - **Snapshots are storage policy, not concurrency.** Pruning past `REV_KEEP` cannot affect
-  a rev anyone is holding.
+  a rev anyone is holding. `REV_KEEP` counts and deletes **unpinned** snapshots only: a
+  pin is the author overriding the policy, and `PINNED_MAX` is what bounds the disk.
 - **Every write is temp-file + rename**, and every request touching one story is
   serialised behind that story's mutex.
 

@@ -22,16 +22,22 @@ type Notifier interface {
 	StoryDeleted(id string, by Origin)
 	StoryRevived(id string, rev int, by Origin)
 	AssetsChanged(story string, rev int, by Origin)
+	// RevisionMetaChanged announces a label or a pin. It is deliberately NOT
+	// StoryChanged: nothing about the story body moved, and a client that re-pulled on
+	// it would fetch a body it already has. An open History dialog re-lists; everyone
+	// else ignores it.
+	RevisionMetaChanged(id string, rev int, by Origin)
 }
 
 // NopNotifier is the default: the API works with no hub attached, which is what keeps the
 // socket an optional layer rather than a dependency.
 type NopNotifier struct{}
 
-func (NopNotifier) StoryChanged(string, int, Origin)  {}
-func (NopNotifier) StoryDeleted(string, Origin)       {}
-func (NopNotifier) StoryRevived(string, int, Origin)  {}
-func (NopNotifier) AssetsChanged(string, int, Origin) {}
+func (NopNotifier) StoryChanged(string, int, Origin)        {}
+func (NopNotifier) StoryDeleted(string, Origin)             {}
+func (NopNotifier) StoryRevived(string, int, Origin)        {}
+func (NopNotifier) AssetsChanged(string, int, Origin)       {}
+func (NopNotifier) RevisionMetaChanged(string, int, Origin) {}
 
 // PresenceClient is one entry of `/ping`'s `clients` — id and name only. The full
 // presence record (story, passage, since) lives on the socket.

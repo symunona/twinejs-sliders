@@ -62,6 +62,7 @@ func run() error {
 	st, err := store.New(store.Options{
 		Dir:          cfg.DataDir,
 		RevKeep:      cfg.RevKeep,
+		PinnedMax:    cfg.PinnedMax,
 		OrphanTTL:    cfg.OrphanTTL,
 		TombstoneTTL: cfg.TombstoneTTL,
 	})
@@ -82,6 +83,7 @@ func run() error {
 		MaxStoryBytes: cfg.MaxStoryBytes,
 		MaxAssetBytes: cfg.MaxAssetBytes,
 		KeepRevisions: cfg.RevKeep,
+		PinnedMax:     cfg.PinnedMax,
 		Version:       version,
 		Notifier:      events,
 		Presence:      events,
@@ -95,8 +97,8 @@ func run() error {
 
 	log.SetOutput(os.Stderr)
 	log.SetFlags(log.LstdFlags | log.LUTC)
-	log.Printf("twine-story-store %s data=%s revKeep=%d maxStory=%dB maxAsset=%dB origins=%v",
-		version, cfg.DataDir, cfg.RevKeep, cfg.MaxStoryBytes, cfg.MaxAssetBytes, cfg.CORSOrigins)
+	log.Printf("twine-story-store %s data=%s revKeep=%d pinnedMax=%d maxStory=%dB maxAsset=%dB origins=%v",
+		version, cfg.DataDir, cfg.RevKeep, cfg.PinnedMax, cfg.MaxStoryBytes, cfg.MaxAssetBytes, cfg.CORSOrigins)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

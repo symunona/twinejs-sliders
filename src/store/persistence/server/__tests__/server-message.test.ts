@@ -20,6 +20,7 @@ import {reconcileVerified, type ReconcileAction} from '../reconcile';
 import {fakeServer, type FakeServer} from '../fake-server';
 import {
 	handleServerMessage,
+	onRevisionMeta,
 	planServerMessage,
 	type ServerMessageEnv,
 	type ServerStoryState
@@ -221,6 +222,27 @@ describe('planServerMessage', () => {
 		).toEqual([{type: 'refresh'}, {storyId: 'stranger', type: 'pullAssets'}]);
 	});
 
+	/**
+	 * A label or a pin. The story did not move, so nothing this file usually does applies:
+	 * no index patch (no field of a row changed), no reconcile (no rev to reconcile), no
+	 * refresh (the list would come back identical).
+	 */
+	describe('revmeta', () => {
+		it('plans one revision-meta effect and nothing else', () => {
+			expect(
+				planServerMessage({id: 's1', rev: 3, t: 'revmeta'}, view([held]))
+			).toEqual([{id: 's1', rev: 3, type: 'revisionMeta'}]);
+		});
+
+		/** A History dialog can be open on a ghost — a story the index lists and this
+		 * browser has not checked out. Holding the story is not the question. */
+		it('plans the same for a story this browser does not hold', () => {
+			expect(
+				planServerMessage({id: 'stranger', rev: 9, t: 'revmeta'}, view([held]))
+			).toEqual([{id: 'stranger', rev: 9, type: 'revisionMeta'}]);
+		});
+	});
+
 	describe('messages that are not about our stories', () => {
 		it.each([
 			['welcome', {clients: [], t: 'welcome'}],
@@ -348,6 +370,32 @@ describe('handleServerMessage', () => {
 
 		expect(harness.index()).toEqual([indexEntry('s2')]);
 		expect(harness.calls.refresh).toBe(1);
+	});
+
+	it('tells the revision-meta listeners, and touches nothing else', () => {
+		const harness = recordingEnv({index: [indexEntry('s1')], stories: [held]});
+		const heard: [string, number][] = [];
+		const off = onRevisionMeta((id, rev) => heard.push([id, rev]));
+
+		try {
+			handleServerMessage({id: 's1', rev: 3, t: 'revmeta'}, harness.env);
+		} finally {
+			off();
+		}
+
+		expect(heard).toEqual([['s1', 3]]);
+		expect(harness.calls.order).toEqual([]);
+		expect(harness.index()).toEqual([indexEntry('s1')]);
+	});
+
+	it('stops telling a listener that unsubscribed', () => {
+		const harness = recordingEnv({stories: [held]});
+		const heard: [string, number][] = [];
+
+		onRevisionMeta((id, rev) => heard.push([id, rev]))();
+		handleServerMessage({id: 's1', rev: 3, t: 'revmeta'}, harness.env);
+
+		expect(heard).toEqual([]);
 	});
 
 	it('patches the row before it asks for anything', () => {

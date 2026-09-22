@@ -41,6 +41,44 @@
 	padding: 0 var(--control-inner-padding);
 }
 
+/*
+ * The label, or the summary the writing client derived. `min-width: 0` because a flex
+ * item will not shrink past its content and the ellipsis would otherwise do nothing --
+ * see .claude/TRAPS.md.
+ */
+.story-history-title {
+	font-style: italic;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.story-history-pinned {
+	align-items: center;
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	display: inline-flex;
+	gap: calc(var(--grid-size) / 4);
+	padding: 0 var(--control-inner-padding);
+}
+
+.story-history-pinned svg {
+	height: 1em;
+	width: 1em;
+}
+
+.story-history-edit {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--grid-size) / 2);
+}
+
+.story-history-error-detail {
+	font-style: italic;
+}
+
 .story-history-who,
 .story-history-detail {
 	color: var(--dark-gray);

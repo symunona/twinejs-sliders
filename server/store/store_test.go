@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func testStore(t *testing.T, tweak func(*Options)) *Store {
@@ -19,6 +20,7 @@ func testStore(t *testing.T, tweak func(*Options)) *Store {
 	opts := Options{
 		Dir:          t.TempDir(),
 		RevKeep:      20,
+		PinnedMax:    50,
 		OrphanTTL:    168 * time.Hour,
 		TombstoneTTL: 2160 * time.Hour,
 	}
@@ -728,3 +730,359 @@ func TestInvalidIDsRefused(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Labels, pins and summaries
+// ---------------------------------------------------------------------------
+
+func mustLabel(t *testing.T, s *Store, id string, rev int, want RevisionMeta) RevisionMetaResult {
+	t.Helper()
+	res, err := s.SetRevisionMeta(id, rev, want)
+	if err != nil {
+		t.Fatalf("SetRevisionMeta(%d): %v", rev, err)
+	}
+	return res
+}
+
+func revIn(t *testing.T, s *Store, id string, rev int) (RevisionEntry, bool) {
+	t.Helper()
+	index, err := s.readRevIndex(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range index {
+		if e.Rev == rev {
+			return e, true
+		}
+	}
+	return RevisionEntry{}, false
+}
+
+func TestPinnedSnapshotSurvivesPruneAndUnpinnedDoesNot(t *testing.T) {
+	const keep = 3
+	s := testStore(t, func(o *Options) { o.RevKeep = keep })
+
+	// Five writes make snapshots of revs 1..4; pin the oldest of them.
+	for i := 1; i <= 5; i++ {
+		mustPut(t, s, "story-1", storyBody("Lighthouse", fmt.Sprintf("take %d", i)))
+	}
+	// Rev 1 has already been pruned by now (keep is 3); rev 2 is the oldest survivor.
+	mustLabel(t, s, "story-1", 2, RevisionMeta{Pinned: boolp(true), Label: strp("before the tavern")})
+
+	// Six more writes: snapshots now run 2..10 and the unpinned ones prune back to keep.
+	for i := 6; i <= 11; i++ {
+		mustPut(t, s, "story-1", storyBody("Lighthouse", fmt.Sprintf("take %d", i)))
+	}
+
+	index, err := s.readRevIndex("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int
+	for _, e := range index {
+		got = append(got, e.Rev)
+	}
+	want := []int{2, 8, 9, 10}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("surviving revs %v, want %v", got, want)
+	}
+	if !index[0].Pinned || index[0].Label != "before the tavern" {
+		t.Fatalf("pinned row lost its metadata: %+v", index[0])
+	}
+
+	// The pinned body is still on disk and still readable.
+	body, err := s.RevisionBody("story-1", 2)
+	if err != nil {
+		t.Fatalf("pinned rev 2 unreadable: %v", err)
+	}
+	if !bytes.Contains(body, []byte("take 2")) {
+		t.Fatalf("pinned rev 2 holds the wrong body: %s", body)
+	}
+
+	files, err := filepath.Glob(filepath.Join(s.revsDir("story-1"), "*.json.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != len(want) {
+		t.Fatalf("%d snapshot files on disk, want %d", len(files), len(want))
+	}
+
+	// Unpinning puts it back under the policy: the next write prunes it away.
+	mustLabel(t, s, "story-1", 2, RevisionMeta{Pinned: boolp(false)})
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "take 12"))
+	if _, ok := revIn(t, s, "story-1", 2); ok {
+		t.Fatal("rev 2 survived a prune after being unpinned")
+	}
+}
+
+func TestPinCapIsRefusedAtPinnedMax(t *testing.T) {
+	s := testStore(t, func(o *Options) { o.PinnedMax = 3 })
+	for i := 1; i <= 6; i++ {
+		mustPut(t, s, "story-1", storyBody("Lighthouse", fmt.Sprintf("take %d", i)))
+	}
+
+	for _, rev := range []int{1, 2, 3} {
+		res := mustLabel(t, s, "story-1", rev, RevisionMeta{Pinned: boolp(true)})
+		if res.Max != 3 {
+			t.Fatalf("pinnedMax = %d, want 3", res.Max)
+		}
+		if res.Pins != rev {
+			t.Fatalf("after pinning rev %d, pins = %d", rev, res.Pins)
+		}
+	}
+
+	_, err := s.SetRevisionMeta("story-1", 4, RevisionMeta{Pinned: boolp(true)})
+	var serr *Error
+	if !errors.As(err, &serr) || serr.Code != CodeBadRequest {
+		t.Fatalf("a 4th pin gave %v, want a bad_request", err)
+	}
+	if !strings.Contains(serr.Message, "PINNED_MAX") {
+		t.Fatalf("the refusal does not name the limit: %q", serr.Message)
+	}
+	if e, _ := revIn(t, s, "story-1", 4); e.Pinned {
+		t.Fatal("the refused pin was written anyway")
+	}
+
+	// Re-pinning something already pinned is not a new pin, so it is never refused.
+	mustLabel(t, s, "story-1", 3, RevisionMeta{Pinned: boolp(true), Label: strp("still pinned")})
+
+	// Unpinning makes room again.
+	mustLabel(t, s, "story-1", 1, RevisionMeta{Pinned: boolp(false)})
+	mustLabel(t, s, "story-1", 4, RevisionMeta{Pinned: boolp(true)})
+}
+
+func TestPinnedCurrentRevCountsTowardsTheCap(t *testing.T) {
+	s := testStore(t, func(o *Options) { o.PinnedMax = 2 })
+	for i := 1; i <= 4; i++ {
+		mustPut(t, s, "story-1", storyBody("Lighthouse", fmt.Sprintf("take %d", i)))
+	}
+
+	// rev 4 is story.json, not an index row — it still pins, and still counts.
+	res := mustLabel(t, s, "story-1", 4, RevisionMeta{Pinned: boolp(true)})
+	if res.Pins != 1 {
+		t.Fatalf("pins = %d, want 1", res.Pins)
+	}
+	mustLabel(t, s, "story-1", 1, RevisionMeta{Pinned: boolp(true)})
+	if _, err := s.SetRevisionMeta("story-1", 2, RevisionMeta{Pinned: boolp(true)}); err == nil {
+		t.Fatal("the current rev's pin did not count towards PINNED_MAX")
+	}
+}
+
+func TestLabellingTheCurrentRevMovesOntoItsSnapshot(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+
+	mustLabel(t, s, "story-1", 1, RevisionMeta{Label: strp("checkpoint"), Pinned: boolp(true)})
+
+	// It shows up straight away on the current row of the history list.
+	revs, err := s.Revisions("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revs.Revisions[0].Rev != 1 || revs.Revisions[0].Label != "checkpoint" || !revs.Revisions[0].Pinned {
+		t.Fatalf("current row = %+v", revs.Revisions[0])
+	}
+
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "two"))
+
+	e, ok := revIn(t, s, "story-1", 1)
+	if !ok || e.Label != "checkpoint" || !e.Pinned {
+		t.Fatalf("label did not move onto the snapshot: %+v", e)
+	}
+	// The new version starts clean.
+	meta, err := s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.RevLabel != "" || meta.RevPinned {
+		t.Fatalf("the new rev inherited the old label: %+v", meta)
+	}
+}
+
+func TestLabellingDoesNotBumpRevOrSnapshot(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "two"))
+
+	before, err := s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustLabel(t, s, "story-1", 1, RevisionMeta{Label: strp("keep me"), Pinned: boolp(true)})
+	mustLabel(t, s, "story-1", 2, RevisionMeta{Label: strp("and me")})
+
+	after, err := s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Rev != before.Rev {
+		t.Fatalf("rev moved %d -> %d", before.Rev, after.Rev)
+	}
+	if after.UpdatedAt != before.UpdatedAt || after.Hash != before.Hash {
+		t.Fatalf("labelling touched the story: %+v", after)
+	}
+	index, err := s.readRevIndex("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(index) != 1 {
+		t.Fatalf("labelling made a snapshot: %+v", index)
+	}
+}
+
+func TestLabelIsClampedAndStripped(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "two"))
+
+	res := mustLabel(t, s, "story-1", 1, RevisionMeta{Label: strp("  tavern\nnight\ttwo\x00three  ")})
+	if res.Label != "tavernnighttwothree" {
+		t.Fatalf("label = %q", res.Label)
+	}
+
+	long := strings.Repeat("é", 200)
+	res = mustLabel(t, s, "story-1", 1, RevisionMeta{Label: &long})
+	if n := len([]rune(res.Label)); n != maxLabelRunes {
+		t.Fatalf("label is %d runes, want %d", n, maxLabelRunes)
+	}
+	e, _ := revIn(t, s, "story-1", 1)
+	if e.Label != res.Label {
+		t.Fatalf("stored label %q != returned %q", e.Label, res.Label)
+	}
+
+	// An empty string is how a label is cleared; nil leaves it alone.
+	res = mustLabel(t, s, "story-1", 1, RevisionMeta{Label: strp("")})
+	if res.Label != "" {
+		t.Fatalf("empty label did not clear: %q", res.Label)
+	}
+	mustLabel(t, s, "story-1", 1, RevisionMeta{Label: strp("named")})
+	res = mustLabel(t, s, "story-1", 1, RevisionMeta{Pinned: boolp(true)})
+	if res.Label != "named" {
+		t.Fatalf("an omitted label changed it to %q", res.Label)
+	}
+}
+
+func TestSummaryIsClampedAndStoredOnTheRevItCreated(t *testing.T) {
+	s := testStore(t, nil)
+
+	if _, err := s.PutStory("story-1", storyBody("Lighthouse", "one"), testClient,
+		PutOptions{Summary: "Tavern Night +2 more"}); err != nil {
+		t.Fatal(err)
+	}
+	meta, err := s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.RevSummary != "Tavern Night +2 more" {
+		t.Fatalf("summary = %q", meta.RevSummary)
+	}
+
+	// A rune straddling the byte cut: the result must stay valid UTF-8 and under the cap.
+	long := "a" + strings.Repeat("é", 150)
+	if _, err := s.PutStory("story-1", storyBody("Lighthouse", "two"), testClient,
+		PutOptions{Summary: long + "\n\x01"}); err != nil {
+		t.Fatal(err)
+	}
+	meta, err = s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(meta.RevSummary) > maxSummaryBytes {
+		t.Fatalf("summary is %d bytes, want <= %d", len(meta.RevSummary), maxSummaryBytes)
+	}
+	if !utf8.ValidString(meta.RevSummary) {
+		t.Fatalf("summary is not valid UTF-8: %q", meta.RevSummary)
+	}
+	if strings.ContainsAny(meta.RevSummary, "\n\x01") {
+		t.Fatalf("control characters survived: %q", meta.RevSummary)
+	}
+
+	// Rev 1's summary went with rev 1 when rev 2 replaced it.
+	e, ok := revIn(t, s, "story-1", 1)
+	if !ok || e.Summary != "Tavern Night +2 more" {
+		t.Fatalf("rev 1 entry = %+v", e)
+	}
+}
+
+func TestOldRevIndexWithoutTheNewFieldsStillLoads(t *testing.T) {
+	s := testStore(t, nil)
+	for i := 1; i <= 3; i++ {
+		mustPut(t, s, "story-1", storyBody("Lighthouse", fmt.Sprintf("take %d", i)))
+	}
+
+	// An index exactly as a pre-labels server wrote it: no label, no pinned, no summary.
+	old := `[{"rev":1,"at":"2026-09-01T10:00:00.000Z","client":"mira","bytes":12,"hash":"h1","passages":1},` +
+		`{"rev":2,"at":"2026-09-01T10:01:00.000Z","client":"mira","bytes":12,"hash":"h2","passages":1}]`
+	if err := os.WriteFile(s.revIndexPath("story-1"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := s.readRevIndex("story-1")
+	if err != nil {
+		t.Fatalf("an old index failed to load: %v", err)
+	}
+	if len(index) != 2 {
+		t.Fatalf("index = %+v", index)
+	}
+	for _, e := range index {
+		if e.Label != "" || e.Pinned || e.Summary != "" {
+			t.Fatalf("an old row came back with metadata: %+v", e)
+		}
+	}
+	if _, err := s.Revisions("story-1"); err != nil {
+		t.Fatalf("Revisions over an old index: %v", err)
+	}
+	// And it is writable: pinning one rewrites the file in the new shape.
+	mustLabel(t, s, "story-1", 2, RevisionMeta{Pinned: boolp(true), Label: strp("old row")})
+	e, ok := revIn(t, s, "story-1", 2)
+	if !ok || !e.Pinned || e.Label != "old row" {
+		t.Fatalf("row 2 = %+v", e)
+	}
+}
+
+func TestLabellingAnUnknownRevIsNotFound(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+
+	if _, err := s.SetRevisionMeta("story-1", 99, RevisionMeta{Label: strp("nope")}); err == nil {
+		t.Fatal("labelling a rev that does not exist was accepted")
+	}
+	if _, err := s.SetRevisionMeta("story-404", 1, RevisionMeta{Label: strp("nope")}); err == nil {
+		t.Fatal("labelling a story that does not exist was accepted")
+	}
+}
+
+// A pinned rev older than the doomed ones must not lose the manifest that answers for it:
+// prune renames a doomed .assets.gz onto the oldest survivor that needs it.
+func TestPrunePromotesManifestsPastAPin(t *testing.T) {
+	const keep = 2
+	s := testStore(t, func(o *Options) { o.RevKeep = keep })
+
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "take 1"))
+	if _, err := s.PutManifest("story-1", manifestJSON(t, "a"), nil, testClient); err != nil {
+		t.Fatal(err)
+	}
+	for i := 2; i <= 6; i++ {
+		mustPut(t, s, "story-1", storyBody("Lighthouse", fmt.Sprintf("take %d", i)))
+		if i == 2 {
+			mustLabel(t, s, "story-1", 2, RevisionMeta{Pinned: boolp(true)})
+		}
+	}
+
+	index, err := s.readRevIndex("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range index {
+		man, err := s.RevisionManifest("story-1", e.Rev)
+		if err != nil {
+			t.Fatalf("rev %d manifest: %v", e.Rev, err)
+		}
+		if len(man.Assets) != 1 || !bytes.Contains(man.Assets[0], []byte(`"id":"a"`)) {
+			t.Fatalf("rev %d lost its manifest: %+v", e.Rev, man)
+		}
+	}
+}
+
+func strp(v string) *string { return &v }
+func boolp(v bool) *bool    { return &v }
