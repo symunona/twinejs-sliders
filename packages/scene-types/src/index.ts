@@ -1298,6 +1298,21 @@ export interface MaskShape {
 	 */
 	feather: number;
 	/**
+	 * Which side of the ring the shape acts on: absent or false for the inside, true for
+	 * everything else in the image.
+	 *
+	 * An inverted `cut` is how an author keeps one region and drops the whole rest of the
+	 * picture — the common case a plain cut needs four shapes to spell out. It pairs with
+	 * `op` rather than replacing it: `op` is add-or-subtract, this is which area.
+	 *
+	 * Stored, not derived from the winding of `points`, even though drawing anticlockwise
+	 * is what sets it. Winding is a property the author can destroy by accident: dragging
+	 * one vertex across the shape reverses the signed area, and a mask that silently
+	 * turned itself inside out under a corner drag would be unusable. It also keeps every
+	 * shape drawn before this existed meaning exactly what it did.
+	 */
+	invert?: boolean;
+	/**
 	 * Fractions of the SOURCE image, rounded to three decimals like an anchor. The
 	 * polygon closes itself — the last point is not repeated.
 	 */

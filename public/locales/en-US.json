@@ -315,12 +315,16 @@
 			"maskEmpty": "Nothing drawn yet. Draw on the image and the shape turns up here.",
 			"maskFeather": "Edge feather",
 			"maskHint": "Drawing needs one of the transparency previews—the rendered one takes no gestures at all. Click out a polygon's corners, or drag to trace one freehand; Enter or a double click closes it, Esc gives up on it.",
-			"maskNote": "Holes cut by hand, for the times no model is going to find the edge for you—a prop's screen, a window, a gap under an arch. They are stored as shapes on the asset rather than burnt into the pixels, so a corner can still be dragged a week later and a later crop or resize leaves them exactly where they were. Cut takes area away, Keep puts it back, and both are added to whatever the background tool produced rather than replacing it.",
+			"maskInvert": "Act on the outside",
+			"maskInvertDrawHint": "Act on the outside — pick a shape to turn it inside out. Draw one anticlockwise and it starts that way round.",
+			"maskInvertHint": "Act on the outside — this shape takes the whole picture except its ring, instead of what is inside it. An inverted Cut is how you keep one region and drop everything else in one stroke.",
+			"maskNote": "Holes cut by hand, for the times no model is going to find the edge for you—a prop's screen, a window, a gap under an arch. They are stored as shapes on the asset rather than burnt into the pixels, so a corner can still be dragged a week later and a later crop or resize leaves them exactly where they were. Cut takes area away, Keep puts it back, and both are added to whatever the background tool produced rather than replacing it. Each shape acts on what is inside its ring, or—drawn anticlockwise, or flipped afterwards—on everything else.",
 			"maskOp": {
 				"cut": "Cut",
 				"keep": "Keep"
 			},
 			"maskShapeLabel": "Shape {{index}}",
+			"maskShapeOutsideLabel": "Shape {{index}}, outside",
 			"maskShapes": "Shapes drawn",
 			"maskTool": {
 				"edit": "Edit Points",
