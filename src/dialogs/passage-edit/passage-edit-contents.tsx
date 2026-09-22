@@ -33,9 +33,12 @@ import {useSceneParse} from './scene-preview/use-scene-parse';
 import {FIX_ORIGIN} from './scene-preview/use-scene-writer';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-source-context';
+import {useScenePreviewToggle} from '../../routes/story-edit/toolbar/story/scene-preview-button';
+import {useOpenSlidersAssets} from '../../routes/story-edit/toolbar/story/sliders-assets-button';
 import {PassageLockBanner} from './passage-lock-banner';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
+import {useCommand} from '../../hotkeys';
 import {usePrefsContext} from '../../store/prefs';
 
 export interface PassageEditContentsProps {
@@ -205,6 +208,36 @@ export const PassageEditContents: React.FC<
 		passageId,
 		storyId,
 		text: sceneText
+	});
+
+	// Alt+P and Alt+A are registered here rather than by the toolbar buttons that run the
+	// same two actions. The buttons live in `<StoryFormatToolbar>`, which is behind three
+	// separate conditions--the toolbars preference, the CodeMirror preference, and the
+	// format's extensions not having crashed--and a command that is only registered while
+	// its button happens to be visible is a key that silently does nothing. These are the
+	// two keys an author presses with the cursor in the scene text, which is exactly when
+	// the toolbar is least likely to be in the way and most likely to be switched off.
+	//
+	// Scope null on a background card: every card in the stack renders these contents, and
+	// only the one in front should answer.
+
+	const openAssets = useOpenSlidersAssets();
+	const {toggle: toggleScenePreview} = useScenePreviewToggle(storyId);
+	const sceneCommandScope = disabled ? null : 'passage-editor';
+
+	useCommand({
+		allowInInput: true,
+		id: 'scene.edit',
+		label: t('hotkeys.commands.scene.edit'),
+		run: toggleScenePreview,
+		scope: sceneCommandScope
+	});
+	useCommand({
+		allowInInput: true,
+		id: 'scene.assets',
+		label: t('hotkeys.commands.scene.assets'),
+		run: openAssets,
+		scope: sceneCommandScope
 	});
 
 	const handlePassageTextChange = React.useCallback(
