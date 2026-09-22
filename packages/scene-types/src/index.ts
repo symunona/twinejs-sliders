@@ -1248,6 +1248,18 @@ export interface ImageEdits {
 	/** Output size in pixels. Starts out as the crop size. */
 	width: number;
 	height: number;
+	/**
+	 * How much of the right edge is folded back over the left, as a fraction of `width`,
+	 * to make the picture loop. 0 to 0.5.
+	 *
+	 * The saved image comes out that much NARROWER than `width` — the overlap is two
+	 * strips becoming one, not a fade — so this is the one edit whose output size is not
+	 * what the sizing controls say.
+	 *
+	 * Optional and absent when off, because it rides `AssetMeta` into sync and a picture
+	 * that never asked to loop should not carry a zero into every manifest.
+	 */
+	tile?: number;
 }
 
 /**

@@ -202,7 +202,8 @@ LOOPS the picture: it travels a whole frame and starts over, which is the endles
 backdrop. The renderer draws a second copy one frame ahead for those four, because an
 `<img>` cannot tile — so the restart is invisible, but only if the ART ITSELF tiles. A
 backdrop whose left and right edges do not match will show that mismatch once per lap; that
-is the picture, not the motion.
+is the picture, not the motion. The asset editor's **Seamless** tool folds those two edges
+into one — see [16-seamless-loop.md](16-seamless-loop.md).
 
 #### A beat can cut the backdrop
 

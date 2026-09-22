@@ -519,3 +519,26 @@ wrapper and not the host itself.
 	z-index: 1;
 	pointer-events: none;
 }
+
+/* The Seamless tool's loop preview. Two copies of the picture side by side, so it is
+   always wider than it is tall -- it fills the pane and lets the height fall out of the
+   aspect ratio rather than being reserved. The checkerboard is the same one the stage
+   canvas carries, because a backdrop being made to loop may well have transparency in it
+   and a blank white strip at the join would read as a flaw that is not there. */
+
+.asset-editor-loop canvas {
+	background: repeating-conic-gradient(
+			var(--light-gray) 0% 25%,
+			transparent 0% 50%
+		)
+		50% / 16px 16px;
+	border: 1px solid var(--dark-gray);
+	border-radius: var(--corner-round);
+	display: block;
+	height: auto;
+	max-width: 100%;
+}
+
+.asset-editor-loop p {
+	margin-top: calc(var(--grid-size) / 2);
+}
