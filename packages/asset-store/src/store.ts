@@ -342,28 +342,48 @@ export class BackedAssetStore implements AssetStore {
 	 * `src` is write-once: the first edit's base is the unedited picture, and every
 	 * later edit is rendered from it, so a later base is never worth storing.
 	 *
-	 * A call that mentions no blob, no `edits` and no `tuning` is a RE-UPLOAD, not an
-	 * edit, and it takes the old sidecars down with it. They describe pixels that have
-	 * just been thrown away, and leaving them would hand the editor a base belonging to
-	 * a different picture.
+	 * `null` DELETES a kind, where `undefined` leaves it alone. The difference is the
+	 * one the asset editor needs: undoing a background removal has to take the alpha map
+	 * down with it, and an edit that simply did not touch the cutout must not. Dropping
+	 * the manifest entry is also what retires the blob server-side — nothing names it
+	 * any more, so the orphan sweep collects it, exactly as it does for a deleted asset.
+	 *
+	 * A call that mentions no blob, no deletion, no `edits` and no `tuning` is a
+	 * RE-UPLOAD, not an edit, and it takes the old sidecars down with it. They describe
+	 * pixels that have just been thrown away, and leaving them would hand the editor a
+	 * base belonging to a different picture.
 	 */
 	private async writeSidecars(
 		id: AssetId,
 		existing: SidecarEntries = {},
 		options: ReplaceAssetOptions = {}
 	): Promise<SidecarEntries | undefined> {
+		const entries = Object.entries(options.sidecars ?? {});
 		// By blob, not by key: a caller that spells an absent sidecar out as
 		// `{cutout: undefined}` is saying the same thing as one that omits it.
-		const offered = Object.entries(options.sidecars ?? {}).filter(
-			([, blob]) => blob
-		) as [string, Blob][];
+		const offered = entries.filter(([, blob]) => blob) as [string, Blob][];
+		const dropped = entries
+			.filter(([, blob]) => blob === null)
+			.map(([kind]) => kind);
 
-		if (!offered.length && !options.edits && !options.tuning) {
+		if (
+			!offered.length &&
+			!dropped.length &&
+			!options.edits &&
+			!options.tuning
+		) {
 			await this.dropSidecars(id, existing);
 			return undefined;
 		}
 
 		const sidecars: SidecarEntries = {...existing};
+
+		for (const kind of dropped) {
+			// Write-once guards `src` against an accidental overwrite, never against a
+			// caller that has said outright to remove it.
+			await this.storage.deleteBlob(sidecarKey(id, kind));
+			delete sidecars[kind];
+		}
 
 		for (const [kind, blob] of offered) {
 			if (kind === 'src' && sidecars.src) {

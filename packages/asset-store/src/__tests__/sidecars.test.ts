@@ -173,7 +173,7 @@ describe('editing sidecars', () => {
 		expect((await store.meta(id))?.edits?.brightness).toBe(10);
 	});
 
-	it('replaces the cutout every time, and drops it when the removal is undone', async () => {
+	it('replaces the cutout every time', async () => {
 		const {id, store} = await seeded();
 
 		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
@@ -201,6 +201,79 @@ describe('editing sidecars', () => {
 			softness: 0.1,
 			threshold: 0.7
 		});
+	});
+
+	it('drops a cutout the save spells out as null, and keeps the src beside it', async () => {
+		const {id, store} = await seeded();
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {
+				cutout: new Blob(['mask'], {type: 'image/png'}),
+				src: new Blob([pngBytes()], {type: 'image/png'})
+			},
+			tuning: {softness: 0.3, threshold: 0.5}
+		});
+
+		// What the editor sends once the author undoes the background removal.
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {cutout: null, src: new Blob([pngBytes()], {type: 'image/png'})}
+		});
+
+		const meta = await store.meta(id);
+
+		// Both halves, because the manifest entry is the one that matters twice over:
+		// `sidecar()` trusts it, and it is what keeps the server's orphan sweep off the
+		// blob. Left behind, the bytes are wanted forever by nobody.
+		expect(meta?.sidecars?.cutout).toBeUndefined();
+		expect(await store.sidecar(id, 'cutout')).toBeUndefined();
+		expect(meta?.tuning).toBeUndefined();
+
+		// The re-edit base is untouched: undoing a cutout is not a re-upload.
+		expect(meta?.sidecars?.src).toBeDefined();
+		expect(await store.sidecar(id, 'src')).toBeDefined();
+	});
+
+	it('drops a null kind even when nothing else is offered', async () => {
+		const {id, store} = await seeded();
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {
+				cutout: new Blob(['mask'], {type: 'image/png'}),
+				src: new Blob([pngBytes()], {type: 'image/png'})
+			}
+		});
+
+		// A deletion is something the call MENTIONS, so this is not the bare re-upload
+		// below -- it must not take the src down with it.
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			sidecars: {cutout: null}
+		});
+
+		expect(await store.sidecar(id, 'cutout')).toBeUndefined();
+		expect(await store.sidecar(id, 'src')).toBeDefined();
+	});
+
+	it('leaves a cutout alone when the save names it undefined', async () => {
+		const {id, store} = await seeded();
+
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {cutout: new Blob(['mask'], {type: 'image/png'})},
+			tuning: {softness: 0.3, threshold: 0.5}
+		});
+
+		// An edit that did not touch the cutout. The difference from `null` is the whole
+		// point of the three-way split.
+		await store.replace(id, file(jpegBytes(), 'a.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {cutout: undefined},
+			tuning: {softness: 0.3, threshold: 0.5}
+		});
+
+		expect(await store.sidecar(id, 'cutout')).toBeDefined();
 	});
 
 	it('takes the sidecars down when bytes are replaced without an edit', async () => {

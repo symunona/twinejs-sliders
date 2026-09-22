@@ -49,7 +49,7 @@ export interface PutAssetOptions {
 	 * here changes. The kind becomes the blob's key suffix (`a_8f21.cutout`), so it has
 	 * to be a slug; `sidecarKey` says so out loud.
 	 */
-	sidecars?: Partial<Record<SidecarKind, Blob>>;
+	sidecars?: Partial<Record<SidecarKind, Blob | null>>;
 }
 
 /**
@@ -65,15 +65,22 @@ export interface ReplaceAssetOptions {
 	/** What the cutout controls were set to. Cleared when absent. */
 	tuning?: CutoutTuning;
 	/**
-	 * Extra blobs to keep beside the new bytes, by kind. A kind this call does not name
-	 * keeps whatever was stored under it; `cutout` and every other kind offered here
-	 * replaces what was there.
+	 * Extra blobs to keep beside the new bytes, by kind. A blob replaces what was stored
+	 * under that kind. `null` DELETES it. A kind this call does not name — or names as
+	 * `undefined` — keeps whatever was there.
 	 *
-	 * `src` is the exception: written ONCE. An asset that already has one keeps the one
-	 * it has, because that is the un-edited picture and what is being offered here is
-	 * only the base of the current round — which was itself rendered from that sidecar.
+	 * The three-way split exists because "I did not touch the cutout" and "the cutout is
+	 * gone" are different saves and used to be the same one: undoing a background removal
+	 * cleared `tuning` off the meta and left the alpha map behind it, on disk and in the
+	 * manifest.
+	 *
+	 * `src` is the exception on the write side: written ONCE. An asset that already has
+	 * one keeps the one it has, because that is the un-edited picture and what is being
+	 * offered here is only the base of the current round — which was itself rendered from
+	 * that sidecar. `null` still removes it; write-once guards against an accidental
+	 * overwrite, not against a caller that has said outright to drop it.
 	 */
-	sidecars?: Partial<Record<SidecarKind, Blob>>;
+	sidecars?: Partial<Record<SidecarKind, Blob | null>>;
 }
 
 export interface PutAssetResult {

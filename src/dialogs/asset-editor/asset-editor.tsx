@@ -700,14 +700,18 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 		return {
 			edits,
-			// Spelled out rather than omitted when there is nothing to write: the store
-			// reads an absent blob and an absent key as the same thing, and one shape
-			// here says which kinds this dialog is responsible for.
+			// One shape, always, naming every kind this dialog is responsible for.
+			//
+			// `null` and not `undefined` for a cutout that is not there: the author has
+			// undone the background removal, and the map has to go with it. Left as
+			// `undefined` the store keeps it, so the meta lost its `tuning` while the
+			// alpha map stayed on disk and in the manifest -- and the manifest is what
+			// tells the server's orphan sweep the bytes are still wanted.
 			sidecars: {
 				cutout:
 					alpha && backgroundRemoved
 						? await encodeCutout(alpha, original.width, original.height)
-						: undefined,
+						: null,
 				src: baseBlob
 			},
 			tuning: backgroundRemoved ? tuning : undefined
