@@ -17,6 +17,9 @@ export type {CropRect, ImageEdits};
 
 export const GAMMA_RANGE = {max: 3, min: 0.1, step: 0.05};
 export const LEVEL_RANGE = {max: 100, min: -100, step: 1};
+export const HUE_RANGE = {max: 180, min: -180, step: 1};
+/** One-sided: `pop` only ever adds. Taking it away is what `contrast` is for. */
+export const POP_RANGE = {max: 100, min: 0, step: 1};
 
 export function defaultEdits(width: number, height: number): ImageEdits {
 	return {
@@ -29,10 +32,49 @@ export function defaultEdits(width: number, height: number): ImageEdits {
 	};
 }
 
-/** True when the adjustment sliders are all at rest, so the LUT can be skipped. */
+/** The adjustments one grey curve can express, in the order the curve applies them. */
+const TONE_KEYS = [
+	'brightness',
+	'contrast',
+	'gamma',
+	'shadows',
+	'highlights',
+	'pop'
+] as const;
+
+/** The adjustments that need all three channels at once, and so a colour matrix. */
+const MATRIX_KEYS = ['saturation', 'hue'] as const;
+
+/** The adjustments that pull the channels apart, and so one curve per channel. */
+const CHANNEL_KEYS = ['warmth', 'tint'] as const;
+
+/** What an adjustment reads as when it is absent, which for gamma is not zero. */
+function level(edits: ImageEdits, key: AdjustKey): number {
+	return key === 'gamma' ? edits.gamma : edits[key] ?? 0;
+}
+
+type AdjustKey =
+	| (typeof TONE_KEYS)[number]
+	| (typeof MATRIX_KEYS)[number]
+	| (typeof CHANNEL_KEYS)[number];
+
+const ADJUST_KEYS: readonly AdjustKey[] = [
+	...TONE_KEYS,
+	...MATRIX_KEYS,
+	...CHANNEL_KEYS
+];
+
+/** True when the grey curve is the identity, so one table can serve all three channels. */
+function neutralTone(edits: ImageEdits): boolean {
+	return TONE_KEYS.every(
+		key => level(edits, key) === (key === 'gamma' ? 1 : 0)
+	);
+}
+
+/** True when the adjustment sliders are all at rest, so the pixel pass can be skipped. */
 export function isNeutral(edits: ImageEdits): boolean {
-	return (
-		edits.brightness === 0 && edits.contrast === 0 && edits.gamma === 1
+	return ADJUST_KEYS.every(
+		key => level(edits, key) === (key === 'gamma' ? 1 : 0)
 	);
 }
 
@@ -97,41 +139,237 @@ export function cropFromDrag(
 	);
 }
 
+/** What `buildLut` needs. Spelled out so a test can hand it three numbers. */
+export type ToneEdits = Pick<ImageEdits, (typeof TONE_KEYS)[number]>;
+
 /**
- * A 256-entry lookup table for brightness, then contrast, then gamma. One table
- * covers every channel, which is what makes a full-size preview cheap enough to
- * redraw as a slider is dragged.
+ * A 256-entry lookup table for the tonal adjustments: brightness, contrast and gamma,
+ * then the three that only touch one end of the range — shadows, highlights and pop.
+ *
+ * One table covers every channel, which is what makes a full-size preview cheap enough to
+ * redraw as a slider is dragged. The tonal half of the panel is deliberately everything
+ * that can live in a table like this; hue and saturation cannot, and cost a matrix.
  */
-export function buildLut(
-	brightness: number,
-	contrast: number,
-	gamma: number
-): Uint8ClampedArray {
+export function buildLut(tone: ToneEdits): Uint8ClampedArray {
 	const lut = new Uint8ClampedArray(256);
-	const offset = (brightness / 100) * 255;
+	const offset = ((tone.brightness ?? 0) / 100) * 255;
 	// The usual contrast factor, which keeps 128 fixed and can't blow up until
 	// contrast reaches its 100 limit.
-	const level = Math.min(Math.max(contrast, -100), 100) * 2.55;
+	const level = Math.min(Math.max(tone.contrast ?? 0, -100), 100) * 2.55;
 	const factor = (259 * (level + 255)) / (255 * (259 - level));
-	const exponent = 1 / Math.min(Math.max(gamma, GAMMA_RANGE.min), GAMMA_RANGE.max);
+	const exponent =
+		1 / Math.min(Math.max(tone.gamma ?? 1, GAMMA_RANGE.min), GAMMA_RANGE.max);
+	// Gains chosen so that every one of these curves stays monotonic at its limit: a
+	// slider that can reorder two tones turns a gradient inside out, which reads as
+	// corruption rather than as a strong edit.
+	const shadows = (clampLevel(tone.shadows) / 100) * 0.25;
+	const highlights = (clampLevel(tone.highlights) / 100) * 0.25;
+	const pop = Math.min(Math.max(tone.pop ?? 0, 0), 100) / 100;
 
 	for (let value = 0; value < 256; value++) {
 		const shifted = factor * (value + offset - 128) + 128;
+		let unit = Math.pow(Math.max(0, shifted) / 255, exponent);
+
+		// Weighted by how dark (or how light) the pixel already is, so each of these two
+		// leaves the other end of the range alone -- that is the whole point of having them
+		// as well as brightness.
+		unit += shadows * (1 - unit) * (1 - unit);
+		unit += highlights * unit * unit;
+		// Smoothstep: fixed at both ends, steeper through the middle. Mixed in rather than
+		// replacing, so `pop` is a dial and not a switch.
+		unit += pop * 0.5 * (smoothstep(unit) - unit);
 
 		// Uint8ClampedArray rounds and clamps on assignment.
-		lut[value] = 255 * Math.pow(Math.max(0, shifted) / 255, exponent);
+		lut[value] = 255 * unit;
 	}
 
 	return lut;
 }
 
+/**
+ * The tone curve, once per channel, with warmth and tint folded in as a push on the
+ * channels that name those axes: warmth trades blue for red, tint trades magenta for
+ * green. Both ride on top of the curve, so they grade the picture the sliders above them
+ * produced.
+ */
+export function buildChannelLuts(edits: ImageEdits): {
+	r: Uint8ClampedArray;
+	g: Uint8ClampedArray;
+	b: Uint8ClampedArray;
+} {
+	const tone = buildLut(edits);
+	const warmth = (clampLevel(edits.warmth) / 100) * 40;
+	const tint = (clampLevel(edits.tint) / 100) * 40;
+
+	if (warmth === 0 && tint === 0) {
+		// The common case, and worth catching: three references to one table cost nothing
+		// and `applyChannelLuts` does not care that they are the same object.
+		return {b: tone, g: tone, r: tone};
+	}
+
+	return {
+		// Tint is split across red and blue against green so that it moves the hue without
+		// also moving the brightness, the way warmth's opposed pair already does.
+		b: shiftLut(tone, -warmth - tint / 2),
+		g: shiftLut(tone, tint),
+		r: shiftLut(tone, warmth - tint / 2)
+	};
+}
+
+/**
+ * A 3x3 colour matrix for saturation and hue, in that order.
+ *
+ * Both are the matrices the CSS filter spec gives for `saturate()` and `hue-rotate()`, so
+ * these two sliders land where the equivalent `filter:` would. Worth keeping that way:
+ * anything that wants to preview a grade without baking it can say it in CSS and get the
+ * same picture.
+ *
+ * `pop` lifts saturation a little as well as bending the curve. Google Photos' slider of
+ * that name does the same, and it is the reason it reads as "pop" rather than "contrast".
+ */
+export function buildColorMatrix(edits: ImageEdits): number[] {
+	const pop = Math.min(Math.max(edits.pop ?? 0, 0), 100) / 100;
+	const saturation =
+		(1 + clampLevel(edits.saturation) / 100) * (1 + pop * 0.25);
+	const radians =
+		(Math.min(Math.max(edits.hue ?? 0, HUE_RANGE.min), HUE_RANGE.max) *
+			Math.PI) /
+		180;
+
+	return multiply(saturateMatrix(saturation), hueMatrix(radians));
+}
+
+/** True when `buildColorMatrix` would return the identity. */
+function neutralMatrix(edits: ImageEdits): boolean {
+	return (
+		(edits.hue ?? 0) === 0 &&
+		(edits.saturation ?? 0) === 0 &&
+		(edits.pop ?? 0) === 0
+	);
+}
+
 /** Applies a LUT to RGB in place. Alpha is left alone. */
 export function applyLut(pixels: Uint8ClampedArray, lut: Uint8ClampedArray) {
+	applyChannelLuts(pixels, {b: lut, g: lut, r: lut});
+}
+
+/** Applies one LUT per channel in place. Alpha is left alone. */
+export function applyChannelLuts(
+	pixels: Uint8ClampedArray,
+	luts: {r: Uint8ClampedArray; g: Uint8ClampedArray; b: Uint8ClampedArray}
+) {
 	for (let index = 0; index < pixels.length; index += 4) {
-		pixels[index] = lut[pixels[index]];
-		pixels[index + 1] = lut[pixels[index + 1]];
-		pixels[index + 2] = lut[pixels[index + 2]];
+		pixels[index] = luts.r[pixels[index]];
+		pixels[index + 1] = luts.g[pixels[index + 1]];
+		pixels[index + 2] = luts.b[pixels[index + 2]];
 	}
+}
+
+/** Applies a 3x3 colour matrix to RGB in place. Alpha is left alone. */
+export function applyColorMatrix(pixels: Uint8ClampedArray, matrix: number[]) {
+	for (let index = 0; index < pixels.length; index += 4) {
+		const r = pixels[index];
+		const g = pixels[index + 1];
+		const b = pixels[index + 2];
+
+		// Read all three out first: each output channel mixes all three inputs, so writing
+		// red back before blue is read would feed a graded red into blue's sum.
+		pixels[index] = matrix[0] * r + matrix[1] * g + matrix[2] * b;
+		pixels[index + 1] = matrix[3] * r + matrix[4] * g + matrix[5] * b;
+		pixels[index + 2] = matrix[6] * r + matrix[7] * g + matrix[8] * b;
+	}
+}
+
+/** Everything the colour panel does, to one buffer, in panel order. */
+export function applyAdjustments(pixels: Uint8ClampedArray, edits: ImageEdits) {
+	if (
+		!neutralTone(edits) ||
+		(edits.warmth ?? 0) !== 0 ||
+		(edits.tint ?? 0) !== 0
+	) {
+		applyChannelLuts(pixels, buildChannelLuts(edits));
+	}
+
+	if (!neutralMatrix(edits)) {
+		applyColorMatrix(pixels, buildColorMatrix(edits));
+	}
+}
+
+/** -100..100, and 0 for an absent slider. */
+function clampLevel(value?: number): number {
+	return Math.min(Math.max(value ?? 0, LEVEL_RANGE.min), LEVEL_RANGE.max);
+}
+
+/** The usual 3x-squared-minus-2x-cubed ease, on 0..1. Fixed at both ends. */
+function smoothstep(unit: number): number {
+	const clamped = Math.min(Math.max(unit, 0), 1);
+
+	return clamped * clamped * (3 - 2 * clamped);
+}
+
+/** A copy of a LUT with every entry pushed by `offset` 0..255 units. */
+function shiftLut(lut: Uint8ClampedArray, offset: number): Uint8ClampedArray {
+	const shifted = new Uint8ClampedArray(256);
+
+	for (let value = 0; value < 256; value++) {
+		shifted[value] = lut[value] + offset;
+	}
+
+	return shifted;
+}
+
+/** How much each channel weighs in the luminance these two matrices preserve. */
+const LUMA = {b: 0.072, g: 0.715, r: 0.213};
+
+/** `saturate()` from the CSS filter spec. */
+function saturateMatrix(amount: number): number[] {
+	const s = Math.max(0, amount);
+
+	return [
+		LUMA.r + (1 - LUMA.r) * s,
+		LUMA.g - LUMA.g * s,
+		LUMA.b - LUMA.b * s,
+		LUMA.r - LUMA.r * s,
+		LUMA.g + (1 - LUMA.g) * s,
+		LUMA.b - LUMA.b * s,
+		LUMA.r - LUMA.r * s,
+		LUMA.g - LUMA.g * s,
+		LUMA.b + (1 - LUMA.b) * s
+	];
+}
+
+/** `hue-rotate()` from the CSS filter spec, which is where the odd constants come from. */
+function hueMatrix(radians: number): number[] {
+	const cos = Math.cos(radians);
+	const sin = Math.sin(radians);
+
+	return [
+		0.213 + cos * 0.787 - sin * 0.213,
+		0.715 - cos * 0.715 - sin * 0.715,
+		0.072 - cos * 0.072 + sin * 0.928,
+		0.213 - cos * 0.213 + sin * 0.143,
+		0.715 + cos * 0.285 + sin * 0.14,
+		0.072 - cos * 0.072 - sin * 0.283,
+		0.213 - cos * 0.213 - sin * 0.787,
+		0.715 - cos * 0.715 + sin * 0.715,
+		0.072 + cos * 0.928 + sin * 0.072
+	];
+}
+
+/** Two 3x3 matrices, as one that does `a` after `b`. */
+function multiply(a: number[], b: number[]): number[] {
+	const out = new Array<number>(9);
+
+	for (let row = 0; row < 3; row++) {
+		for (let column = 0; column < 3; column++) {
+			out[row * 3 + column] =
+				a[row * 3] * b[column] +
+				a[row * 3 + 1] * b[3 + column] +
+				a[row * 3 + 2] * b[6 + column];
+		}
+	}
+
+	return out;
 }
 
 /**
@@ -180,10 +418,7 @@ export function drawEdited(
 	const image = context.getImageData(0, 0, width, height);
 
 	if (!isNeutral(edits)) {
-		applyLut(
-			image.data,
-			buildLut(edits.brightness, edits.contrast, edits.gamma)
-		);
+		applyAdjustments(image.data, edits);
 	}
 
 	if (seam === 0) {
@@ -299,12 +534,11 @@ export function anchorBeforeCrop(
 /** True when two edits would render the same picture. */
 export function sameEdits(a: ImageEdits, b: ImageEdits): boolean {
 	return (
-		a.brightness === b.brightness &&
-		a.contrast === b.contrast &&
-		a.gamma === b.gamma &&
-		// Absent and zero are the same picture, and only one of them is ever written to
-		// the meta. Same for the axis, whose absence is `x`--and which means nothing at all
-		// when there is no overlap to point anywhere.
+		// Absent and zero are the same picture for everything but gamma, and only one of
+		// them is ever written to the meta.
+		ADJUST_KEYS.every(key => level(a, key) === level(b, key)) &&
+		// Same for the tile axis, whose absence is `x`--and which means nothing at all when
+		// there is no overlap to point anywhere.
 		(a.tile ?? 0) === (b.tile ?? 0) &&
 		(!a.tile || (a.tileAxis ?? 'x') === (b.tileAxis ?? 'x')) &&
 		a.width === b.width &&

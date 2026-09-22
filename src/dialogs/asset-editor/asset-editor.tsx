@@ -93,8 +93,10 @@ import {
 	anchorBeforeCrop,
 	drawEdited,
 	GAMMA_RANGE,
+	HUE_RANGE,
 	ImageEdits,
 	LEVEL_RANGE,
+	POP_RANGE,
 	outputSize,
 	sameEdits,
 	sameTuning
@@ -1845,6 +1847,84 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										resetTo={1}
 										step={GAMMA_RANGE.step}
 										value={edits.gamma}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.shadows')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={shadows =>
+											changeEdits({shadows: shadows || undefined})
+										}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.shadows ?? 0}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.highlights')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={highlights =>
+											changeEdits({highlights: highlights || undefined})
+										}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.highlights ?? 0}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.pop')}
+										max={POP_RANGE.max}
+										min={POP_RANGE.min}
+										onChange={pop => changeEdits({pop: pop || undefined})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={POP_RANGE.step}
+										value={edits.pop ?? 0}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.saturation')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={saturation =>
+											changeEdits({saturation: saturation || undefined})
+										}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.saturation ?? 0}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.warmth')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={warmth =>
+											changeEdits({warmth: warmth || undefined})
+										}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.warmth ?? 0}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.tint')}
+										max={LEVEL_RANGE.max}
+										min={LEVEL_RANGE.min}
+										onChange={tint => changeEdits({tint: tint || undefined})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={LEVEL_RANGE.step}
+										value={edits.tint ?? 0}
+									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.hue')}
+										max={HUE_RANGE.max}
+										min={HUE_RANGE.min}
+										onChange={hue => changeEdits({hue: hue || undefined})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={HUE_RANGE.step}
+										value={edits.hue ?? 0}
 									/>
 								</EditorSection>
 							)}

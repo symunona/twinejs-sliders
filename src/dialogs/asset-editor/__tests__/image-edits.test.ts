@@ -1,20 +1,37 @@
 import {
 	anchorAfterCrop,
 	anchorBeforeCrop,
+	applyColorMatrix,
 	applyLut,
+	buildChannelLuts,
+	buildColorMatrix,
 	buildLut,
 	clampCrop,
 	cropFromDrag,
 	defaultEdits,
+	ImageEdits,
 	isNeutral,
 	isUnedited,
 	sameEdits,
-	sameTuning
+	sameTuning,
+	ToneEdits
 } from '../image-edits';
+
+/** Tone edits with everything at rest, so a test only spells out what it is about. */
+function tone(over: Partial<ToneEdits> = {}): ToneEdits {
+	return {brightness: 0, contrast: 0, gamma: 1, ...over};
+}
+
+/** Fails if a curve ever comes back down, which would invert part of a gradient. */
+function expectMonotonic(lut: Uint8ClampedArray) {
+	for (let value = 1; value < 256; value++) {
+		expect(lut[value]).toBeGreaterThanOrEqual(lut[value - 1]);
+	}
+}
 
 describe('buildLut', () => {
 	it('leaves every value alone when nothing is adjusted', () => {
-		const lut = buildLut(0, 0, 1);
+		const lut = buildLut(tone());
 
 		for (let value = 0; value < 256; value++) {
 			expect(lut[value]).toBe(value);
@@ -22,12 +39,12 @@ describe('buildLut', () => {
 	});
 
 	it('shifts values up and down with brightness', () => {
-		expect(buildLut(50, 0, 1)[100]).toBeGreaterThan(100);
-		expect(buildLut(-50, 0, 1)[100]).toBeLessThan(100);
+		expect(buildLut(tone({brightness: 50}))[100]).toBeGreaterThan(100);
+		expect(buildLut(tone({brightness: -50}))[100]).toBeLessThan(100);
 	});
 
 	it('pushes values away from the midpoint with contrast', () => {
-		const lut = buildLut(0, 50, 1);
+		const lut = buildLut(tone({contrast: 50}));
 
 		expect(lut[200]).toBeGreaterThan(200);
 		expect(lut[50]).toBeLessThan(50);
@@ -35,7 +52,7 @@ describe('buildLut', () => {
 	});
 
 	it('lifts midtones as gamma rises, without moving the ends', () => {
-		const lut = buildLut(0, 0, 2);
+		const lut = buildLut(tone({gamma: 2}));
 
 		expect(lut[128]).toBeGreaterThan(128);
 		expect(lut[0]).toBe(0);
@@ -43,16 +60,46 @@ describe('buildLut', () => {
 	});
 
 	it('clamps instead of wrapping around', () => {
-		const lut = buildLut(100, 100, 1);
+		const lut = buildLut(tone({brightness: 100, contrast: 100}));
 
 		expect(lut[255]).toBe(255);
-		expect(buildLut(-100, 0, 1)[0]).toBe(0);
+		expect(buildLut(tone({brightness: -100}))[0]).toBe(0);
+	});
+
+	it('lifts the dark end with shadows and leaves white where it is', () => {
+		const lut = buildLut(tone({shadows: 100}));
+
+		expect(lut[10]).toBeGreaterThan(10);
+		expect(lut[255]).toBe(255);
+		// A slider that reorders two tones turns a gradient inside out, so every one of
+		// these curves has to stay monotonic at its limit.
+		expectMonotonic(lut);
+		expectMonotonic(buildLut(tone({shadows: -100})));
+	});
+
+	it('moves the bright end with highlights and leaves black where it is', () => {
+		const lut = buildLut(tone({highlights: -100}));
+
+		expect(lut[245]).toBeLessThan(245);
+		expect(lut[0]).toBe(0);
+		expectMonotonic(lut);
+		expectMonotonic(buildLut(tone({highlights: 100})));
+	});
+
+	it('steepens the middle with pop, pinned at both ends', () => {
+		const lut = buildLut(tone({pop: 100}));
+
+		expect(lut[64]).toBeLessThan(64);
+		expect(lut[192]).toBeGreaterThan(192);
+		expect(lut[0]).toBe(0);
+		expect(lut[255]).toBe(255);
+		expectMonotonic(lut);
 	});
 });
 
 describe('applyLut', () => {
 	it('maps color channels but not alpha', () => {
-		const lut = buildLut(0, 0, 1);
+		const lut = buildLut(tone());
 
 		lut[10] = 200;
 
@@ -60,6 +107,105 @@ describe('applyLut', () => {
 
 		applyLut(pixels, lut);
 		expect(Array.from(pixels)).toEqual([200, 200, 200, 10]);
+	});
+});
+
+describe('buildChannelLuts', () => {
+	const edits = () => defaultEdits(10, 10);
+
+	it('hands the same table to all three channels when nothing pulls them apart', () => {
+		const luts = buildChannelLuts({...edits(), contrast: 20});
+
+		expect(luts.r).toBe(luts.g);
+		expect(luts.g).toBe(luts.b);
+	});
+
+	it('trades blue for red with warmth, and back again', () => {
+		const warm = buildChannelLuts({...edits(), warmth: 100});
+
+		expect(warm.r[128]).toBeGreaterThan(128);
+		expect(warm.b[128]).toBeLessThan(128);
+		expect(warm.g[128]).toBe(128);
+
+		const cool = buildChannelLuts({...edits(), warmth: -100});
+
+		expect(cool.r[128]).toBeLessThan(128);
+		expect(cool.b[128]).toBeGreaterThan(128);
+	});
+
+	it('trades magenta for green with tint, without moving the brightness much', () => {
+		const luts = buildChannelLuts({...edits(), tint: 100});
+
+		expect(luts.g[128]).toBeGreaterThan(128);
+		expect(luts.r[128]).toBeLessThan(128);
+		// Red and blue move together, so the shift is a hue and not a tilt towards one
+		// corner of the picture's colour space.
+		expect(luts.r[128]).toBe(luts.b[128]);
+	});
+
+	it('grades on top of the tone curve rather than instead of it', () => {
+		const luts = buildChannelLuts({...edits(), brightness: 20, warmth: 100});
+
+		expect(luts.g[128]).toBe(buildLut(tone({brightness: 20}))[128]);
+		expect(luts.r[128]).toBeGreaterThan(luts.g[128]);
+	});
+});
+
+describe('buildColorMatrix and applyColorMatrix', () => {
+	const edits = () => defaultEdits(10, 10);
+
+	/** One pixel, graded. */
+	function graded(over: Partial<ImageEdits>, rgb: number[]) {
+		const pixels = new Uint8ClampedArray([...rgb, 128]);
+
+		applyColorMatrix(pixels, buildColorMatrix({...edits(), ...over}));
+
+		return Array.from(pixels);
+	}
+
+	it('is the identity when nothing is set', () => {
+		const matrix = buildColorMatrix(edits());
+
+		[1, 0, 0, 0, 1, 0, 0, 0, 1].forEach((expected, index) =>
+			expect(matrix[index]).toBeCloseTo(expected)
+		);
+	});
+
+	it('drains all the colour at -100 saturation, keeping the luminance', () => {
+		const [r, g, b, a] = graded({saturation: -100}, [200, 100, 50]);
+
+		expect(r).toBe(g);
+		expect(g).toBe(b);
+		// The CSS spec's luminance weights, which is what makes this grey and not an
+		// average of the three.
+		expect(r).toBeCloseTo(
+			Math.round(0.213 * 200 + 0.715 * 100 + 0.072 * 50),
+			0
+		);
+		expect(a).toBe(128);
+	});
+
+	it('pushes colour further apart at +100 saturation', () => {
+		const [r, , b] = graded({saturation: 100}, [200, 100, 50]);
+
+		expect(r).toBeGreaterThan(200);
+		expect(b).toBeLessThan(50);
+	});
+
+	it('leaves grey alone whatever the hue is, and turns red towards green', () => {
+		expect(graded({hue: 120}, [128, 128, 128]).slice(0, 3)).toEqual([
+			128, 128, 128
+		]);
+
+		const [r, g] = graded({hue: 120}, [255, 0, 0]);
+
+		expect(g).toBeGreaterThan(r);
+	});
+
+	it('lifts saturation a little for pop as well as bending the curve', () => {
+		const [r] = graded({pop: 100}, [200, 100, 50]);
+
+		expect(r).toBeGreaterThan(200);
 	});
 });
 
@@ -117,6 +263,42 @@ describe('isNeutral and isUnedited', () => {
 
 		expect(isNeutral(edits)).toBe(false);
 		expect(isUnedited(edits, 320, 240)).toBe(false);
+	});
+
+	it('notice each of the colour sliders on its own', () => {
+		const sliders: Partial<ImageEdits>[] = [
+			{shadows: 10},
+			{highlights: -10},
+			{pop: 10},
+			{saturation: -10},
+			{warmth: 10},
+			{tint: -10},
+			{hue: 90}
+		];
+
+		for (const slider of sliders) {
+			const edits = {...defaultEdits(320, 240), ...slider};
+
+			expect(isNeutral(edits)).toBe(false);
+			expect(isUnedited(edits, 320, 240)).toBe(false);
+		}
+	});
+
+	it('read an absent colour slider and a zeroed one as the same rest', () => {
+		const edits = {
+			...defaultEdits(320, 240),
+			highlights: 0,
+			hue: 0,
+			pop: 0,
+			saturation: 0,
+			shadows: 0,
+			tint: 0,
+			warmth: 0
+		};
+
+		expect(isNeutral(edits)).toBe(true);
+		expect(isUnedited(edits, 320, 240)).toBe(true);
+		expect(sameEdits(edits, defaultEdits(320, 240))).toBe(true);
 	});
 });
 
@@ -196,6 +378,14 @@ describe('sameEdits', () => {
 		expect(
 			sameEdits(edits, {...edits, crop: {...edits.crop, x: 1}})
 		).toBe(false);
+	});
+
+	it('notices any of the colour sliders', () => {
+		const base = defaultEdits(320, 240);
+
+		expect(sameEdits(base, {...base, hue: 30})).toBe(false);
+		expect(sameEdits(base, {...base, saturation: -30})).toBe(false);
+		expect(sameEdits({...base, pop: 20}, {...base, pop: 21})).toBe(false);
 	});
 
 	it('notices a slider', () => {

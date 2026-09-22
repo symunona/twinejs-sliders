@@ -1295,6 +1295,30 @@ export interface ImageEdits {
 	contrast: number;
 	/** 0.1 to 3. 1 leaves the image alone; above 1 lifts the midtones. */
 	gamma: number;
+	/**
+	 * The rest of the colour controls. All optional and absent at rest, because they ride
+	 * `AssetMeta` into sync the same way `tile` does and a picture nobody graded should not
+	 * carry seven zeroes into every manifest.
+	 *
+	 * -100 to 100. Lifts or crushes the dark end only, leaving the highlights where they
+	 * are.
+	 */
+	shadows?: number;
+	/** -100 to 100. The same thing at the bright end. */
+	highlights?: number;
+	/**
+	 * 0 to 100. Midtone contrast and a little saturation together — the one slider that
+	 * moves two things, because that is what makes a flat photo look less flat.
+	 */
+	pop?: number;
+	/** -100 to 100. Colder to warmer: blue against orange. */
+	warmth?: number;
+	/** -100 to 100. The other axis: green against magenta. */
+	tint?: number;
+	/** -100 to 100. 0 leaves saturation alone, -100 is grey, 100 is twice as saturated. */
+	saturation?: number;
+	/** -180 to 180 degrees. Rotates every hue around the colour wheel; 0 leaves them be. */
+	hue?: number;
 	crop: CropRect;
 	/** Output size in pixels. Starts out as the crop size. */
 	width: number;
