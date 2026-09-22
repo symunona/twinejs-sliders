@@ -1314,6 +1314,65 @@ export interface AssetMask {
  */
 export type SidecarKind = 'source' | 'cutout';
 
+// ---------------------------------------------------------------------------
+// Asset effects (spec 14)
+// ---------------------------------------------------------------------------
+
+/**
+ * A live, animated look an asset carries wherever it is drawn.
+ *
+ * Only `glitch` so far. The kind is a discriminant rather than a flag because the second
+ * effect will want its own parameters, and an `AssetEffect` with every family's knobs
+ * flattened into it has no way to say which of them mean anything.
+ */
+export type EffectKind = 'glitch';
+
+/**
+ * Analogue video tearing: horizontal bands slide sideways, the colour channels come apart,
+ * and the clean picture returns between bursts.
+ *
+ * Every parameter is 0..100 and unitless, which is the one decision here worth stating.
+ * A tear measured in pixels looks right in the asset editor's preview and wrong on a 4K
+ * stage — the same asset is drawn at a dozen sizes, so every distance is a fraction of the
+ * art's own width and survives all of them.
+ */
+export interface GlitchEffect {
+	kind: 'glitch';
+	/** How far a band slides, 0 (still) to 100 (a quarter of the art's width). */
+	amount: number;
+	/** How many horizontal slices the picture is torn into, 1..12. */
+	bands: number;
+	/** Steps per second of the tear clock, 1..50. Low reads as mechanical, high as electrical. */
+	speed: number;
+	/** How far the colour channels come apart, 0..100 (up to 2% of the width each way). */
+	split: number;
+	/** Loop length in seconds, 0.4..8. Short loops hide their own repetition. */
+	period: number;
+	/**
+	 * What share of the loop is corrupted, 0..100. The rest is the untouched picture, and
+	 * that contrast is most of the effect: a permanently torn image reads as a broken file
+	 * rather than as interference.
+	 */
+	burst: number;
+	/** CRT line overlay, 0 (none) to 100. */
+	scanlines: number;
+	/** Snow over the picture, 0 (none) to 100. */
+	noise: number;
+}
+
+/**
+ * What an asset's effect is set to, or absent for the overwhelming majority that have none.
+ *
+ * Metadata, NOT a sidecar, and the distinction costs data when it is got wrong. A sidecar
+ * is local to the device that made the edit and is stripped from bundles and from sync,
+ * because it describes pixels a reader never needs. An effect is the opposite: it is an
+ * instruction to whoever draws the asset, so it has to reach the player, every collaborator
+ * and every bundle. It also never touches the bytes — `replace` overwrites `edits`, `mask`
+ * and `tuning` because those describe a render that just changed, and must LEAVE an effect
+ * alone for the same reason it leaves the name alone.
+ */
+export type AssetEffect = GlitchEffect;
+
 export interface AssetMeta {
 	id: AssetId;
 	name: string;
@@ -1366,6 +1425,14 @@ export interface AssetMeta {
 	 * re-applying it would cut the same hole twice.
 	 */
 	mask?: AssetMask;
+	/**
+	 * The live look this asset is drawn with, or absent for no effect.
+	 *
+	 * Not a render of anything, which is what keeps it out of `replace`'s overwrite list and
+	 * out of the importer's strip list: an effect describes how to DRAW these bytes, so it
+	 * outlives every re-crop and travels in every bundle. See `AssetEffect`.
+	 */
+	effect?: AssetEffect;
 	/**
 	 * Which extra blobs this asset owns. An explicit list rather than a probe, so that
 	 * `remove` can delete them without any backend having to scan for keys by prefix.

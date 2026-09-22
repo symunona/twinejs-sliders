@@ -484,3 +484,20 @@ without the border the two controls read as more of the section above them.
 	background: var(--light-blue-translucent);
 	border-radius: var(--corner-round);
 }
+
+/*
+The effect overlay's box.
+
+Positioned onto the measured art rect rather than the canvas box: the canvas is letterboxed
+by `max-width`/`max-height` and its own aspect, so a full-box overlay would tear empty
+background beside the picture. The fx host inside it is `inset: 0`, which is why this is a
+wrapper and not the host itself.
+*/
+
+.asset-editor-fx {
+	position: absolute;
+	/* Above the checkerboard and the art, below the anchor marker and the mask handles --
+	   the effect is a look, and a look must never cover a control. */
+	z-index: 1;
+	pointer-events: none;
+}

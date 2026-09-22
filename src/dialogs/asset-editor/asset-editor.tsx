@@ -1,4 +1,12 @@
-import {AssetId, AssetMask, AssetMeta, Frac2, MaskOp} from '@sliders/scene-types';
+import {
+	AssetEffect,
+	AssetId,
+	AssetMask,
+	AssetMeta,
+	Frac2,
+	MaskOp
+} from '@sliders/scene-types';
+import {normalizeEffect, sameEffect} from '@sliders/render-dom';
 import classNames from 'classnames';
 import {
 	IconAdjustments,
@@ -66,6 +74,8 @@ import {
 import {NoteBody, NoteButton, useNote} from './editor-note';
 import {EditorSection} from './editor-section';
 import {EditorToolbar, ToolId, TOOL_IDS} from './editor-toolbar';
+import {EffectPreview} from './effect-preview';
+import {EffectTool} from './effect-tool';
 import {
 	anchorAfterCrop,
 	canvasBlob,
@@ -265,6 +275,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const canvasBox = React.useRef<HTMLDivElement>(null);
 	const [dragFrom, setDragFrom] = React.useState<{x: number; y: number}>();
 	const [edits, setEdits] = React.useState<ImageEdits>();
+	/**
+	 * The live look this asset is drawn with, or none.
+	 *
+	 * Alone among this dialog's state it describes no pixels. Everything else here is an
+	 * instruction for the render that a save bakes; an effect is an instruction to whoever
+	 * draws the asset afterwards, so it is written as metadata and never reaches `editedFile`.
+	 */
+	const [effect, setEffect] = React.useState<AssetEffect>();
 	const [error, setError] = React.useState<string>();
 	const [lockAspect, setLockAspect] = React.useState(true);
 	const [meta, setMeta] = React.useState<AssetMeta>();
@@ -338,6 +356,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 */
 	const [saved, setSaved] = React.useState<{
 		edits?: ImageEdits;
+		effect?: AssetEffect;
 		mask?: AssetMask;
 		tuning?: CutoutTuning;
 	}>({});
@@ -506,8 +525,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			setComposed({canvas});
 			setEdits(restored ?? defaultEdits(canvas.width, canvas.height));
 			setMask(restoredMask ?? {shapes: []});
+			// Normalized on the way in, so a value an older build or a hand-edited manifest
+			// put out of range does not read as an unsaved change the moment the dialog opens.
+			const restoredEffect = normalizeEffect(assetMeta?.effect);
+
+			setEffect(restoredEffect);
 			setSaved({
 				edits: restored,
+				effect: restoredEffect,
 				mask: restoredMask,
 				tuning: assetMeta?.tuning
 			});
@@ -670,6 +695,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		hasCutout || hasMask || tool === 'mask' ? MASK_MODES : ['rendered'];
 	/** Editing bytes no asset owns--everything keyed off library metadata is off. */
 	const detached = assetId === undefined;
+	/**
+	 * Which tools this image can use.
+	 *
+	 * An effect is metadata on an asset, and a detached edit has no asset: the bytes go back
+	 * to the generator's history, where there is nothing to write a look onto. Offering the
+	 * pane there would be a tool whose every control silently did nothing.
+	 */
+	const editorTools = detached
+		? TOOL_IDS.filter(id => id !== 'effect')
+		: TOOL_IDS;
 
 	// Deleting the last shape, or restoring the background, can leave the stage in a mode
 	// that no longer means anything. Fall back rather than leave the author looking at an
@@ -753,6 +788,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		// full of greyed-out tools and leave the author to find a second switch first.
 		if (next === 'mask') {
 			setMaskMode(current => (current === 'rendered' ? 'paint' : current));
+		}
+
+		// The mirror of that. An effect is judged against the finished picture, and the two
+		// transparency previews draw an alpha map -- landing in one would tear a black and
+		// white sheet and tell the author nothing about how the asset will look.
+		if (next === 'effect') {
+			setMaskMode('rendered');
 		}
 	}
 
@@ -1010,13 +1052,25 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		try {
 			await store.replace(meta.id, await editedFile(meta.name), await editOptions());
 
-			// Metadata, so it rides a second call rather than the bytes. Cropping moves the
-			// anchor even when nobody touched it, which is why this compares rather than
-			// checking whether the anchor controls were used.
+			// Metadata, so it rides a second call rather than the bytes -- and one call for
+			// both, because two `update`s are two manifest writes and two sync revisions for
+			// what the author did as one save.
+			//
+			// Both are compared rather than tracked: cropping moves the anchor even when
+			// nobody touched it, and an effect restored from the meta is not a change.
 			const anchor = savedAnchor();
+			const metaChanges: Partial<AssetMeta> = {};
 
 			if (!sameAnchor(anchor, meta.origin ?? DEFAULT_ANCHOR)) {
-				await store.update(meta.id, {origin: anchor});
+				metaChanges.origin = anchor;
+			}
+
+			if (!sameEffect(effect, meta.effect)) {
+				metaChanges.effect = effect;
+			}
+
+			if (Object.keys(metaChanges).length > 0) {
+				await store.update(meta.id, metaChanges);
 			}
 
 			refreshAssetLibrary();
@@ -1089,6 +1143,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// in the library as a loose asset while the character kept the old one.
 			const saved = await store.putAsset(await editedFile(saveName), {
 				...(await editOptions()),
+				// Carried along like the anchor and the tags: a copy that looked different
+				// from the asset it was saved out of would be a surprise, not a feature.
+				effect,
 				kind: meta.kind,
 				name: saveName,
 				origin: savedAnchor(),
@@ -1191,6 +1248,20 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 	/** The cutout as it would be saved: absent once an author has undone the removal. */
 	const savedTuning = hasCutout ? tuning : undefined;
+	/**
+	 * Bumped whenever the preview canvas is about to be redrawn.
+	 *
+	 * The effect overlay copies the canvas into an `<img>`, and a canvas gives no notice that
+	 * its pixels changed. The same inputs the redraw effect watches, so the token moves exactly
+	 * when the picture does -- a ref rather than state because nothing here needs a render, only
+	 * a value that compares unequal.
+	 */
+	const previewRev = React.useRef(0);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	const previewRevision = React.useMemo(
+		() => ++previewRev.current,
+		[edits, effective, maskMode, source]
+	);
 
 	/**
 	 * Something has been done to the image that no save has written down. Drives both
@@ -1205,6 +1276,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		source !== undefined &&
 		edits !== undefined &&
 		(anchorChanged ||
+			!sameEffect(effect, saved.effect) ||
 			!sameTuning(savedTuning, saved.tuning) ||
 			!sameMask(mask, saved.mask) ||
 			!sameEdits(
@@ -1433,7 +1505,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 						onGenerate={detached ? undefined : handleGenerate}
 						onSelectTool={selectTool}
 						tool={tool}
-						tools={TOOL_IDS}
+						tools={editorTools}
 					/>
 					<div className="asset-editor">
 						<div className="asset-editor-stage">
@@ -1478,11 +1550,24 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										width={source.width}
 									/>
 								)}
+								{/* Last, so the layers blend against the finished preview. It
+								    is `aria-hidden` and `pointer-events: none`, so it takes
+								    nothing away from the overlays above it. */}
+								{tool === 'effect' && (
+									<EffectPreview
+										art={preview}
+										container={canvasBox}
+										effect={effect}
+										revision={previewRevision}
+									/>
+								)}
 							</div>
 							<p className="asset-editor-hint">
 								{t(
 									picking
 										? 'dialogs.assetEditor.anchorHint'
+										: tool === 'effect'
+										? 'dialogs.assetEditor.effectHint'
 										: tool === 'mask'
 										? 'dialogs.assetEditor.maskHint'
 										: tool === 'size'
@@ -1784,6 +1869,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										</div>
 									)}
 								</EditorSection>
+							)}
+							{tool === 'effect' && (
+								<EffectTool
+									disabled={busy}
+									effect={effect}
+									onChange={setEffect}
+								/>
 							)}
 							{tool === 'mask' && (
 								<MaskTool

@@ -59,6 +59,8 @@ import {
 import type {LinkHandler} from './dialogue';
 import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
+import {injectEffectSupport, syncEffect} from './effect-host';
+import {effectIsIdle} from './effects';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
 export const ENTER_RISE = 0.03;
@@ -123,6 +125,13 @@ interface EntityRecord {
 	/** The running frame cycle, if the entity has one. */
 	anim?: AnimState;
 	img?: HTMLImageElement;
+	/**
+	 * The effect overlay, when this entity's asset carries one.
+	 *
+	 * Held on the record rather than looked up, because `setContent` clears the box on every
+	 * asset change and this has to go back in afterwards.
+	 */
+	fx?: HTMLElement;
 	/** Asset currently shown, so we only touch `src` when it actually changes. */
 	assetId?: string;
 	url?: string;
@@ -293,6 +302,7 @@ export class DomRenderer implements Renderer {
 		this.assets = assets;
 
 		injectStyles(this.doc);
+		injectEffectSupport(this.doc);
 
 		// The mount is the coordinate space `measure()` reports in, so it has to be a
 		// containing block.
@@ -873,6 +883,7 @@ export class DomRenderer implements Renderer {
 		rec.res = res;
 		this.setContent(rec, res);
 		this.applyFrameFit(rec, res);
+		this.applyEffect(rec, res);
 		this.entityLayerEl?.appendChild(el);
 
 		// Enter: fade + slight rise. Snap into the start pose with transitions off, force a
@@ -1005,6 +1016,7 @@ export class DomRenderer implements Renderer {
 			durations.ease('frame', rec.id)
 		);
 		this.applyFrameFit(rec, res);
+		this.applyEffect(rec, res);
 		this.layout(rec, duration, undefined, ease);
 	}
 
@@ -1091,6 +1103,7 @@ export class DomRenderer implements Renderer {
 
 		this.setContent(rec, step.res, 0);
 		this.applyFrameFit(rec, step.res);
+		this.applyEffect(rec, step.res);
 
 		// A step that names an `at` GLIDES over its own hold, so a walk translates smoothly
 		// while the poses swap. A step that names none inherits the entity's placement, and
@@ -1295,6 +1308,47 @@ export class DomRenderer implements Renderer {
 		style.transform = `translate(${offset.x * 100}%, ${
 			offset.y * 100
 		}%) scale(${scale})`;
+	}
+
+	/**
+	 * The asset's own effect, as an overlay inside the sprite box.
+	 *
+	 * An overlay rather than a filter on the `<img>`, because a glitch is several displaced
+	 * copies of the picture blended together and one element can only be one of them. It goes
+	 * INSIDE the box so it inherits the box's position, rotation, mirror and opacity for free —
+	 * an effect has no geometry of its own and should follow the sprite everywhere.
+	 *
+	 * Re-appended on every call. `setContent` clears the box whenever the asset changes, so an
+	 * overlay left to look after itself would silently vanish on the first frame swap.
+	 *
+	 * Nothing about it is read back: the effect is decoration, `pointer-events: none`, and
+	 * invisible to `measure()`, to the visual editor's hit tests and to `rectOf`. A tear that
+	 * moved an anchor would drag every speech bubble along with it.
+	 */
+	private applyEffect(rec: EntityRecord, res: ResolvedEntity): void {
+		const effect = res.meta?.effect;
+
+		if (!res.url || !effect || effectIsIdle(effect)) {
+			rec.fx?.remove();
+			rec.fx = undefined;
+			return;
+		}
+
+		if (!rec.fx) {
+			rec.fx = this.el('div', 'sliders-fx');
+		}
+
+		// After the <img>, so the layers blend against the picture rather than under it.
+		rec.el.appendChild(rec.fx);
+		// A plane's layers take the plane's own fit and sit centred; a sprite's take the
+		// registration point `applyFrameFit` just wrote, so a layer letterboxes exactly as the
+		// art does and a tear reads as a tear rather than as a permanent double image.
+		syncEffect(rec.fx, effect, res.url, {
+			fit: res.entity.fit ?? 'contain',
+			objectPosition: res.entity.fit
+				? '50% 50%'
+				: rec.img?.style.objectPosition || undefined
+		});
 	}
 
 	private metricsFor(res: ResolvedEntity): SpriteMetrics {
