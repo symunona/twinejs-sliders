@@ -9,7 +9,7 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 01 | [twine-language-review.md](01-twine-language-review.md) | Which format to fork, and why. What a format can/can't do. |
 | 02 | [sliders-format.md](02-sliders-format.md) | The Chapbook fork. Scene YAML spec + runtime. |
 | 03 | [twinejs-asset-manager.md](03-twinejs-asset-manager.md) | Asset storage, upload, WebP, publish pipeline. |
-| 04 | [twinejs-character-editor.md](04-twinejs-character-editor.md) | Frames, anchors, origin. Opened from 03. |
+| 04 | [twinejs-character-editor.md](04-twinejs-character-editor.md) | Poses, anchors, origin. Opened from 03. |
 | 05 | [twinejs-parser.md](05-twinejs-parser.md) | Shared YAML→Stage parser. Errors. CM5 highlighting. |
 | 06 | [twinejs-preview.md](06-twinejs-preview.md) | Live preview under the passage editor. Full screen. |
 | 07 | [twinejs-visual-editor.md](07-twinejs-visual-editor.md) | Drag on the preview, write back to YAML. |
@@ -54,7 +54,7 @@ Consumed by **both** repos. Publish as real packages day one or they drift.
 | `scene-core` | Stage model, differ, marks, `from:` resolution, beats. No DOM. |
 | `scene-index` | Global scene graph. Dupe ids, unknown refs, cycles. |
 | `asset-registry` | id → asset. Manifest, preload. |
-| `cast-registry` | Characters: frames, anchors, origins. |
+| `cast-registry` | Characters: poses, anchors, origins. |
 | `render-dom` | Renderer #1. CSS transforms + `<img>`. |
 | `render-three` | Renderer #2. Later. Same interface. |
 | `ui-dialogue` | Bubbles, boxes, links. DOM always. |
@@ -67,9 +67,9 @@ Consumed by **both** repos. Publish as real packages day one or they drift.
 | D2 | Speech bubbles are DOM, positioned from character anchors, in every renderer. |
 | D3 | Wiki-style navigation. Links carry props. Links inside bubbles are real links. |
 | D4 | YAML 1.2, restricted subset. Bundle size is not a constraint. |
-| D5 | Characters hold named frames. Animation = an animated file, not a timeline. |
-| D6 | Users upload files to make frames. Characters reference them by id. |
-| D7 | Asset manager: backgrounds + objects + characters-as-collections. Frames hidden. Tag/group/filter. |
+| D5 | Characters hold named poses. Animation = an animated file or baked steps, not a timeline. (was: frames) |
+| D6 | Users upload files to make poses. Characters reference them by id. |
+| D7 | Asset manager: backgrounds + objects + characters-as-collections. Pose images hidden. Tag/group/filter. |
 | D8 | Separate character editor, opened by clicking a character. Tab per character. |
 | D9 | Story map: colour passage nodes by scene id hash; faded bg thumbnail if available. |
 | D10 | Save granularity = **passage**. Simplest. No beat-level resume. |

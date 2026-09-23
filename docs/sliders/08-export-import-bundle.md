@@ -84,9 +84,9 @@ Per passage: `extractSceneBlock()` → `parseScene()` → walk the `Scene`:
 | `scene.bg` | asset name or id |
 | `scene.entities[*]` with `kind: 'prop'` | `ref` → asset name or id |
 | `scene.entities[*]` with `kind: 'cast'` | `ref` → character id |
-| `scene.entities[*].frame` | frame name, resolved through its character |
+| `scene.entities[*].pose` | pose name, resolved through its character |
 | `scene.fx[*].id` | fx asset |
-| `beat.patch.frame` (say / box / set) | more frame names |
+| `beat.patch.pose` (say / box / set) | more pose names |
 | `beat.kind === 'fx'` | `beat.fx.id` |
 
 No `from:` DAG walk needed. Inheritance never invents a name that is not written literally
@@ -96,7 +96,7 @@ in some passage, so scanning each passage's own block catches everything the ind
 
 Names, not ids, are what authors write (`bg: tavern-night`). Reuse the rule
 `createNamedResolver` already uses: try `store.meta(key)` first, fall back to a name index
-from `store.list({includeFrames: true})`.
+from `store.list({includePoseImages: true})`.
 
 Two known-lossy spots, both reported rather than silently dropped:
 
@@ -106,10 +106,12 @@ Two known-lossy spots, both reported rather than silently dropped:
 - **A name that resolves to nothing** goes into `unresolved` in the manifest and into the
   pre-download report. It never fails the export — a half-written story must still back up.
 
-### Characters pull all their frames
+### Characters pull all their poses
 
-A referenced character contributes **every** `frames[*].asset`, not just the frames the
-scenes name. Frames are small, and a character arriving with three of its nine frames makes
+Bundles written before 2026-09 say `frames:`. Import reads them as `poses:` (`upgradeCharacter`).
+
+A referenced character contributes **every** `poses[*].asset` / `poses[*].steps[*].asset`, not just the poses the
+scenes name. Poses are small, and a character arriving with three of its nine poses makes
 the character editor useless on the other side.
 
 ## Export — `src/util/sliders-bundle/export-bundle.ts`
@@ -165,18 +167,18 @@ asset silently repoints the incoming story's own scenes. That rules out the obvi
 |---|---|
 | Same content hash already in library | Reuse it. Remap the bundle's id to the existing one. Silent — this is the common case on re-import. |
 | Name free, id free | Import as-is, id preserved. |
-| Name free, id taken | Import, mint a new id, remap `frames[*].asset` and `sourceAsset`. |
+| Name free, id taken | Import, mint a new id, remap `poses[*].asset` / `poses[*].steps[*].asset` and `sourceAsset`. |
 | **Name taken, different bytes** | **Keep the existing asset.** Drop the incoming bytes, remap to the existing id, warn loudly and name it in the report. |
-| Character id taken | **Merge frames** into the existing character — add missing, keep existing on conflict. Warn. |
+| Character id taken | **Merge poses** into the existing character — add missing, keep existing on conflict. Warn. |
 
-**A character frame never contests a name**, so the "name taken" row applies only when the
-incoming and the local asset are both loose. A frame is addressed through its character
-(`mira: {frame: happy}`), never by name, so a frame and a background that merely share a
+**A character pose never contests a name**, so the "name taken" row applies only when the
+incoming and the local asset are both loose. A pose is addressed through its character
+(`mira: {pose: happy}`), never by name, so a pose and a background that merely share a
 name are not competing for anything — and treating them as if they were is destructive
 rather than merely wrong. `putCharacter` stamps `ownerCharacter` and `kind: 'frame'` onto
-whatever a frame points at, so letting an incoming frame "keep" a local background swallows
+whatever a pose points at, so letting an incoming pose "keep" a local background swallows
 that background into the imported character: it vanishes from the asset grid, and
-`removeCharacter` later deletes it outright. Which incoming frame wins is settled by the
+`removeCharacter` later deletes it outright. Which incoming pose wins is settled by the
 character merge, not by the name table.
 
 The last two are the honest-but-lossy choices, and they need to be visible. Renaming would
@@ -208,7 +210,7 @@ New i18n keys under `dialogs.storyImport.*` and `routeActions.build.*` in
 
 ## Tests
 
-- `collect-asset-refs` unit: bg, prop, cast + frames, fx incl. the `entityKey` mangle, beat
+- `collect-asset-refs` unit: bg, prop, cast + poses, fx incl. the `entityKey` mangle, beat
   patches, `from:` inheritance, passage with no `[scene]` block, unresolved names.
 - Round-trip: export a story → import into a fresh memory-backed store → manifest and
   passage ids identical.
@@ -251,19 +253,19 @@ something *was* found and does ride along, it just might be the wrong one. It tr
 which they meant. Tie-break: fx-kind assets win over other kinds, then first by name sort.
 
 **`kept-existing` does double duty.** It means both "a local asset owns that name" and "a
-merged character already had that frame, so your image won". The second case exists because
-writing a frame's bytes for a frame the merge rejected would leave an asset owned by a
-character that references it nowhere — invisible in the library (frames are filtered out)
+merged character already had that pose, so your image won". The second case exists because
+writing a pose image's bytes for a pose the merge rejected would leave an asset owned by a
+character that references it nowhere — invisible in the library (poses are filtered out)
 and unreachable from the character editor. `AssetPlanItem.reason` tells the two apart.
 
-**Character merge keeps everything local, not just frames** — name, size, origin, anchors,
+**Character merge keeps everything local, not just poses** — name, size, origin, anchors,
 tags. The local character's own scenes depend on those numbers.
 
-**Dangling references are dropped, never preserved.** A frame whose asset did not travel,
+**Dangling references are dropped, never preserved.** A pose whose asset did not travel,
 and a `sourceAsset` pointing outside the bundle, are both removed rather than left pointing
 at a bundle id. Asset ids are four hex digits minted per library, so a stale id stands a
 fair chance of hitting an unrelated local asset and showing a stranger's art under this
-character's name. A missing frame is visible and fixable; a wrong one is not.
+character's name. A missing pose is visible and fixable; a wrong one is not.
 
 **Names are reserved within a bundle, hashes are not — deliberately asymmetric.** Two
 incoming assets with identical bytes collapse into one, mirroring `putAsset`. Two incoming
@@ -283,14 +285,14 @@ existed for image uploads.
 
 **`applyBundlePlan` rolls back its own asset writes on failure.** Not for tidiness: an
 asset carrying `ownerCharacter` whose character never got written is invisible in the
-library (frames are filtered out of the grid) and unreachable from the character editor, so
+library (poses are filtered out of the grid) and unreachable from the character editor, so
 the author could neither see it nor delete it — bytes stuck in storage forever. The
 rollback is best-effort and never masks the original error.
 
 It covers asset writes, not `putCharacter` calls. With two or more characters, a throw on
-the second leaves the first stored, and the asset rollback then strips its frames — a
-frameless ghost character. That does not break the invariant the rollback exists for (no
-asset owned by an absent character), and unlike an orphaned frame a frameless character is
+the second leaves the first stored, and the asset rollback then strips its poses — a
+poseless ghost character. That does not break the invariant the rollback exists for (no
+asset owned by an absent character), and unlike an orphaned pose a poseless character is
 visible and deletable in the character editor, so it is left alone.
 
 **`store.list()` returns the live manifest objects, and `putCharacter` mutates them in
@@ -310,7 +312,7 @@ are both id-keyed, so a character found by name is one no scene in the bundle ca
 Reporting it as resolved would tell the author their story is fine while it renders
 nothing, so a name-only match is `unresolved`.
 
-**A frame picked up on its own drags its character along.** A `bg:` naming a frame by its
+**A pose picked up on its own drags its character along.** A `bg:` naming a pose by its
 full name would otherwise ship an asset owned by a character that is not in the bundle —
 the orphan state described two paragraphs up, reached with no error at all.
 

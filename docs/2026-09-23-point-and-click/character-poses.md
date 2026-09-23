@@ -1,6 +1,6 @@
 # Character poses — one vocabulary, image-set import
 
-Status: planned. 2026-09-23.
+Status: phase A (rename) shipped on `char-poses`, see Shipped. Rest planned. 2026-09-23.
 
 ## Problem
 
@@ -195,3 +195,70 @@ No skeletal runtime. Baked steps keep the player dumb and licence-free.
 
 - `AssetKind 'frame'` rename, or keep the stored value.
 - Per-step anchors, if a real character needs them. Not before.
+
+## Shipped — phase A (rename), 2026-09-23
+
+Branch `char-poses`. Order steps 1, 2, 3 (rename only), 5. Step strip, Import set, sheet
+slicing, align feet: NOT done, next agent.
+
+### Final names
+
+| thing | name |
+|---|---|
+| character pose | `CharacterPose {asset?, steps?, loop?, fit?, anchors?}` |
+| image in a pose | `PoseStep {asset, dur?, fit?}` |
+| scene list step | `SceneStep {name, dur?, at?, scale?, rot?, flip?, opacity?, ease?}` (was `FrameStep`) |
+| fit | `PoseFit`. `FrameFit` kept as `@deprecated` alias. |
+| loops | `POSE_LOOPS`, `PoseLoop` (`all`/`once`) |
+| default hold | `DEFAULT_STEP_SECONDS` = 0.1, scene steps and pose steps |
+| anchors seed | `DEFAULT_POSE_ANCHORS`, `newPoseAnchors()` |
+| Character | `poses`, `faces?: 'left'\|'right'`, `walkSpeed?` (type only) |
+| StageEntity | `pose`, `steps`, `poseLoop` |
+| TransitionKind | `'pose'` (was `'frame'`). `ease: {frame: …}` still parses. |
+| error code | `unknown-pose` (declared, unused, as `unknown-frame` was), `retired-key` new |
+| severity | `SceneSeverity = 'error' \| 'warning' \| 'info'` |
+| helpers (scene-types) | `poseAssets`, `poseCover`, `poseHasSteps`, `mapPoseAssets`, `upgradeCharacter` |
+| parser exports | `RETIRED_ENTITY_KEYS`, `RETIRED_EASE_KINDS`, `SCENE_STEP_KEYS` |
+| scene-edit | `findEntityKeyPair` — writers find `frame:` when asked for `pose` and rename it in the same splice |
+| editor | `PoseList` (`pose-list.tsx`), `posesFromFiles` / `uniquePoseName` (`sliders-assets/character-poses.ts`), `poseWrite` |
+| store filter | `includePoseImages` (was `includeFrames`) |
+| CLI | `twine-cli rewrite-poses <story> [--dry-run]`; `assets --all-poses` (`--all-frames` still accepted) |
+
+### Decided
+
+- **`AssetKind 'frame'` stays** as the stored value. Wire, manifests, server rows. UI says
+  "pose image". No read-migration. Closes the Open item above.
+- **Old keys never written.** `frame:`/`frameLoop:` parse forever to the same Scene. Lint is
+  a new `info` severity with a one-click fix. `info` never counts as an error or warning;
+  the scene panel header says "Show Notes (n)" when only notes are left.
+- Old keys are NOT in `ENTITY_KEYS` (completion and Scene Help teach only the new word).
+  CM mode still highlights them as keys; completion still works inside `frame:`.
+- **Manifest migration is a read reshape, not a one-off.** `upgradeCharacter` runs in every
+  reader: asset-store `readManifest` + `migrateCharacter`, player `SlidersCast`, bundle
+  import (`import-bundle` and `planBundle`), server pull compare (`castShape`), CLI catalog.
+  Store persists `poses:` on its next write. `poses` wins if both keys exist.
+- Go server stores characters as raw JSON — no server change.
+- **Step pose in a scene list step** shows that pose's first image for the hold. No nested
+  clocks. The plan's "plays on its own clock during the hold" + lint warn: NOT done.
+- Pose with steps: own animation on the renderer clock, `loop` default true, `false` holds
+  the last. Restarts only when pose name or its steps change (`animKey`). Steps swap images
+  only, never move the sprite.
+- A step removed from the library shortens its pose; the last one removes the pose.
+- Bundle merge clash on a step pose: bundle images map image-for-image onto the local
+  pose's, extras onto its last image.
+- `loop` toggle and ⟳ badge now also show for step poses. Edit-image disabled for them.
+- Hotkey command id `slidersCharacters.addFrames` → `addPoses`. MRU completion bucket
+  `frame:<id>` → `pose:<id>` (old recents lost, harmless).
+- `.sprite-preview-frame` CSS class, `PLACEHOLDER_*`, bubble/stage "frame" (the box around a
+  thing), animation frames of gif/webp, websocket frames: unrelated meanings, left alone.
+  `PLACEHOLDER_FRAME` renamed `PLACEHOLDER_SIZE` anyway.
+
+### Deviations / left undone
+
+- No lint for "scene step names a stepped pose" (needs characters in the parser's reach).
+- `addEntity` writes `pose:` from `patch.pose` only — an entity with a scene step list
+  duplicated through the editor loses the list. Was the same with `frames`.
+- Old clients (a browser tab on the previous build) cannot read a `poses:` manifest pushed
+  by a new one. Deploy moves every tab; no dual-write.
+- Locale keys renamed in `en-US.json` only (the only locale with Sliders strings).
+  Dead key `assetEditor.hideFrame` left as found.

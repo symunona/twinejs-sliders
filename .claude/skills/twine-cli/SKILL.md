@@ -77,9 +77,9 @@ twine-cli assets ep3 --missing              # referenced, no blob
 twine-cli assets ep3 --unused               # in manifest, nothing use it
 ```
 
-Local mode print the store blob path. Read it direct — feed to image model, compare frames.
+Local mode print the store blob path. Read it direct — feed to image model, compare poses.
 
-`--scene` resolve `bg:` + props + only the character frames the scene actually name. Print
+`--scene` resolve `bg:` + props + only the character poses the scene actually name. Print
 path, or reason there is none.
 
 **Add art:** `twine-cli put ep3:tavern-dawn tmp/new.webp --kind bg`. Unknown name = create,

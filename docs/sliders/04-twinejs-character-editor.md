@@ -8,17 +8,27 @@ character (D8). Output = the character manifest in [02](02-sliders-format.md).
 Anchors are **the one thing authors cannot sanely type by hand.** Everything else in the
 scene format is typeable. This editor exists mainly to drag two dots onto a sprite.
 
+## Vocabulary
+
+| term | means |
+|---|---|
+| **pose** | named thing a character shows: a still, an animated file, or steps |
+| **step** | one timed image inside a pose |
+| **pose image** | the asset a pose or step points at. Stored `kind: 'frame'` (wire compat). |
+
+`frame` is retired in UI, types, docs. Only the stored asset kind keeps it.
+
 ## Layout
 
 ```
 ┌─ Characters ──────────────────────────────────────────────┐
 │ [Mira] [Joren] [+]                                        │
 ├──────────────┬────────────────────────────────────────────┤
-│  FRAMES      │                                            │
+│  POSES       │                                            │
 │  ▸ idle    ⟳ │            ┌──────────────┐                │
 │  ▸ arms      │            │              │                │
 │  ▸ angry     │            │   ● bubble   │  ← drag        │
-│  ▸ wave      │            │              │                │
+│  ▸ wave    ⟳ │            │              │                │
 │  [+ drop]    │            │   ● mouth    │  ← drag        │
 │              │            │              │                │
 │              │            └──────┬───────┘                │
@@ -28,21 +38,25 @@ scene format is typeable. This editor exists mainly to drag two dots onto a spri
 └───────────────────────────────────────────────────────────┘
 ```
 
-## Frames (D5/D6)
+## Poses (D5/D6)
 
 | Action | Result |
 |---|---|
-| Drop files onto the frame list | uploads via asset manager, `kind: 'frame'`, `ownerCharacter` set |
-| Frame name | derived from filename, editable. This is what `frame:` refers to in scene YAML. |
-| `⟳` badge | file is animated. Plays in preview. |
-| `loop: false` | per-frame toggle, for one-shots like `wave` |
-| Delete a frame | warn if any passage references it (needs the scene index) |
+| Drop files onto the pose list | uploads via asset manager, `kind: 'frame'`, `ownerCharacter` set. One pose per file. First one is `idle`. |
+| Pose name | derived from filename, editable. This is what `pose:` refers to in scene YAML. |
+| `⟳` badge | pose plays by itself: animated file OR steps. |
+| `loop: false` | per-pose toggle, for one-shots like `wave`. Honoured for steps. |
+| Edit image | asset editor on the pose image. Disabled for animated files and step poses. |
+| Delete a pose | warn if any passage references it (needs the scene index) |
 
-Animation = an animated file. No timeline UI. No sprite sheets. (D5)
+Animation = baked images: an animated file, or steps. No skeletal runtime. (D5)
+Step strip, Import set…, sprite sheet slicing, align feet: planned,
+[character-poses.md](../2026-09-23-point-and-click/character-poses.md).
 
 ## Anchors
 
-Draggable dots on the sprite preview. Stored as **fractions of the frame**, never pixels.
+Draggable dots on the sprite preview. Stored as **fractions of the character box**, never
+pixels.
 
 | Anchor | Used for |
 |---|---|
@@ -50,11 +64,17 @@ Draggable dots on the sprite preview. Stored as **fractions of the frame**, neve
 | `mouth` | reserved — lipsync/effects later |
 | *(custom)* | add by name; the renderer just reports positions |
 
-Why fractions: uniform sizes today → per-frame sizes tomorrow → 3D sockets after that, and
+Why fractions: uniform sizes today → per-pose sizes tomorrow → 3D sockets after that, and
 the scene YAML never changes.
 
-**Anchors are per-character, not per-frame** in v1. If a character's frames differ wildly,
-that's a signal to split them into two characters.
+**Anchors are per pose**, not per character, not per step. A character who turns away has
+their mouth elsewhere; a bubble that jitters every step is worse than one slightly off.
+Adding/removing an anchor applies to every pose; dragging moves it on the selected pose.
+
+## Pose fit
+
+Per pose `fit: {offset, scale}`, fractions of the box. Registration, not expression: nudges
+the art, never the rig. A step's own `fit` wins over its pose's.
 
 ## Origin
 
@@ -64,11 +84,11 @@ This is why `at: 0` means "standing centre" rather than "floating centre".
 
 ## Preview
 
-Shows the selected frame at real aspect ratio, with:
+Shows the selected pose at real aspect ratio, with:
 
 - anchor dots and origin cross, draggable
 - a centre line and floor line, so the origin makes visual sense
-- optional onion-skin of another frame, to check registration between poses
+- ghost poses: other poses drawn faint, to check registration between them
 
 ## Fields
 
@@ -76,10 +96,11 @@ Shows the selected frame at real aspect ratio, with:
 |---|---|
 | `id` | slug. Unique. This is what scene YAML writes. Renaming = rewrite refs (needs scene index). |
 | `name` | display name |
-| `size` | `{w, h}`, uniform for now |
+| `size` | `{w, h}`, uniform across poses |
 | `origin` | fraction |
-| `anchors` | map of name → fraction |
-| `frames` | map of name → `{asset, loop?}` |
+| `poses` | map of name → `{asset?, steps?, loop?, fit?, anchors?}`. Old manifests: `frames`, read as `poses`. |
+| `faces` | `left` / `right`, which way the art looks. Default right. For walk-here. |
+| `walkSpeed` | reserved for walk-here. |
 | `tags` | shared with asset manager filtering |
 
 ## Persistence
@@ -94,5 +115,5 @@ Asset **bytes** stay in the asset store. Manifests hold ids only.
 
 ## Out of scope
 
-Rigging. Bones. Sprite sheets. Per-frame anchors. Face/expression compositing (`slots:` is
-the future hook, and it won't require a scene YAML change).
+Rigging. Bones. Per-step anchors. Face/expression compositing (`slots:` is the future hook,
+and it won't require a scene YAML change).

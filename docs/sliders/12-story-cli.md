@@ -143,7 +143,7 @@ mood: tense
 id: tavern-night
 bg: tavern/night
 cast:
-  mira: {at: -0.4, frame: arms-crossed}
+  mira: {at: -0.4, pose: arms-crossed}
 ```
 
 Everything below front matter is passage text, unescaped, exactly as author wrote it. No
@@ -247,15 +247,16 @@ real work:
 
 1. `bg:` → asset id.
 2. every `props:` entry → its `ref` (default = key) → asset id.
-3. every `cast:` entry → **character** → frames the scene actually name: entity `frame:`, any
-   `frame:` in a beat patch, character default. `--all-frames` widen to whole character.
+3. every `cast:` entry → **character** → poses the scene actually name: entity `pose:`, any
+   `pose:` in a beat patch, character default. A pose with steps lists every step image.
+   `--all-poses` widen to whole character (`--all-frames` still accepted).
 4. `fx:` entries that are asset-backed.
 5. `from:` set → same walk over inherited scene, marked `inherited`.
 
 ```
 a_8f21  bg              …/assets/a_8f21.webp     bg:
 a_11c0  frame  mira     …/assets/a_11c0.webp     cast/mira
-a_44de  frame  mira     MISSING BLOB             beats/2 patch frame: angry
+a_44de  frame  mira     MISSING BLOB             beats/2 patch pose: angry
 —       object candle   NOT IN MANIFEST          props/candle
 ```
 
@@ -377,7 +378,7 @@ its types and `ServerError`. Both compile against `server.types.ts`, so they sta
 |---|---|
 | **1** | `ping`, `ls`, `map`, `cat`, `put`, `check`, `lint` |
 | **2** | `assets`, `graph`, `copy`, `revs`, `restore`, `new`, `rm`, `login` |
-| **3** | `--fix`, `--reid`, `--all`, `assets --all-frames`, `graph --format dot`, `watch` |
+| **3** | `--fix`, `--reid`, `--all`, `assets --all-poses`, `graph --format dot`, `watch` |
 
 **Tests.** Round-trip is load-bearing: `cat` a fixture passage, `put` it back unchanged, assert
 body byte-identical and rev bumped by exactly one. Then the three-way table — same passage
@@ -393,7 +394,7 @@ Three jobs stay in the editor, and the CLI says so rather than half-doing them.
 
 | Job | Why it lives there |
 |---|---|
-| **Characters and frames** | A character is a rig — origin, per-frame anchors, bubble placement (spec 04). Those are drawn, not typed. The CLI reads characters and resolves their frames; it does not mint them, so a scene with `cast:` needs its character to exist first, and `lint` says so plainly when it does not. |
+| **Characters and poses** | A character is a rig — origin, per-pose anchors, bubble placement (spec 04). Those are drawn, not typed. The CLI reads characters and resolves their poses; it does not mint them, so a scene with `cast:` needs its character to exist first, and `lint` says so plainly when it does not. |
 | **Image dimensions** | A new asset's `w`/`h` land as `0` and the editor fills them on first render. Decoding four image formats to save one round trip is not worth the dependency. |
 | **Advisory locks** | Presence lives on the websocket and this package has no socket client, so `put` does not yet warn that someone else is focused on the passage. `--strict` is reserved for when it does. Locks enforce nothing either way (spec 11). |
 

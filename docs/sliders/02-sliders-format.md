@@ -13,7 +13,7 @@ seen_mira: true
 id: tavern-night
 bg: tavern/night
 cast:
-  mira: {at: -0.4, frame: arms-crossed}
+  mira: {at: -0.4, pose: arms-crossed}
 beats:
   - mira: "You shouldn't have come back."
 
@@ -136,8 +136,8 @@ bg: tavern/night              # asset id, never a path. Omit it and `id` stands 
 camera: {at: [0, 0], zoom: 1} # optional. The 3D hook lives here.
 
 cast:
-  mira:  {at: -0.4, frame: arms-crossed}
-  joren: {at: 0.35, frame: idle, flip: true, layer: back}
+  mira:  {at: -0.4, pose: arms-crossed}
+  joren: {at: 0.35, pose: idle, flip: true, layer: back}
 
 props:
   candle: {at: [0.1, -0.2], layer: front}
@@ -148,7 +148,7 @@ fx: [rain@0.6]
 beats:
   - mira: "You shouldn't have come back."
   - joren: "And yet."
-  - mira: {frame: angry, at: -0.25, say: "Get out."}
+  - mira: {pose: angry, at: -0.25, say: "Get out."}
   - wait: 0.5
   - mark: tense
   - box: "The candle gutters."
@@ -242,11 +242,37 @@ cannot carry one.
 | `of` | another entity's id. Makes `at` relative to it. See Relative placement. |
 | `scale` | uniform size multiplier. 1 = natural size. Scales about the origin, so a character keeps its feet on the floor. Must be > 0. |
 | `rot` | tilt, degrees CLOCKWISE, about the same origin `scale` grows about. Negative leans the other way. Absent = 0. |
-| `frame` | which named frame of the character/prop (D5) |
+| `pose` | which named pose of the character (D5). A list animates: see Poses. Old spelling `frame:` still parses. |
+| `poseLoop` | `all` (default) / `once`. How a `pose:` list ends. Old spelling `frameLoop:`. |
 | `flip` | mirror horizontally |
 | `fit` | `cover` / `contain`. Draw it as a full-bleed PLANE, not a sprite. See Planes. |
 | `layer` | `back` / `mid` / `front`. Optional. |
 | `z` | numeric escape hatch within a layer |
+
+### Poses — `pose:`
+
+Vocabulary. `frame` is retired.
+
+| term | means |
+|---|---|
+| **pose** | a named thing a character shows: a still, an animated file, or a list of steps. Lives in the character. |
+| **step** | one timed image inside a pose, or one timed pose inside a scene's `pose:` list |
+
+```yaml
+cast:
+  mira: {at: -0.4, pose: idle}             # one pose. Animates by itself if the pose does.
+beats:
+  - mira: {pose: [walk_1, walk_2]}          # scene list: steps, each names a pose
+  - mira: {pose: [{name: wave, dur: 0.3}, {name: idle, at: 0.2}], poseLoop: once}
+```
+
+| Rule | |
+|---|---|
+| Scene list step | `name` + `dur` (s, default 0.1) + placement `at`/`scale`/`rot`/`flip`/`opacity`/`ease`. |
+| `poseLoop` | `all` loops, `once` holds the last step. |
+| Pose with steps | the character's own animation. Plays on the renderer clock whatever the beat does. `loop: false` holds the last image. |
+| List step naming a stepped pose | shows that pose's FIRST image for its hold. One clock per sprite. |
+| Old keys | `frame:` = `pose:`, `frameLoop:` = `poseLoop:`, `ease: {frame: …}` = `{pose: …}`. Parse forever. Lint `info`, one-click fix. `twine-cli rewrite-poses` renames a whole story. |
 
 ### Rotation — `rot:`
 
@@ -264,9 +290,9 @@ beats:
 | Editor | rotate dot on the middle of the selection box's top edge. Drag to tilt, Shift snaps to 15°. Whole degrees, one undo per drag. The origin marker lights orange for the turn. |
 | Absent vs `rot: 0` | the same rotation. A beat gaining `rot: 0` produces no transition. |
 | With `flip` | the mirror is applied FIRST, so a positive `rot` leans the same way on screen whichever way the sprite faces. |
-| Past 360 | accepted with a warning — it draws as `rot % 360`. A spin is a frame cycle, not a pose. |
+| Past 360 | accepted with a warning — it draws as `rot % 360`. A spin is a pose list, not one pose. |
 | `of:` children | do not inherit it. |
-| Frame steps | a step of a `frame:` cycle may carry its own `rot`, like `at`/`scale`/`flip`. |
+| Pose steps | a step of a `pose:` list may carry its own `rot`, like `at`/`scale`/`flip`. |
 
 There is deliberately **no** `transform:` string key. Composition order is the renderer's, so
 that `at`, `scale`, `rot` and `flip` each stay one number the differ can time, the beat
@@ -300,7 +326,7 @@ props:
 |---|---|
 | Bare `at: 0.4` on a child | x offset only, **y level with the parent**. Not the layer baseline — see below. |
 | What inherits | **position only.** |
-| What does NOT | `scale`, `rot`, `flip`, `frame`, `layer`, `z` — a child keeps its own. |
+| What does NOT | `scale`, `rot`, `flip`, `pose`, `layer`, `z` — a child keeps its own. |
 | Chains | allowed, any depth. `of:` edges must form a DAG. |
 | Id space | `cast:` and `props:` share one, so a prop may hang off a character. |
 | Unknown parent | error in a snapshot scene; ignored in a patch scene, where it may be inherited. |
@@ -418,7 +444,7 @@ No parallax. A plane does not counter-translate with the camera (yet).
 | Form | Means |
 |---|---|
 | `- mira: "text"` | mira speaks. Bubble at her `bubble` anchor. |
-| `- mira: {frame: angry, at: -0.25, say: "…"}` | mutate stage **and** speak, one beat |
+| `- mira: {pose: angry, at: -0.25, say: "…"}` | mutate stage **and** speak, one beat |
 | `- box: "text"` | narration box, no speaker |
 | `- wait: 0.5` | pause, seconds |
 | `- fx: thunder` | fire an effect |
@@ -597,7 +623,7 @@ paints it. That is the extension point — no format change needed for a new loo
 
 A character carries defaults in its manifest (`bubble: {as, place}`, set in the character
 editor), and a beat's own keys merge over them key by key. A narrator is a character with
-`place: top` and no frames: nothing on stage to point at, so the bubble draws no tail.
+`place: top` and no poses: nothing on stage to point at, so the bubble draws no tail.
 
 In the editor, dragging a bubble writes `at:` and the side handles write `w:` — both onto
 the beat, since the same character can speak twice and want the bubble somewhere else each
@@ -741,7 +767,7 @@ beats:
 | `link: {to: Cellar, if: has_key}` | a condition of its own |
 | `link: ~` | stop being clickable |
 
-**A link is stage STATE.** Every later beat inherits it, exactly like `frame:` — which is
+**A link is stage STATE.** Every later beat inherits it, exactly like `pose:` — which is
 what makes "click the door at beat 3 for A, at beat 7 for B" an ordinary patch and not a
 construct of its own. There is no beat-level `link:` key, and none is needed.
 
@@ -791,7 +817,7 @@ S₀ (enter) ─beat1→ S₁ ─beat2→ … ─beatN→ Sₙ (exit)
 id: tavern-fight
 from: tavern-night@tense
 cast:
-  mira: {frame: angry}     # delta only
+  mira: {pose: angry}      # delta only
 beats:
   - mira: "Then draw."
 ```
@@ -806,7 +832,7 @@ collide.
 | | no `from:` (snapshot) | with `from:` (patch) |
 |---|---|---|
 | key absent | **removed** from stage | **inherited** unchanged |
-| `mira: {frame: angry}` | full definition | shallow-merged onto inherited |
+| `mira: {pose: angry}` | full definition | shallow-merged onto inherited |
 | `mira: ~` | n/a | **explicitly removed** |
 | `cast: !only {…}` | n/a | replace whole cast (escape hatch) |
 
@@ -837,22 +863,29 @@ Read by the runtime. Authored in the [character editor](04-twinejs-character-edi
 ```yaml
 id: mira
 name: Mira
-size: {w: 512, h: 1024}       # uniform for now, per-frame later
-origin: {x: 0.5, y: 1.0}      # feet, as a fraction of the frame
-anchors:                       # fractions -> resolution independent
-  bubble: {x: 0.62, y: 0.18}   # in 3D these become named sockets/bones
-  mouth:  {x: 0.50, y: 0.22}
-frames:
-  idle:         {asset: a_8f21}          # animated .webp
-  arms-crossed: {asset: a_3c09}
-  wave:         {asset: a_5d14, loop: false}
+size: {w: 512, h: 1024}       # the character box, uniform across poses
+origin: {x: 0.5, y: 1.0}      # feet, as a fraction of the box
+faces: right                  # which way the art looks. Default right.
+poses:
+  idle:                        # a pose with steps: baked image sequence
+    steps:
+      - {asset: a_8f21, dur: 0.12}
+      - {asset: a_8f22, dur: 0.12}
+    anchors: {bubble: {x: 0.62, y: 0.18}, mouth: {x: 0.50, y: 0.22}}
+  arms-crossed: {asset: a_3c09}             # a still
+  wave:         {asset: a_5d14}             # an animated .webp
+  bow:          {steps: [{asset: a_6a01}, {asset: a_6a02}], loop: false}
 tags: [tavern, main-cast]
 ```
 
-- **Animation = an animated file** (gif / animated webp / apng). No sprite sheets, no
-  timeline, no frame scheduler in v1. Deletes an entire subsystem. (D5)
-- Anchors/origins as **frame fractions** is the extensibility hinge: uniform sizes today,
-  per-frame sizes tomorrow, 3D sockets after — scene YAML never changes.
+- A pose is `asset:` (still or animated file) OR `steps:` (image sequence). `loop`
+  (default true) is for steps. `fit` per pose, a step's own `fit` wins. `anchors` per pose,
+  never per step.
+- **Animation = baked images.** An animated file, or steps. No skeletal runtime. (D5)
+- Anchors/origins as **box fractions** is the extensibility hinge: uniform sizes today,
+  per-pose sizes tomorrow, 3D sockets after — scene YAML never changes.
+- Old manifests say `frames:`. Read as `poses:`, written back as `poses:`.
+- Stored asset kind of a pose image stays `'frame'` (wire compat). UI says "pose image".
 - No `face:` / compositing in v1. Add `slots:` later without touching scene YAML.
 
 Manifests travel as **hidden passages** (`SlidersCast`, `SlidersAssets`) so they survive

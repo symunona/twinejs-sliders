@@ -20,7 +20,7 @@ Two-tier strategy:
 
 | Change | How |
 |---|---|
-| **Change an existing scalar** (`at:`, `frame:`, `flip:`, `z:`) | locate the node with `yaml.parseDocument()`, take its `range`, **splice the text**. Minimal diff. Nothing else in the file moves. |
+| **Change an existing scalar** (`at:`, `pose:`, `flip:`, `z:`) | locate the node with `yaml.parseDocument()`, take its `range`, **splice the text**. Minimal diff. Nothing else in the file moves. |
 | **Add or remove a block** (new cast member, delete a prop) | mutate the `Document` and `toString()`. Costs some reformatting; only fires on structural edits, which are rare and deliberate. |
 
 `yaml`'s `parseDocument()` preserves comments and formatting on round-trip — that's exactly
@@ -49,7 +49,7 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 | `F` / context menu | `flip:` |
 | Send to back / front | `layer:` (D11 — `back` / `mid` / `front`) |
 | Bracket keys | `z:` nudge within a layer |
-| Frame dropdown on selection | `frame:` |
+| Pose dropdown on selection | `pose:` |
 | Pan / scroll-zoom the stage | `camera:` |
 
 ## What is NOT editable visually
@@ -89,7 +89,7 @@ Coordinates are normalized (−1…1), so **round on write**: 3 decimals. `at: -
 2. Read-only selection + highlight, both directions.
 3. Drag → `at:` write-back with undo coalescing.
 4. Drop from asset panel.
-5. Layer / flip / frame controls.
+5. Layer / flip / pose controls.
 6. Camera.
 
 Stop after 3 if it feels wrong. Drag-to-position is 80% of the value; everything after it
