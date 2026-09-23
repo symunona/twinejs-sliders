@@ -148,7 +148,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 	/** The manifest and the parsed scenes, both of which three tools want. */
 	const catalog = React.useCallback(async () => {
 		const [assets, characters] = await Promise.all([
-			assetStore.list({includeFrames: true}),
+			assetStore.list({includePoseImages: true}),
 			assetStore.listCharacters()
 		]);
 
@@ -178,7 +178,7 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 	return React.useMemo<VoiceToolEnv>(
 		() => ({
 			assets: async () => {
-				const rows = await assetStore.list({includeFrames: true});
+				const rows = await assetStore.list({includePoseImages: true});
 
 				return rows.map(asset => ({
 					bytes: asset.bytes,
@@ -194,11 +194,11 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 				const usage: Record<string, string[]> = {};
 
 				for (const [id, scene] of scenes) {
-					// `allFrames`, because "does this scene use that picture" has to mean
+					// `allPoses`, because "does this scene use that picture" has to mean
 					// any pose of any cast member — the narrow walk answers a different
-					// question and would call a frame unused while a beat flips to it.
+					// question and would call a pose unused while a beat flips to it.
 					for (const row of resolveSceneAssets(scene, resolved, {
-						allFrames: true,
+						allPoses: true,
 						scenes: sceneId => scenes.get(sceneId)
 					})) {
 						if (row.id === '') {

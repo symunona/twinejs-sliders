@@ -34,6 +34,7 @@
 
 import type {AssetStore} from '@sliders/asset-store';
 import type {AssetMeta, Character} from '@sliders/scene-types';
+import {upgradeCharacter} from '@sliders/scene-types';
 import {
 	checkoutAssets,
 	dedupeKey,
@@ -88,9 +89,9 @@ export interface PullStoryAssetsOptions {
 }
 
 /**
- * A character as the pull compares it: id plus frame NAMES.
+ * A character as the pull compares it: id plus pose NAMES.
  *
- * Deliberately not the asset ids. `planBundle` repoints an incoming frame at whatever
+ * Deliberately not the asset ids. `planBundle` repoints an incoming pose image at whatever
  * local asset carries the same bytes, so two libraries holding the same artwork routinely
  * spell the same character with different ids — comparing those would report a change on
  * every poll and re-import the whole cast each time.
@@ -99,7 +100,7 @@ function castShape(characters: Character[]): string {
 	return characters
 		.map(
 			character =>
-				`${character.id}:${Object.keys(character.frames ?? {})
+				`${character.id}:${Object.keys(upgradeCharacter(character).poses ?? {})
 					.sort()
 					.join(',')}`
 		)
@@ -175,7 +176,7 @@ export async function pullStoryAssets(
 		return nothing(manifest.rev);
 	}
 
-	const local = await store.list({includeFrames: true});
+	const local = await store.list({includePoseImages: true});
 	const wanted = needsPull(manifest, local);
 	const castMoved =
 		castShape(manifest.characters ?? []) !==

@@ -164,11 +164,11 @@ describe('measure', () => {
 	});
 
 	/**
-	 * The reason anchors live on frames at all. A character who turns to face away has their
-	 * mouth on the other side of the box, and a rig shared by every frame would leave the
+	 * The reason anchors live on poses at all. A character who turns to face away has their
+	 * mouth on the other side of the box, and a rig shared by every pose would leave the
 	 * bubble pointing at the back of their head.
 	 */
-	it('follows the frame on screen, not the character', async () => {
+	it('follows the pose on screen, not the character', async () => {
 		const mount = makeMount(1600, 900);
 		const renderer = new DomRenderer();
 
@@ -177,7 +177,7 @@ describe('measure', () => {
 			createStubResolver({
 				characters: {
 					mira: {
-						frames: {
+						poses: {
 							away: {anchors: {bubble: {x: 0.2, y: 0.2}}, asset: 'a_mira_away'},
 							idle: {anchors: {bubble: {x: 0.8, y: 0.2}}, asset: 'a_mira_idle'}
 						}
@@ -187,14 +187,14 @@ describe('measure', () => {
 		);
 
 		await renderer.apply(
-			stage([entity({frame: 'idle', id: 'mira', ref: 'mira'})]),
+			stage([entity({pose: 'idle', id: 'mira', ref: 'mira'})]),
 			[]
 		);
 
 		const facing = renderer.measure('mira', 'bubble')!;
 
 		await renderer.apply(
-			stage([entity({frame: 'away', id: 'mira', ref: 'mira'})]),
+			stage([entity({pose: 'away', id: 'mira', ref: 'mira'})]),
 			[]
 		);
 
@@ -204,14 +204,14 @@ describe('measure', () => {
 		expect(turned.x).toBeLessThan(800);
 	});
 
-	it('falls back to the defaults for a frame nobody rigged', async () => {
+	it('falls back to the defaults for a pose nobody rigged', async () => {
 		const mount = makeMount(1600, 900);
 		const renderer = new DomRenderer();
 
 		await renderer.mount(
 			mount,
 			createStubResolver({
-				characters: {mira: {frames: {idle: {asset: 'a_mira_idle'}}}}
+				characters: {mira: {poses: {idle: {asset: 'a_mira_idle'}}}}
 			})
 		);
 
@@ -278,7 +278,7 @@ describe('measure', () => {
 
 		const scaled = renderer.measure('mira', 'bubble')!;
 
-		// Every anchor is a frame fraction, so it moves twice as far from the origin.
+		// Every anchor is a box fraction, so it moves twice as far from the origin.
 		expect(scaled.x - 800).toBeCloseTo(2 * (bubble.x - 800), 6);
 		expect(scaled.y - 450).toBeCloseTo(2 * (bubble.y - 450), 6);
 	});
@@ -424,7 +424,7 @@ describe('reconciliation', () => {
 		const second = mount.querySelector('[data-entity-id="mira"]');
 
 		expect(second).toBe(first);
-		// Same frame, same asset: the <img> must survive or an animated webp would restart.
+		// Same pose, same asset: the <img> must survive or an animated webp would restart.
 		expect(second?.querySelector('img')).toBe(firstImg);
 	});
 

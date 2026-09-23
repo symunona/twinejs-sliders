@@ -4,7 +4,7 @@
  *   npx vite packages/render-dom/harness --port 5199
  *
  * Three hardcoded stages exercise every path the renderer has — enter, exit, move, flip,
- * frame swap, depth change, camera pan + zoom, fx, a missing asset, bubbles with links and a
+ * pose swap, depth change, camera pan + zoom, fx, a missing asset, bubbles with links and a
  * narration box.
  */
 
@@ -25,7 +25,7 @@ function cast(
 		kind: 'cast',
 		ref: id,
 		at: {x: at.x, y: at.y ?? FLOOR},
-		frame: 'idle',
+		pose: 'idle',
 		flip: false,
 		opacity: 1,
 		scale: 1,
@@ -76,7 +76,7 @@ const STEPS: Step[] = [
 	{
 		title: 'Arrival — mira alone, candle on the table',
 		stage: stageOf([
-			cast('mira', {x: -0.4}, {frame: 'arms-crossed'}),
+			cast('mira', {x: -0.4}, {pose: 'arms-crossed'}),
 			prop('table', 'obj_table', {x: 0.15}),
 			prop('candle', 'obj_candle', {x: 0.15, y: -0.55}, {z: 2})
 		]),
@@ -96,7 +96,7 @@ const STEPS: Step[] = [
 	{
 		title: 'Joren enters behind her, flipped, behind everything',
 		stage: stageOf([
-			cast('mira', {x: -0.25}, {frame: 'angry'}),
+			cast('mira', {x: -0.25}, {pose: 'angry'}),
 			cast('joren', {x: 0.45, y: -0.78}, {flip: true, z: -1}),
 			prop('table', 'obj_table', {x: 0.15}),
 			prop('candle', 'obj_candle', {x: 0.15, y: -0.55}, {z: 2})
@@ -104,7 +104,7 @@ const STEPS: Step[] = [
 		transitions: [
 			{kind: 'enter', entityId: 'joren', duration: 0.5},
 			{kind: 'move', duration: 0.5},
-			{kind: 'frame', duration: 0.3}
+			{kind: 'pose', duration: 0.3}
 		],
 		bubbles: [
 			{who: 'mira', name: 'Mira', text: 'Get out.'},
@@ -116,8 +116,8 @@ const STEPS: Step[] = [
 		title: 'Camera pushes in, candle gutters, one asset deliberately missing',
 		stage: stageOf(
 			[
-				cast('mira', {x: -0.1}, {frame: 'wave'}),
-				cast('joren', {x: 0.3}, {frame: 'angry'}),
+				cast('mira', {x: -0.1}, {pose: 'wave'}),
+				cast('joren', {x: 0.3}, {pose: 'angry'}),
 				prop('table', 'obj_table', {x: 0.15}),
 				prop('ghost', 'obj_missing_thing', {x: 0.75, y: -0.6}, {z: 2})
 			],
@@ -131,7 +131,7 @@ const STEPS: Step[] = [
 			{kind: 'enter', duration: 0.4},
 			{kind: 'move', duration: 0.6},
 			{kind: 'camera', duration: 0.7},
-			{kind: 'frame', duration: 0.25}
+			{kind: 'pose', duration: 0.25}
 		],
 		bubbles: [
 			{
@@ -148,7 +148,7 @@ const STEPS: Step[] = [
 			// A cycle that also travels: each step names its own `at`, so the sprite glides
 			// across the stage while the poses swap under it.
 			cast('mira', {x: -0.6}, {
-				frames: [
+				steps: [
 					{name: 'idle', dur: 0.25, at: {x: -0.6, y: FLOOR}},
 					{name: 'wave', dur: 0.25, at: {x: 0, y: FLOOR}},
 					{name: 'angry', dur: 0.25, at: {x: 0.6, y: FLOOR}}
@@ -156,8 +156,8 @@ const STEPS: Step[] = [
 			}),
 			// A cycle in place, played through once.
 			cast('joren', {x: 0.4}, {
-				frameLoop: 'once',
-				frames: [
+				poseLoop: 'once',
+				steps: [
 					{name: 'idle', dur: 0.4},
 					{name: 'angry'}
 				]
@@ -166,7 +166,7 @@ const STEPS: Step[] = [
 		]),
 		transitions: [{kind: 'enter', duration: 0.4}],
 		bubbles: [],
-		box: 'Frame cycles run on the renderer\'s own clock, not the beat\'s.'
+		box: 'Pose steps run on the renderer\'s own clock, not the beat\'s.'
 	},
 	{
 		title: 'Two fit: planes with the cast sandwiched between them',

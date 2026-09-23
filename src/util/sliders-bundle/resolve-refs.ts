@@ -7,6 +7,7 @@
 
 import {AssetStore, entityKey} from '@sliders/asset-store';
 import type {AssetMeta, Character} from '@sliders/scene-types';
+import {poseAssets} from '@sliders/scene-types';
 import type {SceneAssetRefs} from './bundle.types';
 
 export interface ResolvedBundleRefs {
@@ -31,8 +32,8 @@ export interface ResolvedBundleRefs {
  * `entityKey()` keeps only the last path segment and slugifies it. That is lossy: both
  * `fx/rain` and `weather/rain` mangle to `rain`.
  *
- * Character frames are excluded. A frame is addressed through its character (`mira: {frame:
- * rain}`), never on its own, so a frame matching an `fx:` ref is a coincidence of slugs
+ * Pose images are excluded. A pose image is addressed through its character (`mira: {pose:
+ * rain}`), never on its own, so a pose image matching an `fx:` ref is a coincidence of slugs
  * rather than a reference — and bundling one on that basis ships an asset owned by a
  * character that is not in the bundle, which lands invisible in the library and unreachable
  * from the character editor.
@@ -63,9 +64,9 @@ export async function resolveBundleRefs(
 	refs: SceneAssetRefs
 ): Promise<ResolvedBundleRefs> {
 	// One pass over the library, not one per ref: a 40 MB library is thousands of metas
-	// and every ref would re-read the manifest. Frames are included because a `bg:` may
+	// and every ref would re-read the manifest. Pose images are included because a `bg:` may
 	// legitimately name one.
-	const all = [...(await store.list({includeFrames: true}))].sort((a, b) =>
+	const all = [...(await store.list({includePoseImages: true}))].sort((a, b) =>
 		a.name.localeCompare(b.name)
 	);
 	const byName = new Map<string, AssetMeta>();
@@ -154,8 +155,8 @@ export async function resolveBundleRefs(
 	}
 
 	/**
-	 * Pulls in a character and all of its frames — every frame, not just the ones the
-	 * scenes name. Frames are small, and a character arriving with three of its nine frames
+	 * Pulls in a character and all of its poses — every pose, not just the ones the
+	 * scenes name. Poses are small, and a character arriving with three of its nine poses
 	 * makes the character editor useless on the other side (spec 08).
 	 */
 	async function takeCharacter(character: Character): Promise<void> {
@@ -165,15 +166,15 @@ export async function resolveBundleRefs(
 
 		characters.set(character.id, character);
 
-		for (const frame of Object.values(character.frames)) {
-			const meta = await store.meta(frame.asset);
+		for (const image of Object.values(character.poses).flatMap(poseAssets)) {
+			const meta = await store.meta(image);
 
 			if (meta) {
 				take(meta);
 			} else {
-				// A frame pointing at an asset the library lost. Reported rather than
-				// dropped, because the character will arrive with a dead frame.
-				unresolved.add(frame.asset);
+				// A pose pointing at an asset the library lost. Reported rather than
+				// dropped, because the character will arrive with a dead pose.
+				unresolved.add(image);
 			}
 		}
 	}
@@ -213,7 +214,7 @@ export async function resolveBundleRefs(
 		}
 	}
 
-	// A frame that got picked up on its own — a `bg:` naming one, say — drags its character
+	// A pose image that got picked up on its own — a `bg:` naming one, say — drags its character
 	// along. Without this it arrives owned by a character that is not in the bundle, which
 	// leaves it filtered out of the asset grid and unreachable from the character editor:
 	// bytes the author can see the effects of but can never open or delete.
@@ -229,19 +230,19 @@ export async function resolveBundleRefs(
 		}
 	}
 
-	// Frames a scene names that its character does not have. Only checkable when the
+	// Poses a scene names that its character does not have. Only checkable when the
 	// entity id is the character id — which is the default, since `ref` falls back to the
 	// entity key — so anything else is left alone rather than guessed at.
-	for (const [entityId, frames] of Object.entries(refs.frameRefs)) {
+	for (const [entityId, poses] of Object.entries(refs.poseRefs)) {
 		const character = characters.get(entityId);
 
 		if (!character) {
 			continue;
 		}
 
-		for (const frame of frames) {
-			if (!character.frames[frame]) {
-				unresolved.add(`${entityId}/${frame}`);
+		for (const pose of poses) {
+			if (!character.poses[pose]) {
+				unresolved.add(`${entityId}/${pose}`);
 			}
 		}
 	}

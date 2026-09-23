@@ -1,21 +1,24 @@
 /**
- * Character shape maintenance: anchors used to be per character, and are now per frame.
+ * Character shape maintenance. Two old shapes:
  *
- * One rig for a whole character only works while every frame faces the same way. The moment
- * a character is drawn in profile, sitting, or turned away, the speech bubble is pinned to
- * a spot that made sense in the idle pose and nowhere else — so `anchors` moved onto
- * `CharacterFrame`, where the pose that decides them lives.
+ * - `frames:` is now `poses:` (2026-09). Pure key rename, `upgradeCharacter`.
+ * - anchors used to be per character, and are now per pose. One rig for a whole character
+ *   only works while every pose faces the same way. The moment a character is drawn in
+ *   profile, sitting, or turned away, the speech bubble is pinned to a spot that made sense
+ *   in the idle pose and nowhere else — so `anchors` moved onto `CharacterPose`.
  *
- * Manifests written before that change carry the old shape, and there is no migration step
- * to run: `migrateCharacter` is applied on every read and every write, so a library heals
- * itself the first time it is opened and is written back clean the first time it is saved.
+ * Manifests written before either change carry the old shape, and there is no migration
+ * step to run: `migrateCharacter` is applied on every read and every write, so a library
+ * heals itself the first time it is opened and is written back clean the first time it is
+ * saved.
  */
 
 import {
 	Character,
-	CharacterFrame,
-	DEFAULT_FRAME_ANCHORS,
-	Frac2
+	CharacterPose,
+	DEFAULT_POSE_ANCHORS,
+	Frac2,
+	upgradeCharacter
 } from '@sliders/scene-types';
 
 /** A character as it may still exist on disk, with the rig at the top level. */
@@ -40,39 +43,39 @@ function copyAnchors(
 }
 
 /**
- * The rig a frame added right now should start with.
+ * The rig a pose added right now should start with.
  *
- * Taken from a frame the character already has rather than from the constants: a sprite
+ * Taken from a pose the character already has rather than from the constants: a sprite
  * sheet's poses are variations on one drawing, so the anchors that fit the others are far
  * closer to right than a generic bubble-above-the-shoulder, and the author adjusts from
  * there instead of placing every anchor from scratch.
  */
-export function newFrameAnchors(
-	character: Pick<Character, 'frames'> | undefined
+export function newPoseAnchors(
+	character: Pick<Character, 'poses'> | undefined
 ): Record<string, Frac2> {
-	for (const frame of Object.values(character?.frames ?? {})) {
-		const existing = copyAnchors(frame.anchors);
+	for (const pose of Object.values(character?.poses ?? {})) {
+		const existing = copyAnchors(pose.anchors);
 
 		if (existing && Object.keys(existing).length > 0) {
 			return existing;
 		}
 	}
 
-	return copyAnchors(DEFAULT_FRAME_ANCHORS)!;
+	return copyAnchors(DEFAULT_POSE_ANCHORS)!;
 }
 
 /**
  * Every anchor name the character uses, in first-seen order.
  *
- * The editor keeps the SET of anchors the same across a character's frames — only their
- * positions differ — so that a scene asking for `mouth` finds one whichever frame is
+ * The editor keeps the SET of anchors the same across a character's poses — only their
+ * positions differ — so that a scene asking for `mouth` finds one whichever pose is
  * showing. This is what that set is read from.
  */
-export function anchorNames(character: Pick<Character, 'frames'>): string[] {
+export function anchorNames(character: Pick<Character, 'poses'>): string[] {
 	const names: string[] = [];
 
-	for (const frame of Object.values(character.frames ?? {})) {
-		for (const name of Object.keys(frame.anchors ?? {})) {
+	for (const pose of Object.values(character.poses ?? {})) {
+		for (const name of Object.keys(pose.anchors ?? {})) {
 			if (!names.includes(name)) {
 				names.push(name);
 			}
@@ -83,33 +86,34 @@ export function anchorNames(character: Pick<Character, 'frames'>): string[] {
 }
 
 /**
- * A character in today's shape: every frame rigged, nothing at the top level.
+ * A character in today's shape: `poses:`, every pose rigged, nothing at the top level.
  *
- * A legacy rig is copied onto every frame that has none — which is all of them, since the
- * old shape had nowhere else to put one. A frame with no rig and no legacy to inherit gets
- * the same seed a freshly added frame would, so the editor never opens on a character whose
+ * A legacy rig is copied onto every pose that has none — which is all of them, since the
+ * old shape had nowhere else to put one. A pose with no rig and no legacy to inherit gets
+ * the same seed a freshly added pose would, so the editor never opens on a character whose
  * anchor list is empty and whose readout has nothing to show.
  *
  * Identity when there is nothing to do: the same object comes back, so a read path can
  * apply this to everything without churning references.
  */
-export function migrateCharacter<T extends Character>(character: T): T {
+export function migrateCharacter<T extends Character>(input: T): T {
+	const character = upgradeCharacter(input);
 	const stored = character as StoredCharacter;
 	const legacy = copyAnchors(stored.anchors);
-	const entries = Object.entries(character.frames ?? {});
+	const entries = Object.entries(character.poses ?? {});
 
-	if (!legacy && entries.every(([, frame]) => frame.anchors)) {
+	if (!legacy && entries.every(([, pose]) => pose.anchors)) {
 		return character;
 	}
 
-	const seed = legacy ?? newFrameAnchors(character);
-	const frames: Record<string, CharacterFrame> = {};
+	const seed = legacy ?? newPoseAnchors(character);
+	const poses: Record<string, CharacterPose> = {};
 
-	for (const [name, frame] of entries) {
-		frames[name] = frame.anchors ? frame : {...frame, anchors: copyAnchors(seed)!};
+	for (const [name, pose] of entries) {
+		poses[name] = pose.anchors ? pose : {...pose, anchors: copyAnchors(seed)!};
 	}
 
-	const migrated = {...character, frames} as StoredCharacter;
+	const migrated = {...character, poses} as StoredCharacter;
 
 	delete migrated.anchors;
 

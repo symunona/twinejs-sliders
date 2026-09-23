@@ -48,15 +48,21 @@ export const SceneErrors: React.FC<SceneErrorsProps> = ({
 	const [open, setOpen] = React.useState(false);
 	const {t} = useTranslation();
 	const errorCount = errors.filter(one => one.severity === 'error').length;
-	const warningCount = errors.length - errorCount;
+	const warningCount = errors.filter(one => one.severity === 'warning').length;
 	const clean = errors.length === 0;
 
-	// Nothing to open when the scene is clean, so the header stops being a button.
+	// Nothing to open when the scene is clean, so the header stops being a button. Notes
+	// (`info`: an old spelling that still works) are last, so they never outshout a
+	// problem.
 	const label = clean
 		? t('dialogs.passageEdit.sceneErrors.valid')
 		: errorCount > 0
 		? t('dialogs.passageEdit.sceneErrors.showErrors', {count: errorCount})
-		: t('dialogs.passageEdit.sceneErrors.showWarnings', {count: warningCount});
+		: warningCount > 0
+		? t('dialogs.passageEdit.sceneErrors.showWarnings', {count: warningCount})
+		: t('dialogs.passageEdit.sceneErrors.showNotes', {
+				count: errors.length
+		  });
 
 	return (
 		<div

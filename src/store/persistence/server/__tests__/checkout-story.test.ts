@@ -64,7 +64,7 @@ const EDITS: ImageEdits = {
 
 function character(overrides: Partial<Character> = {}): Character {
 	return {
-		frames: {},
+		poses: {},
 		id: 'mira',
 		name: 'Mira',
 		origin: {x: 0.5, y: 1},
@@ -179,7 +179,7 @@ describe('checkoutStory', () => {
 		const {client, dispatched, getAssetBlob} = fakeServer({
 			assets: [assetMeta],
 			blobs: {a_8f21: new Blob([bytes])},
-			characters: [character({frames: {happy: {asset: 'a_8f21'}}})]
+			characters: [character({poses: {happy: {asset: 'a_8f21'}}})]
 		});
 		const store = newStore();
 
@@ -195,7 +195,7 @@ describe('checkoutStory', () => {
 		expect(result.downloaded).toEqual(['a_8f21']);
 		expect(await store.meta('a_8f21')).toMatchObject({name: 'tavern/night'});
 		expect((await store.get('a_8f21'))?.size).toBe(bytes.length);
-		expect((await store.getCharacter('mira'))?.frames.happy.asset).toBe(
+		expect((await store.getCharacter('mira'))?.poses.happy.asset).toBe(
 			'a_8f21'
 		);
 	});

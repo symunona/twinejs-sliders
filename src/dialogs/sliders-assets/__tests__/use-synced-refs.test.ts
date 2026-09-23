@@ -36,7 +36,7 @@ function meta(overrides: Partial<AssetMeta> = {}): AssetMeta {
 
 function character(overrides: Partial<Character> = {}): Character {
 	return {
-		frames: {},
+		poses: {},
 		id: 'mira',
 		name: 'Mira Vale',
 		origin: {x: 0.5, y: 1},
@@ -123,10 +123,10 @@ describe('resolveSyncedRefs()', () => {
 
 	/**
 	 * The case the badge exists for. A character is cast by ID, and casting it drags every
-	 * frame along — including frames no scene mentions. Marking those frames "unused"
+	 * pose along — including poses no scene mentions. Marking those poses "unused"
 	 * because their names are absent from the YAML would be a lie.
 	 */
-	it('returns a cast character and all of its frames, named or not', async () => {
+	it('returns a cast character and all of its poses, named or not', async () => {
 		const store = newStore();
 
 		await seed(
@@ -137,14 +137,14 @@ describe('resolveSyncedRefs()', () => {
 			],
 			[
 				character({
-					frames: {idle: {asset: 'a_idle'}, wave: {asset: 'a_wave'}}
+					poses: {idle: {asset: 'a_idle'}, wave: {asset: 'a_wave'}}
 				})
 			]
 		);
 
 		const {assets, characters} = await resolveSyncedRefs(
 			store,
-			storyWithScene('cast:\n  mira: {at: 0, frame: idle}')
+			storyWithScene('cast:\n  mira: {at: 0, pose: idle}')
 		);
 
 		expect(characters.map(found => found.id)).toEqual(['mira']);
@@ -157,7 +157,7 @@ describe('resolveSyncedRefs()', () => {
 		await seed(
 			store,
 			[meta({id: 'a_idle', kind: 'frame', name: 'mira/idle'})],
-			[character({frames: {idle: {asset: 'a_idle'}}})]
+			[character({poses: {idle: {asset: 'a_idle'}}})]
 		);
 
 		const {assets, characters} = await resolveSyncedRefs(

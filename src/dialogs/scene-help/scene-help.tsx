@@ -36,7 +36,7 @@ import {
 	EASE_NAMES,
 	ENTITY_FITS,
 	FIT_Z,
-	FRAME_LOOPS,
+	POSE_LOOPS,
 	LAYERS,
 	SCENE_LOCKS
 } from '@sliders/scene-types';
@@ -85,11 +85,6 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 		' or '
 	)} — cover fills and crops, contain fits the whole picture in. A plane sits in the same z space as the cast, so a transparent PNG at z: 1 is a wall to stand behind. at:, of:, scale: and rot: do nothing on one; z:, opacity: and flip: still do. Without a z: it sits at ${FIT_Z}, behind everyone.`,
 	flip: 'true mirrors the sprite horizontally.',
-	frame:
-		'Which named frame of the character to draw — idle, angry, whatever it has. A LIST animates: frame: [walk_1, walk_2], or frame: [{name: walk_1, dur: 0.1, at: -0.2}] to time and move each step. dur is seconds, 0.1 by default.',
-	frameLoop: `How an animated frame: list ends. ${FRAME_LOOPS.join(
-		', '
-	)} — all loops forever (the default), once plays through and holds the last step.`,
 	highlight:
 		'How a clickable entity lights up under the pointer. A CSS colour (gold, #ffcc00) tints the default glow; gold, danger, cold and warm are built in. Any other word reaches the DOM as data-highlight for your stylesheet to paint.',
 	layer: `Legacy sugar for z:. ${LAYERS.join(', ')} — back is z: -1, front is z: 2, mid writes nothing. An explicit z: wins.`,
@@ -97,6 +92,11 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 		'Makes this entity clickable: the reader clicks it and goes to that passage. A passage name, or the name of an entry under links: — which gives it that entry’s if: for free. link: {to: Cellar, if: has_key} spells it out. A link set on a beat holds for every beat after it; link: ~ takes it away.',
 	of: `Hang this entity off another one: at: becomes an offset from it. of: ~ detaches.`,
 	opacity: '0 to 1. 1 is the default.',
+	pose:
+		'Which named pose of the character to draw — idle, angry, walk, whatever it has. A pose the character animates (steps, or an animated file) plays by itself. A LIST animates in the scene: pose: [walk_1, walk_2], or pose: [{name: walk_1, dur: 0.1, at: -0.2}] to time and move each step. dur is seconds, 0.1 by default. frame: is the old spelling and still works.',
+	poseLoop: `How a pose: list ends. ${POSE_LOOPS.join(
+		', '
+	)} — all loops forever (the default), once plays through and holds the last step. frameLoop: is the old spelling.`,
 	ref: 'The asset or character this id draws, when the id is not the asset name itself.',
 	rot: 'Tilt, in degrees clockwise, about the same origin scale: grows about — so a leaning character keeps its feet where they were. Negative leans the other way. Pin that origin in the asset or character editor.',
 	scale: 'Uniform size multiplier, about the origin, so feet stay on the floor. > 0.',
@@ -230,8 +230,8 @@ const CONVERSATION_SAMPLE = `[scene]
 id: tavern-night              # also the backdrop, with no bg: line
 
 cast:
-  mira:  {at: -0.4, frame: idle}
-  joren: {at: 0.35, frame: idle, flip: true}
+  mira:  {at: -0.4, pose: idle}
+  joren: {at: 0.35, pose: idle, flip: true}
 
 props:
   candle: {at: [0.1, -0.2], z: 2}
@@ -239,7 +239,7 @@ props:
 beats:
   - mira: "You shouldn't have come back."
   - joren: "And yet."
-  - mira: {frame: angry, at: -0.25, say: "Get out."}
+  - mira: {pose: angry, at: -0.25, say: "Get out."}
   - wait: 0.5
   - box: "The candle gutters."
   - mark: tense
@@ -255,7 +255,7 @@ const PATCH_SAMPLE = `[scene]
 id: tavern-fight
 from: tavern-night@tense    # or tavern-night, or tavern-night@enter
 cast:
-  mira: {frame: angry}      # a delta, not a whole definition
+  mira: {pose: angry}       # a delta, not a whole definition
   joren: ~                  # remove him from the stage
 beats:
   - mira: "Then draw."
@@ -280,7 +280,7 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 					Inside a <code>[scene]</code> block it offers what the cursor is
 					standing in: backdrops after <code>bg:</code>, characters under{' '}
 					<code>cast:</code>, assets under <code>props:</code>, a character&apos;s own
-					frames after <code>frame:</code>, layers, effects, and passage names
+					poses after <code>pose:</code>, layers, effects, and passage names
 					after <code>to:</code>. Inside <code>[[…]]</code> anywhere in the
 					passage it offers passage names.
 				</p>
@@ -368,14 +368,14 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 								scenes use.
 							</li>
 							<li>
-								Add a <strong>frame</strong> per expression or pose — idle,
+								Add a <strong>pose</strong> per expression or stance — idle,
 								angry, wave — each one an image. An animated GIF or WebP just
-								plays; there is no sprite sheet and no frame scheduler.
+								plays, and so does a pose made of steps (an image sequence).
 							</li>
 							<li>
-								Set the frame&apos;s <strong>anchors</strong>: <code>bubble</code>{' '}
+								Set the pose&apos;s <strong>anchors</strong>: <code>bubble</code>{' '}
 								is where dialogue hangs off them. Anchors are fractions of the
-								frame, so they survive a change of resolution.
+								character box, so they survive a change of resolution.
 							</li>
 							<li>
 								Back in the scene, put them on stage:{' '}
@@ -383,8 +383,8 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 							</li>
 						</ol>
 						<Sample>{`cast:
-  mira:  {at: -0.4, frame: idle}
-  joren: {at: 0.35, frame: idle, flip: true, z: -1}`}</Sample>
+  mira:  {at: -0.4, pose: idle}
+  joren: {at: 0.35, pose: idle, flip: true, z: -1}`}</Sample>
 						<p>
 							Props work the same way but come from the asset library rather
 							than the character editor. Dragging an image onto the preview adds
@@ -414,7 +414,7 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 										- mira: {'{'}at: -0.25, say: &quot;text&quot;{'}'}
 									</th>
 									<td>
-										Move, change frame, and speak in one beat. Any entity key
+										Move, change pose, and speak in one beat. Any entity key
 										works alongside <code>say:</code>.
 									</td>
 								</tr>
@@ -474,9 +474,9 @@ beats:
 beats:
   - mira: {at: 0.4, dur: 0.6, ease: back_out}            # overshoots and settles
   - tav: {at: -0.3, ease: {move: ease_out, scale: linear}}
-  - mira: {frame: [{name: step, at: 0.1, ease: linear}]}  # one step's own glide`}</Sample>
+  - mira: {pose: [{name: step, at: 0.1, ease: linear}]}   # one step's own glide`}</Sample>
 						<p>
-							Narrowest wins: a frame step&apos;s <code>ease</code>, then the
+							Narrowest wins: a pose step&apos;s <code>ease</code>, then the
 							beat&apos;s, then the scene&apos;s, then the default for that kind
 							of change. Resolved per kind, so a beat naming only{' '}
 							<code>move</code> keeps the scene&apos;s curve for everything else.
@@ -522,8 +522,8 @@ beats:
 							</tbody>
 						</table>
 						<p>
-							A character&apos;s own motion is the frame image itself — an animated
-							GIF or WebP loops on its own.
+							A character&apos;s own motion is the pose itself — an animated GIF or
+							WebP, or a pose made of steps, loops on its own.
 						</p>
 						<h3>Effects</h3>
 						<p>

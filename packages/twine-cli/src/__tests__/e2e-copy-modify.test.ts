@@ -31,7 +31,7 @@ id: ridge-dusk
 bg: ridge                       # asset id, never a path
 camera: {at: [0, 0], zoom: 0.9}
 cast:
-  scout: {at: -0.35, frame: idle}
+  scout: {at: -0.35, pose: idle}
 beats:
   - scout: "Three ways down."
   - mark: choosing

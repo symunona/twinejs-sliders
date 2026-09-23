@@ -161,10 +161,10 @@ beats:
 });
 
 describe('where link: is not accepted', () => {
-	it('is not a frame step key — a cycle animates a sprite, it does not repoint it', () => {
+	it('is not a pose step key — a cycle animates a sprite, it does not repoint it', () => {
 		const scene = parseScene(`
 cast:
-  mira: {frame: [{name: walk_1, link: Cellar}]}
+  mira: {pose: [{name: walk_1, link: Cellar}]}
 `);
 
 		expect(scene.errors.map(error => error.message).join(' ')).toMatch(

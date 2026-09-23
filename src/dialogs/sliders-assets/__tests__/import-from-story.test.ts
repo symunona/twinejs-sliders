@@ -137,7 +137,7 @@ describe('importCharacterFromStory', () => {
 		);
 
 		return await store.putCharacter({
-			frames: {angry: {asset: 'a_0002'}, idle: {asset: 'a_0001'}},
+			poses: {angry: {asset: 'a_0002'}, idle: {asset: 'a_0001'}},
 			id: 'mira',
 			name: 'Mira Vale',
 			origin: {x: 0.5, y: 1},
@@ -146,7 +146,7 @@ describe('importCharacterFromStory', () => {
 		});
 	}
 
-	it('brings every frame across, not only the ones a scene names', async () => {
+	it('brings every pose across, not only the ones a scene names', async () => {
 		const source = newStore();
 		const target = newStore();
 		const character = await castMember(source);
@@ -154,10 +154,10 @@ describe('importCharacterFromStory', () => {
 		const result = await importCharacterFromStory(source, target, character);
 
 		expect(result.imported).toBe(true);
-		expect(Object.keys((await target.getCharacter('mira'))!.frames).sort()).toEqual(
+		expect(Object.keys((await target.getCharacter('mira'))!.poses).sort()).toEqual(
 			['angry', 'idle']
 		);
-		expect(await target.list({includeFrames: true})).toHaveLength(2);
+		expect(await target.list({includePoseImages: true})).toHaveLength(2);
 	});
 
 	it('merges into a character that is already here rather than replacing it', async () => {
@@ -171,7 +171,7 @@ describe('importCharacterFromStory', () => {
 			new Blob([mine])
 		);
 		await target.putCharacter({
-			frames: {idle: {asset: 'a_9999'}},
+			poses: {idle: {asset: 'a_9999'}},
 			id: 'mira',
 			name: 'My Mira',
 			origin: {x: 0.5, y: 1},
@@ -183,17 +183,17 @@ describe('importCharacterFromStory', () => {
 		const merged = (await target.getCharacter('mira'))!;
 
 		expect(merged.name).toBe('My Mira');
-		expect(merged.frames.idle.asset).toBe('a_9999');
-		expect(merged.frames.angry).toBeDefined();
+		expect(merged.poses.idle.asset).toBe('a_9999');
+		expect(merged.poses.angry).toBeDefined();
 		expect(result.warnings.join(' ')).toContain('merged');
 	});
 
-	it('reports a frame whose image the other story lost', async () => {
+	it('reports a pose whose image the other story lost', async () => {
 		const source = newStore();
 		const target = newStore();
 
 		await source.putCharacter({
-			frames: {idle: {asset: 'a_dead'}},
+			poses: {idle: {asset: 'a_dead'}},
 			id: 'mira',
 			name: 'Mira Vale',
 			origin: {x: 0.5, y: 1},
@@ -208,7 +208,7 @@ describe('importCharacterFromStory', () => {
 		);
 
 		expect(result.warnings.join(' ')).toContain('idle');
-		expect((await target.getCharacter('mira'))!.frames.idle).toBeUndefined();
+		expect((await target.getCharacter('mira'))!.poses.idle).toBeUndefined();
 	});
 });
 
@@ -221,11 +221,11 @@ describe('assetIsPresent', () => {
 		expect(assetIsPresent(theirs, [mine])).toBe(true);
 	});
 
-	it('does not count a character frame as a loose asset', async () => {
+	it('does not count a character pose as a loose asset', async () => {
 		const bytes = pngBytes();
-		const frame = await meta(bytes, {ownerCharacter: 'mira'});
+		const pose = await meta(bytes, {ownerCharacter: 'mira'});
 		const loose = await meta(bytes, {id: 'a_2222'});
 
-		expect(assetIsPresent(loose, [frame])).toBe(false);
+		expect(assetIsPresent(loose, [pose])).toBe(false);
 	});
 });

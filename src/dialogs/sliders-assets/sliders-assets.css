@@ -130,7 +130,7 @@
 	position: relative;
 }
 
-/* Files dragged over a character tile become frames of it, not a new character--so the
+/* Files dragged over a character tile become poses of it, not a new character--so the
    tile has to claim the drag visibly, or the tab's own drop zone is the only feedback and
    it promises the wrong thing. */
 .sliders-tile.drag-over {

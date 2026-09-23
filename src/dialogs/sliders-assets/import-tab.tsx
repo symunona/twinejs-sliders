@@ -1,4 +1,10 @@
-import {AssetKind, AssetMeta, Character} from '@sliders/scene-types';
+import {
+	AssetKind,
+	AssetMeta,
+	Character,
+	poseAssets,
+	poseCover
+} from '@sliders/scene-types';
 import {IconDownload} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -16,7 +22,7 @@ import {
 } from './import-from-story';
 
 export interface ImportTabProps {
-	/** This story's assets, frames included — what "already here" is judged against. */
+	/** This story's assets, pose images included — what "already here" is judged against. */
 	present: AssetMeta[];
 	search: string;
 	/** Called after anything is written, so the other tabs re-read the library. */
@@ -130,14 +136,14 @@ export const ImportTab: React.FC<ImportTabProps> = props => {
 		);
 	}
 
-	/** A character is here when its frames are — the same bytes test the assets use. */
+	/** A character is here when its pose images are — the same bytes test the assets use. */
 	function characterIsPresent(character: Character): boolean {
-		const frames = Object.values(character.frames);
+		const images = Object.values(character.poses).flatMap(poseAssets);
 
 		return (
-			frames.length > 0 &&
-			frames.every(frame => {
-				const meta = library.all.find(asset => asset.id === frame.asset);
+			images.length > 0 &&
+			images.every(image => {
+				const meta = library.all.find(asset => asset.id === image);
 
 				return !!meta && assetIsPresent(meta, present);
 			})
@@ -189,16 +195,16 @@ export const ImportTab: React.FC<ImportTabProps> = props => {
 				{matchingCharacters.map(character => (
 					<ImportTile
 						busy={busyId === character.id}
-						detail={t('dialogs.slidersAssets.frameCount', {
-							count: Object.keys(character.frames).length
+						detail={t('dialogs.slidersAssets.poseCount', {
+							count: Object.keys(character.poses).length
 						})}
 						here={characterIsPresent(character)}
 						key={character.id}
 						name={character.name}
 						onImport={() => handleImportCharacter(character)}
-						previewId={
-							character.frames[Object.keys(character.frames)[0]]?.asset
-						}
+						previewId={poseCover(
+							character.poses[Object.keys(character.poses)[0]]
+						)}
 						scope={selected!}
 					/>
 				))}

@@ -18,10 +18,10 @@ import type {
 	Character,
 	EntityId,
 	Frac2,
-	FrameFit,
-	FrameLoop,
-	FrameStep,
+	PoseFit,
+	PoseLoop,
 	Renderer,
+	SceneStep,
 	Stage,
 	StageEntity,
 	StageSound,
@@ -30,7 +30,7 @@ import type {
 	Vec2
 } from '@sliders/scene-types';
 import {
-	DEFAULT_FRAME_STEP_SECONDS,
+	DEFAULT_STEP_SECONDS,
 	FIT_Z,
 	bgMotionTiles,
 	cssEase
@@ -38,7 +38,7 @@ import {
 import {
 	DEFAULT_ANCHORS,
 	DEFAULT_ORIGIN,
-	PLACEHOLDER_FRAME,
+	PLACEHOLDER_SIZE,
 	PLACEHOLDER_PROP,
 	Rect,
 	SpriteMetrics,
@@ -73,17 +73,17 @@ export const ENTER_RISE = 0.03;
  */
 const ENTITY_TRANSFORM_KINDS = ['move', 'scale', 'rot', 'flip'] as const;
 
-/** Fallback when an entity has no `frame` and the manifest has no `idle`. */
-const DEFAULT_FRAME_NAME = 'idle';
+/** Fallback when an entity has no `pose` and the manifest has no `idle`. */
+const DEFAULT_POSE_NAME = 'idle';
 
 /**
- * Floor on a frame step's hold.
+ * Floor on a step's hold — scene step or pose step.
  *
  * A `dur: 0` step is legal YAML and means "as fast as possible"; without a floor it is a
- * `setTimeout(0)` loop that never yields a painted frame, so the cycle would burn the main
- * thread and show nothing. One screen frame is as fast as possible.
+ * `setTimeout(0)` loop that never yields a paint, so the steps would burn the main
+ * thread and show nothing. One screen refresh is as fast as possible.
  */
-const MIN_FRAME_STEP_SECONDS = 1 / 60;
+const MIN_STEP_SECONDS = 1 / 60;
 
 export interface DomRendererOptions {
 	/** Draw the centre + floor guides. Makes `at: 0` and the feet origin legible (spec 06). */
@@ -111,18 +111,18 @@ interface EntityRecord {
 	entity: StageEntity;
 	/** Resolved manifest for cast entities. Undefined for props and unknown characters. */
 	character?: Character;
-	/** Which of that character's frames is on screen. The rig hangs off it, not off the
-	    character: anchors are per frame, so a pose change moves the bubble with it. */
-	frameName?: string;
+	/** Which of that character's poses is on screen. The rig hangs off it, not off the
+	    character: anchors are per pose, so a pose change moves the bubble with it. */
+	poseName?: string;
 	metrics: SpriteMetrics;
 	/** Target rect in BOX pixels. */
 	rect: Rect;
 	/**
-	 * What the stage last resolved for this entity, so a frame cycle's tick can re-run the
+	 * What the stage last resolved for this entity, so a step's tick can re-run the
 	 * same code an update runs without resolving anything again.
 	 */
 	res?: ResolvedEntity;
-	/** The running frame cycle, if the entity has one. */
+	/** The running steps, if the entity has any. */
 	anim?: AnimState;
 	img?: HTMLImageElement;
 	/**
@@ -148,20 +148,25 @@ interface ResolvedEntity {
 	assetId?: string;
 	url?: string;
 	meta?: AssetMeta;
-	/** The cast frame's registration transform, if it has one. */
-	fit?: FrameFit;
-	/** The frame being drawn, so its anchors are the ones `measure` reports. */
-	frameName?: string;
+	/** The cast pose's (or step's) registration transform, if it has one. */
+	fit?: PoseFit;
+	/** The pose being drawn, so its anchors are the ones `measure` reports. */
+	poseName?: string;
 	/** Set when we cannot draw the real thing — render a labelled placeholder instead. */
 	placeholderLabel?: string;
 	/** The id that failed to resolve. Exposed as `data-asset-id` for tests to assert on. */
 	placeholderId?: string;
-	/** The resolved frame cycle, when the entity declared one. */
+	/**
+	 * The resolved steps: the scene's own list (`pose: [a, b]`), or the steps of a pose
+	 * that is an image sequence. The scene's list wins; see `resolveCast`.
+	 */
 	steps?: ResolvedStep[];
-	loop?: FrameLoop;
+	loop?: PoseLoop;
+	/** Identity of `steps`. Changes only when the list as written does. */
+	animKey?: string;
 }
 
-/** One step of a resolved cycle. `res.entity` is the entity as this step stages it. */
+/** One step of a resolved list. `res.entity` is the entity as this step stages it. */
 interface ResolvedStep {
 	res: ResolvedEntity;
 	seconds: number;
@@ -172,24 +177,24 @@ interface ResolvedStep {
 
 interface AnimState {
 	/**
-	 * The cycle this state is playing, as written. Compared on every apply: a cycle that did
+	 * The steps this state is playing, as written. Compared on every apply: a list that did
 	 * not change keeps playing, because restarting it on each keystroke would make the
 	 * editor's preview stutter and never reach step 2.
 	 */
 	key: string;
 	steps: ResolvedStep[];
-	loop: FrameLoop;
+	loop: PoseLoop;
 	index: number;
 	timer?: ReturnType<typeof setTimeout>;
 }
 
 /** The entity a step effectively stages: the base, with the step's own keys over it. */
-function applyFrameStep(entity: StageEntity, step: FrameStep): StageEntity {
+function applySceneStep(entity: StageEntity, step: SceneStep): StageEntity {
 	return {
 		...entity,
 		at: step.at ?? entity.at,
 		flip: step.flip ?? entity.flip,
-		frame: step.name,
+		pose: step.name,
 		opacity: step.opacity ?? entity.opacity,
 		rot: step.rot ?? entity.rot,
 		scale: step.scale ?? entity.scale
@@ -224,13 +229,6 @@ function highlightColour(token: string): string | undefined {
 	}
 
 	return HIGHLIGHT_COLOUR.test(value) ? value : undefined;
-}
-
-/** Identity of a cycle. Changes only when the author's own list does. */
-function animKey(entity: StageEntity): string {
-	return entity.frames
-		? `${entity.frameLoop ?? 'all'}\u0000${JSON.stringify(entity.frames)}`
-		: '';
 }
 
 export class DomRenderer implements Renderer {
@@ -477,7 +475,7 @@ export class DomRenderer implements Renderer {
 			return null;
 		}
 
-		// Sprite frame -> BOX px, mirrored about the origin when flipped...
+		// Sprite box -> BOX px, mirrored about the origin when flipped...
 		const inBox = anchorPointInRect(
 			rec.rect,
 			rec.metrics.origin,
@@ -707,27 +705,31 @@ export class DomRenderer implements Renderer {
 		entity: StageEntity,
 		character: Character
 	): Promise<ResolvedEntity> {
-		const still = await this.resolvePose(entity, character, entity.frame);
+		const still = await this.resolvePose(entity, character, entity.pose);
 
-		if (!entity.frames?.length) {
-			return still;
+		if (!entity.steps?.length) {
+			return this.resolvePoseSteps(still, character);
 		}
 
-		// Resolve the whole cycle up front, so a tick is synchronous DOM work. Each step is
+		// Resolve the whole list up front, so a tick is synchronous DOM work. Each step is
 		// a ResolvedEntity of its own, carrying the entity the step effectively stages —
 		// which makes a tick exactly the same code path as an ordinary update.
+		//
+		// A step that names a pose which is itself an image sequence shows that pose's
+		// FIRST image for its hold. Two clocks on one sprite is rarely what an author means,
+		// and the scene's list is the one they wrote here.
 		const steps: ResolvedStep[] = [];
 
-		for (const step of entity.frames) {
+		for (const step of entity.steps) {
 			steps.push({
 				res: await this.resolvePose(
-					applyFrameStep(entity, step),
+					applySceneStep(entity, step),
 					character,
 					step.name
 				),
 				seconds: Math.max(
-					MIN_FRAME_STEP_SECONDS,
-					step.dur ?? DEFAULT_FRAME_STEP_SECONDS
+					MIN_STEP_SECONDS,
+					step.dur ?? DEFAULT_STEP_SECONDS
 				),
 				/** A step with no `at` of its own must not glide anywhere. */
 				moves: step.at !== undefined,
@@ -739,7 +741,63 @@ export class DomRenderer implements Renderer {
 			});
 		}
 
-		return {...still, loop: entity.frameLoop ?? 'all', steps};
+		const loop = entity.poseLoop ?? 'all';
+
+		return {
+			...still,
+			animKey: `scene\u0000${loop}\u0000${JSON.stringify(entity.steps)}`,
+			loop,
+			steps
+		};
+	}
+
+	/**
+	 * A pose that is an image sequence, as steps on the same clock a scene's list uses.
+	 *
+	 * The character owns this animation, so it runs whatever the scene says around it — a
+	 * breathing idle breathes through every line. `loop: false` holds the last image.
+	 * Steps swap images only: they never move the sprite, so the entity's own placement
+	 * (and any glide the beat started) is left alone.
+	 */
+	private async resolvePoseSteps(
+		still: ResolvedEntity,
+		character: Character
+	): Promise<ResolvedEntity> {
+		const pose = still.poseName ? character.poses?.[still.poseName] : undefined;
+
+		if (!pose?.steps?.length) {
+			return still;
+		}
+
+		const steps: ResolvedStep[] = [];
+
+		for (const step of pose.steps) {
+			const url = await this.url(step.asset);
+
+			steps.push({
+				moves: false,
+				res: {
+					...still,
+					assetId: step.asset,
+					fit: step.fit ?? pose.fit,
+					placeholderId: url ? undefined : step.asset,
+					placeholderLabel: url ? undefined : `? asset\n${step.asset}`,
+					url
+				},
+				seconds: Math.max(MIN_STEP_SECONDS, step.dur ?? DEFAULT_STEP_SECONDS)
+			});
+		}
+
+		const loop: PoseLoop = pose.loop === false ? 'once' : 'all';
+
+		return {
+			...still,
+			animKey: `pose\u0000${still.poseName}\u0000${loop}\u0000${JSON.stringify(
+				pose.steps
+			)}`,
+			loop,
+			steps
+		};
 	}
 
 	/** One pose of one character, resolved for the entity that is wearing it. */
@@ -748,31 +806,34 @@ export class DomRenderer implements Renderer {
 		character: Character,
 		wanted: string | undefined
 	): Promise<ResolvedEntity> {
-		const frameName = pickFrameName(character, wanted);
-		const frame = frameName ? character.frames?.[frameName] : undefined;
+		const poseName = pickPoseName(character, wanted);
+		const pose = poseName ? character.poses?.[poseName] : undefined;
+		// A pose with steps stands on its first image until `resolvePoseSteps` takes over.
+		const first = pose?.steps?.[0];
+		const assetId = first ? first.asset : pose?.asset;
 
-		if (!frame) {
-			const missingFrame = `${entity.ref}/${wanted ?? DEFAULT_FRAME_NAME}`;
+		if (!pose || !assetId) {
+			const missingPose = `${entity.ref}/${wanted ?? DEFAULT_POSE_NAME}`;
 
 			return {
 				entity,
 				character,
-				placeholderId: missingFrame,
-				placeholderLabel: `? frame\n${missingFrame}`
+				placeholderId: missingPose,
+				placeholderLabel: `? pose\n${missingPose}`
 			};
 		}
 
-		const url = await this.url(frame.asset);
+		const url = await this.url(assetId);
 
 		return {
 			entity,
 			character,
-			assetId: frame.asset,
+			assetId,
 			url,
-			fit: frame.fit,
-			frameName,
-			placeholderId: url ? undefined : frame.asset,
-			placeholderLabel: url ? undefined : `? asset\n${frame.asset}`
+			fit: first?.fit ?? pose.fit,
+			poseName,
+			placeholderId: url ? undefined : assetId,
+			placeholderLabel: url ? undefined : `? asset\n${assetId}`
 		};
 	}
 
@@ -902,7 +963,7 @@ export class DomRenderer implements Renderer {
 			el,
 			entity: res.entity,
 			character: res.character,
-			frameName: res.frameName,
+			poseName: res.poseName,
 			metrics: this.metricsFor(res),
 			rect: {left: 0, top: 0, width: 0, height: 0},
 			exiting: false
@@ -911,7 +972,7 @@ export class DomRenderer implements Renderer {
 		this.entities.set(id, rec);
 		rec.res = res;
 		this.setContent(rec, res);
-		this.applyFrameFit(rec, res);
+		this.applyPoseFit(rec, res);
 		this.applyEffect(rec, res);
 		this.entityLayerEl?.appendChild(el);
 
@@ -1014,14 +1075,14 @@ export class DomRenderer implements Renderer {
 
 		const prev = rec.entity;
 
-		// ABOVE the syncAnim bail-out below: an entity running a frame cycle takes the early
+		// ABOVE the syncAnim bail-out below: an entity running steps takes the early
 		// return, and a link written after it would never update on a walking sprite.
 		this.syncPlane(rec.el, res.entity);
 		this.syncLink(rec.el, res.entity);
 
 		rec.entity = res.entity;
 		rec.character = res.character;
-		rec.frameName = res.frameName;
+		rec.poseName = res.poseName;
 		rec.metrics = this.metricsFor(res);
 		rec.res = res;
 
@@ -1031,9 +1092,9 @@ export class DomRenderer implements Renderer {
 		// what listing width/height in the CSS transition is there to prevent.
 		const {duration, ease} = durations.longest(ENTITY_TRANSFORM_KINDS, rec.id);
 
-		// A cycle still on its feet keeps the screen: the stage's own `frame` is the cycle's
+		// Steps still on their feet keep the screen: the stage's own `pose` is the list's
 		// FIRST step, so drawing it here would flash step 1 on every keystroke. `syncAnim`
-		// redraws the step the cycle is actually standing on, against the new base.
+		// redraws the step the list is actually standing on, against the new base.
 		if (this.syncAnim(rec, res, duration, ease)) {
 			return;
 		}
@@ -1041,28 +1102,29 @@ export class DomRenderer implements Renderer {
 		this.setContent(
 			rec,
 			res,
-			durations.duration('frame', rec.id),
-			durations.ease('frame', rec.id)
+			durations.duration('pose', rec.id),
+			durations.ease('pose', rec.id)
 		);
-		this.applyFrameFit(rec, res);
+		this.applyPoseFit(rec, res);
 		this.applyEffect(rec, res);
 		this.layout(rec, duration, undefined, ease);
 	}
 
 	// -----------------------------------------------------------------------
-	// Frame cycles
+	// Steps
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Start, keep or stop an entity's frame cycle, and draw the step it stands on.
+	 * Start, keep or stop an entity's steps, and draw the step it stands on. Steps are the
+	 * scene's own list or the pose's own sequence — one clock for both.
 	 *
-	 * Returns true when a cycle is running and has taken over the drawing, so the caller
-	 * must not also paint the stage's still pose over it.
+	 * Returns true when steps are running and have taken over the drawing, so the caller
+	 * must not also paint the stage's single pose over them.
 	 *
-	 * A cycle runs on the renderer's own clock, not on the beat's: `dur:` is how long the
+	 * Steps run on the renderer's own clock, not on the beat's: `dur:` is how long the
 	 * reader looks at a moment, a step's `dur` is how fast the sprite's legs move, and a
-	 * walk outlives the line that started it. Which is also why an unchanged cycle is left
-	 * alone across applies — the editor re-applies on every keystroke, and a cycle restarted
+	 * walk outlives the line that started it. Which is also why an unchanged list is left
+	 * alone across applies — the editor re-applies on every keystroke, and a list restarted
 	 * each time would never reach its second step.
 	 */
 	private syncAnim(
@@ -1071,7 +1133,7 @@ export class DomRenderer implements Renderer {
 		duration: number,
 		ease?: string
 	): boolean {
-		const key = res.steps?.length ? animKey(res.entity) : '';
+		const key = res.steps?.length ? res.animKey ?? '' : '';
 
 		if (!key) {
 			this.stopAnim(rec);
@@ -1079,7 +1141,7 @@ export class DomRenderer implements Renderer {
 		}
 
 		if (rec.anim?.key === key) {
-			// Same cycle, possibly a moved entity: steps are re-resolved against the new
+			// Same steps, possibly a moved entity: steps are re-resolved against the new
 			// base, and the one on screen is redrawn where the base now puts it.
 			rec.anim.steps = res.steps!;
 			rec.anim.loop = res.loop ?? 'all';
@@ -1110,12 +1172,12 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
-	 * Draw the step the cycle is standing on. Everything an ordinary update does, against
+	 * Draw the step the list is standing on. Everything an ordinary update does, against
 	 * the step's own resolved entity — so a step's `at`/`scale`/`flip` need no second code
 	 * path to reach the screen.
 	 *
-	 * Frames swap HARD (`setContent` duration 0): a cross-fade is for a pose change the
-	 * reader is meant to notice, and cross-fading a ten-per-second cycle is a blur.
+	 * Steps swap HARD (`setContent` duration 0): a cross-fade is for a pose change the
+	 * reader is meant to notice, and cross-fading ten steps a second is a blur.
 	 */
 	private drawStep(rec: EntityRecord, duration = 0, ease?: string): void {
 		const anim = rec.anim;
@@ -1127,11 +1189,11 @@ export class DomRenderer implements Renderer {
 
 		rec.entity = step.res.entity;
 		rec.character = step.res.character;
-		rec.frameName = step.res.frameName;
+		rec.poseName = step.res.poseName;
 		rec.metrics = this.metricsFor(step.res);
 
 		this.setContent(rec, step.res, 0);
-		this.applyFrameFit(rec, step.res);
+		this.applyPoseFit(rec, step.res);
 		this.applyEffect(rec, step.res);
 
 		// A step that names an `at` GLIDES over its own hold, so a walk translates smoothly
@@ -1166,7 +1228,7 @@ export class DomRenderer implements Renderer {
 
 		if (!current || (last && anim.loop === 'once')) {
 			// `once` holds its final pose. Nothing more to schedule, and the state stays put
-			// so a later apply with the same cycle does not restart it.
+			// so a later apply with the same steps does not restart it.
 			return;
 		}
 
@@ -1219,7 +1281,7 @@ export class DomRenderer implements Renderer {
 		rec: EntityRecord,
 		res: ResolvedEntity,
 		duration = 0,
-		ease = cssEase(undefined, 'frame')
+		ease = cssEase(undefined, 'pose')
 	): void {
 		const wantsPlaceholder = !!res.placeholderLabel;
 
@@ -1261,7 +1323,7 @@ export class DomRenderer implements Renderer {
 		img.src = res.url!;
 		rec.el.replaceChildren();
 
-		// Cross-fade frame swaps: the outgoing frame rides along on top, fading out.
+		// Cross-fade pose swaps: the outgoing image rides along on top, fading out.
 		if (previous && duration > 0) {
 			previous.classList.add('sliders-ghost');
 			previous.style.transitionDuration = `${duration}s`;
@@ -1281,22 +1343,22 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
-	 * The frame's registration transform, written on the <img> rather than the sprite box.
+	 * The pose's registration transform, written on the <img> rather than the sprite box.
 	 * The box's own `transform` is fully occupied by position and the mirror, and its
 	 * `transform-origin` has to stay the entity origin for `scaleX(-1)` to mirror about the
 	 * feet — so this gets its own element, and the two never fight.
 	 *
-	 * Scaling about that same origin keeps the feet planted when a frame is resized, and
+	 * Scaling about that same origin keeps the feet planted when a pose is resized, and
 	 * `translate` reads as a fraction of the sprite box, which is the <img> element's own
 	 * size — `object-fit: contain` letterboxes the pixels inside it, it does not resize it.
 	 * Written outside `setContent`, which bails early when the asset is unchanged: two
-	 * frames can share one asset and differ only in fit.
+	 * poses can share one asset and differ only in fit.
 	 *
-	 * `object-position` is the box fit's anchor: the frame's origin point lands on the
-	 * sprite box's origin point, so a frame with a wider aspect than the manifest size
+	 * `object-position` is the box fit's anchor: the image's origin point lands on the
+	 * sprite box's origin point, so an image with a wider aspect than the manifest size
 	 * sits bottom centre (feet on the floor) rather than floating mid-box.
 	 */
-	private applyFrameFit(rec: EntityRecord, res: ResolvedEntity): void {
+	private applyPoseFit(rec: EntityRecord, res: ResolvedEntity): void {
 		if (!rec.img) {
 			return;
 		}
@@ -1304,7 +1366,7 @@ export class DomRenderer implements Renderer {
 		const style = rec.img.style;
 
 		// A `fit:` plane's picture fills the stage, so neither of this function's two inputs
-		// applies: there is no sprite origin to pin it to and a frame's registration
+		// applies: there is no sprite origin to pin it to and a pose's registration
 		// transform would shift a backdrop off the edge. Written inline as well as in the
 		// stylesheet because an entity that WAS a sprite still carries that sprite's
 		// `object-position`, and a stylesheet cannot outrank it.
@@ -1348,7 +1410,7 @@ export class DomRenderer implements Renderer {
 	 * an effect has no geometry of its own and should follow the sprite everywhere.
 	 *
 	 * Re-appended on every call. `setContent` clears the box whenever the asset changes, so an
-	 * overlay left to look after itself would silently vanish on the first frame swap.
+	 * overlay left to look after itself would silently vanish on the first pose swap.
 	 *
 	 * Nothing about it is read back: the effect is decoration, `pointer-events: none`, and
 	 * invisible to `measure()`, to the visual editor's hit tests and to `rectOf`. A tear that
@@ -1370,7 +1432,7 @@ export class DomRenderer implements Renderer {
 		// After the <img>, so the layers blend against the picture rather than under it.
 		rec.el.appendChild(rec.fx);
 		// A plane's layers take the plane's own fit and sit centred; a sprite's take the
-		// registration point `applyFrameFit` just wrote, so a layer letterboxes exactly as the
+		// registration point `applyPoseFit` just wrote, so a layer letterboxes exactly as the
 		// art does and a tear reads as a tear rather than as a permanent double image.
 		syncEffect(rec.fx, effect, res.url, {
 			fit: res.entity.fit ?? 'contain',
@@ -1386,7 +1448,7 @@ export class DomRenderer implements Renderer {
 		if (res.character || res.entity.kind === 'cast') {
 			return characterMetrics(
 				this.box,
-				res.character ?? {size: PLACEHOLDER_FRAME, origin: DEFAULT_ORIGIN},
+				res.character ?? {size: PLACEHOLDER_SIZE, origin: DEFAULT_ORIGIN},
 				res.entity.scale
 			);
 		}
@@ -1404,7 +1466,7 @@ export class DomRenderer implements Renderer {
 	/**
 	 * Write the sprite's geometry. Position lives entirely in `transform` so it is cheap to
 	 * animate; `transform-origin` is the entity's own origin so `scaleX(-1)` mirrors about the
-	 * feet rather than about the frame's corner.
+	 * feet rather than about the image's corner.
 	 */
 	private layout(
 		rec: EntityRecord,
@@ -1945,19 +2007,19 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
-	 * Where an anchor sits on the frame currently drawn.
+	 * Where an anchor sits on the pose currently drawn.
 	 *
-	 * Read off the FRAME, because that is where the pose is: a character who turns away has
-	 * their mouth somewhere else, and a rig shared by every frame would leave the bubble
-	 * pointing at the back of their head. A frame that was never rigged falls through to
-	 * `DEFAULT_ANCHORS`, so a bubble is never homeless.
+	 * Read off the POSE: a character who turns away has their mouth somewhere else, and a
+	 * rig shared by every pose would leave the bubble pointing at the back of their head.
+	 * A pose that was never rigged falls through to `DEFAULT_ANCHORS`, so a bubble is never
+	 * homeless.
 	 */
 	private anchorFraction(rec: EntityRecord, anchor: string): Frac2 | undefined {
-		const frame = rec.frameName
-			? rec.character?.frames?.[rec.frameName]
+		const pose = rec.poseName
+			? rec.character?.poses?.[rec.poseName]
 			: undefined;
 
-		return frame?.anchors?.[anchor] ?? DEFAULT_ANCHORS[anchor];
+		return pose?.anchors?.[anchor] ?? DEFAULT_ANCHORS[anchor];
 	}
 
 	private notify(): void {
@@ -2058,21 +2120,21 @@ function indexTransitions(transitions: Transition[]): TransitionIndex {
 	return index;
 }
 
-function pickFrameName(
+function pickPoseName(
 	character: Character,
 	requested: string | undefined
 ): string | undefined {
-	const frames = character.frames ?? {};
+	const poses = character.poses ?? {};
 
 	if (requested) {
-		return requested in frames ? requested : undefined;
+		return requested in poses ? requested : undefined;
 	}
 
-	if (DEFAULT_FRAME_NAME in frames) {
-		return DEFAULT_FRAME_NAME;
+	if (DEFAULT_POSE_NAME in poses) {
+		return DEFAULT_POSE_NAME;
 	}
 
-	return Object.keys(frames)[0];
+	return Object.keys(poses)[0];
 }
 
 function normalizeCamera(camera: Camera | undefined): Camera {

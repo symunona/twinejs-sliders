@@ -7,7 +7,7 @@ import {
 	deleteWrites,
 	flipWrites,
 	formatCamera,
-	frameWrite,
+	poseWrite,
 	panCamera,
 	uniqueEntityId,
 	wheelZoomFactor,
@@ -82,11 +82,11 @@ describe('zWrites()', () => {
 	});
 });
 
-describe('frameWrite()', () => {
+describe('poseWrite()', () => {
 	it('writes the chosen frame', () => {
-		expect(frameWrite(stage.entities.mira, 'angry')).toEqual({
+		expect(poseWrite(stage.entities.mira, 'angry')).toEqual({
 			id: 'mira',
-			key: 'frame',
+			key: 'pose',
 			kind: 'cast',
 			ref: 'mira',
 			value: 'angry'
@@ -94,11 +94,11 @@ describe('frameWrite()', () => {
 	});
 
 	it('removes the key when the choice goes back to automatic', () => {
-		expect(frameWrite(stage.entities.mira, undefined)?.value).toBeUndefined();
+		expect(poseWrite(stage.entities.mira, undefined)?.value).toBeUndefined();
 	});
 
 	it('refuses props — they are one image and have no frames', () => {
-		expect(frameWrite(stage.entities.candle, 'lit')).toBeUndefined();
+		expect(poseWrite(stage.entities.candle, 'lit')).toBeUndefined();
 	});
 });
 

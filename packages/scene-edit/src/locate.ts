@@ -8,6 +8,7 @@
 
 import {LineCounter, isMap, isScalar, isSeq, parseDocument} from 'yaml';
 import type {Document, Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
+import {RETIRED_ENTITY_KEYS} from '@sliders/scene-schema';
 import type {EntityKind} from '@sliders/scene-types';
 import type {EntityTarget} from './types';
 
@@ -52,8 +53,8 @@ export const ENTITY_KEY_ORDER = [
 	'at',
 	'scale',
 	'rot',
-	'frame',
-	'frameLoop',
+	'pose',
+	'poseLoop',
 	'flip',
 	'fit',
 	'layer',
@@ -130,6 +131,34 @@ export function findPair(
 	return (map.items as Pair<unknown, unknown>[]).find(
 		pair => keyName(pair) === key
 	);
+}
+
+/**
+ * An entity key's pair, under its own name or an old spelling the parser still reads
+ * (`frame:` for `pose:`). Without the fallback, setting `pose` on `{frame: idle}` would add
+ * a second key that means the same thing, and the parser would keep whichever came last.
+ */
+export function findEntityKeyPair(
+	map: YAMLMap,
+	key: string
+): Pair<unknown, unknown> | undefined {
+	const own = findPair(map, key);
+
+	if (own) {
+		return own;
+	}
+
+	for (const [old, next] of Object.entries(RETIRED_ENTITY_KEYS)) {
+		if (next === key) {
+			const retired = findPair(map, old);
+
+			if (retired) {
+				return retired;
+			}
+		}
+	}
+
+	return undefined;
 }
 
 /**

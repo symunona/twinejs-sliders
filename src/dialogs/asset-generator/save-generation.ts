@@ -1,7 +1,7 @@
 import {
 	AssetStore,
 	defaultCharacter,
-	newFrameAnchors,
+	newPoseAnchors,
 	slugify
 } from '@sliders/asset-store';
 import {Character} from '@sliders/scene-types';
@@ -55,7 +55,7 @@ export interface SaveResult {
 /**
  * Puts a generated image into the asset library.
  *
- * A character is not just an asset: it needs an id, a frame, and a size measured from
+ * A character is not just an asset: it needs an id, a pose, and a size measured from
  * the image, or the character editor opens on something it can't draw. Doing that here
  * means the generator can offer it as one click rather than sending the author off to
  * create a character and then upload into it.
@@ -79,19 +79,19 @@ export async function saveGeneration(
 	}
 
 	const id = await freeCharacterId(store, slugify(name));
-	const frame = await store.putAsset(generationFile(generation, name), {
+	const image = await store.putAsset(generationFile(generation, name), {
 		kind: 'frame',
 		name: `${id}/idle`,
 		ownerCharacter: id
 	});
 	const character: Character = {
 		...defaultCharacter(id),
-		// Anchors are per frame, and this is the character's only one, so it carries the
+		// Anchors are per pose, and this is the character's only one, so it carries the
 		// starting rig the character editor would have given it.
-		frames: {idle: {anchors: newFrameAnchors(undefined), asset: frame.id}},
+		poses: {idle: {anchors: newPoseAnchors(undefined), asset: image.id}},
 		// Measured from the image, so the character's origin and anchors land where
 		// the editor draws them rather than on the 512x1024 placeholder.
-		size: {h: frame.meta.h, w: frame.meta.w}
+		size: {h: image.meta.h, w: image.meta.w}
 	};
 
 	await store.putCharacter(character);

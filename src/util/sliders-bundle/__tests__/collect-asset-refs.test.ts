@@ -11,14 +11,14 @@ const TAVERN = `[scene]
 id: tavern-night
 bg: tavern/night
 cast:
-  mira: {at: -0.4, frame: arms-crossed}
+  mira: {at: -0.4, pose: arms-crossed}
 props:
   candle: {at: 0.1, layer: front}
 fx: [rain@0.6]
 beats:
-  - mira: {frame: angry, say: "Get out."}
+  - mira: {pose: angry, say: "Get out."}
   - fx: thunder
-  - candle: {frame: guttering}
+  - candle: {pose: guttering}
 `;
 
 const PROSE = `mood: tense
@@ -84,7 +84,7 @@ describe('collectPassageRefs', () => {
 			const {scene} = parseScene(block!.text);
 
 			expect(scene.entities.mira).toMatchObject({
-				frame: 'arms-crossed',
+				pose: 'arms-crossed',
 				kind: 'cast',
 				ref: 'mira'
 			});
@@ -94,7 +94,7 @@ describe('collectPassageRefs', () => {
 			});
 			expect(scene.fx).toEqual([{amount: 0.6, id: 'rain'}]);
 			expect(scene.beats.map(b => b.kind)).toEqual(['say', 'fx', 'set']);
-			expect((scene.beats[0] as SayBeat).patch).toMatchObject({frame: 'angry'});
+			expect((scene.beats[0] as SayBeat).patch).toMatchObject({pose: 'angry'});
 			expect((scene.beats[2] as SetBeat).who).toBe('candle');
 		});
 
@@ -138,18 +138,18 @@ describe('collectPassageRefs', () => {
 
 	it('honours an explicit ref:, which need not match the entity id', () => {
 		const refs = collectPassageRefs(
-			'[scene]\ncast:\n  barkeep: {ref: joren, frame: idle}\n'
+			'[scene]\ncast:\n  barkeep: {ref: joren, pose: idle}\n'
 		);
 
 		expect(refs.characterRefs).toEqual(['joren']);
-		// The frame is keyed by the entity id, not by the character it points at.
-		expect(refs.frameRefs).toEqual({barkeep: ['idle']});
+		// The pose is keyed by the entity id, not by the character it points at.
+		expect(refs.poseRefs).toEqual({barkeep: ['idle']});
 	});
 
-	it('collects a frame declared on an entity', () => {
-		const refs = collectPassageRefs('[scene]\ncast:\n  mira: {frame: angry}\n');
+	it('collects a pose declared on an entity', () => {
+		const refs = collectPassageRefs('[scene]\ncast:\n  mira: {pose: angry}\n');
 
-		expect(refs.frameRefs).toEqual({mira: ['angry']});
+		expect(refs.poseRefs).toEqual({mira: ['angry']});
 	});
 
 	it('collects fx from fx: and from an fx beat', () => {
@@ -160,12 +160,12 @@ describe('collectPassageRefs', () => {
 		expect(refs.fxRefs).toEqual(['dust', 'rain', 'thunder']);
 	});
 
-	it('collects frame: from a say beat patch and from a set beat', () => {
+	it('collects pose: from a say beat patch and from a set beat', () => {
 		const refs = collectPassageRefs(
-			'[scene]\nbeats:\n  - mira: {frame: angry, say: "Out."}\n  - joren: {frame: idle}\n'
+			'[scene]\nbeats:\n  - mira: {pose: angry, say: "Out."}\n  - joren: {pose: idle}\n'
 		);
 
-		expect(refs.frameRefs).toEqual({joren: ['idle'], mira: ['angry']});
+		expect(refs.poseRefs).toEqual({joren: ['idle'], mira: ['angry']});
 	});
 
 	it('sorts every bucket', () => {
@@ -174,7 +174,7 @@ describe('collectPassageRefs', () => {
 		expect(refs.assetRefs).toEqual(['candle', 'tavern/night']);
 		expect(refs.characterRefs).toEqual(['mira']);
 		expect(refs.fxRefs).toEqual(['rain', 'thunder']);
-		expect(refs.frameRefs).toEqual({
+		expect(refs.poseRefs).toEqual({
 			candle: ['guttering'],
 			mira: ['angry', 'arms-crossed']
 		});
@@ -187,7 +187,7 @@ describe('collectPassageRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: [],
 			optionalAssetRefs: [],
 			soundRefs: []
@@ -251,14 +251,14 @@ describe('collectAssetRefs', () => {
 			TAVERN,
 			PROSE,
 			'Only prose here.\n',
-			'[scene]\nbg: tavern/night\ncast:\n  mira: {frame: smiling}\nfx: [rain]\n'
+			'[scene]\nbg: tavern/night\ncast:\n  mira: {pose: smiling}\nfx: [rain]\n'
 		]);
 		const refs = collectAssetRefs(story);
 
 		expect(refs.assetRefs).toEqual(['candle', 'street/day', 'tavern/night']);
 		expect(refs.characterRefs).toEqual(['joren', 'mira']);
 		expect(refs.fxRefs).toEqual(['rain', 'thunder']);
-		expect(refs.frameRefs).toEqual({
+		expect(refs.poseRefs).toEqual({
 			candle: ['guttering'],
 			mira: ['angry', 'arms-crossed', 'smiling']
 		});
@@ -268,14 +268,14 @@ describe('collectAssetRefs', () => {
 		// The parser has no library, so it cannot say whether `mira` is a character or an
 		// asset name. Filing it as either would report the other as missing.
 		const refs = collectPassageRefs(
-			'[scene]\nentities:\n  mira: {at: 0, frame: angry}\n  lamp: {at: 0.4}\n'
+			'[scene]\nentities:\n  mira: {at: 0, pose: angry}\n  lamp: {at: 0.4}\n'
 		);
 
 		expect(refs.autoRefs).toEqual(['lamp', 'mira']);
 		expect(refs.assetRefs).toEqual([]);
 		expect(refs.characterRefs).toEqual([]);
-		// A frame named on an auto entity is still a frame its character has to have.
-		expect(refs.frameRefs).toEqual({mira: ['angry']});
+		// A pose named on an auto entity is still a pose its character has to have.
+		expect(refs.poseRefs).toEqual({mira: ['angry']});
 	});
 
 	it('keeps cast: and props: in their own buckets alongside it', () => {
@@ -293,7 +293,7 @@ describe('collectAssetRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: [],
 			optionalAssetRefs: [],
 			soundRefs: []

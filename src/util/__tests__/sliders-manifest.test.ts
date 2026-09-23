@@ -77,7 +77,7 @@ function scenePassage(name: string, block: string): Passage {
 
 const CLIFF = scenePassage(
 	'Cliff',
-	['bg: lighthouse-night', 'cast:', '  nell: {at: 0, frame: idle}'].join('\n')
+	['bg: lighthouse-night', 'cast:', '  nell: {at: 0, pose: idle}'].join('\n')
 );
 
 function file(bytes: Uint8Array, name: string, type: string) {
@@ -98,7 +98,7 @@ async function seed(): Promise<Seeded> {
 	);
 	const character: Character = defaultCharacter('nell');
 
-	character.frames.idle = {
+	character.poses.idle = {
 		anchors: {},
 		asset: await store.put(file(pngBytes(40, 90), 'nell.png', 'image/png'), {
 			kind: 'frame',
@@ -159,13 +159,13 @@ describe('withSlidersManifests', () => {
 			urls: 'blob'
 		});
 		const {assets} = manifests(published);
-		const frameAsset = character.frames.idle.asset;
+		const poseAsset = character.poses.idle.asset!;
 
-		// `bg: lighthouse-night` resolves by name; a character frame carries an id.
+		// `bg: lighthouse-night` resolves by name; a character pose carries an id.
 		expect(assets.urls['lighthouse-night']).toMatch(/^blob:/);
 		expect(assets.urls[bg]).toBe(assets.urls['lighthouse-night']);
-		expect(assets.urls[frameAsset]).toMatch(/^blob:/);
-		expect(assets.urls['nell/idle']).toBe(assets.urls[frameAsset]);
+		expect(assets.urls[poseAsset]).toMatch(/^blob:/);
+		expect(assets.urls['nell/idle']).toBe(assets.urls[poseAsset]);
 		// The unreferenced asset stays home.
 		expect(Object.keys(assets.urls)).toHaveLength(4);
 	});

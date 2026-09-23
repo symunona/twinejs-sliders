@@ -17,7 +17,7 @@ import {
 const SCENE = `[scene]
 id: player-scene
 cast:
-  mira:  {at: -0.4, frame: idle}
+  mira:  {at: -0.4, pose: idle}
   joren: {at: 0.35}
 beats:
   - mira: "One."

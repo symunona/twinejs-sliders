@@ -1,7 +1,13 @@
-import {AssetMeta, CharacterFrame} from '@sliders/scene-types';
+import {
+	AssetMeta,
+	CharacterPose,
+	poseCover,
+	poseHasSteps
+} from '@sliders/scene-types';
 import {
 	IconEye,
 	IconEyeOff,
+	IconFileImport,
 	IconPencil,
 	IconPhotoEdit,
 	IconRepeat,
@@ -18,30 +24,33 @@ import {PromptButton} from '../../components/control/prompt-button';
 import {AssetPreview} from '../sliders-assets/asset-preview';
 import {UploadButton} from '../sliders-assets/upload-button';
 
-export interface FrameListProps {
+export interface PoseListProps {
 	assets: Record<string, AssetMeta>;
-	frames: Record<string, CharacterFrame>;
+	poses: Record<string, CharacterPose>;
 	onAddFiles: (files: File[]) => void;
 	onChangeLoop: (name: string, loop: boolean) => void;
 	onDelete: (name: string) => void;
 	onEdit: (name: string) => void;
+	/** Opens Import set: many files, a folder or a sprite sheet into poses at once. */
+	onImportSet: () => void;
 	onRename: (name: string, newName: string) => void;
 	onSelect: (name: string) => void;
-	/** Turns a frame's ghost on and off. The selected frame is never a ghost. */
+	/** Turns a pose's ghost on and off. The selected pose is never a ghost. */
 	onToggleGhost: (name: string) => void;
 	selected?: string;
-	/** Frames drawn faintly behind the selected one. */
+	/** Poses drawn faintly behind the selected one. */
 	visible: string[];
 }
 
-export const FrameList: React.FC<FrameListProps> = props => {
+export const PoseList: React.FC<PoseListProps> = props => {
 	const {
 		assets,
-		frames,
+		poses,
 		onAddFiles,
 		onChangeLoop,
 		onDelete,
 		onEdit,
+		onImportSet,
 		onRename,
 		onSelect,
 		onToggleGhost,
@@ -52,41 +61,52 @@ export const FrameList: React.FC<FrameListProps> = props => {
 	const {t} = useTranslation();
 
 	return (
-		<div className="frame-list">
-			<h3>{t('dialogs.slidersCharacters.frames')}</h3>
+		<div className="pose-list">
+			<h3>{t('dialogs.slidersCharacters.poses')}</h3>
 			<UploadButton
-				commandId="slidersCharacters.addFrames"
+				commandId="slidersCharacters.addPoses"
 				commandScope="sliders-characters"
-				label={t('dialogs.slidersCharacters.addFrames')}
+				label={t('dialogs.slidersCharacters.addPoses')}
 				onUpload={onAddFiles}
 			/>
+			<IconButton
+				icon={<IconFileImport />}
+				label={t('dialogs.slidersCharacters.importSet.open')}
+				onClick={onImportSet}
+			/>
 			<ul>
-				{Object.entries(frames).map(([name, frame]) => {
-					const meta = assets[frame.asset];
-					const looping = frame.loop !== false;
+				{Object.entries(poses).map(([name, pose]) => {
+					const cover = poseCover(pose);
+					const meta = cover ? assets[cover] : undefined;
+					// ⟳ means the pose plays by itself: an animated file, or steps.
+					const animated = !!meta?.animated || poseHasSteps(pose);
+					const looping = pose.loop !== false;
 					const ghosted = visible.includes(name);
 
 					return (
 						<li
-							className={classNames('frame-list-item', {
+							className={classNames('pose-list-item', {
 								ghosted: ghosted && name !== selected,
 								selected: name === selected
 							})}
-							data-frame={name}
+							data-pose={name}
 							key={name}
 						>
 							{/* The picture fills the tile and wears its own name: at this size the
 							    art tells two poses apart faster than the words do. */}
 							<button
-								className="frame-list-select"
+								className="pose-list-select"
 								onClick={() => onSelect(name)}
 								type="button"
 							>
-								<AssetPreview alt={name} assetId={frame.asset} />
-								<span className="frame-list-name">{name}</span>
-								{meta?.animated && (
+								<AssetPreview alt={name} assetId={cover} />
+								<span className="pose-list-name">{name}</span>
+								{poseHasSteps(pose) && (
+									<span className="pose-list-steps">{pose.steps!.length}</span>
+								)}
+								{animated && (
 									<span
-										className="frame-list-animated"
+										className="pose-list-animated"
 										title={t('dialogs.slidersAssets.animated')}
 									>
 										⟳
@@ -96,7 +116,7 @@ export const FrameList: React.FC<FrameListProps> = props => {
 							{/* One row, never two: the buttons are shrunk in CSS so the widest
 							    set--ghost, edit, rename, loop, delete--still fits the column. */}
 							<ButtonBar>
-								{/* The selected frame is already on screen in full, so it has
+								{/* The selected pose is already on screen in full, so it has
 								    nothing to show or hide. */}
 								{name !== selected && (
 									<IconButton
@@ -105,20 +125,21 @@ export const FrameList: React.FC<FrameListProps> = props => {
 										iconOnly
 										label={
 											ghosted
-												? t('dialogs.slidersCharacters.hideFrame', {name})
-												: t('dialogs.slidersCharacters.showFrame', {name})
+												? t('dialogs.slidersCharacters.hidePose', {name})
+												: t('dialogs.slidersCharacters.showPose', {name})
 										}
 										onClick={() => onToggleGhost(name)}
 										role="checkbox"
 									/>
 								)}
 								<IconButton
-									// Editing an animation would flatten it to one frame.
-									disabled={meta?.animated}
+									// Editing an animation would flatten it to one image, and a
+									// pose with steps has no one image to edit.
+									disabled={animated}
 									icon={<IconPhotoEdit />}
 									iconOnly
 									label={
-										meta?.animated
+										animated
 											? t('dialogs.slidersAssets.editImageAnimated')
 											: t('dialogs.slidersAssets.editImage')
 									}
@@ -127,13 +148,13 @@ export const FrameList: React.FC<FrameListProps> = props => {
 								<PromptButton
 									icon={<IconPencil />}
 									iconOnly
-									label={t('dialogs.slidersCharacters.renameFrame')}
+									label={t('dialogs.slidersCharacters.renamePose')}
 									onChange={event => setRenaming(event.target.value)}
 									onSubmit={value => onRename(name, value)}
-									prompt={t('dialogs.slidersCharacters.renameFramePrompt')}
+									prompt={t('dialogs.slidersCharacters.renamePosePrompt')}
 									value={renaming}
 								/>
-								{meta?.animated && (
+								{animated && (
 									<IconButton
 										ariaChecked={looping}
 										icon={looping ? <IconRepeat /> : <IconRepeatOff />}
@@ -151,9 +172,9 @@ export const FrameList: React.FC<FrameListProps> = props => {
 									confirmVariant="danger"
 									icon={<IconTrash />}
 									iconOnly
-									label={t('dialogs.slidersCharacters.deleteFrame')}
+									label={t('dialogs.slidersCharacters.deletePose')}
 									onConfirm={() => onDelete(name)}
-									prompt={t('dialogs.slidersCharacters.deleteFramePrompt', {
+									prompt={t('dialogs.slidersCharacters.deletePosePrompt', {
 										name
 									})}
 								/>

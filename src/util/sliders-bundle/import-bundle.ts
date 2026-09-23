@@ -16,6 +16,7 @@ import {strFromU8, unzip, unzipSync} from 'fflate';
 import type {Unzipped} from 'fflate';
 import {blobBytes, contentHash} from '@sliders/asset-store';
 import type {AssetMeta, Character} from '@sliders/scene-types';
+import {upgradeCharacter} from '@sliders/scene-types';
 import {
 	BUNDLE_FORMAT,
 	BUNDLE_MANIFEST,
@@ -131,7 +132,10 @@ function readManifest(files: Unzipped): BundleManifest {
 		creator: manifest.creator ?? {name: 'unknown', version: ''},
 		story: manifest.story ?? {id: '', ifid: '', name: ''},
 		assets: Array.isArray(manifest.assets) ? manifest.assets : [],
-		characters: Array.isArray(manifest.characters) ? manifest.characters : [],
+		// A bundle written before the rename says `frames:` for `poses:`.
+		characters: Array.isArray(manifest.characters)
+			? manifest.characters.map(upgradeCharacter)
+			: [],
 		unresolved: Array.isArray(manifest.unresolved) ? manifest.unresolved : []
 	};
 }

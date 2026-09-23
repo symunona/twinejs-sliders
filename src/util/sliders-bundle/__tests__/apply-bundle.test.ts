@@ -64,7 +64,7 @@ function character(overrides: Partial<Character> = {}): Character {
 		name: 'Mira',
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
-		frames: {},
+		poses: {},
 		tags: [],
 		...overrides
 	};
@@ -111,7 +111,7 @@ async function librarySnapshot(
 ): Promise<{bytes: number[]; meta: AssetMeta}[]> {
 	const rows: {bytes: number[]; meta: AssetMeta}[] = [];
 
-	for (const meta of await store.list({includeFrames: true})) {
+	for (const meta of await store.list({includePoseImages: true})) {
 		rows.push({
 			bytes: await bytesOf(await store.get(meta.id)),
 			meta: {...meta, tags: [...meta.tags]}
@@ -138,7 +138,7 @@ describe('planBundle asset clashes', () => {
 
 		await applyBundlePlan(store, plan);
 
-		const library = await store.list({includeFrames: true});
+		const library = await store.list({includePoseImages: true});
 
 		expect(library).toHaveLength(1);
 		expect(library[0].name).toBe('my/tavern');
@@ -164,7 +164,7 @@ describe('planBundle asset clashes', () => {
 		expect(plan.warnings).toEqual([]);
 	});
 
-	it('does not reuse a frame for a loose asset with the same bytes', async () => {
+	it('does not reuse a pose for a loose asset with the same bytes', async () => {
 		const store = newStore();
 		const local = await asset(webpBytes(), {
 			id: 'a_local',
@@ -184,7 +184,7 @@ describe('planBundle asset clashes', () => {
 		expect(plan.assets[0].outcome).toBe('imported');
 	});
 
-	it('does not reuse a loose asset for a frame with the same bytes', async () => {
+	it('does not reuse a loose asset for a pose with the same bytes', async () => {
 		const store = newStore();
 		const local = await asset(webpBytes(), {
 			id: 'a_local',
@@ -194,7 +194,7 @@ describe('planBundle asset clashes', () => {
 		await store.importAsset(local.meta, local.blob);
 
 		// The mirror of the case above, and the direction that actually costs something:
-		// `putCharacter` stamps ownerCharacter/kind onto whatever a frame points at, so
+		// `putCharacter` stamps ownerCharacter/kind onto whatever a pose points at, so
 		// reusing this loose background would drag it into the imported character.
 		const incoming = await asset(webpBytes(), {
 			id: 'a_8f21',
@@ -208,14 +208,14 @@ describe('planBundle asset clashes', () => {
 		expect(plan.assets[0].targetId).toBe('a_8f21');
 	});
 
-	it('does not let an incoming frame swallow a loose asset with the same name', async () => {
+	it('does not let an incoming pose swallow a loose asset with the same name', async () => {
 		const store = newStore();
 		const local = await asset(pngBytes(), {id: 'a_local', name: 'mira/happy'});
 
 		await store.importAsset(local.meta, local.blob);
 
 		// A background the author happened to call `mira/happy`, and a bundle whose
-		// character has a frame under that name. Nothing addresses a frame by name, so
+		// character has a pose under that name. Nothing addresses a pose by name, so
 		// these two are not competing for anything.
 		const incoming = await asset(webpBytes(), {
 			id: 'a_8f21',
@@ -227,7 +227,7 @@ describe('planBundle asset clashes', () => {
 			store,
 			contents({
 				assets: [incoming],
-				characters: [character({frames: {happy: {asset: 'a_8f21'}}})]
+				characters: [character({poses: {happy: {asset: 'a_8f21'}}})]
 			})
 		);
 
@@ -238,7 +238,7 @@ describe('planBundle asset clashes', () => {
 
 		const kept = await store.meta('a_local');
 
-		// Letting the frame "keep" the contested name would hand its id to the imported
+		// Letting the pose "keep" the contested name would hand its id to the imported
 		// character, and putCharacter would stamp ownerCharacter/kind onto the author's
 		// background: gone from the asset grid, and deleted outright by removeCharacter.
 		expect(kept?.kind).toBe('bg');
@@ -248,7 +248,7 @@ describe('planBundle asset clashes', () => {
 			Array.from(pngBytes())
 		);
 		expect(await store.getCharacter('mira')).toMatchObject({
-			frames: {happy: {asset: 'a_8f21'}}
+			poses: {happy: {asset: 'a_8f21'}}
 		});
 	});
 
@@ -304,7 +304,7 @@ describe('planBundle asset clashes', () => {
 		expect(await bytesOf(await store.get(plan.assets[0].targetId))).toEqual(
 			Array.from(webpBytes())
 		);
-		expect(await store.list({includeFrames: true})).toHaveLength(2);
+		expect(await store.list({includePoseImages: true})).toHaveLength(2);
 	});
 
 	it('keeps the local asset when the name is taken by different bytes', async () => {
@@ -334,7 +334,7 @@ describe('planBundle asset clashes', () => {
 		expect(await bytesOf(await store.get('a_local'))).toEqual(
 			Array.from(pngBytes())
 		);
-		expect(await store.list({includeFrames: true})).toHaveLength(1);
+		expect(await store.list({includePoseImages: true})).toHaveLength(1);
 		expect(await store.meta('a_8f21')).toBeUndefined();
 	});
 
@@ -386,7 +386,7 @@ describe('planBundle asset clashes', () => {
 		expect(plan.assets[1].targetId).toBe('a_0001');
 
 		await applyBundlePlan(store, plan);
-		expect(await store.list({includeFrames: true})).toHaveLength(1);
+		expect(await store.list({includePoseImages: true})).toHaveLength(1);
 	});
 });
 
@@ -399,7 +399,7 @@ describe('planBundle against a local character id', () => {
 		const store = newStore();
 
 		await store.putCharacter({
-			frames: {},
+			poses: {},
 			id: 'lamp',
 			name: 'Lamp',
 			origin: {x: 0.5, y: 1},
@@ -415,7 +415,7 @@ describe('planBundle against a local character id', () => {
 
 		await applyBundlePlan(store, plan);
 
-		const library = await store.list({includeFrames: true});
+		const library = await store.list({includePoseImages: true});
 
 		expect(library.map(item => item.name)).toEqual(['lamp-2']);
 	});
@@ -429,11 +429,11 @@ describe('planBundle against a local character id', () => {
 		expect(plan.warnings).toEqual([]);
 	});
 
-	it('does not move a frame — a frame is reached through its character, not by name', async () => {
+	it('does not move a pose — a pose is reached through its character, not by name', async () => {
 		const store = newStore();
 
 		await store.putCharacter({
-			frames: {},
+			poses: {},
 			id: 'lamp',
 			name: 'Lamp',
 			origin: {x: 0.5, y: 1},
@@ -502,7 +502,7 @@ describe('planBundle sourceAsset', () => {
 describe('planBundle characters', () => {
 	it('imports a character whose id is free', async () => {
 		const store = newStore();
-		const frame = await asset(webpBytes(), {
+		const pose = await asset(webpBytes(), {
 			id: 'a_f1',
 			name: 'mira/happy',
 			kind: 'frame',
@@ -511,29 +511,29 @@ describe('planBundle characters', () => {
 		const plan = await planBundle(
 			store,
 			contents({
-				assets: [frame],
-				characters: [character({frames: {happy: {asset: 'a_f1'}}})]
+				assets: [pose],
+				characters: [character({poses: {happy: {asset: 'a_f1'}}})]
 			})
 		);
 
 		expect(plan.characters[0].outcome).toBe('imported');
-		expect(plan.characters[0].addedFrames).toEqual(['happy']);
-		expect(plan.characters[0].keptFrames).toEqual([]);
+		expect(plan.characters[0].addedPoses).toEqual(['happy']);
+		expect(plan.characters[0].keptPoses).toEqual([]);
 
 		await applyBundlePlan(store, plan);
 
 		expect(await store.getCharacter('mira')).toMatchObject({
-			frames: {happy: {asset: 'a_f1'}}
+			poses: {happy: {asset: 'a_f1'}}
 		});
 	});
 
-	it('remaps frame asset ids when the asset id collides', async () => {
+	it('remaps pose asset ids when the asset id collides', async () => {
 		const store = newStore();
 		const squatter = await asset(pngBytes(), {id: 'a_f1', name: 'unrelated'});
 
 		await store.importAsset(squatter.meta, squatter.blob);
 
-		const frame = await asset(webpBytes(), {
+		const pose = await asset(webpBytes(), {
 			id: 'a_f1',
 			name: 'mira/happy',
 			kind: 'frame',
@@ -542,26 +542,26 @@ describe('planBundle characters', () => {
 		const plan = await planBundle(
 			store,
 			contents({
-				assets: [frame],
-				characters: [character({frames: {happy: {asset: 'a_f1'}}})]
+				assets: [pose],
+				characters: [character({poses: {happy: {asset: 'a_f1'}}})]
 			})
 		);
 		const targetId = plan.assets[0].targetId;
 
 		expect(plan.assets[0].outcome).toBe('new-id');
-		expect(plan.characters[0].character.frames.happy.asset).toBe(targetId);
+		expect(plan.characters[0].character.poses.happy.asset).toBe(targetId);
 
 		await applyBundlePlan(store, plan);
 
 		expect(await store.getCharacter('mira')).toMatchObject({
-			frames: {happy: {asset: targetId}}
+			poses: {happy: {asset: targetId}}
 		});
 		// The unrelated local asset was not dragged into the character.
 		expect(await store.meta('a_f1')).toMatchObject({name: 'unrelated'});
 		expect((await store.meta('a_f1'))?.ownerCharacter).toBeUndefined();
 	});
 
-	it('merges into an existing character, keeping its frames and adding the missing ones', async () => {
+	it('merges into an existing character, keeping its poses and adding the missing ones', async () => {
 		const store = newStore();
 		const mine = await asset(pngBytes(), {
 			id: 'a_mine',
@@ -572,7 +572,7 @@ describe('planBundle characters', () => {
 
 		await store.importAsset(mine.meta, mine.blob);
 		await store.putCharacter(
-			character({name: 'My Mira', frames: {happy: {asset: 'a_mine'}}})
+			character({name: 'My Mira', poses: {happy: {asset: 'a_mine'}}})
 		);
 
 		const plan = await planBundle(
@@ -595,37 +595,37 @@ describe('planBundle characters', () => {
 				characters: [
 					character({
 						name: 'Their Mira',
-						frames: {happy: {asset: 'a_theirs'}, sad: {asset: 'a_sad'}}
+						poses: {happy: {asset: 'a_theirs'}, sad: {asset: 'a_sad'}}
 					})
 				]
 			})
 		);
 
 		expect(plan.characters[0].outcome).toBe('merged');
-		expect(plan.characters[0].addedFrames).toEqual(['sad']);
-		expect(plan.characters[0].keptFrames).toEqual(['happy']);
-		// Identity beyond frames stays local.
+		expect(plan.characters[0].addedPoses).toEqual(['sad']);
+		expect(plan.characters[0].keptPoses).toEqual(['happy']);
+		// Identity beyond poses stays local.
 		expect(plan.characters[0].character.name).toBe('My Mira');
-		expect(plan.characters[0].character.frames.happy.asset).toBe('a_mine');
+		expect(plan.characters[0].character.poses.happy.asset).toBe('a_mine');
 		expect(plan.warnings.some(warning => /merged/.test(warning))).toBe(true);
 
 		await applyBundlePlan(store, plan);
 
 		const stored = await store.getCharacter('mira');
 
-		expect(Object.keys(stored?.frames ?? {}).sort()).toEqual(['happy', 'sad']);
-		expect(stored?.frames.happy.asset).toBe('a_mine');
+		expect(Object.keys(stored?.poses ?? {}).sort()).toEqual(['happy', 'sad']);
+		expect(stored?.poses.happy.asset).toBe('a_mine');
 		expect(await bytesOf(await store.get('a_mine'))).toEqual(
 			Array.from(pngBytes())
 		);
-		// The losing frame's image was not written: nothing would ever reference it.
+		// The losing pose's image was not written: nothing would ever reference it.
 		expect(await store.meta('a_theirs')).toBeUndefined();
 		expect(await bytesOf(await store.get('a_sad'))).toEqual(
 			Array.from(apngBytes())
 		);
 	});
 
-	it('drops a frame whose image did not travel with the bundle', async () => {
+	it('drops a pose whose image did not travel with the bundle', async () => {
 		const store = newStore();
 		const plan = await planBundle(
 			store,
@@ -640,21 +640,21 @@ describe('planBundle characters', () => {
 				],
 				characters: [
 					character({
-						frames: {happy: {asset: 'a_f1'}, sad: {asset: 'a_gone'}}
+						poses: {happy: {asset: 'a_f1'}, sad: {asset: 'a_gone'}}
 					})
 				]
 			})
 		);
 
-		expect(Object.keys(plan.characters[0].character.frames)).toEqual(['happy']);
+		expect(Object.keys(plan.characters[0].character.poses)).toEqual(['happy']);
 		expect(plan.warnings.some(warning => /"sad"/.test(warning))).toBe(true);
 	});
 });
 
 describe('applyBundlePlan', () => {
-	it('repoints frames when the store hands back a different id', async () => {
+	it('repoints poses when the store hands back a different id', async () => {
 		const store = newStore();
-		const frame = await asset(webpBytes(), {
+		const pose = await asset(webpBytes(), {
 			id: 'a_f1',
 			name: 'mira/happy',
 			kind: 'frame',
@@ -663,8 +663,8 @@ describe('applyBundlePlan', () => {
 		const plan = await planBundle(
 			store,
 			contents({
-				assets: [frame],
-				characters: [character({frames: {happy: {asset: 'a_f1'}}})]
+				assets: [pose],
+				characters: [character({poses: {happy: {asset: 'a_f1'}}})]
 			})
 		);
 
@@ -679,8 +679,8 @@ describe('applyBundlePlan', () => {
 
 		const stored = await store.getCharacter('mira');
 
-		expect(stored?.frames.happy.asset).not.toBe('a_f1');
-		expect(await bytesOf(await store.get(stored!.frames.happy.asset))).toEqual(
+		expect(stored?.poses.happy.asset).not.toBe('a_f1');
+		expect(await bytesOf(await store.get(stored!.poses.happy.asset!))).toEqual(
 			Array.from(webpBytes())
 		);
 	});

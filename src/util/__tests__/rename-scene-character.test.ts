@@ -63,7 +63,7 @@ describe('renameSceneCharacter', () => {
 			'# who is on stage',
 			'cast:',
 			'',
-			'  mira:   {at: -0.4, frame: idle}   # by the door',
+			'  mira:   {at: -0.4, pose: idle}   # by the door',
 			'  tav:    {at: 0.4}'
 		);
 
@@ -72,7 +72,7 @@ describe('renameSceneCharacter', () => {
 				'# who is on stage',
 				'cast:',
 				'',
-				'  mira-2:   {at: -0.4, frame: idle}   # by the door',
+				'  mira-2:   {at: -0.4, pose: idle}   # by the door',
 				'  tav:    {at: 0.4}'
 			)
 		);
@@ -86,13 +86,13 @@ describe('renameSceneCharacter', () => {
 		);
 	});
 
-	it('leaves passage names, backdrops, frames and marks alone', () => {
+	it('leaves passage names, backdrops, poses and marks alone', () => {
 		const text = scene(
 			'id: mira',
 			'from: mira',
 			'bg: mira',
 			'cast:',
-			'  tav: {frame: mira}',
+			'  tav: {pose: mira}',
 			'beats:',
 			'  - mark: mira',
 			'  - tav: "Where is mira?"',

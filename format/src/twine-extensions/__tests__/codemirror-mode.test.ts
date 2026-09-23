@@ -71,7 +71,7 @@ describe('the scene half of the mode', () => {
 		'camera: {at: [0, 0], zoom: 1}',
 		'notakey: 1',
 		'cast:',
-		'  mira: {at: -0.4, frame: idle}',
+		'  mira: {at: -0.4, pose: idle}',
 		'# a comment',
 		'[continued]',
 		'After.'
@@ -90,7 +90,13 @@ describe('the scene half of the mode', () => {
 	it('styles an entity id as a definition and its keys as keywords', () => {
 		expect(stylesOf(scene, 'mira')).toEqual(['def']);
 		expect(stylesOf(scene, 'at')).toEqual(['keyword', 'keyword']);
-		expect(stylesOf(scene, 'frame')).toEqual(['keyword']);
+		expect(stylesOf(scene, 'pose')).toEqual(['keyword']);
+	});
+
+	it('still styles the old frame: spelling as a key', () => {
+		const old = '[scene]\ncast:\n  mira: {at: -0.4, frame: idle}';
+
+		expect(stylesOf(old, 'frame')).toEqual(['keyword']);
 	});
 
 	it('styles comments and numbers', () => {
@@ -159,7 +165,7 @@ describe('values inside a scene', () => {
 		expect(valueOf('bg: ~')).toEqual([['~', 'atom']]);
 		expect(valueOf('  if: true')).toEqual([['true', 'atom']]);
 		expect(valueOf('  if: false')).toEqual([['false', 'atom']]);
-		expect(valueOf('  frame: @idle')).toEqual([['@idle', 'atom']]);
+		expect(valueOf('  pose: @idle')).toEqual([['@idle', 'atom']]);
 	});
 
 	it('still types every part of a flow value', () => {

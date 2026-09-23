@@ -37,6 +37,7 @@ import * as ping from './cmd/ping';
 import * as put from './cmd/put';
 import * as restore from './cmd/restore';
 import * as revs from './cmd/revs';
+import * as rewritePoses from './cmd/rewrite-poses';
 import * as rm from './cmd/rm';
 
 export interface CommandModule {
@@ -58,6 +59,7 @@ const COMMANDS: CommandModule[] = [
 	assets,
 	graph,
 	copy,
+	rewritePoses,
 	newStory,
 	rm,
 	revs,

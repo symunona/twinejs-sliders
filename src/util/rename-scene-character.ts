@@ -22,7 +22,7 @@
  * recovers from a half-typed block is a guess, and splicing at a guess edits the author's
  * text into something they never wrote.
  *
- * NOT rewritten, on purpose: `frame:` (a frame name inside the character, not the id),
+ * NOT rewritten, on purpose: `pose:` (a pose name inside the character, not the id),
  * `mark:`, `fx` ids, `id:`/`from:`/`bg:`/`links:` (passage and asset names), dialogue prose
  * and `if:` expressions.
  */

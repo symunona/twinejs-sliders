@@ -22,10 +22,10 @@ export interface AssetFilter {
 	/** Asset must carry every tag listed. */
 	tags?: string[];
 	/**
-	 * Character frames are hidden by default (spec 03) — they belong to the character
+	 * Pose images are hidden by default (spec 03) — they belong to the character
 	 * editor, not the flat library list.
 	 */
-	includeFrames?: boolean;
+	includePoseImages?: boolean;
 }
 
 export interface PutAssetOptions {
@@ -33,7 +33,7 @@ export interface PutAssetOptions {
 	/** Defaults to a slug derived from the filename. */
 	name?: string;
 	tags?: string[];
-	/** Set when the asset is a character frame. */
+	/** Set when the asset is a pose image. */
 	ownerCharacter?: string;
 	/** Set when the asset is an edited copy of another one. */
 	sourceAsset?: AssetId;
@@ -228,7 +228,7 @@ export interface AssetStore extends AssetResolver {
 	 */
 	putCharacter(character: Character): Promise<Character>;
 	/**
-	 * Every name a scene can address: asset names, character frames included, plus character
+	 * Every name a scene can address: asset names, pose images included, plus character
 	 * ids. The namespace `uniqueName` dedupes against.
 	 */
 	takenNames(): Promise<Set<string>>;

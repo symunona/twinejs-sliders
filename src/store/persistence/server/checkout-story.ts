@@ -331,7 +331,7 @@ async function landProvenance(options: {
 
 	const localByKey = new Map<string, AssetMeta>();
 
-	for (const meta of await store.list({includeFrames: true})) {
+	for (const meta of await store.list({includePoseImages: true})) {
 		if (!localByKey.has(dedupeKey(meta))) {
 			localByKey.set(dedupeKey(meta), meta);
 		}
@@ -519,7 +519,7 @@ export async function checkoutAssets(options: {
 
 	const localByKey = new Map<string, AssetMeta>();
 
-	for (const meta of await store.list({includeFrames: true})) {
+	for (const meta of await store.list({includePoseImages: true})) {
 		if (!localByKey.has(dedupeKey(meta))) {
 			localByKey.set(dedupeKey(meta), meta);
 		}
@@ -541,8 +541,8 @@ export async function checkoutAssets(options: {
 
 		const twin = localByKey.get(dedupeKey(meta));
 		// Already here. Its bytes still have to ride along in `contents`, because
-		// `planBundle` builds the id map that repoints character frames from exactly this
-		// list — leave it out and every frame pointing at it is dropped.
+		// `planBundle` builds the id map that repoints character poses from exactly this
+		// list — leave it out and every pose pointing at it is dropped.
 		let blob = twin ? await store.get(twin.id) : undefined;
 
 		if (!blob) {

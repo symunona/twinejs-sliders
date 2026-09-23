@@ -27,13 +27,13 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
 	enter: 0.3,
 	exit: 0.3,
 	flip: 0.15,
-	frame: 0.15,
 	fx: 0.3,
 	move: 0.3,
 	// A bed crossfades rather than cuts. Longer than anything visual on purpose: a picture
 	// that takes a second to change looks broken, and music that changes in a tenth of one
 	// sounds like a mistake.
 	music: 1.5,
+	pose: 0.15,
 	// Its own kind rather than part of `move`, for the same reason `scale` is: a sprite can
 	// turn where it stands, and a renderer that wants a lean to settle slower than a walk
 	// has nowhere else to say so.
@@ -45,7 +45,7 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
  * What a `move` transition carries: everything that places an entity in space.
  *
  * `scale` is deliberately NOT in here. Size is its own transition kind, like `flip` and
- * `frame`, so a renderer can time a resize separately from a walk across the stage.
+ * `pose`, so a renderer can time a resize separately from a walk across the stage.
  */
 export interface Placement {
 	at: Vec2;
@@ -66,19 +66,19 @@ function sameVec(a: Vec2, b: Vec2): boolean {
 }
 
 /**
- * What the sprite is drawing, pose and cycle together.
+ * What the sprite is drawing, pose and step list together.
  *
- * A cycle carries its first step in `frame`, so `frame: idle` -> `frame: [idle, blink]`
+ * A step list carries its first step in `pose`, so `pose: idle` -> `pose: [idle, blink]`
  * leaves that string alone while the sprite starts moving. Comparing the whole thing is
- * what makes that a `frame` transition, which is the one the renderer cross-fades and
- * restarts the cycle on.
+ * what makes that a `pose` transition, which is the one the renderer cross-fades and
+ * restarts the steps on.
  */
-function frameKey(entity: StageEntity): string {
-	return entity.frames
-		? `${entity.frame ?? ''}\u0000${entity.frameLoop ?? ''}\u0000${JSON.stringify(
-				entity.frames
+function poseKey(entity: StageEntity): string {
+	return entity.steps
+		? `${entity.pose ?? ''}\u0000${entity.poseLoop ?? ''}\u0000${JSON.stringify(
+				entity.steps
 		  )}`
-		: entity.frame ?? '';
+		: entity.pose ?? '';
 }
 
 function samePlacement(a: StageEntity, b: StageEntity): boolean {
@@ -212,13 +212,13 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 			});
 		}
 
-		if (frameKey(before) !== frameKey(after)) {
+		if (poseKey(before) !== poseKey(after)) {
 			out.push({
-				duration: DEFAULT_DURATIONS.frame,
+				duration: DEFAULT_DURATIONS.pose,
 				entityId: id,
-				from: before.frame,
-				kind: 'frame',
-				to: after.frame
+				from: before.pose,
+				kind: 'pose',
+				to: after.pose
 			});
 		}
 

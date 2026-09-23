@@ -19,8 +19,8 @@ bg: tavern/night
 camera: {at: [0, 0], zoom: 1}
 
 cast:
-  mira:  {at: -0.4, frame: arms-crossed}
-  joren: {at: 0.35, frame: idle, flip: true, layer: back}
+  mira:  {at: -0.4, pose: arms-crossed}
+  joren: {at: 0.35, pose: idle, flip: true, layer: back}
 
 props:
   candle: {at: [0.1, -0.2], layer: front}
@@ -31,7 +31,7 @@ fx: [rain@0.6]
 beats:
   - mira: "You shouldn't have come back."
   - joren: "And yet."
-  - mira: {frame: angry, at: -0.25, say: "Get out."}
+  - mira: {pose: angry, at: -0.25, say: "Get out."}
   - wait: 0.5
   - mark: tense
   - box: "The candle gutters."
@@ -64,14 +64,14 @@ describe('parseScene', () => {
 		it('makes cast and props entity patches keyed by id', () => {
 			expect(scene.entities.mira).toEqual({
 				at: {x: -0.4, y: LAYER_BASELINE},
-				frame: 'arms-crossed',
+				pose: 'arms-crossed',
 				kind: 'cast',
 				ref: 'mira'
 			});
 			expect(scene.entities.joren).toEqual({
 				at: {x: 0.35, y: LAYER_BASELINE},
 				flip: true,
-				frame: 'idle',
+				pose: 'idle',
 				kind: 'cast',
 				ref: 'joren',
 				// `layer: back` is sugar. It desugars to a z seed behind everything derived.
@@ -110,7 +110,7 @@ describe('parseScene', () => {
 			const both = scene.beats[2] as SayBeat;
 
 			expect(both.text).toBe('Get out.');
-			expect(both.patch).toEqual({at: {x: -0.25, y: LAYER_BASELINE}, frame: 'angry'});
+			expect(both.patch).toEqual({at: {x: -0.25, y: LAYER_BASELINE}, pose: 'angry'});
 		});
 
 		it('parses links', () => {
@@ -272,12 +272,12 @@ describe('parseScene', () => {
 	describe('entities:', () => {
 		it('parses entries with kind auto — it cannot know which they are', () => {
 			const {errors, scene} = parseScene(
-				'entities:\n  mira: {at: -0.4, frame: idle}\n  candle: {at: 0.4}\n'
+				'entities:\n  mira: {at: -0.4, pose: idle}\n  candle: {at: 0.4}\n'
 			);
 
 			expect(errors).toEqual([]);
 			expect(scene.entities.mira).toMatchObject({
-				frame: 'idle',
+				pose: 'idle',
 				kind: 'auto',
 				ref: 'mira'
 			});
@@ -326,10 +326,10 @@ describe('parseScene', () => {
 		});
 
 		it('suggests the nearest entity key', () => {
-			const {errors} = parseScene('cast:\n  mira: {fram: angry}\n');
+			const {errors} = parseScene('cast:\n  mira: {pos: angry}\n');
 
 			expect(errors[0].code).toBe('unknown-key');
-			expect(errors[0].hint).toBe("Did you mean 'frame'?");
+			expect(errors[0].hint).toBe("Did you mean 'pose'?");
 		});
 
 		it('omits the hint when nothing is close', () => {
@@ -484,7 +484,7 @@ describe('parseScene', () => {
 
 		it('names the missing indent when a beat body is written as siblings', () => {
 			const {scene, errors} = parseScene(
-				'beats:\n  - mira:\n    at: [0.1, 0.2]\n    frame: idle\n'
+				'beats:\n  - mira:\n    at: [0.1, 0.2]\n    pose: idle\n'
 			);
 
 			expect(errors).toHaveLength(1);
@@ -498,7 +498,7 @@ describe('parseScene', () => {
 
 		it('still parses the first beat when only its body exploded', () => {
 			const {scene, errors} = parseScene(
-				'beats:\n  - mira: "hi"\n    frame: idle\n'
+				'beats:\n  - mira: "hi"\n    pose: idle\n'
 			);
 
 			expect(errors).toHaveLength(1);
@@ -518,7 +518,7 @@ describe('parseScene', () => {
 
 		it('accepts the correctly indented body', () => {
 			const {scene, errors} = parseScene(
-				'beats:\n  - mira:\n      at: [0.1, 0.2]\n      frame: idle\n      say: Hello\n'
+				'beats:\n  - mira:\n      at: [0.1, 0.2]\n      pose: idle\n      say: Hello\n'
 			);
 
 			expect(errors).toEqual([]);
@@ -618,14 +618,14 @@ describe('parseScene', () => {
 
 		it('keeps the digits of the other name slots', () => {
 			const {scene, errors} = parseScene(
-				'id: 04\nfrom: 03\nbg: 007\ncast:\n  02: {frame: 01}\nprops:\n  05: {of: 02}\nbeats:\n  - mark: 06\n'
+				'id: 04\nfrom: 03\nbg: 007\ncast:\n  02: {pose: 01}\nprops:\n  05: {of: 02}\nbeats:\n  - mark: 06\n'
 			);
 
 			expect(errors).toEqual([]);
 			expect(scene.id).toBe('04');
 			expect(scene.from).toBe('03');
 			expect(scene.bg).toBe('007');
-			expect(scene.entities['02']).toMatchObject({frame: '01'});
+			expect(scene.entities['02']).toMatchObject({pose: '01'});
 			expect(scene.entities['05']).toMatchObject({of: '02'});
 			expect(scene.beats[0]).toEqual({index: 0, kind: 'mark', name: '06'});
 		});

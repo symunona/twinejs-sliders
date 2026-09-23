@@ -1,5 +1,5 @@
 /**
- * The rules behind phase 4's gestures (spec 10): flip, z, frame, delete, drop, camera.
+ * The rules behind phase 4's gestures (spec 10): flip, z, pose, delete, drop, camera.
  *
  * Pure, like `planEntityWrite` and for the same reason — "does `f` on an unflipped sprite
  * write `flip: true` or delete the key" is a rule, and a rule that can only be checked by
@@ -108,20 +108,23 @@ export function zWrites(
 }
 
 // ---------------------------------------------------------------------------
-// frame
+// pose
 // ---------------------------------------------------------------------------
 
 /**
- * Pick a named frame. Not for props — a prop is a single image and has no frames (spec 03).
- * An `auto` entity is allowed through: only the frame select can call this, and that is
- * only on screen when the resolver actually found a character with frames.
+ * Pick a named pose. Not for props — a prop is a single image and has no poses (spec 03).
+ * An `auto` entity is allowed through: only the pose select can call this, and that is
+ * only on screen when the resolver actually found a character with poses.
  *
  * An empty choice removes the key: the renderer then falls back to `idle`, or to the first
- * frame in the manifest, which is a better default than any name this could write.
+ * pose in the manifest, which is a better default than any name this could write.
+ *
+ * Always writes `pose:`. An entity still spelled `frame:` is renamed in the same edit
+ * (`setEntityKey` finds the old spelling), so the text never holds both.
  */
-export function frameWrite(
+export function poseWrite(
 	entity: StageEntity | undefined,
-	frame: string | undefined
+	pose: string | undefined
 ): EntityKeyWrite | undefined {
 	if (!entity || entity.kind === 'prop') {
 		return undefined;
@@ -129,10 +132,10 @@ export function frameWrite(
 
 	return {
 		id: entity.id,
-		key: 'frame',
+		key: 'pose',
 		kind: entity.kind,
 		ref: entity.ref,
-		value: frame ? frame : undefined
+		value: pose ? pose : undefined
 	};
 }
 

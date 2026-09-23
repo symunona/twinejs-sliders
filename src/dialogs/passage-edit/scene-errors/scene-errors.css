@@ -68,6 +68,11 @@ preview rather than pushing the text the author is typing in.
 	color: #96700a;
 }
 
+/* Advice, not a problem: an old spelling that still works. Quiet on purpose. */
+.scene-errors .scene-preview-errors li.info .line {
+	color: #3b6ea8;
+}
+
 .scene-errors .scene-preview-errors .line {
 	font-variant-numeric: tabular-nums;
 	min-width: 3em;
@@ -131,6 +136,10 @@ which text, and the tooltip below says what.
 	background: rgba(150, 112, 10, 0.08);
 }
 
+.CodeMirror .sliders-info-line {
+	background: rgba(59, 110, 168, 0.05);
+}
+
 .CodeMirror .sliders-scene-error {
 	text-decoration: underline wavy #b00020;
 	text-decoration-skip-ink: none;
@@ -138,6 +147,11 @@ which text, and the tooltip below says what.
 
 .CodeMirror .sliders-scene-warning {
 	text-decoration: underline wavy #96700a;
+	text-decoration-skip-ink: none;
+}
+
+.CodeMirror .sliders-scene-info {
+	text-decoration: underline dotted #3b6ea8;
 	text-decoration-skip-ink: none;
 }
 

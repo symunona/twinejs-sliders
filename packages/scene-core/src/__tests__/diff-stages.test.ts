@@ -150,30 +150,30 @@ describe('diffStages', () => {
 			]);
 		});
 
-		it('reports a frame change', () => {
+		it('reports a pose change', () => {
 			const transitions = diffStages(
-				stageWith(entity('mira', {frame: 'idle'})),
-				stageWith(entity('mira', {frame: 'angry'}))
+				stageWith(entity('mira', {pose: 'idle'})),
+				stageWith(entity('mira', {pose: 'angry'}))
 			);
 
 			expect(transitions).toEqual([
 				{
-					duration: DEFAULT_DURATIONS.frame,
+					duration: DEFAULT_DURATIONS.pose,
 					entityId: 'mira',
 					from: 'idle',
-					kind: 'frame',
+					kind: 'pose',
 					to: 'angry'
 				}
 			]);
 		});
 
-		it('reports a frame change from nothing', () => {
+		it('reports a pose change from nothing', () => {
 			const transitions = diffStages(
 				stageWith(entity('mira')),
-				stageWith(entity('mira', {frame: 'wave'}))
+				stageWith(entity('mira', {pose: 'wave'}))
 			);
 
-			expect(transitions[0]).toMatchObject({from: undefined, kind: 'frame', to: 'wave'});
+			expect(transitions[0]).toMatchObject({from: undefined, kind: 'pose', to: 'wave'});
 		});
 
 		it('reports a flip change', () => {
@@ -220,20 +220,20 @@ describe('diffStages', () => {
 			expect(only(transitions, 'move')[0].to).not.toHaveProperty('scale');
 		});
 
-		it('reports move, frame and flip together for one entity', () => {
+		it('reports move, pose and flip together for one entity', () => {
 			const transitions = diffStages(
-				stageWith(entity('mira', {at: {x: -0.4, y: 0}, flip: false, frame: 'idle'})),
-				stageWith(entity('mira', {at: {x: 0.1, y: 0}, flip: true, frame: 'angry'}))
+				stageWith(entity('mira', {at: {x: -0.4, y: 0}, flip: false, pose: 'idle'})),
+				stageWith(entity('mira', {at: {x: 0.1, y: 0}, flip: true, pose: 'angry'}))
 			);
 
-			expect(kinds(transitions)).toEqual(['move', 'frame', 'flip']);
+			expect(kinds(transitions)).toEqual(['move', 'pose', 'flip']);
 			expect(transitions.every(t => t.entityId === 'mira')).toBe(true);
 		});
 
 		it('does not report a move for an entity that entered', () => {
 			const transitions = diffStages(
 				emptyStage(),
-				stageWith(entity('mira', {at: {x: 0.5, y: 0}, frame: 'idle'}))
+				stageWith(entity('mira', {at: {x: 0.5, y: 0}, pose: 'idle'}))
 			);
 
 			expect(kinds(transitions)).toEqual(['enter']);
@@ -320,14 +320,14 @@ describe('diffStages', () => {
 		const next = stage({
 			bg: 'b',
 			camera: {at: {x: 0.1, y: 0}, zoom: 1},
-			entities: {mira: entity('mira', {frame: 'angry'})},
+			entities: {mira: entity('mira', {pose: 'angry'})},
 			fx: [{amount: 1, id: 'rain'}]
 		});
 
 		expect(kinds(diffStages(prev, next))).toEqual([
 			'bg',
 			'camera',
-			'frame',
+			'pose',
 			'fx'
 		]);
 	});

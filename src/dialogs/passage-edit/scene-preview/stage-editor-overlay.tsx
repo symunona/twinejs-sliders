@@ -99,8 +99,8 @@ const WHEEL_COMMIT_DELAY_MS = 220;
  * literals. A `MenuButton`'s popover is portalled to `document.body` — but React bubbles a
  * portal's events up the React TREE, not the DOM one, so a press on a menu opened from the
  * selection row still arrives here. Its DOM ancestors are the body's, so none of the other
- * entries in this list can match it; without its own the frame menu's first pointerdown
- * cleared the very selection whose frame it was about to set, and the click never landed.
+ * entries in this list can match it; without its own the pose menu's first pointerdown
+ * cleared the very selection whose pose it was about to set, and the click never landed.
  *
  * The trace panel is the same trap without the portal: it hangs off the sprite's rect, so it
  * routinely covers empty ground, and a press there hit tested through to nothing and cleared

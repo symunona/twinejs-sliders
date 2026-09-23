@@ -36,8 +36,8 @@ bg: tavern-night
 camera: {at: [0, 0], zoom: 1}
 
 cast:
-  mira:  {at: -0.4, frame: arms-crossed}
-  joren: {at: 0.35, frame: idle, flip: true, layer: back}
+  mira:  {at: -0.4, pose: arms-crossed}
+  joren: {at: 0.35, pose: idle, flip: true, layer: back}
 
 props:
   # ref: points at the asset when the stage name differs from the asset name.
@@ -50,7 +50,7 @@ beats:
   - mira: "You shouldn't have come back."
   - joren: "And yet."
   - mark: tense
-  - mira: {frame: angry, at: -0.25, say: "Get out."}
+  - mira: {pose: angry, at: -0.25, say: "Get out."}
   - wait: 0.5
   - box: "The candle gutters."
   # Targets go inline: Twine parses [[...]] out of the passage SOURCE to draw the map
@@ -76,7 +76,7 @@ id: tavern-fight
 from: tavern-night@tense
 
 cast:
-  mira: {frame: angry, at: -0.15}
+  mira: {pose: angry, at: -0.15}
 
 beats:
   - mira: "Then draw."
@@ -96,7 +96,7 @@ bg: street-dusk
 
 cast:
   joren: ~
-  mira: {at: 0, frame: idle}
+  mira: {at: 0, pose: idle}
 
 props:
   candle: ~
@@ -118,7 +118,7 @@ export const BROKEN_PASSAGE: SamplePassage = {
 	text: `[scene]
 id: broken
 chast:
-  mira: {at: -0.4, frame: idle}
+  mira: {at: -0.4, pose: idle}
 cast:
   joren: {at: 9.5, layer: middle}
 `

@@ -52,8 +52,11 @@ Chapbook's. 0.2.0 shipped exactly that way, in production, for a day.
   that string. Uniqueness is enforced in `asset-store`; a rename throws, an upload numbers.
 - Assets are **per story**, not a shared library. `<AssetScopeProvider>` gates the store so
   nothing can write to the wrong scope by accident.
-- Character frame assets are named `<character id>-<frame>`. A character's first frame is
+- Character pose images are named `<character id>-<pose>`. A character's first pose is
   always `idle`, whatever the file was called.
+- The word `frame` is retired: **pose** (named look: still, animated file or steps) and
+  **step**. Old `frame:`/`frameLoop:` YAML and `frames:` manifests are read forever and
+  never written. Only the stored `AssetKind 'frame'` keeps the word — it is on the wire.
 
 ## Z and layers
 

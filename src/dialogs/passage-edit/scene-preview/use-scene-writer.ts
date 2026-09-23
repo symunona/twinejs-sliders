@@ -64,7 +64,7 @@ export const DRAG_ORIGIN = 'sliders-drag';
 export const NUDGE_ORIGIN = '+sliders-nudge';
 
 /**
- * One deliberate keypress or click — flip, layer, frame, delete. One undo entry each: two
+ * One deliberate keypress or click — flip, layer, pose, delete. One undo entry each: two
  * flips in a row are two decisions, and merging them would make the first one unreachable.
  */
 export const EDIT_ORIGIN = 'sliders-edit';

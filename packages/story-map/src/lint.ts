@@ -42,7 +42,8 @@ export interface LintFinding {
 	file: string;
 	/** 1-indexed. 0 means "this is about the whole file", and the formatter drops it. */
 	line: number;
-	level: 'error' | 'warn';
+	/** `info` is advice (an old spelling that still works). It never fails a lint. */
+	level: 'error' | 'warn' | 'info';
 	message: string;
 }
 
@@ -50,15 +51,26 @@ export interface LintFinding {
 export function formatFinding(finding: LintFinding): string {
 	const where = finding.line > 0 ? `${finding.file}:${finding.line}` : finding.file;
 
-	return `${where}: ${finding.level === 'error' ? 'error' : 'warning'}: ${finding.message}`;
+	const word =
+		finding.level === 'error'
+			? 'error'
+			: finding.level === 'info'
+			? 'info'
+			: 'warning';
+
+	return `${where}: ${word}: ${finding.message}`;
 }
 
 export function hasErrors(findings: readonly LintFinding[]): boolean {
 	return findings.some(finding => finding.level === 'error');
 }
 
-function levelOf(error: SceneError): 'error' | 'warn' {
-	return error.severity === 'error' ? 'error' : 'warn';
+function levelOf(error: SceneError): LintFinding['level'] {
+	return error.severity === 'error'
+		? 'error'
+		: error.severity === 'info'
+		? 'info'
+		: 'warn';
 }
 
 /** A scene error's `message` plus its `hint`, which is where `keyHint()` lands. */

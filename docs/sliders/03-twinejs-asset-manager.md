@@ -36,7 +36,7 @@ undo, archive, and import/export. You do not want 40 MB of sprites riding along.
 IndexedDB key prefix, an Electron story folder. Art uploaded while writing one story is
 invisible from another, so `bg: forest` in two stories is two pictures. Reuse is deliberate:
 the asset manager's **Import…** tab reads another story's library and copies one asset (or
-one character, frames and all) at a time, through the same rules the bundle importer uses.
+one character, poses and all) at a time, through the same rules the bundle importer uses.
 
 The unscoped library that predates this is scope `''`. It is never written to again. On
 first load after the upgrade, each story is given the assets its own scenes reference —
@@ -89,7 +89,7 @@ interface AssetMeta {
   w: number; h: number;
   bytes: number;
   hash: string;
-  ownerCharacter?: string;   // set when kind==='frame'
+  ownerCharacter?: string;   // set when kind==='frame' (a pose image)
 }
 ```
 
@@ -100,14 +100,14 @@ interface AssetMeta {
 │ [Backgrounds] [Objects] [Characters] [FX]   🔍 tag ▾   │
 ├────────────────────────────────────────────────────────┤
 │  ▢ tavern/night   ▢ street/dusk   ▢ candle   ▢ table   │
-│  ◈ Mira (7 frames)   ◈ Joren (4 frames)                │
+│  ◈ Mira (7 poses)    ◈ Joren (4 poses)                 │
 └────────────────────────────────────────────────────────┘
         click ◈ Mira → Character Editor (04)
 ```
 
 | Rule | |
 |---|---|
-| Character frames | **hidden** from the flat list. `ownerCharacter` set → filtered out. |
+| Pose images | **hidden** from the flat list. `ownerCharacter` set → filtered out. |
 | Characters | shown as **collections**, one tile each. |
 | Click a character | opens the [character editor](04-twinejs-character-editor.md), tab per character. |
 | Tags | free-form. Filter and group by them. |
@@ -121,7 +121,7 @@ Copying a tile yields the **YAML fragment**, not the id:
 |---|---|
 | background | `bg: tavern/night` |
 | object | `candle: {at: 0}` |
-| character | `mira: {at: 0, frame: idle}` |
+| character | `mira: {at: 0, pose: idle}` |
 
 This closes the loop with the scene format. It is the thing that will get used every day.
 

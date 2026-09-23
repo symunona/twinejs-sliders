@@ -48,18 +48,18 @@ describe('formatValue', () => {
 	});
 
 	it('leaves plain strings unquoted', () => {
-		expect(formatValue('frame', 'arms-crossed')).toBe('arms-crossed');
+		expect(formatValue('pose', 'arms-crossed')).toBe('arms-crossed');
 		expect(formatValue('layer', 'back')).toBe('back');
 	});
 
 	it('quotes strings that would re-parse as something else', () => {
-		expect(formatValue('frame', '1.5')).toBe('"1.5"');
-		expect(formatValue('frame', 'true')).toBe('"true"');
-		expect(formatValue('frame', '~')).toBe('"~"');
-		expect(formatValue('frame', '')).toBe('""');
+		expect(formatValue('pose', '1.5')).toBe('"1.5"');
+		expect(formatValue('pose', 'true')).toBe('"true"');
+		expect(formatValue('pose', '~')).toBe('"~"');
+		expect(formatValue('pose', '')).toBe('""');
 		// YAML 1.2 core — which is what the parser is pinned to — reads `yes` as a plain
 		// string, so quoting it would be noise the author did not ask for.
-		expect(formatValue('frame', 'yes')).toBe('yes');
+		expect(formatValue('pose', 'yes')).toBe('yes');
 	});
 
 	/*
@@ -71,7 +71,7 @@ describe('formatValue', () => {
 		expect(formatValue('bg', 'rgba(0, 0, 0, 0.6)')).toBe('"rgba(0, 0, 0, 0.6)"');
 		expect(formatValue('font', 'Georgia, serif')).toBe('"Georgia, serif"');
 		expect(formatValue('font', '{weird}')).toBe('"{weird}"');
-		expect(formatValue('frame', '[odd]')).toBe('"[odd]"');
+		expect(formatValue('pose', '[odd]')).toBe('"[odd]"');
 	});
 
 	it('leaves a colour with no comma to yaml, which quotes it for the hash', () => {

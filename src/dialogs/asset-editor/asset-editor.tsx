@@ -506,7 +506,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	React.useEffect(() => {
 		let current = true;
 
-		store.list({includeFrames: true}).then(assets => {
+		store.list({includePoseImages: true}).then(assets => {
 			if (current) {
 				setLibrary(assets.map(asset => ({id: asset.id, name: asset.name})));
 			}

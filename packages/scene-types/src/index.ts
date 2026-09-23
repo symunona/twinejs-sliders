@@ -78,7 +78,7 @@ export interface Vec2 {
 	y: number;
 }
 
-/** Fraction of a sprite frame (0..1). Used for origins and anchors. */
+/** Fraction of a sprite box (0..1). Used for origins and anchors. */
 export interface Frac2 {
 	x: number;
 	y: number;
@@ -95,28 +95,32 @@ export interface Frac2 {
  */
 export type EntityKind = 'cast' | 'prop' | 'auto';
 
-/** How a `frames` cycle ends. */
-export const FRAME_LOOPS = ['all', 'once'] as const;
+/** How a scene's inline step list (`pose: [a, b, …]`) ends. */
+export const POSE_LOOPS = ['all', 'once'] as const;
 
-export type FrameLoop = (typeof FRAME_LOOPS)[number];
+export type PoseLoop = (typeof POSE_LOOPS)[number];
 
-/** Seconds a step holds when it names no `dur:` of its own. */
-export const DEFAULT_FRAME_STEP_SECONDS = 0.1;
+/** Seconds a step holds when it names no `dur:` of its own. Scene steps and pose steps alike. */
+export const DEFAULT_STEP_SECONDS = 0.1;
 
 /**
- * One step of a frame cycle: a pose, how long it is held, and optionally where the sprite
- * is while it is held.
+ * One step of a scene's inline step list: a pose, how long it is held, and optionally where
+ * the sprite is while it is held.
+ *
+ * Not a `PoseStep`. A pose step belongs to the character and names an IMAGE; this belongs
+ * to the scene and names a POSE — which may itself be animated, and then plays on its own
+ * clock during the hold.
  *
  * The placement keys are the entity's own (`at`, `scale`, `flip`, `opacity`), and they mean
  * exactly what they mean on the entity — a step that sets none of them leaves the entity's
  * placement alone, so a plain blink cycle stays four names and four numbers. They exist
  * because a walk is a pose cycle AND a translation, and splitting the two across a beat's
- * `dur:` and a frame list would make the author keep them in sync by hand.
+ * `dur:` and a step list would make the author keep them in sync by hand.
  */
-export interface FrameStep {
-	/** The character frame to draw. Required — a step with no pose is not a step. */
+export interface SceneStep {
+	/** The character pose to draw. Required — a step with no pose is not a step. */
 	name: string;
-	/** Seconds held. Defaults to `DEFAULT_FRAME_STEP_SECONDS`. */
+	/** Seconds held. Defaults to `DEFAULT_STEP_SECONDS`. */
 	dur?: number;
 	/** Placement while this step is on screen. Absolute, like the entity's own `at`. */
 	at?: Vec2;
@@ -147,7 +151,7 @@ export interface StageEntity {
 	/**
 	 * Parent entity id. `at` becomes relative to it, so moving the parent moves this too.
 	 *
-	 * Translation ONLY, deliberately (D17): the parent's `scale`, `flip` and `frame` do not
+	 * Translation ONLY, deliberately (D17): the parent's `scale`, `flip` and `pose` do not
 	 * reach the child. That is what keeps resolution a vector add with no sprite metrics in
 	 * it, and therefore keeps it in `scene-core` — where the differ can see it, so a child
 	 * glides when its parent moves instead of snapping.
@@ -160,25 +164,26 @@ export interface StageEntity {
 	 */
 	of?: EntityId;
 	/**
-	 * Named frame for cast; ignored for simple props.
+	 * Named pose for cast; ignored for simple props.
 	 *
-	 * When the author wrote a LIST (`frame: [{name: walk_1, dur: 0.1}, …]`) this holds the
-	 * first step's name and `frames` holds the whole cycle. Two keys for one YAML key so
+	 * When the author wrote a LIST (`pose: [{name: walk_1, dur: 0.1}, …]`) this holds the
+	 * first step's name and `steps` holds the whole list. Two keys for one YAML key so
 	 * that everything which only ever wanted "which pose is this" — the differ, the
-	 * editor's frame picker, the asset collectors, the rig's anchor lookup — keeps reading
+	 * editor's pose picker, the asset collectors, the rig's anchor lookup — keeps reading
 	 * one string and never has to know about animation.
 	 */
-	frame?: string;
+	pose?: string;
 	/**
-	 * A frame CYCLE, played by the renderer on its own clock. Absent for a still pose.
+	 * A scene's inline step list, played by the renderer on its own clock. Absent for a
+	 * single pose (which may still animate: a pose with `steps` is the character's own).
 	 *
 	 * Timing lives here rather than in the beat's `dur:` because the two answer different
 	 * questions: `dur:` is how long the reader looks at the beat, this is how fast the
 	 * sprite's own legs move, and a walk cycle outlives the line that started it.
 	 */
-	frames?: FrameStep[];
-	/** How `frames` ends. Default `all` — loop forever. `once` holds the last step. */
-	frameLoop?: FrameLoop;
+	steps?: SceneStep[];
+	/** How `steps` ends. Default `all` — loop forever. `once` holds the last step. */
+	poseLoop?: PoseLoop;
 	flip: boolean;
 	/**
 	 * Draw this entity as a full-bleed PLANE instead of as a positioned sprite: it fills the
@@ -231,7 +236,7 @@ export interface StageEntity {
 	/**
 	 * Where clicking this entity takes the reader. Absent means it is scenery.
 	 *
-	 * STATE, like `frame` and unlike a beat's `sfx`: every later beat inherits it, so the
+	 * STATE, like `pose` and unlike a beat's `sfx`: every later beat inherits it, so the
 	 * door that opened onto the hall at beat 2 still does at beat 9 unless a beat repoints
 	 * it — which is what makes "same object, different destination per beat" a patch rather
 	 * than a construct of its own. `link: ~` on a beat is how it stops being a way out.
@@ -341,8 +346,8 @@ export type BgMotion = (typeof BG_MOTIONS)[number];
  * A backdrop that moves on its own: a slow parallax drift, a shudder, a lazy circle.
  *
  * Kept OUT of `Stage.bg` — which stays the plain asset name every collector, differ and
- * placeholder already reads — for the same reason `StageEntity.frames` is kept out of
- * `frame`: one YAML key, two fields, and nothing downstream has to learn about the new one
+ * placeholder already reads — for the same reason `StageEntity.steps` is kept out of
+ * `pose`: one YAML key, two fields, and nothing downstream has to learn about the new one
  * to keep working.
  *
  * `speed` is the seconds one cycle of the motion takes. Absent means the preset's own
@@ -826,7 +831,7 @@ export interface Scene {
 	 * The backdrop's motion, from `bg: {id: …, fx: …, speed: …}`.
 	 *
 	 * Absent does NOT mean "inherit" on its own: the rule is read off `bg`, the way
-	 * `mergePatch` reads a frame cycle off `frame`. A scene that names a backdrop at all
+	 * `mergePatch` reads a step list off `pose`. A scene that names a backdrop at all
 	 * states its motion completely, so `bg: cellar` after an inherited parallax stops it —
 	 * a drift left over from art that is no longer on screen is never what was meant.
 	 */
@@ -844,7 +849,7 @@ export interface Scene {
 	/**
 	 * How this scene's stage changes move, for every beat that does not say otherwise.
 	 *
-	 * The middle of three layers, narrowest first: a frame step's own `ease`, the beat's
+	 * The middle of three layers, narrowest first: a scene step's own `ease`, the beat's
 	 * `ease:`, this, then `DEFAULT_EASES`. Resolved per KIND, so a scene that says
 	 * `ease: ease_in_out` and a beat that says `ease: {move: back_out}` give that beat an
 	 * overshooting move and an eased-in-out everything-else.
@@ -917,7 +922,8 @@ export type SceneErrorCode =
 	| 'bad-value'
 	| 'unknown-asset'
 	| 'unknown-character'
-	| 'unknown-frame'
+	| 'unknown-pose'
+	| 'retired-key'
 	| 'unknown-link'
 	| 'unknown-passage'
 	| 'passage-case'
@@ -932,6 +938,8 @@ export type SceneErrorCode =
 	| 'vars-value'
 	| 'missing-id';
 
+export type SceneSeverity = 'error' | 'warning' | 'info';
+
 export interface SceneError {
 	code: SceneErrorCode;
 	message: string;
@@ -941,7 +949,11 @@ export interface SceneError {
 	col: number;
 	endLine?: number;
 	endCol?: number;
-	severity: 'error' | 'warning';
+	/**
+	 * `info` is advice, never a problem: an old spelling that still works (`frame:` is now
+	 * `pose:`). It never counts as an error and never blocks anything.
+	 */
+	severity: SceneSeverity;
 	/** Present only when the repair is mechanical. See `SceneFix`. */
 	fix?: SceneFix;
 }
@@ -1031,7 +1043,7 @@ export type TransitionKind =
 	| 'move'
 	| 'scale'
 	| 'rot'
-	| 'frame'
+	| 'pose'
 	| 'flip'
 	| 'bg'
 	| 'camera'
@@ -1111,7 +1123,7 @@ export type BeatEase = string | Partial<Record<TransitionKind, string>>;
  * moving without a stated curve is a decision, not a default to inherit silently. Adding
  * one fails the build here until it is made.
  *
- * `enter`/`exit` are opposites (out of nothing, back into it) and `bg`/`frame`/`fx` are
+ * `enter`/`exit` are opposites (out of nothing, back into it) and `bg`/`pose`/`fx` are
  * linear because a cross-fade that eases is a cross-fade that looks mistimed.
  */
 export const DEFAULT_EASES: Record<TransitionKind, EaseName> = {
@@ -1120,10 +1132,10 @@ export const DEFAULT_EASES: Record<TransitionKind, EaseName> = {
 	enter: 'ease_out',
 	exit: 'ease_in',
 	flip: 'ease_out',
-	frame: 'linear',
 	fx: 'linear',
 	move: 'ease_out',
 	music: 'linear',
+	pose: 'linear',
 	rot: 'ease_out',
 	scale: 'ease_out'
 };
@@ -1192,54 +1204,139 @@ export function cssEase(
 // ---------------------------------------------------------------------------
 
 /**
- * How one frame's art sits inside the character box — registration, not expression.
- * Sprite sheets rarely agree: a wave is drawn a little higher, an idle a little smaller.
- * This nudges each frame until they line up, which is what the editor's ghost frames are
- * for seeing.
+ * How one pose's (or one step's) art sits inside the character box — registration, not
+ * expression. Sprite sheets rarely agree: a wave is drawn a little higher, an idle a little
+ * smaller. This nudges each pose until they line up, which is what the editor's ghost pose
+ * is for seeing.
  *
- * The rig does NOT move with it: `fit` nudges the ART, and a frame's `anchors` describe
+ * The rig does NOT move with it: `fit` nudges the ART, and a pose's `anchors` describe
  * where the rig points sit in the BOX. Registration and rigging are separate jobs, and a
- * frame that has been nudged into place must not drag its bubble along with it.
+ * pose that has been nudged into place must not drag its bubble along with it.
  *
  * Fractions of the character box, never pixels — `replace` re-derives an asset's `w`/`h`
- * from new bytes, so a pixel offset would silently shift every aligned frame the moment
+ * from new bytes, so a pixel offset would silently shift every aligned pose the moment
  * its background was cut out.
  */
-export interface FrameFit {
+export interface PoseFit {
 	/** {x: 0, y: 0} leaves the art where it is. */
 	offset: Frac2;
 	/** Uniform. 1 fills the box. */
 	scale: number;
 }
 
-export const DEFAULT_FIT: FrameFit = {offset: {x: 0, y: 0}, scale: 1};
+/** @deprecated Use `PoseFit`. The word frame is retired. */
+export type FrameFit = PoseFit;
+
+export const DEFAULT_FIT: PoseFit = {offset: {x: 0, y: 0}, scale: 1};
 
 /**
- * What a brand-new frame's rig starts as: a bubble above the shoulder, a mouth below it.
+ * What a brand-new pose's rig starts as: a bubble above the shoulder, a mouth below it.
  *
- * Only a starting point. The whole reason anchors are per frame is that these two move —
+ * Only a starting point. The whole reason anchors are per pose is that these two move —
  * a character who turns to face away, sits down, or is drawn in profile has their mouth
  * somewhere else, and a bubble pinned to one pose points at nothing in the next.
  */
-export const DEFAULT_FRAME_ANCHORS: Readonly<Record<string, Frac2>> = {
+export const DEFAULT_POSE_ANCHORS: Readonly<Record<string, Frac2>> = {
 	bubble: {x: 0.5, y: 0.15},
 	mouth: {x: 0.5, y: 0.25}
 };
 
-export interface CharacterFrame {
+/**
+ * One timed image inside a pose. Names an IMAGE (asset id), never another pose — that is
+ * what separates it from a scene's `SceneStep`.
+ */
+export interface PoseStep {
 	asset: AssetId;
+	/** Seconds held. Default `DEFAULT_STEP_SECONDS`. */
+	dur?: number;
+	/** Per step, because sheet cells drift. Wins over the pose's own `fit`. */
+	fit?: PoseFit;
+}
+
+/**
+ * A named thing a character can show: a still, an animated file, or a list of steps.
+ *
+ * Exactly one of `asset` / `steps`. The scene does not care which — `pose: idle` is the
+ * same line for a still idle and a breathing one.
+ */
+export interface CharacterPose {
+	/** A still, or an animated file (gif/webp/apng) that plays itself. */
+	asset?: AssetId;
+	/** An image sequence, played on the renderer's step clock. */
+	steps?: PoseStep[];
+	/**
+	 * `steps` only. Default true. `false` holds the last step. An animated FILE loops the
+	 * way its own bytes say, whatever this is.
+	 */
 	loop?: boolean;
-	/** Absent means identity — every frame drawn before this existed. */
-	fit?: FrameFit;
+	/** Absent means identity — every pose drawn before this existed. A step's own wins. */
+	fit?: PoseFit;
 	/**
 	 * Fractions of the character box. `bubble` is required for speech (D2).
 	 *
-	 * Per FRAME, not per character: the pose is what decides where a speech bubble belongs,
-	 * and one rig for every pose puts the bubble over the back of a character's head the
-	 * moment they turn around. Absent means the renderer's own fallbacks stand in, so a
-	 * frame added and never rigged still draws a bubble somewhere sane.
+	 * Per POSE, not per character and not per step: the pose is what decides where a
+	 * speech bubble belongs, and one rig for every pose puts the bubble over the back of a
+	 * character's head the moment they turn around. Per step would make a bubble jitter
+	 * every 0.1 s. Absent means the renderer's own fallbacks stand in, so a pose added and
+	 * never rigged still draws a bubble somewhere sane.
 	 */
 	anchors?: Record<string, Frac2>;
+}
+
+/**
+ * Every image a pose draws, in order: its `asset`, or each step's. What a collector walks
+ * when it needs "the art this pose cannot be shown without".
+ */
+export function poseAssets(pose: CharacterPose | undefined): AssetId[] {
+	if (!pose) {
+		return [];
+	}
+
+	if (pose.steps && pose.steps.length > 0) {
+		return pose.steps.map(step => step.asset);
+	}
+
+	return pose.asset ? [pose.asset] : [];
+}
+
+/**
+ * The same pose with every image id passed through `map`. Undefined when `map` loses any
+ * one of them: a pose short of an image is a different animation, and a caller that
+ * repoints ids (bundle import, library copy) drops the pose rather than guess.
+ */
+export function mapPoseAssets(
+	pose: CharacterPose,
+	map: (id: AssetId) => AssetId | undefined
+): CharacterPose | undefined {
+	if (pose.steps && pose.steps.length > 0) {
+		const steps: PoseStep[] = [];
+
+		for (const step of pose.steps) {
+			const asset = map(step.asset);
+
+			if (!asset) {
+				return undefined;
+			}
+
+			steps.push({...step, asset});
+		}
+
+		return {...pose, steps};
+	}
+
+	const asset = pose.asset && map(pose.asset);
+
+	return asset ? {...pose, asset} : undefined;
+}
+
+/** The first image a pose shows: the still, or step one. What a thumbnail draws. */
+export function poseCover(pose: CharacterPose | undefined): AssetId | undefined {
+	return poseAssets(pose)[0];
+}
+
+/** True when a pose is an image sequence rather than one file. */
+export function poseHasSteps(pose: CharacterPose | undefined): boolean {
+	return !!pose?.steps && pose.steps.length > 0;
 }
 
 export interface Character {
@@ -1251,12 +1348,41 @@ export interface Character {
 	 */
 	bubble?: BubbleStyle;
 	size: {w: number; h: number};
-	/** Fraction of the frame. Default {x:0.5,y:1} = feet, bottom centre. */
+	/** Fraction of the character box. Default {x:0.5,y:1} = feet, bottom centre. */
 	origin: Frac2;
-	frames: Record<string, CharacterFrame>;
+	poses: Record<string, CharacterPose>;
+	/** Which way the art looks. Default `right`. A walk flips from it. */
+	faces?: 'left' | 'right';
+	/** Stage widths per second when walking. See point-and-click/walk-area.md. Unused yet. */
+	walkSpeed?: number;
 	tags: string[];
 }
 
+/**
+ * A character as an older writer left it — `frames:` where today says `poses:` — in
+ * today's shape. Every reader of stored or published characters goes through this: the
+ * asset store, the player's `SlidersCast`, bundle import, server pulls.
+ *
+ * A pure key rename; nothing inside a pose changed. `poses` wins where both exist.
+ * Identity when there is nothing to do, so a read path can apply it to everything.
+ */
+export function upgradeCharacter<T extends Character>(character: T): T {
+	const stored = character as T & {frames?: Record<string, CharacterPose>};
+
+	if (!stored || typeof stored !== 'object' || !('frames' in stored)) {
+		return character;
+	}
+
+	const {frames, ...rest} = stored;
+
+	return {...rest, poses: {...(frames ?? {}), ...(stored.poses ?? {})}} as T;
+}
+
+/**
+ * `frame` is a STORED value and stays: it is on the wire, in every manifest and in the
+ * server's rows. It means "an image owned by a character" — a pose image. The UI says
+ * "pose image"; the word only survives here.
+ */
 export type AssetKind = 'bg' | 'object' | 'frame' | 'fx' | 'sound';
 
 /** The kinds that are pictures. A `sound` has no pixels, so `w`/`h` mean nothing for it. */

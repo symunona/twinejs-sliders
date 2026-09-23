@@ -17,7 +17,7 @@ describe('parseSceneText', () => {
 				'id: tavern-night',
 				'bg: tavern-night',
 				'cast:',
-				'  mira: {at: -0.4, frame: idle}',
+				'  mira: {at: -0.4, pose: idle}',
 				'beats:',
 				'  - mira: "Hello."'
 			].join('\n')

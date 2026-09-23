@@ -127,7 +127,7 @@ describe('BackedAssetStore', () => {
 		expect(result.meta.h).toBe(480);
 	});
 
-	it('hides character frames from the flat list', async () => {
+	it('hides character poses from the flat list', async () => {
 		const store = newStore();
 
 		await store.put(file(pngBytes(1, 1), 'bg.png', 'image/png'), {kind: 'bg'});
@@ -137,7 +137,7 @@ describe('BackedAssetStore', () => {
 		});
 
 		expect(await store.list()).toHaveLength(1);
-		expect(await store.list({includeFrames: true})).toHaveLength(2);
+		expect(await store.list({includePoseImages: true})).toHaveLength(2);
 	});
 
 	it('filters by kind, search text and tags', async () => {
@@ -170,9 +170,9 @@ describe('BackedAssetStore', () => {
 		expect(await store.get(id)).toBeUndefined();
 	});
 
-	it('persists characters and marks their frames as owned', async () => {
+	it('persists characters and marks their poses as owned', async () => {
 		const store = newStore();
-		const frameId = await store.put(
+		const imageId = await store.put(
 			file(pngBytes(), 'idle.png', 'image/png'),
 			{kind: 'bg'}
 		);
@@ -181,7 +181,7 @@ describe('BackedAssetStore', () => {
 			// A name of its own: new characters take the id, but the wire format still
 			// carries a name and a story written before the two merged has one.
 			name: 'Mira',
-			frames: {idle: {asset: frameId}}
+			poses: {idle: {asset: imageId}}
 		};
 
 		await store.putCharacter(character);
@@ -190,27 +190,27 @@ describe('BackedAssetStore', () => {
 
 		expect(stored?.name).toBe('Mira');
 		expect(stored?.origin).toEqual({x: 0.5, y: 1});
-		expect((await store.meta(frameId))?.ownerCharacter).toBe('mira');
-		expect((await store.meta(frameId))?.kind).toBe('frame');
+		expect((await store.meta(imageId))?.ownerCharacter).toBe('mira');
+		expect((await store.meta(imageId))?.kind).toBe('frame');
 		expect(await store.list()).toHaveLength(0);
 		expect(await store.listCharacters()).toHaveLength(1);
 	});
 
-	it('removes a character along with its frames', async () => {
+	it('removes a character along with its pose images', async () => {
 		const store = newStore();
-		const frameId = await store.put(file(pngBytes(), 'idle.png', 'image/png'), {
+		const imageId = await store.put(file(pngBytes(), 'idle.png', 'image/png'), {
 			kind: 'frame',
 			ownerCharacter: 'mira'
 		});
 
 		await store.putCharacter({
 			...defaultCharacter('mira'),
-			frames: {idle: {asset: frameId}}
+			poses: {idle: {asset: imageId}}
 		});
 		await store.removeCharacter('mira');
 
 		expect(await store.listCharacters()).toHaveLength(0);
-		expect(await store.meta(frameId)).toBeUndefined();
+		expect(await store.meta(imageId)).toBeUndefined();
 	});
 
 	it('survives concurrent uploads without losing manifest entries', async () => {
@@ -248,18 +248,18 @@ describe('YAML fragments', () => {
 		expect(assetFragment((await store.meta(id))!)).toBe('candle: {at: 0}');
 	});
 
-	it('copies a character as an entity line naming its first frame', () => {
+	it('copies a character as an entity line naming its first pose', () => {
 		expect(
 			characterFragment({
 				...defaultCharacter('mira'),
-				frames: {idle: {asset: 'a_0001'}, wave: {asset: 'a_0002'}}
+				poses: {idle: {asset: 'a_0001'}, wave: {asset: 'a_0002'}}
 			})
-		).toBe('mira: {at: 0, frame: idle}');
+		).toBe('mira: {at: 0, pose: idle}');
 	});
 
-	it('falls back to an idle frame for a character with no frames yet', () => {
+	it('falls back to an idle pose for a character with no poses yet', () => {
 		expect(characterFragment(defaultCharacter('joren'))).toBe(
-			'joren: {at: 0, frame: idle}'
+			'joren: {at: 0, pose: idle}'
 		);
 	});
 
@@ -388,7 +388,7 @@ describe('importAsset', () => {
 		expect(await store.list({kind: 'bg', tags: ['night']})).toHaveLength(1);
 	});
 
-	it('keeps an imported character frame out of the flat list', async () => {
+	it('keeps an imported character pose out of the flat list', async () => {
 		const store = newStore();
 
 		await store.importAsset(
@@ -397,7 +397,7 @@ describe('importAsset', () => {
 		);
 
 		expect(await store.list()).toHaveLength(0);
-		expect(await store.list({includeFrames: true})).toHaveLength(1);
+		expect(await store.list({includePoseImages: true})).toHaveLength(1);
 		expect((await store.meta('a_1111'))?.ownerCharacter).toBe('mira');
 	});
 });
@@ -436,7 +436,7 @@ describe('unique names', () => {
 		expect(put.meta.name).toBe('mira-2');
 	});
 
-	it('counts character frames too — a bg: may legitimately name one', async () => {
+	it('counts character poses too — a bg: may legitimately name one', async () => {
 		const store = newStore();
 
 		await store.putCharacter(defaultCharacter('mira'));
@@ -530,7 +530,7 @@ describe('unique names', () => {
 
 			await store.putCharacter(defaultCharacter('mira'));
 
-			// The frame lands under a different name (`mira` is taken by the character), but
+			// The pose lands under a different name (`mira` is taken by the character), but
 			// the re-save itself must not become an error — every edit goes through here.
 			await expect(
 				store.putCharacter({...defaultCharacter('mira'), name: 'Mira the Second'})

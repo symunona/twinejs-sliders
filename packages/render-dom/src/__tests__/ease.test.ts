@@ -185,7 +185,7 @@ describe('ease reaches the camera and the backdrop', () => {
 	});
 });
 
-describe('a frame step carries its own curve', () => {
+describe('a pose step carries its own curve', () => {
 	it('uses the step ease for a step that glides, and the beat ease otherwise', async () => {
 		jest.useFakeTimers();
 
@@ -198,8 +198,8 @@ describe('a frame step carries its own curve', () => {
 					{},
 					entity({
 						id: 'mira',
-						frame: 'step_a',
-						frames: [
+						pose: 'step_a',
+						steps: [
 							{name: 'step_a', dur: 0.1, at: {x: 0.1, y: -0.85}, ease: 'linear'},
 							{name: 'step_b', dur: 0.1, at: {x: 0.2, y: -0.85}, ease: 'back_out'}
 						]
@@ -234,8 +234,8 @@ describe('a frame step carries its own curve', () => {
 					{},
 					entity({
 						id: 'mira',
-						frame: 'blink_a',
-						frames: [
+						pose: 'blink_a',
+						steps: [
 							{name: 'blink_a', dur: 0.1},
 							{name: 'blink_b', dur: 0.1}
 						]

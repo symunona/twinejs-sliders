@@ -34,9 +34,9 @@ describe('recently used scene names', () => {
 
 		it('keeps slots apart', () => {
 			noteNameUsed('bg', 'street');
-			noteNameUsed('frame:mira', 'angry');
+			noteNameUsed('pose:mira', 'angry');
 			expect(recentNames('bg')).toEqual(['street']);
-			expect(recentNames('frame:mira')).toEqual(['angry']);
+			expect(recentNames('pose:mira')).toEqual(['angry']);
 		});
 
 		it('forgets past the limit', () => {

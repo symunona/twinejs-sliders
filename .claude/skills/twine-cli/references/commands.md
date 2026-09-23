@@ -40,10 +40,11 @@ Receipt front matter = `story`, `passage`, `rev`, `hash`, plus editable `name`, 
 |---|---|
 | `ping` | mode, server version, story count, connected clients |
 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, bytes, est tokens |
-| `assets <story> [--scene <id>] [--all-frames] [--unused] [--missing] [--fetch -o dir] [--json]` | what exists, or what a scene needs, with paths |
+| `assets <story> [--scene <id>] [--all-poses] [--unused] [--missing] [--fetch -o dir] [--json]` | what exists, or what a scene needs, with paths |
 | `graph <story> [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph |
 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
-| `lint [<story>\|<file>] [--after <file>] [--fix]` | `file:line: message`; exit 5 on errors |
+| `lint [<story>\|<file>] [--after <file>] [--fix]` | `file:line: message`; exit 5 on errors. `info` = old spelling, never fails |
+| `rewrite-poses <story> [--dry-run]` | rename scene `frame:`/`frameLoop:` → `pose:`/`poseLoop:` in every passage. Opt-in; old keys parse forever |
 
 `lint <file>` = YAML tier only, no server. `lint <story> --after <file>` = all four tiers as if
 that file were pushed. Pre-flight.
@@ -53,7 +54,7 @@ that file were pushed. Pre-flight.
 | Command | Does |
 |---|---|
 | `copy <story>[@rev] --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone: new id, new ifid, new passage ids |
-| `put <story>:<name> <file> --kind bg\|obj\|fx\|frame` | upload art; unknown name create it |
+| `put <story>:<name> <file> --kind bg\|obj\|fx\|frame` (`frame` = pose image, stored name) | upload art; unknown name create it |
 | `new --name "<n>"` | empty story |
 | `rm <story> [--purge] --yes` | tombstone, or erase |
 | `restore <story> --rev N` | new revision from old one; print `missingAssets` |

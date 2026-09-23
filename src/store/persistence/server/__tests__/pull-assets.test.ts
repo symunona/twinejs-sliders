@@ -126,7 +126,7 @@ function fakeClient(options: {
 
 function character(overrides: Partial<Character> = {}): Character {
 	return {
-		frames: {idle: 'a_8f21'},
+		poses: {idle: 'a_8f21'},
 		id: 'mira',
 		name: 'mira',
 		size: {h: 1, w: 0.3},
@@ -150,7 +150,7 @@ describe('pullStoryAssets', () => {
 		expect(result.downloaded).toEqual([incoming.id]);
 		expect(result.changed).toBe(true);
 		expect(result.rev).toBe(4);
-		expect((await store.list({includeFrames: true})).length).toBe(1);
+		expect((await store.list({includePoseImages: true})).length).toBe(1);
 	});
 
 	it('asks the server nothing when the manifest rev has not moved', async () => {

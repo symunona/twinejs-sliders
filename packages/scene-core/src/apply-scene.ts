@@ -3,7 +3,7 @@
  *
  *                     no `from:` (snapshot)     with `from:` (patch)
  *   key absent        REMOVED from the stage    INHERITED unchanged
- *   mira: {frame: x}  full definition           shallow-merged onto the inherited entity
+ *   mira: {pose: x}   full definition           shallow-merged onto the inherited entity
  *   mira: ~           n/a                       explicitly REMOVED
  *   cast: !only {…}   n/a                       replaces the whole cast
  */
@@ -64,7 +64,7 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 		out.bg = bg;
 		out.bgImplicit = scene.bg === undefined ? true : undefined;
 		// The motion is read off `bg`, not off its own absence — the same rule `mergePatch`
-		// uses for a frame cycle. A scene that names a backdrop states its motion in full,
+		// uses for a step list. A scene that names a backdrop states its motion in full,
 		// so `bg: cellar` after an inherited parallax STOPS it; an `id:`-derived backdrop
 		// (no `bg:` line at all) leaves an inherited motion alone, because it asked for
 		// nothing.

@@ -143,7 +143,7 @@ async function libraryAssets(
 					.join('');
 			const views = [];
 
-			for (const meta of await store.list({includeFrames: true})) {
+			for (const meta of await store.list({includePoseImages: true})) {
 				const sidecars: Record<string, unknown> = {};
 
 				for (const [kind, entry] of Object.entries(meta.sidecars ?? {})) {
@@ -242,7 +242,7 @@ async function seedEdits(
 		async ({assetName, id, modulePath, nextGamma, nextOrigin}) => {
 			const module = await import(modulePath);
 			const store = module.slidersAssetStore(id);
-			const meta = (await store.list({includeFrames: true})).find(
+			const meta = (await store.list({includePoseImages: true})).find(
 				(asset: {name: string}) => asset.name === assetName
 			);
 
@@ -298,7 +298,7 @@ async function seedCutout(
 		async ({assetName, id, modulePath, tuning}) => {
 			const module = await import(modulePath);
 			const store = module.slidersAssetStore(id);
-			const meta = (await store.list({includeFrames: true})).find(
+			const meta = (await store.list({includePoseImages: true})).find(
 				(asset: {name: string}) => asset.name === assetName
 			);
 
@@ -374,7 +374,7 @@ async function undoCutout(
 		async ({assetName, id, modulePath}) => {
 			const module = await import(modulePath);
 			const store = module.slidersAssetStore(id);
-			const meta = (await store.list({includeFrames: true})).find(
+			const meta = (await store.list({includePoseImages: true})).find(
 				(asset: {name: string}) => asset.name === assetName
 			);
 

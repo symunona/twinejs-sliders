@@ -95,21 +95,21 @@ async function zipBytes(blob: Blob) {
 	return new Uint8Array(await blobBytes(blob));
 }
 
-/** A character with `count` frames, all of them stored assets. */
+/** A character with `count` poses, all of them stored assets. */
 async function putCharacter(
 	store: BackedAssetStore,
 	id: string,
-	frameNames: string[]
+	poseNames: string[]
 ): Promise<Character> {
 	const character = defaultCharacter(id);
 
-	for (const [index, frameName] of frameNames.entries()) {
+	for (const [index, poseName] of poseNames.entries()) {
 		const asset = await store.put(
-			file(pngBytes(10 + index, 20), `${id}-${frameName}.png`, 'image/png'),
-			{kind: 'frame', name: `${id}/${frameName}`, ownerCharacter: id}
+			file(pngBytes(10 + index, 20), `${id}-${poseName}.png`, 'image/png'),
+			{kind: 'frame', name: `${id}/${poseName}`, ownerCharacter: id}
 		);
 
-		character.frames[frameName] = {asset};
+		character.poses[poseName] = {asset};
 	}
 
 	return await store.putCharacter(character);
@@ -144,7 +144,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: ['tavern-night'],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: []
 		});
 
@@ -162,7 +162,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: [],
 			optionalAssetRefs: ['tavern-night', 'signal-fire']
 		});
@@ -183,7 +183,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [id],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: []
 		});
 
@@ -210,7 +210,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: ['tavern-nite', 'tavern-nite'],
 			autoRefs: [],
 			characterRefs: ['mira'],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: ['sparkle']
 		});
 
@@ -225,7 +225,7 @@ describe('resolveBundleRefs', () => {
 	describe('two assets under one name', () => {
 		/** The index `createNamedResolver` builds, built the way that file builds it. */
 		async function previewIndex(store: BackedAssetStore) {
-			const list = await store.list({includeFrames: true});
+			const list = await store.list({includePoseImages: true});
 
 			return new Map(list.map(asset => [asset.name, asset]));
 		}
@@ -266,7 +266,7 @@ describe('resolveBundleRefs', () => {
 			'bundles the one the preview would draw (%s uploaded first)',
 			async first => {
 				const store = await seedBothOrders(first);
-				const clashing = (await store.list({includeFrames: true})).filter(
+				const clashing = (await store.list({includePoseImages: true})).filter(
 					meta => meta.name === 'tavern-night'
 				);
 
@@ -279,7 +279,7 @@ describe('resolveBundleRefs', () => {
 					assetRefs: ['tavern-night'],
 					autoRefs: [],
 					characterRefs: [],
-					frameRefs: {},
+					poseRefs: {},
 					fxRefs: []
 				});
 
@@ -297,7 +297,7 @@ describe('resolveBundleRefs', () => {
 			const store = newStore();
 
 			await store.putCharacter({
-				frames: {},
+				poses: {},
 				id: 'mira',
 				name: 'Mira',
 				origin: {x: 0.5, y: 1},
@@ -309,7 +309,7 @@ describe('resolveBundleRefs', () => {
 				assetRefs: [],
 				autoRefs: ['mira'],
 				characterRefs: [],
-				frameRefs: {},
+				poseRefs: {},
 				fxRefs: []
 			});
 
@@ -327,7 +327,7 @@ describe('resolveBundleRefs', () => {
 				assetRefs: [],
 				autoRefs: ['lamp'],
 				characterRefs: [],
-				frameRefs: {},
+				poseRefs: {},
 				fxRefs: []
 			});
 
@@ -341,7 +341,7 @@ describe('resolveBundleRefs', () => {
 				assetRefs: [],
 				autoRefs: ['ghost'],
 				characterRefs: [],
-				frameRefs: {},
+				poseRefs: {},
 				fxRefs: []
 			});
 
@@ -359,7 +359,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: ['rain']
 		});
 
@@ -384,7 +384,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: ['rain']
 		});
 
@@ -409,7 +409,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: ['rain']
 		});
 
@@ -420,26 +420,26 @@ describe('resolveBundleRefs', () => {
 		expect(resolved.unresolved).toEqual([]);
 	});
 
-	it('does not answer an fx ref with a character frame', async () => {
+	it('does not answer an fx ref with a pose image', async () => {
 		const store = newStore();
 
 		await putCharacter(store, 'mira', ['rain']);
 
-		// The only thing in the library that mangles to `rain` is a frame, and there is no
+		// The only thing in the library that mangles to `rain` is a pose, and there is no
 		// fx asset at all -- so anything found here was found by slug coincidence.
 		expect(
-			(await store.list({includeFrames: true})).map(meta => meta.name)
+			(await store.list({includePoseImages: true})).map(meta => meta.name)
 		).toEqual(['mira/rain']);
 
 		const resolved = await resolveBundleRefs(store, {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: ['rain']
 		});
 
-		// A frame is only ever addressed through its character (`mira: {frame: rain}`), so
+		// A pose is only ever addressed through its character (`mira: {pose: rain}`), so
 		// bundling one for an `fx:` ref ships an asset owned by a character that is not in
 		// the bundle: filtered out of the asset grid, unreachable from the character editor.
 		expect(resolved.assets).toEqual([]);
@@ -448,20 +448,20 @@ describe('resolveBundleRefs', () => {
 		expect(resolved.ambiguousFx).toEqual([]);
 	});
 
-	it('drags a character along when one of its frames is named on its own', async () => {
+	it('drags a character along when one of its poses is named on its own', async () => {
 		const store = newStore();
 		const character = await putCharacter(store, 'mira', ['idle', 'smile']);
 		const resolved = await resolveBundleRefs(store, {
-			// A `bg:` may legitimately name a frame by its full name, and then the frame
+			// A `bg:` may legitimately name a pose by its full name, and then the pose
 			// travels without anything having asked for its character.
 			assetRefs: ['mira/smile'],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: []
 		});
 
-		// Without the owner, the frame lands in the destination owned by a character that
+		// Without the owner, the pose lands in the destination owned by a character that
 		// is not there -- invisible in the grid and unopenable in the character editor.
 		expect(resolved.characters).toEqual([character]);
 		expect(resolved.assets.map(meta => meta.name).sort()).toEqual([
@@ -494,7 +494,7 @@ describe('resolveBundleRefs', () => {
 		expect(bundle.report.unresolved).toEqual([]);
 	});
 
-	it('pulls every frame of a referenced character, not just the named ones', async () => {
+	it('pulls every pose of a referenced character, not just the named ones', async () => {
 		const store = newStore();
 		const character = await putCharacter(store, 'mira', [
 			'idle',
@@ -505,7 +505,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: ['mira'],
-			frameRefs: {mira: ['smile']},
+			poseRefs: {mira: ['smile']},
 			fxRefs: []
 		});
 
@@ -517,7 +517,7 @@ describe('resolveBundleRefs', () => {
 		]);
 	});
 
-	it('reports a frame the referenced character does not have', async () => {
+	it('reports a pose the referenced character does not have', async () => {
 		const store = newStore();
 
 		await putCharacter(store, 'mira', ['idle']);
@@ -526,11 +526,11 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: ['mira'],
-			frameRefs: {mira: ['idle', 'smirk'], candle: ['lit']},
+			poseRefs: {mira: ['idle', 'smirk'], candle: ['lit']},
 			fxRefs: []
 		});
 
-		// `candle` is not a resolved character, so its frame is not guessed at.
+		// `candle` is not a resolved character, so its pose is not guessed at.
 		expect(resolved.unresolved).toEqual(['mira/smirk']);
 	});
 
@@ -543,7 +543,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: [],
 			autoRefs: [],
 			characterRefs: ['mira'],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: []
 		});
 
@@ -565,7 +565,7 @@ describe('resolveBundleRefs', () => {
 			assetRefs: ['tavern-night', id],
 			autoRefs: [],
 			characterRefs: [],
-			frameRefs: {},
+			poseRefs: {},
 			fxRefs: []
 		});
 
@@ -636,7 +636,7 @@ describe('exportStoryBundle', () => {
 				[
 					'bg: tavern-night',
 					'cast:',
-					'  mira: {at: -0.4, frame: smile}',
+					'  mira: {at: -0.4, pose: smile}',
 					'fx: [{id: rain, amount: 1}]',
 					'beats:',
 					'  - mira: Evening.'
@@ -676,7 +676,7 @@ describe('exportStoryBundle', () => {
 			expect(entries[path].length).toBeGreaterThan(0);
 		}
 
-		// bg + fx + three of Mira's frames. The unused asset stayed home.
+		// bg + fx + three of Mira's poses. The unused asset stayed home.
 		expect(manifest.assets).toHaveLength(5);
 		expect(manifest.characters.map(character => character.id)).toEqual([
 			'mira'
@@ -777,7 +777,7 @@ describe('exportStoryBundle', () => {
 			assetRefs: ['tavern-night'],
 			autoRefs: [],
 			characterRefs: ['mira'],
-			frameRefs: {mira: ['smile']},
+			poseRefs: {mira: ['smile']},
 			fxRefs: ['rain'],
 			optionalAssetRefs: [],
 			soundRefs: []

@@ -2,8 +2,8 @@
  * Most-recently-used names for the scene editor's autocomplete.
  *
  * The asset library is app-wide, not per-story, so this is too. A slot is one
- * completion context -- `bg`, `cast`, `frame:mira` -- kept apart because the
- * frames an author reaches for on one character say nothing about another.
+ * completion context -- `bg`, `cast`, `pose:mira` -- kept apart because the
+ * poses an author reaches for on one character say nothing about another.
  *
  * localStorage, like `use-last-scene.ts`: losing it costs an author nothing but
  * alphabetical order, so it is never worth an error dialog. Two tabs editing at

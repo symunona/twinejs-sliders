@@ -15,6 +15,7 @@ import type {
 	Character,
 	Frac2
 } from '@sliders/scene-types';
+import {poseAssets} from '@sliders/scene-types';
 
 export interface StubAssetSpec {
 	w?: number;
@@ -57,16 +58,16 @@ const STUB_ANCHORS: Record<string, Frac2> = {
 	hand: {x: 0.78, y: 0.52}
 };
 
-/** Anchors live on frames, so every stub frame gets the same rig unless told otherwise. */
-function stubFrames(
+/** Anchors live on poses, so every stub pose gets the same rig unless told otherwise. */
+function stubPoses(
 	id: string,
-	frames: string[],
+	poses: string[],
 	anchors: Record<string, Frac2> = STUB_ANCHORS
-): Character['frames'] {
+): Character['poses'] {
 	return Object.fromEntries(
-		frames.map(frame => [
-			frame,
-			{anchors: {...anchors}, asset: `a_${id}_${frame}`}
+		poses.map(pose => [
+			pose,
+			{anchors: {...anchors}, asset: `a_${id}_${pose}`}
 		])
 	);
 }
@@ -74,7 +75,7 @@ function stubFrames(
 function character(
 	id: string,
 	name: string,
-	frames: string[],
+	poses: string[],
 	overrides: Partial<Character> = {}
 ): Character {
 	return {
@@ -82,7 +83,7 @@ function character(
 		name,
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
-		frames: stubFrames(id, frames),
+		poses: stubPoses(id, poses),
 		tags: ['stub'],
 		...overrides
 	};
@@ -93,7 +94,7 @@ export function defaultStubCast(): Record<string, Character> {
 	return {
 		mira: character('mira', 'Mira', ['idle', 'arms-crossed', 'angry', 'wave']),
 		joren: character('joren', 'Joren', ['idle', 'angry'], {
-			frames: stubFrames('joren', ['idle', 'angry'], {
+			poses: stubPoses('joren', ['idle', 'angry'], {
 				...STUB_ANCHORS,
 				bubble: {x: 0.38, y: 0.16}
 			}),
@@ -137,8 +138,8 @@ export function createStubResolver(
 		}
 
 		for (const char of Object.values(characters)) {
-			for (const frame of Object.values(char.frames ?? {})) {
-				if (frame.asset === id) {
+			for (const pose of Object.values(char.poses ?? {})) {
+				if (poseAssets(pose).includes(id)) {
 					return {w: char.size.w, h: char.size.h, kind: 'frame'};
 				}
 			}

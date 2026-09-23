@@ -6,6 +6,7 @@ import type {
 	SidecarEntry,
 	SidecarKind
 } from '@sliders/scene-types';
+import {poseAssets} from '@sliders/scene-types';
 import {
 	AssetFilter,
 	AssetManifest,
@@ -55,10 +56,10 @@ export function sidecarSyncs(kind: SidecarKind): boolean {
 }
 
 /**
- * A character with spec 04's defaults: origin at the feet, and no frames yet.
+ * A character with spec 04's defaults: origin at the feet, and no poses yet.
  *
- * No rig either, because there is nothing to rig — anchors belong to frames, and the first
- * frame added brings its own (`newFrameAnchors`).
+ * No rig either, because there is nothing to rig — anchors belong to poses, and the first
+ * pose added brings its own (`newPoseAnchors`).
  *
  * `name` is always the id. It is kept in the type for the wire format and for stories
  * written before the two were separate, but nothing writes a name of its own any more:
@@ -71,13 +72,13 @@ export function defaultCharacter(id: string): Character {
 		name: id,
 		size: {w: 512, h: 1024},
 		origin: {x: 0.5, y: 1},
-		frames: {},
+		poses: {},
 		tags: []
 	};
 }
 
 function matchesFilter(meta: AssetMeta, filter: AssetFilter): boolean {
-	if (!filter.includeFrames && meta.ownerCharacter) {
+	if (!filter.includePoseImages && meta.ownerCharacter) {
 		return false;
 	}
 
@@ -140,6 +141,13 @@ export class BackedAssetStore implements AssetStore {
 		manifest.assets ??= {};
 		manifest.characters ??= {};
 
+		// A pure reshape (`frames:` -> `poses:`), so it is safe on every read. Done here as
+		// well as on the way out so the store's own walks over `manifest.characters` —
+		// `remove`, `removeCharacter` — see one shape. The next write persists it.
+		for (const [id, character] of Object.entries(manifest.characters)) {
+			manifest.characters[id] = migrateCharacter(character);
+		}
+
 		// Eager, and written straight back: this moves bytes rather than reshaping a
 		// value, so it cannot be redone on every read the way `migrateCharacter` is.
 		if (await migrateSidecars(manifest, this.storage)) {
@@ -169,8 +177,8 @@ export class BackedAssetStore implements AssetStore {
 	 * because that is how a scene reads them: `bg: lamp` and an `entities:` entry called
 	 * `mira` are looked up against both.
 	 *
-	 * Frames count. They are ordinary assets and `bg:` may legitimately name one, so a frame
-	 * called `tavern` is as much a clash as a backdrop called `tavern`.
+	 * Pose images count. They are ordinary assets and `bg:` may legitimately name one, so a
+	 * pose image called `tavern` is as much a clash as a backdrop called `tavern`.
 	 */
 	private namesIn(manifest: AssetManifest, except?: string): Set<string> {
 		const taken = new Set<string>();
@@ -224,7 +232,7 @@ export class BackedAssetStore implements AssetStore {
 				),
 				// Bytes beat the caller here. A sound dropped on the Backgrounds tab is a
 				// mis-aim, not a request for a backdrop made of an mp3, and the old
-				// `kind ?? 'bg'` fallthrough is exactly how frames once became backgrounds
+				// `kind ?? 'bg'` fallthrough is exactly how pose images once became backgrounds
 				// in silence.
 				kind: prepared.audio
 					? 'sound'
@@ -603,9 +611,19 @@ export class BackedAssetStore implements AssetStore {
 			delete manifest.assets[id];
 
 			for (const character of Object.values(manifest.characters)) {
-				for (const [frameName, frame] of Object.entries(character.frames)) {
-					if (frame.asset === id) {
-						delete character.frames[frameName];
+				for (const [poseName, pose] of Object.entries(character.poses)) {
+					if (pose.asset === id) {
+						delete character.poses[poseName];
+					} else if (pose.steps?.some(step => step.asset === id)) {
+						// One image gone from a sequence leaves a shorter sequence, not
+						// a broken pose. The last image gone leaves no pose at all.
+						const steps = pose.steps.filter(step => step.asset !== id);
+
+						if (steps.length > 0) {
+							pose.steps = steps;
+						} else {
+							delete character.poses[poseName];
+						}
 					}
 				}
 			}
@@ -639,15 +657,17 @@ export class BackedAssetStore implements AssetStore {
 
 			manifest.characters[stored.id] = stored;
 
-			// Frames belong to their character. Keep ownership on the asset metadata in
-			// sync so the flat library keeps hiding them.
+			// Pose images belong to their character. Keep ownership on the asset metadata
+			// in sync so the flat library keeps hiding them. `kind: 'frame'` is the stored
+			// name for a pose image — see `AssetKind`.
+			for (const pose of Object.values(stored.poses)) {
+				for (const assetId of poseAssets(pose)) {
+					const meta = manifest.assets[assetId];
 
-			for (const frame of Object.values(stored.frames)) {
-				const meta = manifest.assets[frame.asset];
-
-				if (meta) {
-					meta.ownerCharacter = stored.id;
-					meta.kind = 'frame';
+					if (meta) {
+						meta.ownerCharacter = stored.id;
+						meta.kind = 'frame';
+					}
 				}
 			}
 
@@ -683,7 +703,7 @@ export class BackedAssetStore implements AssetStore {
 				return [];
 			}
 
-			const assetIds = Object.values(character.frames).map(frame => frame.asset);
+			const assetIds = Object.values(character.poses).flatMap(poseAssets);
 
 			delete manifest.characters[id];
 

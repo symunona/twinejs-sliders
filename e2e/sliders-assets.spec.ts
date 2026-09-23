@@ -187,7 +187,7 @@ test.describe('Sliders character editor', () => {
 		await clearAssetLibrary(page);
 	});
 
-	test('creates a character, adds frames and drags an anchor', async ({page}) => {
+	test('creates a character, adds poses and drags an anchor', async ({page}) => {
 		await createStory(page, 'Character editor test');
 		await openAssetManager(page);
 		await page.getByRole('tab', {name: 'Characters'}).click();
@@ -207,18 +207,18 @@ test.describe('Sliders character editor', () => {
 		await editor.getByRole('button', {name: 'Maximize'}).click();
 		await shot(page, '06-character-editor-new');
 
-		// Frames arrive through the asset store, tagged with their owner character.
+		// Pose images arrive through the asset store, tagged with their owner character.
 		await uploadInto(page, 'Characters', [
 			fixture('mira-idle.png'),
 			fixture('mira-arms-crossed.png'),
 			fixture('mira-angry.png')
 		]);
 
-		await expect(editor.locator('.frame-list-item')).toHaveCount(3, {
+		await expect(editor.locator('.pose-list-item')).toHaveCount(3, {
 			timeout: 20000
 		});
 		await expect(editor.locator('.sprite-preview img')).toBeVisible();
-		await shot(page, '07-character-frames-added');
+		await shot(page, '07-character-poses-added');
 
 		// Anchors are stored as fractions of the frame, never pixels.
 		const bubble = editor.locator('[data-handle="anchor:bubble"]');
@@ -262,7 +262,7 @@ test.describe('Sliders character editor', () => {
 
 		const reopened = page.getByRole('dialog', {name: 'Characters'});
 
-		await expect(reopened.locator('.frame-list-item')).toHaveCount(3, {
+		await expect(reopened.locator('.pose-list-item')).toHaveCount(3, {
 			timeout: 20000
 		});
 		await expect
@@ -275,7 +275,7 @@ test.describe('Sliders character editor', () => {
 		await shot(page, '10-character-persisted');
 	});
 
-	test('shows a character as one tile with its frame count', async ({page}) => {
+	test('shows a character as one tile with its pose count', async ({page}) => {
 		await createStory(page, 'Character tile test');
 		await openAssetManager(page);
 		await page.getByRole('tab', {name: 'Characters'}).click();
@@ -286,16 +286,16 @@ test.describe('Sliders character editor', () => {
 		await page.getByRole('button', {name: 'OK'}).click();
 		await uploadInto(page, 'Characters', [fixture('joren-idle.png')]);
 		await expect(
-			page.getByRole('dialog', {name: 'Characters'}).locator('.frame-list-item')
+			page.getByRole('dialog', {name: 'Characters'}).locator('.pose-list-item')
 		).toHaveCount(1, {timeout: 20000});
 
 		const assets = page.getByRole('dialog', {name: 'Assets'});
 		const tile = assets.locator('.sliders-tile', {hasText: 'Joren'});
 
 		await expect(tile).toBeVisible({timeout: 15000});
-		await expect(tile).toContainText('1 frame');
+		await expect(tile).toContainText('1 pose');
 
-		// Character frames never appear in the flat background list.
+		// Pose images never appear in the flat background list.
 		await assets.getByRole('tab', {name: 'Backgrounds'}).click();
 		await expect(
 			assets.locator('.sliders-tile', {hasText: 'joren-idle'})

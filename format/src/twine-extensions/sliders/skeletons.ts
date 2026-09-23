@@ -24,8 +24,8 @@ camera: {at: [0, 0], zoom: 1}   # origin is screen centre, +y is UP
 autoAdvance: ~                  # seconds an untimed beat holds; 0 waits for a click
 
 cast:
-  mira:  {at: -0.4, frame: idle}
-  joren: {at: 0.35, frame: idle, flip: true, layer: back, z: 2, opacity: 1}
+  mira:  {at: -0.4, pose: idle}
+  joren: {at: 0.35, pose: idle, flip: true, layer: back, z: 2, opacity: 1}
 
 props:
   candle: {at: [0.1, -0.2], layer: front}
@@ -35,7 +35,7 @@ fx: [rain@0.6]                  # name@amount, or {id: rain, amount: 0.6}
 
 beats:
   - mira: "Dialogue. The bubble hangs off her anchor."
-  - joren: {at: 0.3, frame: idle, say: "Move and speak in one beat."}
+  - joren: {at: 0.3, pose: idle, say: "Move and speak in one beat."}
   - mira: {at: -0.25}           # stage change, nobody speaks
   - box: "Narration, with no speaker."
   - wait: 0.5                   # seconds
@@ -51,7 +51,7 @@ links:
 export const BEATS_SNIPPET = `
 beats:
   - mira: "Dialogue."
-  - mira: {frame: angry, at: -0.25, say: "Dialogue and a stage change."}
+  - mira: {pose: angry, at: -0.25, say: "Dialogue and a stage change."}
   - box: "Narration, with no speaker."
   - wait: 0.5
   - mark: name-this-state
@@ -59,7 +59,7 @@ beats:
 
 export const CAST_SNIPPET = `
 cast:
-  mira: {at: -0.4, frame: idle}
+  mira: {at: -0.4, pose: idle}
 props:
   candle: {at: [0.1, -0.2], layer: front}
 `;

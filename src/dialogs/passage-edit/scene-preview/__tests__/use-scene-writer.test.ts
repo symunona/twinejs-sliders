@@ -30,7 +30,7 @@ const passage = [
 	'[scene]', // 2
 	'id: tavern', // 3
 	'cast:', // 4
-	'  mira: {at: -0.4, frame: idle}', // 5
+	'  mira: {at: -0.4, pose: idle}', // 5
 	'props:', // 6
 	'  candle: {at: 0.1, scale: 0.6}', // 7
 	'beats:', // 8
@@ -682,7 +682,7 @@ describe('writing onto the beat the scrubber is on', () => {
 
 		expect(out).toContain('- mira: {say: "Hello.", at: 0.5}');
 		// cast: untouched.
-		expect(out).toContain('  mira: {at: -0.4, frame: idle}');
+		expect(out).toContain('  mira: {at: -0.4, pose: idle}');
 	});
 
 	it('splices a beat that already stages something', () => {
@@ -755,8 +755,8 @@ describe('writing onto the beat the scrubber is on', () => {
 
 	it('still deletes the key on the entry at the opening state', () => {
 		const flipped = passage.replace(
-			'  mira: {at: -0.4, frame: idle}',
-			'  mira: {at: -0.4, frame: idle, flip: true}'
+			'  mira: {at: -0.4, pose: idle}',
+			'  mira: {at: -0.4, pose: idle, flip: true}'
 		);
 		const out = applied(flipped, 0, {
 			id: 'mira',
@@ -767,7 +767,7 @@ describe('writing onto the beat the scrubber is on', () => {
 			value: undefined
 		});
 
-		expect(out).toContain('  mira: {at: -0.4, frame: idle}');
+		expect(out).toContain('  mira: {at: -0.4, pose: idle}');
 		expect(out).not.toContain('flip');
 	});
 

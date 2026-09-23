@@ -50,6 +50,7 @@ const FIX = {
 const VALID = 'dialogs.passageEdit.sceneErrors.valid';
 const ERRORS = 'dialogs.passageEdit.sceneErrors.showErrors';
 const WARNINGS = 'dialogs.passageEdit.sceneErrors.showWarnings';
+const NOTES = 'dialogs.passageEdit.sceneErrors.showNotes';
 
 describe('<SceneErrors>', () => {
 	it('says the scene is valid when there is nothing wrong', () => {
@@ -70,6 +71,21 @@ describe('<SceneErrors>', () => {
 
 	it('counts warnings separately when nothing is an error', () => {
 		renderErrors([error({severity: 'warning'})]);
+		expect(screen.getByTestId('scene-errors-header')).toHaveTextContent(
+			WARNINGS
+		);
+	});
+
+	it('calls a scene with only info findings one with notes, not warnings', () => {
+		renderErrors([error({code: 'retired-key', severity: 'info'})]);
+		expect(screen.getByTestId('scene-errors-header')).toHaveTextContent(NOTES);
+	});
+
+	it('lets a warning outrank a note in the header', () => {
+		renderErrors([
+			error({code: 'retired-key', severity: 'info'}),
+			error({severity: 'warning'})
+		]);
 		expect(screen.getByTestId('scene-errors-header')).toHaveTextContent(
 			WARNINGS
 		);

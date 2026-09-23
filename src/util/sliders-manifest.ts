@@ -12,8 +12,8 @@
  * authors see in Play, Test and Publish to File while the editor preview draws real art.
  *
  * The keying trap: authors write NAMES in scene YAML (`bg: lighthouse-night`) and
- * `dom-renderer` hands those straight to `resolver.url()`, while character frames carry
- * asset IDS (`frame.asset`). The runtime's lookup is a bare map read with no name
+ * `dom-renderer` hands those straight to `resolver.url()`, while character poses carry
+ * asset IDS (`pose.asset`, `pose.steps[].asset`). The runtime's lookup is a bare map read with no name
  * fallback, so every asset is emitted under BOTH keys. Ids are written last, so a name
  * that happens to equal some other asset's id can never shadow the real one.
  */

@@ -155,7 +155,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 
 	'slidersCharacters.create': {bindings: ['n']},
 	'slidersCharacters.delete': {bindings: ['backspace', 'delete']},
-	'slidersCharacters.addFrames': {bindings: ['u']},
+	'slidersCharacters.addPoses': {bindings: ['u']},
 	'slidersCharacters.addAnchor': {bindings: ['a']},
 
 	// Registered but unbound by default: once-a-session actions, and ones that

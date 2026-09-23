@@ -32,7 +32,7 @@ function meta(overrides: Partial<AssetMeta> = {}): AssetMeta {
 
 function character(): Character {
 	return {
-		frames: {idle: {asset: 'a_0001'}},
+		poses: {idle: {asset: 'a_0001'}},
 		id: 'mira',
 		name: 'Mira Vale',
 		origin: {x: 0.5, y: 1},

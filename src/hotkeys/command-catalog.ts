@@ -181,7 +181,7 @@ export const commandCatalog: CatalogEntry[] = [
 
 	{id: 'slidersCharacters.create', scope: 'sliders-characters'},
 	{id: 'slidersCharacters.delete', scope: 'sliders-characters'},
-	{id: 'slidersCharacters.addFrames', scope: 'sliders-characters'},
+	{id: 'slidersCharacters.addPoses', scope: 'sliders-characters'},
 	{id: 'slidersCharacters.addAnchor', scope: 'sliders-characters'},
 
 	{id: 'finder.select', scope: 'fuzzy-finder'},
