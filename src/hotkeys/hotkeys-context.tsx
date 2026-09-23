@@ -4,7 +4,11 @@ import {detectPlatform, Platform} from '../util/platform';
 import {Command} from './commands.types';
 import {commandCatalog} from './command-catalog';
 import {findConflicts} from './conflicts';
-import {eventToKeyString, normalizeKeyString} from './key-string';
+import {
+	eventToKeyString,
+	normalizeKeyString,
+	typesCharacter
+} from './key-string';
 import {resolveKeymap, ResolvedKeymap} from './resolve-keymap';
 import {
 	GLOBAL_SCOPE,
@@ -163,6 +167,17 @@ export const HotkeysProvider: React.FC = props => {
 					? eventTarget
 					: eventDocument.activeElement;
 			const inTextEntry = isTextEntry(target);
+
+			// A bare printable key never runs a command while the user is typing,
+			// however permissive the command is--it would eat the character. This
+			// is what lets a pair like `passage.goTo` (bare `p`) and
+			// `passage.find` (`mod+p`, `allowInInput`) coexist: the second is safe
+			// to register outermost because only the chord can reach a field.
+
+			if (inTextEntry && typesCharacter(keyString, platform)) {
+				return;
+			}
+
 			const chain = scopeChain(target);
 
 			// Inside the keyboard shortcuts list, scopeChain() returns that scope

@@ -15,8 +15,12 @@ const TestCommand: React.FC<Partial<Command> & {run: () => void}> = props => {
 	return null;
 };
 
-function press(key: string, target: Element = document.activeElement!) {
-	fireEvent.keyDown(target, {code: key, key});
+function press(
+	key: string,
+	target: Element = document.activeElement!,
+	init: Partial<KeyboardEventInit> = {}
+) {
+	fireEvent.keyDown(target, {code: key, key, ...init});
 }
 
 describe('useCommand()', () => {
@@ -78,7 +82,7 @@ describe('useCommand()', () => {
 
 		render(
 			<FakeStateProvider hotkeyScope="story-map">
-				<TestCommand allowInInput run={run} />
+				<TestCommand allowInInput id="passage.find" run={run} />
 				<input type="text" />
 			</FakeStateProvider>
 		);
@@ -86,7 +90,51 @@ describe('useCommand()', () => {
 		const input = screen.getByRole('textbox');
 
 		input.focus();
-		press('n', input);
+		press('p', input, {ctrlKey: true});
+		expect(run).toHaveBeenCalledTimes(1);
+	});
+
+	// `passage.goTo` is the bare `p` that opens the passage finder. Even if it
+	// opted into text fields, the key has to type a `p` in one--which is why the
+	// chord `passage.find` exists alongside it.
+
+	it('does not run a bare printable key in a text field, even if the command opted in', () => {
+		const run = jest.fn();
+
+		render(
+			<FakeStateProvider hotkeyScope="story-map">
+				<TestCommand allowInInput id="passage.goTo" run={run} />
+				<input type="text" />
+			</FakeStateProvider>
+		);
+
+		const input = screen.getByRole('textbox');
+
+		input.focus();
+		press('p', input);
+		expect(run).not.toHaveBeenCalled();
+
+		// Same key, outside the field: runs.
+
+		input.blur();
+		press('p', document.querySelector('[data-hotkey-scope="story-map"]')!);
+		expect(run).toHaveBeenCalledTimes(1);
+	});
+
+	it('still runs a bare named key in a text field if the command opted in', () => {
+		const run = jest.fn();
+
+		render(
+			<FakeStateProvider hotkeyScope="story-map">
+				<TestCommand allowInInput id="finder.close" run={run} />
+				<input type="text" />
+			</FakeStateProvider>
+		);
+
+		const input = screen.getByRole('textbox');
+
+		input.focus();
+		press('Escape', input);
 		expect(run).toHaveBeenCalledTimes(1);
 	});
 

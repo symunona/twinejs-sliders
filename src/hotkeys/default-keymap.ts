@@ -32,6 +32,12 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// In the catalog since the AI dialog moved out of Preferences, but never given a
 	// key; it's listed here so the shortcuts dialog can offer to bind it.
 	'app.ai': {bindings: []},
+	// The passage finder, reachable from anywhere. `passage.goTo` is the same
+	// finder on a bare `p`, which only works in the story map: a bare letter
+	// belongs to a scope where the work is picking things, not typing. Ctrl+P is
+	// the chord that takes the key back off the browser's print dialog, and it is
+	// wanted with focus in the passage text and in dialogs, hence `global`.
+	'passage.find': {bindings: ['mod+p']},
 
 	// Dialogs. Dialogs are mostly text fields, so this has to be a chord that
 	// produces no character and that CodeMirror doesn't use.
@@ -54,7 +60,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'passage.delete': {bindings: ['backspace', 'delete']},
 	'passage.deselectAll': {bindings: ['escape']},
 	'passage.edit': {bindings: ['enter']},
-	'passage.goTo': {bindings: ['p', 'mod+p']},
+	'passage.goTo': {bindings: ['p']},
 	'passage.rename': {bindings: ['f2']},
 	'passage.selectAll': {bindings: ['mod+a'], env: 'web'},
 	'passage.test': {bindings: ['t']},

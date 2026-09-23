@@ -1406,7 +1406,8 @@
 				"delete": "Delete Passage",
 				"test": "Test From Passage",
 				"startAt": "Start Story Here",
-				"goTo": "Go To Passage",
+				"goTo": "Go To / Search Passage",
+				"find": "Search Passages Anywhere",
 				"selectAll": "Select All Passages",
 				"deselectAll": "Deselect All Passages"
 			},

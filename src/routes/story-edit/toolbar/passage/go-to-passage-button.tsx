@@ -19,6 +19,21 @@ export const GoToPassageButton: React.FC<GoToPassageButtonProps> = props => {
 		scope: 'story-map'
 	});
 
+	// The same finder as a chord, in `global` and allowed in text fields, which
+	// is what the bare key above cannot be: a letter only belongs in a scope
+	// where the work is picking things rather than typing. Every place
+	// `passage.goTo` did not resolve--focus in the passage text, in a dialog, or
+	// on nothing at all--was a place Ctrl+P opened the browser's print dialog
+	// instead.
+
+	useCommand({
+		allowInInput: true,
+		id: 'passage.find',
+		label: t('hotkeys.commands.passage.find'),
+		run: onOpenFuzzyFinder,
+		scope: 'global'
+	});
+
 	return (
 		<IconButton
 			commandId="passage.goTo"

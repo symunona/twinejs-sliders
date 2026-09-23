@@ -175,7 +175,7 @@ exists, no default binding.
 | ◐ | `mod+a` | `passage.selectAll` | Select all | **web only**; `role: 'selectAll'` eats it on desktop |
 | ● | `Escape` | `passage.deselectAll` | Deselect all | after any open dialog/finder has had it |
 | ● | `p` | `passage.goTo` | Go to passage | **ships today, but globally** — narrow to this scope |
-| ● | `mod+p` | `passage.goTo` | Go to passage | VSCode "go to file" parity, second binding |
+| ● | `mod+p` | `passage.find` | Search passages anywhere | VSCode "go to file" parity. Own id, scope `global`, `allowInInput`: the chord has to beat the browser print dialog with focus in the passage text or a dialog, which the bare `p` above cannot do |
 | ● | `mod+f` | `story.findReplace` | Find and replace | overrides browser find, as expected |
 | ● | `t` | `passage.test` | Test from selected passage | |
 | ● | `-` | `view.zoomOut` | Zoom out | **ships today**; 3 levels: 1 → 0.6 → 0.3 |

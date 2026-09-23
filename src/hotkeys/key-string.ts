@@ -132,6 +132,23 @@ export function eventToKeyString(
 }
 
 /**
+ * Would this key string type a character into a text field? True for a bare
+ * printable key--`p`, `7`, `space`--and false for anything with a modifier or
+ * with a named key like `escape` or `f2`. The dispatcher uses it to keep a
+ * command that opted into text fields from eating the user's typing--only a
+ * chord or a named key may fire while the caret is in one.
+ */
+export function typesCharacter(keyString: string, platform: Platform): boolean {
+	const parts = normalizeKeyString(keyString, platform).split('+');
+
+	if (parts.length !== 1) {
+		return false;
+	}
+
+	return parts[0].length === 1 || parts[0] === 'space';
+}
+
+/**
  * Splits a key string into display tokens, e.g. `['⌘', '⇧', 'P']`. Rendering
  * each token as its own `<kbd>` is up to the caller.
  */

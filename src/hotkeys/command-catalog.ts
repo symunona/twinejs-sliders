@@ -52,6 +52,8 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'app.preferences', scope: 'global'},
 	{id: 'app.ai', scope: 'global'},
 	{id: 'app.keyboardShortcuts', scope: 'global'},
+	// Opens the passage finder from anywhere; see `default-keymap.ts`.
+	{id: 'passage.find', scope: 'global'},
 
 	{id: 'story.create', scope: 'story-list'},
 	{id: 'story.edit', scope: 'story-list'},

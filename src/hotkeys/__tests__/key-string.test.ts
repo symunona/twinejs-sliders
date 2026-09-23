@@ -3,6 +3,7 @@ import {
 	formatKeyString,
 	keyStringTokens,
 	normalizeKeyString,
+	typesCharacter,
 	usesReservedSuperKey
 } from '../key-string';
 
@@ -115,5 +116,27 @@ describe('usesReservedSuperKey()', () => {
 		expect(usesReservedSuperKey('meta+k', 'windows')).toBe(true);
 		expect(usesReservedSuperKey('meta+k', 'mac')).toBe(false);
 		expect(usesReservedSuperKey('mod+k', 'linux')).toBe(false);
+	});
+});
+
+describe('typesCharacter()', () => {
+	it('is true for a bare printable key', () => {
+		expect(typesCharacter('p', 'linux')).toBe(true);
+		expect(typesCharacter('7', 'linux')).toBe(true);
+		expect(typesCharacter('space', 'linux')).toBe(true);
+		expect(typesCharacter('[', 'linux')).toBe(true);
+	});
+
+	it('is false for a chord', () => {
+		expect(typesCharacter('mod+p', 'linux')).toBe(false);
+		expect(typesCharacter('shift+p', 'linux')).toBe(false);
+		expect(typesCharacter('alt+p', 'linux')).toBe(false);
+	});
+
+	it('is false for a named key', () => {
+		expect(typesCharacter('escape', 'linux')).toBe(false);
+		expect(typesCharacter('f2', 'linux')).toBe(false);
+		expect(typesCharacter('enter', 'linux')).toBe(false);
+		expect(typesCharacter('down', 'linux')).toBe(false);
 	});
 });
