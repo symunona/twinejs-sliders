@@ -173,6 +173,49 @@ describe('resolveSceneAssets', () => {
 		);
 	});
 
+	it('reads walk#n as one image of a stepped pose, as the renderer does', async () => {
+		const kid: Character = {
+			id: 'kid',
+			name: 'Kid',
+			origin: {x: 0.5, y: 1},
+			poses: {
+				idle: {asset: 'a_kid'},
+				walk: {steps: [{asset: 'a_w1'}, {asset: 'a_w2'}, {asset: 'a_w3'}]}
+			},
+			size: {h: 1024, w: 512},
+			tags: []
+		};
+		const kids = await catalogFromManifest({
+			assets: [
+				asset('a_kid', 'kid-idle', 'frame'),
+				asset('a_w1', 'kid-walk-1', 'frame'),
+				asset('a_w2', 'kid-walk-2', 'frame'),
+				asset('a_w3', 'kid-walk-3', 'frame')
+			],
+			characters: [kid],
+			missing: [],
+			rev: 1,
+			version: 1
+		});
+		const rows = resolveSceneAssets(
+			scene(
+				'id: x\ncast:\n  kid: {at: 0, pose: idle}\nbeats:\n' +
+					'  - kid: {pose: [{name: walk#2}, {name: idle#1}, {name: walk#9}], poseLoop: once}\n'
+			),
+			kids
+		);
+
+		expect(rows.filter(row => row.present === 'present').map(row => row.id).sort()).toEqual(
+			['a_kid', 'a_w2']
+		);
+		// Past the end draws a placeholder, so it stays an unknown reference.
+		expect(rows).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({name: 'kid/walk#9', present: 'unknown'})
+			])
+		);
+	});
+
 	it('reaches the bed and the one-shots a beat fires', async () => {
 		const rows = resolveSceneAssets(
 			scene(

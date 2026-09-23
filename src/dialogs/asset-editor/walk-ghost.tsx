@@ -48,6 +48,16 @@ export function stepImage(
 }
 
 /**
+ * Which way the ghost faces once a walk is over: the way its last step faced. A walk that
+ * ends facing left must not snap back to the art's own facing when it stops.
+ */
+export function facingAfter(steps: SceneStep[], before: boolean): boolean {
+	const last = steps[steps.length - 1];
+
+	return last?.flip === undefined ? before : last.flip;
+}
+
+/**
  * A compiled walk being played on the ghost: the renderer's step list, its start, and
  * how to put a step's scene `at` back over the art.
  */

@@ -547,5 +547,28 @@ describe('<AssetEditorDialog>', () => {
 				'dialogs.assetEditor.unsavedChanges'
 			);
 		});
+
+		it('saves a walk-only change as meta, keeping the bytes', async () => {
+			const replace = jest.fn(async () => fakeMeta());
+
+			renderAsset({kind: 'bg', walk: WALK});
+			(mockStore as unknown as {replace: jest.Mock}).replace = replace;
+			await screen.findByTestId('asset-editor-dirty');
+			await waitFor(() => expect(sidecar).toHaveBeenCalled());
+			fireEvent.click(walkRadio()!);
+			fireEvent.click(
+				await screen.findByRole('checkbox', {
+					name: 'dialogs.assetEditor.walk.depth'
+				})
+			);
+			fireEvent.click(
+				screen.getByRole('button', {name: 'dialogs.assetEditor.replace'})
+			);
+			fireEvent.click(await screen.findByRole('button', {name: 'common.ok'}));
+
+			await waitFor(() => expect(update).toHaveBeenCalled());
+			expect(update.mock.calls[0][1].walk.depth).toBeDefined();
+			expect(replace).not.toHaveBeenCalled();
+		});
 	});
 });

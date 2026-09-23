@@ -20,7 +20,7 @@ import {
 } from '@sliders/scene-types';
 import * as React from 'react';
 import {MaskToolId} from './mask-shapes';
-import {GhostWalk} from './walk-ghost';
+import {facingAfter, GhostWalk} from './walk-ghost';
 import {bakedSize, frameToBaked, frameToSource, WalkFrame} from './walk-shapes';
 
 /** The ghost character an author last picked, across dialogs. Per browser, not per story. */
@@ -79,6 +79,8 @@ export interface WalkEditor {
 	/** Depth scale where the ghost stands. */
 	ghostScale: number;
 	ghostPose: string;
+	/** Mirrored: the way the last walk left the ghost facing. */
+	ghostFlip: boolean;
 	walking?: GhostWalk;
 	endWalk: () => void;
 	path?: WalkPreviewPath;
@@ -116,6 +118,7 @@ export function useWalkEditor(options: {
 	const [urls, setUrls] = React.useState<Record<AssetId, string>>({});
 	const [ghostAt, setGhostAt] = React.useState<Frac2>();
 	const [walking, setWalking] = React.useState<GhostWalk>();
+	const [ghostFlip, setGhostFlip] = React.useState(false);
 	const [path, setPath] = React.useState<WalkPreviewPath>();
 
 	React.useEffect(() => {
@@ -222,6 +225,7 @@ export function useWalkEditor(options: {
 		const compiled = compileWalk({
 			character: ghost,
 			depth: baked.depth,
+			flip: ghostFlip,
 			img,
 			path: found.points
 		});
@@ -235,6 +239,7 @@ export function useWalkEditor(options: {
 			toSource: v => toSource(stageToImage(v, img))
 		});
 		setGhostAt(toSource(found.goal));
+		setGhostFlip(facingAfter(compiled.steps, ghostFlip));
 	}
 
 	// A walk belongs to the gesture that started it. Leaving walk-here ends it and wipes
@@ -253,6 +258,7 @@ export function useWalkEditor(options: {
 		endWalk: () => setWalking(undefined),
 		ghost,
 		ghostAt: at,
+		ghostFlip,
 		ghostId: ghost?.id,
 		ghostOff: floor && !isWalkable(baked, bakedAt),
 		ghostPose: ghost ? idlePoseName(ghost) : 'idle',

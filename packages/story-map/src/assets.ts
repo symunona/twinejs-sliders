@@ -16,8 +16,8 @@
 
 import {sceneBg} from '@sliders/scene-core';
 import {splitSceneRef} from '@sliders/scene-index';
-import type {Character, EntityPatchBody, Scene} from '@sliders/scene-types';
-import {poseAssets, upgradeCharacter} from '@sliders/scene-types';
+import type {AssetId, Character, EntityPatchBody, Scene} from '@sliders/scene-types';
+import {poseAssets, splitPoseImage, upgradeCharacter} from '@sliders/scene-types';
 import type {AssetMetaRow, Manifest} from './types';
 
 /**
@@ -81,6 +81,34 @@ function defaultPoseName(character: Character): string | undefined {
 	}
 
 	return Object.keys(poses)[0];
+}
+
+/**
+ * The images one scene name reaches, as the renderer's `resolvePose` reads it. An exact
+ * pose name wins; else `walk#3` is the third image of pose `walk`, one image, never the
+ * whole pose (what a compiled walk writes). Past the end is empty: a placeholder on stage.
+ */
+function wantedImages(character: Character, name: string): AssetId[] {
+	const poses = character.poses ?? {};
+
+	if (name in poses) {
+		return poseAssets(poses[name]);
+	}
+
+	const image = splitPoseImage(name);
+	const pose = image ? poses[image.pose] : undefined;
+
+	if (!image || !pose) {
+		return [];
+	}
+
+	const one = pose.steps?.length
+		? pose.steps[image.index]?.asset
+		: image.index === 0
+		? pose.asset
+		: undefined;
+
+	return one ? [one] : [];
 }
 
 /**
@@ -366,8 +394,7 @@ export function resolveSceneAssets(
 			}
 
 			for (const want of wanted) {
-				const pose = character.poses?.[want.name];
-				const images = poseAssets(pose);
+				const images = wantedImages(character, want.name);
 
 				if (images.length === 0) {
 					push({

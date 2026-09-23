@@ -1216,7 +1216,17 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setSaving(true);
 
 		try {
-			await store.replace(meta.id, await editedFile(meta.name), await editOptions());
+			// Only the anchor, the effect or the walk area moved: meta, not pixels. Re-baking
+			// anyway re-encodes the same picture to new bytes, and a pull on another device
+			// then meets a name it holds under different bytes and keeps its own -- so a
+			// floor drawn here never reached it. Keep the bytes; the meta rides alone.
+			if (pixelsChanged()) {
+				await store.replace(
+					meta.id,
+					await editedFile(meta.name),
+					await editOptions()
+				);
+			}
 
 			// Metadata, so it rides a second call rather than the bytes -- and one call for
 			// both, because two `update`s are two manifest writes and two sync revisions for
@@ -1446,18 +1456,30 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * Re-opening an edit restores its controls, and comparing those to zero would call
 	 * an already-saved edit unsaved from the moment the dialog appeared.
 	 */
+	/**
+	 * The part of `dirty` a save has to re-bake the picture for. Anchor, effect and walk
+	 * area are meta beside the bytes; tuning, mask and the edits are the bytes.
+	 */
+	function pixelsChanged(): boolean {
+		return (
+			source !== undefined &&
+			edits !== undefined &&
+			(!sameTuning(savedTuning, saved.tuning) ||
+				!sameMask(mask, saved.mask) ||
+				!sameEdits(
+					edits,
+					saved.edits ?? defaultEdits(source.width, source.height)
+				))
+		);
+	}
+
 	const dirty =
 		source !== undefined &&
 		edits !== undefined &&
 		(anchorChanged ||
 			!sameEffect(effect, saved.effect) ||
-			!sameTuning(savedTuning, saved.tuning) ||
-			!sameMask(mask, saved.mask) ||
 			!sameWalk(walk, saved.walk) ||
-			!sameEdits(
-				edits,
-				saved.edits ?? defaultEdits(source.width, source.height)
-			));
+			pixelsChanged());
 
 	const saveDisabled = busy || !source || !edits || !dirty;
 

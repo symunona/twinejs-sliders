@@ -204,6 +204,7 @@ export const WalkStage: React.FC<WalkStageProps> = props => {
 				<WalkGhost
 					at={editor.ghostAt}
 					character={editor.ghost}
+					flip={editor.ghostFlip}
 					invalid={editor.ghostOff}
 					onPointerDown={
 						disabled
