@@ -19,6 +19,16 @@ describe('containRect', () => {
 		).toEqual({height: 400, left: 0, top: 0, width: 200});
 	});
 
+	it('letterboxes at the origin, as the renderer does', () => {
+		expect(
+			containRect(
+				{height: 100, width: 200},
+				{height: 400, width: 400},
+				{x: 0.5, y: 1}
+			)
+		).toEqual({height: 200, left: 0, top: 200, width: 400});
+	});
+
 	it('has no answer before the image or the box has a size', () => {
 		expect(
 			containRect({height: 0, width: 0}, {height: 400, width: 400})

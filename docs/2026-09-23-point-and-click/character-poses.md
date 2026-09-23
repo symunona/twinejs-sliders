@@ -1,6 +1,6 @@
 # Character poses — one vocabulary, image-set import
 
-Status: phase A (rename) shipped on `char-poses`, see Shipped. Rest planned. 2026-09-23.
+Status: phase A (rename) shipped on `char-poses`, phase B (step strip, Import set) on `pose-import`. See Shipped. 2026-09-23.
 
 ## Problem
 
@@ -262,3 +262,85 @@ slicing, align feet: NOT done, next agent.
   by a new one. Deploy moves every tab; no dual-write.
 - Locale keys renamed in `en-US.json` only (the only locale with Sliders strings).
   Dead key `assetEditor.hideFrame` left as found.
+
+## Shipped — phase B (step strip, Import set), 2026-09-23
+
+Branch `pose-import` (on `char-poses`). Order steps 3 (step strip) and 4 (Import set).
+
+### Files
+
+| file | what |
+|---|---|
+| `sliders-characters/import-set-logic.ts` | pure: `poseKey`, `groupFiles`, `gridLayout`, `cellIsEmpty`, `alphaProfile`/`contentRuns`/`guessGrid`, `looksLikeSheet`, `findFeet`, `imagePointInBox`, `feetFit`, `alignFits`, `durForFps`/`fpsForDur` |
+| `sliders-characters/import-set-images.ts` | browser: decode, read pixels, cut slice to PNG |
+| `sliders-characters/import-set.tsx` | pick → sheet grid → review → upload |
+| `sliders-characters/pose-steps.ts` | pure step edits: move, remove, append, dur, fps, per-step fit |
+| `sliders-characters/step-strip.tsx` | strip under the stage |
+| `sliders-assets/character-poses.ts` | `importPoseSet`, `plannedPoseNames`, `stepImagesFromFiles` |
+
+### Decided
+
+- **Import set takes the editor's place** in the characters dialog, not a modal on top.
+  z-index trap avoided. Switching character cancels it.
+- **Entry points.** "Import Set…" button under Add Poses. Drop / Add Poses with MANY files →
+  Import set, pre-filled. ONE file: animated or box-shaped → added at once (old fast path);
+  still and sheet-shaped → Import set, sheet mode.
+- **Sheet vs still:** toggle "This is a sprite sheet". Suggested when image aspect ÷ box
+  aspect ≥ 1.75 or ≤ 1/1.75 (`looksLikeSheet`).
+- **Grid guess:** count transparent gutters across the whole sheet (`guessGrid`). Kenney
+  demo sheet → 9×5, right first time. Fallback: one row of box-shaped cells.
+- **Row split:** Shift+click a cell = new pose starts there (plan said drag). Click = skip
+  cell. Extra checkbox "Every cell is its own pose" for atlas-style sheets (Kenney). Split
+  parts named `<row>-2`, `-3`.
+- **Default row names:** row 1 `idle` if the character has none, else `row-N`.
+- **Grouping extras:** trailing number may have no separator (`climb0`, `walk07`). A stem
+  that is only a number (`0001.png`) takes its folder name from `webkitRelativePath`, else
+  `pose`. Groups sorted `idle` first, then by name.
+- **Names:** `plannedPoseNames` is the one rule; the review shows `→ walk-2` when the name
+  will change. Empty character: its `idle`, else the set's first pose, becomes `idle`.
+- **Asset names:** still `<id>-<pose>`, step `<id>-<pose>-<n>`. Store numbers clashes.
+  Steps added from the strip: `<id>-<pose>`, store numbers them.
+- **Align feet = 3 modes, default per step** (the plan's rule). `pose` = one shared feet
+  point (mean x, lowest y) for all images of a pose: keeps already-registered art (Blender
+  renders) steady, moves it as a whole. `off`. Stills get aligned too. Animated files never.
+  Feet = lowest row with alpha ≥ 128 (shadow / antialias ignored), x = alpha-weighted
+  centre of mass. Offset puts feet ON the character origin. Scale stays 1.
+- **fps → dur**: `1/fps`, 3 decimals; 10 fps = default hold, stored absent.
+- **Step strip** shows for every pose except an animated file. A still is a strip of one:
+  dropping images on it turns it into steps. Down to one step → collapses back to
+  `asset` (its fit moves to the pose if the pose has none). Last image cannot be deleted
+  from the strip; delete the pose.
+- **Strip gestures:** click thumb = select step (preview stops on it), click again / Play =
+  play. ←/→ buttons + native drag reorder. Hold (s) per step, fps for all. Files dropped on
+  the strip stop there, the editor's big drop zone never sees them.
+- **Fit while playing** is off (pan would write the pose fit, which steps with own fits
+  ignore). Pick a step to fit it. Fit tab edits the picked step; "Apply This Step's Fit To
+  All Steps" added. Ghost poses use their first step's fit.
+- **Onion skin:** picked step shows previous one (first → last when looping) as a ghost.
+- **faces:** select in the review. `right` stored as absent.
+- **Preview fix:** `SpritePreview` now sets `object-position` at the origin, as
+  `applyPoseFit` does. Before, the editor centred non-box-shaped art while the renderer stood
+  it on the floor, so fits made by eye were off in scenes. `containRect` takes the position
+  too.
+
+### Tests
+
+- `import-set-logic.test.ts` 28, `pose-steps.test.ts` 5, `character-poses.test.ts` +4,
+  `sprite-geometry.test.ts` +1. Dirs green: 95 tests.
+- Browser (headless chromium, local vite): loose files (idle + walk 8) → 2 poses, walk plays
+  at feet on origin; step select, onion, move, hold, delete, per-step pan-fit, persisted after
+  reload. Kenney sheet 1728×1280 → guessed 9×5, skip + split, 6 poses, walk 12 fps.
+  Synthetic sheet with margin 6 / spacing 4 → 64×128 slices, 2 empty cells greyed and
+  skipped. Animated gif → one ⟳ pose. Multi-file drop on editor → review. Drop on strip →
+  still becomes 3 steps. Drag reorder works. Screenshots `/mnt/data_ssd/tmp/shots/pose-import/`.
+
+### Left undone
+
+- No zip input.
+- Row split by drag (Shift+click instead).
+- Slicing is slow on big sheets in headless (~10 s for 45 cells): one canvas per cell for
+  pixels + one for the PNG. Fine in a real browser; worker/OffscreenCanvas if it bites.
+- No per-pose align override in the review (one mode for the set).
+- Character box size is not adapted to the imported art's aspect.
+- Scene-list lint for "step names a stepped pose" still open (phase A).
+- No component tests for the strip / Import set UI (logic tested; UI verified in browser).

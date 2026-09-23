@@ -451,3 +451,294 @@
 	margin: 0 0 var(--grid-size) 0;
 	padding: var(--control-inner-padding) var(--grid-size);
 }
+
+/* Step count on a pose tile, under the ⟳ badge. */
+.pose-list-steps {
+	background: var(--white-translucent);
+	border-radius: var(--corner-round);
+	font-size: 80%;
+	line-height: 1;
+	padding: 2px;
+	position: absolute;
+	right: 2px;
+	top: calc(var(--grid-size) * 2.5);
+}
+
+/* Step strip: the selected pose's images in order, under the stage. */
+.step-strip {
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	padding: var(--control-inner-padding);
+}
+
+.step-strip.drag-over {
+	border-color: var(--blue);
+	border-style: dashed;
+}
+
+.step-strip-header,
+.step-strip-controls {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--control-inner-padding);
+}
+
+.step-strip-title {
+	font-weight: bold;
+}
+
+.step-strip-field {
+	align-items: center;
+	display: inline-flex;
+	gap: 4px;
+}
+
+.step-strip-field input {
+	width: 5em;
+}
+
+.step-strip-list {
+	display: flex;
+	gap: 4px;
+	list-style: none;
+	margin: 0;
+	overflow-x: auto;
+	padding: 0 0 4px;
+}
+
+.step-strip-item {
+	border: 2px solid transparent;
+	border-radius: var(--corner-round);
+	flex: 0 0 auto;
+}
+
+.step-strip-item.shown {
+	border-color: var(--light-gray);
+}
+
+.step-strip-item.selected {
+	border-color: var(--blue);
+}
+
+.step-strip-select {
+	background: none;
+	border: none;
+	cursor: pointer;
+	display: block;
+	padding: 0;
+	position: relative;
+}
+
+.step-strip-select .asset-preview {
+	height: calc(var(--grid-size) * 7);
+	width: calc(var(--grid-size) * 5);
+}
+
+.step-strip-index,
+.step-strip-dur,
+.step-strip-fit {
+	background: var(--white-translucent);
+	color: var(--black);
+	font-size: 75%;
+	line-height: 1;
+	padding: 1px 2px;
+	position: absolute;
+}
+
+.step-strip-index {
+	left: 0;
+	top: 0;
+}
+
+.step-strip-dur {
+	bottom: 0;
+	right: 0;
+}
+
+.step-strip-fit {
+	right: 0;
+	top: 0;
+}
+
+/* Import set: takes the editor's place while it runs. */
+.import-set {
+	display: flex;
+	flex-direction: column;
+	gap: var(--grid-size);
+	min-height: calc(var(--grid-size) * 30);
+	padding: var(--grid-size);
+}
+
+.import-set-header {
+	align-items: center;
+	display: flex;
+	gap: var(--grid-size);
+	justify-content: space-between;
+}
+
+.import-set-header h3 {
+	margin: 0;
+}
+
+.import-set-pick {
+	border: 2px dashed var(--light-gray);
+	border-radius: var(--corner-round);
+	padding: calc(var(--grid-size) * 2);
+}
+
+.import-set-busy {
+	font-style: italic;
+}
+
+.import-set-sheet {
+	display: flex;
+	gap: var(--grid-size);
+}
+
+.import-set-sheet-controls {
+	display: flex;
+	flex: 0 0 calc(var(--grid-size) * 22);
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+}
+
+.import-set-field {
+	align-items: center;
+	display: flex;
+	gap: var(--control-inner-padding);
+	justify-content: space-between;
+}
+
+.import-set-field input {
+	min-width: 0;
+	width: 8em;
+}
+
+.import-set-check {
+	align-items: center;
+	display: flex;
+	gap: var(--control-inner-padding);
+}
+
+.import-set-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.import-set-sheet-view {
+	flex: 1 1 0;
+	min-width: 0;
+	overflow: auto;
+}
+
+.import-set-sheet-art {
+	background: repeating-conic-gradient(
+			var(--light-gray) 0% 25%,
+			transparent 0% 50%
+		)
+		50% / 16px 16px;
+	display: inline-block;
+	max-width: 100%;
+	position: relative;
+}
+
+.import-set-sheet-art > img {
+	display: block;
+	max-height: 70vh;
+	max-width: 100%;
+}
+
+.import-set-cell {
+	background: transparent;
+	border: 1px solid var(--blue);
+	cursor: pointer;
+	padding: 0;
+	position: absolute;
+}
+
+.import-set-cell.empty {
+	background: rgba(128, 128, 128, 0.55);
+	border-color: var(--gray);
+	cursor: default;
+}
+
+.import-set-cell.skipped {
+	background: rgba(128, 128, 128, 0.55);
+	border-style: dashed;
+}
+
+/* A new pose starts here: a thick bar on the cell's leading edge. */
+.import-set-cell.split {
+	border-left: 4px solid var(--red);
+}
+
+.import-set-review table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+.import-set-review th,
+.import-set-review td {
+	border-bottom: 1px solid var(--light-gray);
+	padding: 4px var(--control-inner-padding);
+	text-align: left;
+	vertical-align: middle;
+}
+
+.import-set-review tr.dropped {
+	opacity: 0.45;
+}
+
+.import-set-review td input[type='number'] {
+	width: 4em;
+}
+
+.import-set-planned {
+	color: var(--gray);
+	font-size: 85%;
+	margin-left: 4px;
+}
+
+.import-set-preview {
+	background: repeating-conic-gradient(
+			var(--light-gray) 0% 25%,
+			transparent 0% 50%
+		)
+		50% / 12px 12px;
+	height: calc(var(--grid-size) * 10);
+	outline: 1px solid var(--blue);
+	overflow: hidden;
+	position: relative;
+}
+
+.import-set-preview img {
+	height: 100%;
+	left: 0;
+	object-fit: contain;
+	position: absolute;
+	top: 0;
+	width: 100%;
+}
+
+.import-set-floor {
+	border-top: 1px dashed var(--blue);
+	left: 0;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+}
+
+.import-set-options {
+	align-items: flex-end;
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--grid-size) * 2);
+}

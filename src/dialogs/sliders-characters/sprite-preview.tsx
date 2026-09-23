@@ -135,16 +135,20 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	const activeFit = fit ?? DEFAULT_FIT;
 	const canFit = !!onChangeFit && !!url;
 	const artBox = useArtRect(art, viewport);
-	const artRect = natural && artBox ? containRect(natural, artBox) : undefined;
+	const artRect =
+		natural && artBox ? containRect(natural, artBox, origin) : undefined;
 
 	/**
 	 * Fit rides on the image alone, so the guides, handles and ghost poses stay put — you
 	 * are aligning art to the rig, not dragging the rig around. Scaling about the origin
 	 * keeps the feet planted, and the translate percentages read as fractions of the box
-	 * because the image is stretched across it. Matches `applyPoseFit` in the DOM renderer.
+	 * because the image is stretched across it. Matches `applyPoseFit` in the DOM renderer,
+	 * `object-position` included.
 	 */
 	function fitStyle(value: PoseFit): React.CSSProperties {
 		return {
+			// Where `contain` letterboxes the art: at the origin, as `applyPoseFit` does.
+			objectPosition: `${origin.x * 100}% ${origin.y * 100}%`,
 			transform: `translate(${value.offset.x * 100}%, ${
 				value.offset.y * 100
 			}%) scale(${value.scale})`,

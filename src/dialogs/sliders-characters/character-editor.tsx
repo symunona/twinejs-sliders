@@ -10,7 +10,9 @@ import {
 	CharacterPose,
 	DEFAULT_FIT,
 	Frac2,
+	DEFAULT_STEP_SECONDS,
 	PoseFit,
+	PoseStep,
 	poseCover
 } from '@sliders/scene-types';
 import {
@@ -32,7 +34,9 @@ import {useCommand} from '../../hotkeys';
 import {AdjustSlider} from '../asset-editor/adjust-slider';
 import {UploadDropZone} from '../sliders-assets/upload-drop-zone';
 import {PoseList} from './pose-list';
-import {SpritePreview} from './sprite-preview';
+import {setStepFit, stepFit, stepFitToAll, stepsOf} from './pose-steps';
+import {SpritePreview, SpriteGhost} from './sprite-preview';
+import {StepStrip} from './step-strip';
 
 /** What the box reset buttons go back to--the size a new character starts at. */
 const DEFAULT_SIZE = {h: 1024, w: 512};
@@ -45,7 +49,56 @@ export interface CharacterEditorProps {
 	onCommit: () => void;
 	/** Open the asset editor on a pose's image — cropping, levels, background removal. */
 	onEditPose: (name: string) => void;
+	/** Upload files and append them to a pose's steps. */
+	onAddSteps: (name: string, files: File[]) => void;
+	/** Opens Import set, with files if some were already chosen. */
+	onImportSet: (files?: File[]) => void;
 	onUploadPoses: (files: File[]) => void;
+}
+
+/**
+ * Which step of a pose the preview is on while it plays. Restarts when the steps change;
+ * `loop: false` holds the last one. Stopped (index 0) when `running` is false.
+ */
+function useStepClock(
+	steps: PoseStep[],
+	loop: boolean,
+	running: boolean
+): number {
+	const [index, setIndex] = React.useState(0);
+	const key = steps.map(step => `${step.asset}:${step.dur ?? ''}`).join('|');
+
+	React.useEffect(() => {
+		setIndex(0);
+
+		if (!running || steps.length < 2) {
+			return;
+		}
+
+		let current = 0;
+		let timer: number | undefined;
+
+		function schedule() {
+			const seconds = steps[current]?.dur ?? DEFAULT_STEP_SECONDS;
+
+			timer = window.setTimeout(() => {
+				if (current === steps.length - 1 && !loop) {
+					return;
+				}
+
+				current = (current + 1) % steps.length;
+				setIndex(current);
+				schedule();
+			}, Math.max(16, seconds * 1000));
+		}
+
+		schedule();
+
+		return () => window.clearTimeout(timer);
+		// `key` stands in for `steps`, whose identity changes on every draft edit.
+	}, [key, loop, running]);
+
+	return index;
 }
 
 /**
@@ -68,8 +121,16 @@ function withBubble(character: Character, patch: Partial<BubbleStyle>): Characte
 }
 
 export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
-	const {assets, character, onChange, onCommit, onEditPose, onUploadPoses} =
-		props;
+	const {
+		assets,
+		character,
+		onAddSteps,
+		onChange,
+		onCommit,
+		onEditPose,
+		onImportSet,
+		onUploadPoses
+	} = props;
 	const poseNames = Object.keys(character.poses);
 	const [newAnchor, setNewAnchor] = React.useState('');
 	const [newAnchorOpen, setNewAnchorOpen] = React.useState(false);
@@ -90,6 +151,29 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	}, [character.poses, poseNames, selectedPose]);
 
 	const activePose = selectedPose ? character.poses[selectedPose] : undefined;
+	/** A step picked in the strip. Undefined = the pose plays in the preview. */
+	const [selectedStep, setSelectedStep] = React.useState<number>();
+	const activeSteps = activePose ? stepsOf(activePose) : [];
+	const hasSteps = !!activePose?.steps && activePose.steps.length > 1;
+	const clock = useStepClock(
+		activeSteps,
+		activePose?.loop !== false,
+		hasSteps && selectedStep === undefined
+	);
+	const shownStep = hasSteps ? selectedStep ?? clock : undefined;
+	const animatedFile =
+		!!activePose?.asset && !!assets[activePose.asset]?.animated;
+
+	// A new pose, or a step list that shrank under the selection, starts from playing.
+	React.useEffect(() => {
+		setSelectedStep(undefined);
+	}, [selectedPose]);
+
+	React.useEffect(() => {
+		if (selectedStep !== undefined && selectedStep >= activeSteps.length) {
+			setSelectedStep(undefined);
+		}
+	}, [activeSteps.length, selectedStep]);
 	// What the sprite preview draws and what the readout lists: this POSE's rig. The
 	// character has no rig of its own — a pose is what decides where a mouth is.
 	const activeAnchors = activePose?.anchors ?? {};
@@ -218,6 +302,22 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 			return;
 		}
 
+		// A picked step keeps its own fit: sheet cells drift one by one.
+		if (hasSteps && selectedStep !== undefined) {
+			onChange({
+				...character,
+				poses: {
+					...character.poses,
+					[selectedPose]: setStepFit(
+						character.poses[selectedPose],
+						selectedStep,
+						fit
+					)
+				}
+			});
+			return;
+		}
+
 		// Identity is stored as absent, so a pose nudged back to zero reads the same as
 		// one never touched--and the manifest stays free of no-op entries.
 		const identity = fit.offset.x === 0 && fit.offset.y === 0 && fit.scale === 1;
@@ -260,6 +360,29 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 		onCommit();
 	}
 
+	function handleStepFitToAll() {
+		if (!selectedPose || !activePose || selectedStep === undefined) {
+			return;
+		}
+
+		onChange({
+			...character,
+			poses: {
+				...character.poses,
+				[selectedPose]: stepFitToAll(activePose, selectedStep)
+			}
+		});
+		onCommit();
+	}
+
+	function handleChangePose(pose: CharacterPose) {
+		if (!selectedPose) {
+			return;
+		}
+
+		onChange({...character, poses: {...character.poses, [selectedPose]: pose}});
+	}
+
 	function handleToggleGhost(name: string) {
 		setGhosts(current =>
 			current.includes(name)
@@ -269,13 +392,43 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	}
 
 	// The selected pose draws itself in full, so it is never also a ghost of itself.
-	const ghostPoses = ghosts
+	const ghostPoses: SpriteGhost[] = ghosts
 		.filter(name => name !== selectedPose && character.poses[name])
 		.map(name => ({
 			assetId: poseCover(character.poses[name]),
-			fit: character.poses[name].fit,
+			fit: stepFit(character.poses[name], 0),
 			name
 		}));
+
+	// Onion skin: a picked step shows the one before it, faintly, underneath. The first
+	// step of a looping pose follows the last.
+	if (activePose && hasSteps && selectedStep !== undefined) {
+		const previous =
+			selectedStep > 0
+				? selectedStep - 1
+				: activePose.loop !== false
+				? activeSteps.length - 1
+				: undefined;
+
+		if (previous !== undefined && previous !== selectedStep) {
+			ghostPoses.unshift({
+				assetId: activeSteps[previous].asset,
+				fit: stepFit(activePose, previous),
+				name: `step:${previous}`
+			});
+		}
+	}
+
+	// What the stage draws: the step on show, with the fit it plays with.
+	const shownAsset =
+		shownStep !== undefined ? activeSteps[shownStep]?.asset : poseCover(activePose);
+	const shownFit =
+		activePose && shownStep !== undefined
+			? stepFit(activePose, shownStep)
+			: activePose?.fit;
+	// Panning while the pose plays would write the POSE fit, which every step with its own
+	// fit ignores. Pick a step to fit it.
+	const canFit = !hasSteps || selectedStep !== undefined;
 
 	return (
 		<div className="character-editor">
@@ -294,6 +447,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 						poses={character.poses}
 						onAddFiles={onUploadPoses}
 						onChangeLoop={handleChangeLoop}
+						onImportSet={() => onImportSet()}
 						onDelete={handleDeletePose}
 						onEdit={onEditPose}
 						onRename={handleRenamePose}
@@ -305,10 +459,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					<div className="character-editor-stage">
 						<SpritePreview
 							anchors={activeAnchors}
-							assetId={poseCover(activePose)}
-							fit={activePose?.fit}
+							assetId={shownAsset}
+							fit={shownFit}
 							onChangeAnchor={handleChangeAnchor}
-							onChangeFit={handleChangeFit}
+							onChangeFit={canFit ? handleChangeFit : undefined}
 							onChangeOrigin={origin => onChange({...character, origin})}
 							onCommit={onCommit}
 							ghosts={ghostPoses}
@@ -317,6 +471,18 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 							picking={picking}
 							size={character.size}
 						/>
+						{activePose && selectedPose && !animatedFile && (
+							<StepStrip
+								name={selectedPose}
+								onAddFiles={files => onAddSteps(selectedPose, files)}
+								onChange={handleChangePose}
+								onCommit={onCommit}
+								onSelect={setSelectedStep}
+								pose={activePose}
+								selected={hasSteps ? selectedStep : undefined}
+								shown={shownStep}
+							/>
+						)}
 					</div>
 				</div>
 			</UploadDropZone>
@@ -417,26 +583,42 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 					<div className="character-editor-group character-editor-fit">
 						{activePose ? (
 							<>
+								{hasSteps && (
+									<p className="character-editor-note" data-fit-target>
+										{selectedStep === undefined
+											? t('dialogs.slidersCharacters.steps.fitWholePose')
+											: t('dialogs.slidersCharacters.steps.fitStep', {
+													index: selectedStep + 1
+											  })}
+									</p>
+								)}
 								<AdjustSlider
 									editable
 									label={t('dialogs.slidersCharacters.poseScale')}
 									max={3}
 									min={0.2}
 									onChange={scale =>
-										handleChangeFit({...(activePose.fit ?? DEFAULT_FIT), scale})
+										handleChangeFit({...(shownFit ?? DEFAULT_FIT), scale})
 									}
 									resetLabel={t('dialogs.slidersCharacters.resetPoseScale')}
 									resetTo={DEFAULT_FIT.scale}
 									step={0.01}
-									value={activePose.fit?.scale ?? DEFAULT_FIT.scale}
+									value={shownFit?.scale ?? DEFAULT_FIT.scale}
 								/>
 								<ButtonBar>
 									<IconButton
-										disabled={!activePose.fit}
+										disabled={!shownFit}
 										icon={<IconArrowBackUp />}
 										label={t('dialogs.slidersCharacters.resetFit')}
 										onClick={() => handleChangeFit(DEFAULT_FIT)}
 									/>
+									{hasSteps && selectedStep !== undefined && (
+										<IconButton
+											icon={<IconCopy />}
+											label={t('dialogs.slidersCharacters.steps.fitToAllSteps')}
+											onClick={handleStepFitToAll}
+										/>
+									)}
 									<IconButton
 										disabled={poseNames.length < 2}
 										icon={<IconCopy />}

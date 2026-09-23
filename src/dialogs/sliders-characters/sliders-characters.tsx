@@ -28,8 +28,17 @@ import {
 	useAssetLibrary,
 	useAssetScope
 } from '../sliders-assets/asset-store-context';
-import {posesFromFiles} from '../sliders-assets/character-poses';
+import {
+	ImportPose,
+	importPoseSet,
+	posesFromFiles,
+	stepImagesFromFiles
+} from '../sliders-assets/character-poses';
 import {CharacterEditor} from './character-editor';
+import {ImportSet} from './import-set';
+import {decodeImage} from './import-set-images';
+import {looksLikeSheet} from './import-set-logic';
+import {appendSteps} from './pose-steps';
 import './sliders-characters.css';
 
 /** How long a change sits before it's written to the asset store. */
@@ -62,6 +71,8 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 	const [idError, setIdError] = React.useState<string>();
 	const [pendingRename, setPendingRename] = React.useState<PendingRename>();
 	const [selectedId, setSelectedId] = React.useState(characterId);
+	/** Set while Import set has the editor's place, with any files it was opened with. */
+	const [importing, setImporting] = React.useState<{files?: File[]}>();
 	const {t} = useTranslation();
 
 	const {characters, refresh, store} = library;
@@ -82,6 +93,9 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			setDraft(undefined);
 		}
 	}, [activeId, characters, draft]);
+
+	// Import set belongs to the character it was opened on.
+	React.useEffect(() => setImporting(undefined), [activeId]);
 
 	// Held in a ref so `commit()` can write the newest draft without being re-created on
 	// every keystroke.
@@ -271,7 +285,90 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		return id !== draft?.id && characters.some(other => other.id === id);
 	}
 
+	/**
+	 * A drop or a pick of pose files. Many files, or one image shaped like a sheet, go to
+	 * Import set for grouping and review; one ordinary image or one animated file is added
+	 * straight away, as it always was.
+	 */
 	async function handleUploadPoses(files: File[]) {
+		if (!draft) {
+			return;
+		}
+
+		if (files.length > 1) {
+			setImporting({files});
+			return;
+		}
+
+		if (files.length === 1) {
+			try {
+				const decoded = await decodeImage(files[0]);
+
+				URL.revokeObjectURL(decoded.url);
+
+				if (!decoded.animated && looksLikeSheet(decoded, draft.size)) {
+					setImporting({files});
+					return;
+				}
+			} catch {
+				// Not decodable here: let the store have its say, as before.
+			}
+		}
+
+		await addPoses(files);
+	}
+
+	async function handleImportSet(set: ImportPose[], faces: 'left' | 'right') {
+		const current = latest.current;
+
+		if (!current) {
+			return;
+		}
+
+		const poses = await importPoseSet(store, current, set);
+		const updated: Character = {...(latest.current ?? current), poses};
+
+		// Right is the default, stored as absent.
+		if (faces === 'left') {
+			updated.faces = 'left';
+		} else {
+			delete updated.faces;
+		}
+
+		setDraft(updated);
+		latest.current = updated;
+		await store.putCharacter(updated);
+		setImporting(undefined);
+		refresh();
+	}
+
+	async function handleAddSteps(name: string, files: File[]) {
+		const current = latest.current;
+
+		if (!current?.poses[name]) {
+			return;
+		}
+
+		const ids = await stepImagesFromFiles(store, current, name, files);
+		// Read again: the upload awaited, and the author may have edited meanwhile.
+		const now = latest.current ?? current;
+
+		if (ids.length === 0 || !now.poses[name]) {
+			return;
+		}
+
+		const updated = {
+			...now,
+			poses: {...now.poses, [name]: appendSteps(now.poses[name], ids)}
+		};
+
+		setDraft(updated);
+		latest.current = updated;
+		await store.putCharacter(updated);
+		refresh();
+	}
+
+	async function addPoses(files: File[]) {
 		if (!draft) {
 			return;
 		}
@@ -477,14 +574,24 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 					</div>
 					{characters.map(character => (
 						<TabPanel key={character.id}>
-							{draft && draft.id === character.id && (
+							{draft && draft.id === character.id && importing && (
+								<ImportSet
+									character={draft}
+									initialFiles={importing.files}
+									onCancel={() => setImporting(undefined)}
+									onImport={handleImportSet}
+								/>
+							)}
+							{draft && draft.id === character.id && !importing && (
 								<CharacterEditor
 									assets={assets}
 									character={draft}
 									onChange={setDraft}
 									onCommit={commit}
+									onAddSteps={(name, files) => void handleAddSteps(name, files)}
 									onEditPose={handleEditPose}
-									onUploadPoses={handleUploadPoses}
+									onImportSet={files => setImporting({files})}
+									onUploadPoses={files => void handleUploadPoses(files)}
 								/>
 							)}
 						</TabPanel>

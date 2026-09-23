@@ -22,10 +22,18 @@ export interface Rect {
  * The rect an image paints when it is drawn `object-fit: contain` in `box`.
  *
  * The element fills the box, but the picture inside it does not: the shorter axis is
- * letterboxed and centred. Drawing the art outline against the element would put a line
- * around empty space, which is exactly the thing an author is trying to see past.
+ * letterboxed. Drawing the art outline against the element would put a line around empty
+ * space, which is exactly the thing an author is trying to see past.
+ *
+ * `position` is `object-position` as fractions: centred by default, the character's origin
+ * for a sprite — the renderer pins the art's origin point to the box's, so art wider than
+ * the box's shape stands on the floor instead of floating mid-box.
  */
-export function containRect(natural: Box, box: Box): Rect | undefined {
+export function containRect(
+	natural: Box,
+	box: Box,
+	position: {x: number; y: number} = {x: 0.5, y: 0.5}
+): Rect | undefined {
 	if (!(natural.width > 0) || !(natural.height > 0)) {
 		return undefined;
 	}
@@ -40,8 +48,8 @@ export function containRect(natural: Box, box: Box): Rect | undefined {
 
 	return {
 		height,
-		left: (box.width - width) / 2,
-		top: (box.height - height) / 2,
+		left: (box.width - width) * position.x,
+		top: (box.height - height) * position.y,
 		width
 	};
 }

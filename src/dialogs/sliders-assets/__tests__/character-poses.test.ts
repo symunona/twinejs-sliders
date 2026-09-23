@@ -4,7 +4,11 @@ import {
 	defaultCharacter
 } from '@sliders/asset-store';
 import {pngBytes} from '../../../../packages/asset-store/src/test-fixtures';
-import {posesFromFiles} from '../character-poses';
+import {
+	importPoseSet,
+	plannedPoseNames,
+	posesFromFiles
+} from '../character-poses';
 
 // jsdom ships getRandomValues but not SubtleCrypto.
 beforeAll(() => {
@@ -81,5 +85,68 @@ describe('posesFromFiles', () => {
 		]);
 
 		expect(poses.wave.anchors).toEqual({bubble: {x: 0.25, y: 0.1}});
+	});
+});
+
+describe('importPoseSet', () => {
+	function image(width: number, fit?: {offset: {x: number; y: number}; scale: number}) {
+		return {blob: file(`${width}.png`, width), fit, label: `${width}`};
+	}
+
+	it('makes steps, stills, idle first, and keeps fits and timing', async () => {
+		const store = newStore();
+		const fit = {offset: {x: 0.1, y: 0}, scale: 1};
+		const poses = await importPoseSet(store, {id: 'mira', poses: {}}, [
+			{dur: 0.2, images: [image(10, fit), image(11)], loop: false, name: 'walk'},
+			{images: [image(12)], name: 'wave'}
+		]);
+
+		// No idle in the set, and the character had no poses: the first one takes it.
+		expect(Object.keys(poses)).toEqual(['idle', 'wave']);
+		expect(poses.idle.loop).toBe(false);
+		expect(poses.idle.steps).toEqual([
+			{asset: expect.any(String), dur: 0.2, fit},
+			{asset: expect.any(String), dur: 0.2}
+		]);
+		expect(poses.wave.asset).toEqual(expect.any(String));
+		expect(poses.wave.steps).toBeUndefined();
+
+		const names = (await store.list({includePoseImages: true})).map(
+			meta => meta.name
+		);
+
+		expect(names).toEqual(
+			expect.arrayContaining(['mira-idle-1', 'mira-idle-2', 'mira-wave'])
+		);
+	});
+
+	it('suffixes a name that clashes with an existing pose', async () => {
+		const store = newStore();
+		const first = await posesFromFiles(store, {id: 'mira', poses: {}}, [
+			file('a.png')
+		]);
+		const poses = await importPoseSet(store, {id: 'mira', poses: first}, [
+			{images: [image(20), image(21)], name: 'idle'}
+		]);
+
+		expect(Object.keys(poses)).toEqual(['idle', 'idle-2']);
+		expect(poses['idle-2'].steps).toHaveLength(2);
+	});
+});
+
+describe('plannedPoseNames', () => {
+	it('gives an empty character idle: its own, else the first', () => {
+		expect(plannedPoseNames(['walk', 'Idle', 'wave'], {})).toEqual([
+			'walk',
+			'idle',
+			'wave'
+		]);
+		expect(plannedPoseNames(['walk', 'wave'], {})).toEqual(['idle', 'wave']);
+	});
+
+	it('suffixes clashes, with existing poses and within the set', () => {
+		expect(
+			plannedPoseNames(['idle', 'walk', 'walk'], {idle: {asset: 'a'}})
+		).toEqual(['idle-2', 'walk', 'walk-2']);
 	});
 });

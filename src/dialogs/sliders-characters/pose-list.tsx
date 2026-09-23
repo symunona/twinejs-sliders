@@ -7,6 +7,7 @@ import {
 import {
 	IconEye,
 	IconEyeOff,
+	IconFileImport,
 	IconPencil,
 	IconPhotoEdit,
 	IconRepeat,
@@ -30,6 +31,8 @@ export interface PoseListProps {
 	onChangeLoop: (name: string, loop: boolean) => void;
 	onDelete: (name: string) => void;
 	onEdit: (name: string) => void;
+	/** Opens Import set: many files, a folder or a sprite sheet into poses at once. */
+	onImportSet: () => void;
 	onRename: (name: string, newName: string) => void;
 	onSelect: (name: string) => void;
 	/** Turns a pose's ghost on and off. The selected pose is never a ghost. */
@@ -47,6 +50,7 @@ export const PoseList: React.FC<PoseListProps> = props => {
 		onChangeLoop,
 		onDelete,
 		onEdit,
+		onImportSet,
 		onRename,
 		onSelect,
 		onToggleGhost,
@@ -64,6 +68,11 @@ export const PoseList: React.FC<PoseListProps> = props => {
 				commandScope="sliders-characters"
 				label={t('dialogs.slidersCharacters.addPoses')}
 				onUpload={onAddFiles}
+			/>
+			<IconButton
+				icon={<IconFileImport />}
+				label={t('dialogs.slidersCharacters.importSet.open')}
+				onClick={onImportSet}
 			/>
 			<ul>
 				{Object.entries(poses).map(([name, pose]) => {
@@ -92,6 +101,9 @@ export const PoseList: React.FC<PoseListProps> = props => {
 							>
 								<AssetPreview alt={name} assetId={cover} />
 								<span className="pose-list-name">{name}</span>
+								{poseHasSteps(pose) && (
+									<span className="pose-list-steps">{pose.steps!.length}</span>
+								)}
 								{animated && (
 									<span
 										className="pose-list-animated"
