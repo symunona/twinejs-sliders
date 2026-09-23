@@ -604,16 +604,17 @@ wrapper and not the host itself.
 
 .walk-path {
 	fill: none;
-	stroke: var(--orange);
+	/* Magenta: nothing in a wooden or stone floor is that colour, so it reads on any art. */
+	stroke: #ff2da0;
 	stroke-linejoin: round;
-	stroke-width: 2.5;
+	stroke-width: 3;
 }
 
 .walk-path-miss {
 	fill: none;
-	stroke: var(--orange);
-	stroke-dasharray: 3 4;
-	stroke-width: 1.5;
+	stroke: #ff2da0;
+	stroke-dasharray: 4 4;
+	stroke-width: 2;
 }
 
 /* Walk-here: a sheet over the art that turns any press into a walk. */
