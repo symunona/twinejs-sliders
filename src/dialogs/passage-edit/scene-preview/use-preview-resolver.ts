@@ -25,7 +25,7 @@ export function createNamedResolver(store: AssetStore): AssetResolver & {
 		}
 
 		if (!loading) {
-			loading = store.list({includeFrames: true}).then(all => {
+			loading = store.list({includePoseImages: true}).then(all => {
 				byName = new Map(all.map(asset => [asset.name, asset]));
 				loading = undefined;
 				return byName;

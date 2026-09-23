@@ -14,7 +14,7 @@ const passage = [
 	'id: tavern-night',
 	'bg: tavern-night',
 	'cast:',
-	'  mira: {at: -0.4, frame: idle}',
+	'  mira: {at: -0.4, pose: idle}',
 	'props:',
 	'  candle: {at: 0.1}',
 	'beats:',

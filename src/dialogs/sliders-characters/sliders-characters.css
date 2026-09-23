@@ -53,7 +53,7 @@
 	padding: var(--grid-size);
 }
 
-/* Frame list */
+/* Pose list */
 
 /* The zone wraps the list AND the stage, so it must not become a scroller of its own or
    add a second ring of padding round the body it contains. */
@@ -64,7 +64,7 @@
 	padding: 0;
 }
 
-.frame-list {
+.pose-list {
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 calc(var(--grid-size) * 18);
@@ -76,11 +76,11 @@
 	min-width: 0;
 }
 
-.frame-list h3 {
+.pose-list h3 {
 	margin: 0;
 }
 
-.frame-list ul {
+.pose-list ul {
 	display: flex;
 	flex-direction: column;
 	gap: var(--control-inner-padding);
@@ -91,7 +91,7 @@
 	padding: 0;
 }
 
-.frame-list-item {
+.pose-list-item {
 	border: 1px solid var(--light-gray);
 	border-radius: var(--corner-round);
 	/* The list is a column flex box with a capped height, so without this the tiles shrink
@@ -100,19 +100,19 @@
 	overflow: hidden;
 }
 
-.frame-list-item.selected {
+.pose-list-item.selected {
 	background: var(--faint-blue);
 	border-color: var(--blue);
 }
 
-/* A frame currently showing as a ghost behind the selected one. */
-.frame-list-item.ghosted {
+/* A pose currently showing as a ghost behind the selected one. */
+.pose-list-item.ghosted {
 	border-color: var(--gray);
 	border-style: dashed;
 }
 
 /* The whole tile is the picture; the name rides on top of it. */
-.frame-list-select {
+.pose-list-select {
 	background: none;
 	border: none;
 	cursor: pointer;
@@ -125,7 +125,7 @@
 	width: 100%;
 }
 
-.frame-list-select .asset-preview {
+.pose-list-select .asset-preview {
 	border-radius: 0;
 	display: block;
 	height: 100%;
@@ -133,7 +133,7 @@
 }
 
 /* Cover, not contain: a column of letterboxed thumbnails is mostly checkerboard. */
-.frame-list-select .asset-preview img {
+.pose-list-select .asset-preview img {
 	height: 100%;
 	max-height: none;
 	max-width: none;
@@ -141,7 +141,7 @@
 	width: 100%;
 }
 
-.frame-list-name {
+.pose-list-name {
 	background: var(--white-translucent);
 	bottom: 0;
 	color: var(--black);
@@ -154,7 +154,7 @@
 	white-space: nowrap;
 }
 
-.frame-list-animated {
+.pose-list-animated {
 	background: var(--white-translucent);
 	border-radius: var(--corner-round);
 	line-height: 1;
@@ -166,12 +166,12 @@
 
 /* One row, whatever the column width: five icon buttons at full chrome are wider than the
    list, and wrapping them made each tile three rows tall. */
-.frame-list-item .button-bar {
+.pose-list-item .button-bar {
 	flex-wrap: nowrap;
 	justify-content: space-around;
 }
 
-.frame-list-item .icon-button {
+.pose-list-item .icon-button {
 	height: calc(var(--grid-size) * 3);
 	padding: 0 var(--control-inner-padding);
 }
@@ -247,7 +247,7 @@
 }
 
 /* Three layers inside the box, because everything in here is positioned and would
-   otherwise stack in document order: ghosts at the back, the selected frame over them, and
+   otherwise stack in document order: ghosts at the back, the selected pose over them, and
    the rig — guides, outline, handles — on top, where it stays clickable. */
 .sprite-ghost {
 	height: 100%;

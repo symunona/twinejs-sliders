@@ -8,7 +8,7 @@ import {parseSceneText} from '../use-scene-parse';
 const passage = [
 	'[scene]',
 	'cast:',
-	'  mira: {at: -0.4, frame: angry}',
+	'  mira: {at: -0.4, pose: angry}',
 	'  joren: {at: 0.3, z: 2}',
 	'props:',
 	'  candle: {at: 0.4}'
@@ -17,7 +17,7 @@ const passage = [
 const stage: Stage = parseSceneText(passage).states[0];
 
 const mira: Character = {
-	frames: {angry: {asset: 'a_2'}, idle: {asset: 'a_1'}},
+	poses: {angry: {asset: 'a_2'}, idle: {asset: 'a_1'}},
 	id: 'mira',
 	name: 'Mira',
 	origin: {x: 0.5, y: 1},
@@ -38,8 +38,8 @@ function renderControls(
 	const handlers = {
 		onDelete: jest.fn(),
 		onFlip: jest.fn(),
-		onFrame: jest.fn(),
-		onPreviewFrame: jest.fn(),
+		onPose: jest.fn(),
+		onPreviewPose: jest.fn(),
 		onStepZ: jest.fn()
 	};
 
@@ -59,17 +59,17 @@ function renderControls(
 }
 
 /**
- * i18n is not initialised under jest, so every `t()` is its own key here. Real frame names
+ * i18n is not initialised under jest, so every `t()` is its own key here. Real pose names
  * come from the manifest and are unaffected; only the Automatic row is a key.
  */
-const AUTO_LABEL = 'dialogs.passageEdit.scenePreview.frameAuto';
+const AUTO_LABEL = 'dialogs.passageEdit.scenePreview.poseAuto';
 
 /**
- * The frame control's own button. Found structurally — it is the row's only `MenuButton` —
+ * The pose control's own button. Found structurally — it is the row's only `MenuButton` —
  * rather than by label: the row also holds flip, two depth steps and delete, their order is
  * not what these tests are about, and their labels are all keys in this environment.
  */
-function frameButton(): HTMLButtonElement | undefined {
+function poseButton(): HTMLButtonElement | undefined {
 	return (
 		document.querySelector<HTMLButtonElement>(
 			'.scene-preview-selection .menu-button button'
@@ -78,24 +78,24 @@ function frameButton(): HTMLButtonElement | undefined {
 }
 
 /** The open menu's rows. Portalled to the body, so this cannot be scoped to the row. */
-function frameItems(): HTMLButtonElement[] {
+function poseItems(): HTMLButtonElement[] {
 	return Array.from(document.querySelectorAll('.menu-button-menu button'));
 }
 
 function itemNamed(label: string): HTMLButtonElement {
-	const item = frameItems().find(button => button.textContent === label);
+	const item = poseItems().find(button => button.textContent === label);
 
 	if (!item) {
-		throw new Error(`no menu item "${label}" in [${frameItems().map(i => i.textContent).join(', ')}]`);
+		throw new Error(`no menu item "${label}" in [${poseItems().map(i => i.textContent).join(', ')}]`);
 	}
 
 	return item;
 }
 
-async function openFrameMenu() {
-	await waitFor(() => expect(frameButton()).toBeDefined());
-	fireEvent.click(frameButton() as HTMLButtonElement);
-	await waitFor(() => expect(frameItems().length).toBeGreaterThan(0));
+async function openPoseMenu() {
+	await waitFor(() => expect(poseButton()).toBeDefined());
+	fireEvent.click(poseButton() as HTMLButtonElement);
+	await waitFor(() => expect(poseItems().length).toBeGreaterThan(0));
 }
 
 /**
@@ -127,78 +127,78 @@ describe('<StageSelectionControls>', () => {
 		expect(screen.queryByTestId('scene-preview-selection')).toBeNull();
 	});
 
-	it('offers the character manifest frames, plus automatic', async () => {
+	it('offers the character manifest poses, plus automatic', async () => {
 		renderControls(['mira']);
-		await openFrameMenu();
+		await openPoseMenu();
 
-		expect(frameItems().map(item => item.textContent)).toEqual([
+		expect(poseItems().map(item => item.textContent)).toEqual([
 			AUTO_LABEL,
 			'angry',
 			'idle'
 		]);
-		// The scene's own frame is the one ticked, so the menu reports as well as offers.
+		// The scene's own pose is the one ticked, so the menu reports as well as offers.
 		expect(
-			frameItems()
+			poseItems()
 				.filter(item => item.getAttribute('aria-checked') === 'true')
 				.map(item => item.textContent)
 		).toEqual(['angry']);
 	});
 
-	it('writes the chosen frame, and removes the key for automatic', async () => {
-		const {onFrame} = renderControls(['mira']);
+	it('writes the chosen pose, and removes the key for automatic', async () => {
+		const {onPose} = renderControls(['mira']);
 
-		await openFrameMenu();
+		await openPoseMenu();
 		fireEvent.click(itemNamed('idle'));
-		expect(onFrame).toHaveBeenCalledWith('idle');
+		expect(onPose).toHaveBeenCalledWith('idle');
 
-		await openFrameMenu();
+		await openPoseMenu();
 		fireEvent.click(itemNamed(AUTO_LABEL));
-		expect(onFrame).toHaveBeenLastCalledWith(undefined);
+		expect(onPose).toHaveBeenLastCalledWith(undefined);
 	});
 
-	it('previews the hovered frame and takes it back on leave', async () => {
-		const {onFrame, onPreviewFrame} = renderControls(['mira']);
+	it('previews the hovered pose and takes it back on leave', async () => {
+		const {onPose, onPreviewPose} = renderControls(['mira']);
 
-		await openFrameMenu();
+		await openPoseMenu();
 		hover(itemNamed('idle'));
-		expect(onPreviewFrame).toHaveBeenLastCalledWith('idle');
+		expect(onPreviewPose).toHaveBeenLastCalledWith('idle');
 
-		// Automatic previews the fallback, so it is a frame to look at like any other.
+		// Automatic previews the fallback, so it is a pose to look at like any other.
 		hover(itemNamed(AUTO_LABEL));
-		expect(onPreviewFrame).toHaveBeenLastCalledWith('');
+		expect(onPreviewPose).toHaveBeenLastCalledWith('');
 
 		unhover(itemNamed(AUTO_LABEL));
-		expect(onPreviewFrame).toHaveBeenLastCalledWith(null);
+		expect(onPreviewPose).toHaveBeenLastCalledWith(null);
 
 		// Hovering is a question, not an answer.
-		expect(onFrame).not.toHaveBeenCalled();
+		expect(onPose).not.toHaveBeenCalled();
 	});
 
 	it('takes the preview back when the menu closes without a leave', async () => {
-		const {onPreviewFrame} = renderControls(['mira']);
+		const {onPreviewPose} = renderControls(['mira']);
 
-		await openFrameMenu();
+		await openPoseMenu();
 		hover(itemNamed('idle'));
-		onPreviewFrame.mockClear();
+		onPreviewPose.mockClear();
 
 		// What a click anywhere else does: the items unmount under the pointer and no leave
 		// event ever arrives.
 		fireEvent.click(document.body);
-		expect(onPreviewFrame).toHaveBeenCalledWith(null);
+		expect(onPreviewPose).toHaveBeenCalledWith(null);
 	});
 
-	it('offers no frames for a prop — props are one image', async () => {
+	it('offers no poses for a prop — props are one image', async () => {
 		renderControls(['candle']);
 
 		// Nothing left to choose at all now that depth is two buttons. Waited on so a late
 		// resolver cannot sneak one in after the assertion.
-		await waitFor(() => expect(frameButton()).toBeUndefined());
+		await waitFor(() => expect(poseButton()).toBeUndefined());
 	});
 
-	it('offers no frames for a multi-selection', async () => {
+	it('offers no poses for a multi-selection', async () => {
 		renderControls(['mira', 'joren']);
 
-		await waitFor(() => expect(frameButton()).toBeUndefined());
+		await waitFor(() => expect(poseButton()).toBeUndefined());
 	});
 
 	// A prop, so nothing is fetched and the buttons are all there is.

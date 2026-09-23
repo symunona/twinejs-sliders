@@ -69,7 +69,7 @@ async function bytesOf(blob: Blob | undefined): Promise<number[]> {
  * references would compare equal to itself however badly a second import had mangled it.
  */
 async function librarySnapshot(store: BackedAssetStore): Promise<AssetMeta[]> {
-	return (await store.list({includeFrames: true})).map(meta => ({
+	return (await store.list({includePoseImages: true})).map(meta => ({
 		...meta,
 		tags: [...meta.tags]
 	}));
@@ -122,7 +122,7 @@ const TAVERN = scenePassage(
 	[
 		'bg: tavern-night',
 		'cast:',
-		'  mira: {at: -0.4, frame: smile}',
+		'  mira: {at: -0.4, pose: smile}',
 		'fx: [{id: rain, amount: 1}]',
 		'beats:',
 		'  - mira: Evening.'
@@ -186,15 +186,15 @@ async function seedSource(): Promise<Seeded> {
 		tags: ['cast', 'chapter-one']
 	};
 
-	for (const [index, frameName] of ['idle', 'smile'].entries()) {
+	for (const [index, poseName] of ['idle', 'smile'].entries()) {
 		const asset = await store.put(
-			file(pngBytes(10 + index, 20), `mira-${frameName}.png`, 'image/png'),
-			{kind: 'frame', name: `mira/${frameName}`, ownerCharacter: 'mira'}
+			file(pngBytes(10 + index, 20), `mira-${poseName}.png`, 'image/png'),
+			{kind: 'frame', name: `mira/${poseName}`, ownerCharacter: 'mira'}
 		);
 
-		// Anchors are per frame, and deliberately different between the two: a round trip
+		// Anchors are per pose, and deliberately different between the two: a round trip
 		// that flattened them back onto the character would still pass with one rig.
-		character.frames[frameName] = {
+		character.poses[poseName] = {
 			anchors: {
 				bubble: {x: 0.5, y: index === 0 ? 0.12 : 0.17},
 				mouth: {x: 0.48, y: 0.3}
@@ -256,7 +256,7 @@ describe('the fixture story references what this suite relies on', () => {
 			assetRefs: ['tavern-night', 'tavern-night-edited'],
 			autoRefs: [],
 			characterRefs: ['mira'],
-			frameRefs: {mira: ['smile']},
+			poseRefs: {mira: ['smile']},
 			fxRefs: ['rain'],
 			optionalAssetRefs: [],
 			soundRefs: []
@@ -271,7 +271,7 @@ describe('the fixture story references what this suite relies on', () => {
 			mime: 'image/gif'
 		});
 		expect(character.size).toEqual({w: 400, h: 900});
-		expect(Object.keys(character.frames).sort()).toEqual(['idle', 'smile']);
+		expect(Object.keys(character.poses).sort()).toEqual(['idle', 'smile']);
 	});
 });
 
@@ -283,8 +283,8 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 
 		expect(contents.warnings).toEqual([]);
 
-		const before = await source.list({includeFrames: true});
-		const after = await dest.list({includeFrames: true});
+		const before = await source.list({includePoseImages: true});
+		const after = await dest.list({includePoseImages: true});
 
 		expect(after.map(meta => meta.name)).toEqual(BUNDLED_NAMES);
 
@@ -308,7 +308,7 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 
 		await roundTrip(storyFixture(), source, dest);
 
-		const rain = (await dest.list({includeFrames: true})).find(
+		const rain = (await dest.list({includePoseImages: true})).find(
 			meta => meta.name === 'fx/rain'
 		);
 
@@ -331,14 +331,14 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 
 		await roundTrip(storyFixture(), source, dest);
 
-		const library = await dest.list({includeFrames: true});
+		const library = await dest.list({includePoseImages: true});
 		const original = library.find(meta => meta.name === 'tavern-night');
 		const edited = library.find(meta => meta.name === 'tavern-night-edited');
 
 		expect(edited?.sourceAsset).toBe(original?.id);
 	});
 
-	it('carries the character whole, with its frames repointed by name', async () => {
+	it('carries the character whole, with its poses repointed by name', async () => {
 		const {character, store: source} = await seedSource();
 		const dest = newStore();
 
@@ -350,43 +350,43 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 		expect(stored!.name).toBe('Mira');
 		expect(stored!.size).toEqual({w: 400, h: 900});
 		expect(stored!.origin).toEqual({x: 0.42, y: 0.98});
-		expect(stored!.frames.idle.anchors).toEqual({
+		expect(stored!.poses.idle.anchors).toEqual({
 			bubble: {x: 0.5, y: 0.12},
 			mouth: {x: 0.48, y: 0.3}
 		});
-		expect(stored!.frames.smile.anchors).toEqual({
+		expect(stored!.poses.smile.anchors).toEqual({
 			bubble: {x: 0.5, y: 0.17},
 			mouth: {x: 0.48, y: 0.3}
 		});
 		expect(stored!.tags).toEqual(['cast', 'chapter-one']);
-		expect(Object.keys(stored!.frames).sort()).toEqual(['idle', 'smile']);
-		// `loop` is per-frame and easy to drop in a remap that rebuilds the object.
-		expect(stored!.frames.idle.loop).toBe(true);
-		expect(stored!.frames.smile.loop).toBe(false);
+		expect(Object.keys(stored!.poses).sort()).toEqual(['idle', 'smile']);
+		// `loop` is per-pose and easy to drop in a remap that rebuilds the object.
+		expect(stored!.poses.idle.loop).toBe(true);
+		expect(stored!.poses.smile.loop).toBe(false);
 
-		const local = await dest.list({includeFrames: true});
+		const local = await dest.list({includePoseImages: true});
 
-		for (const [name, frame] of Object.entries(character.frames)) {
-			const sourceMeta = await source.meta(frame.asset);
+		for (const [name, pose] of Object.entries(character.poses)) {
+			const sourceMeta = await source.meta(pose.asset!);
 			const destMeta = local.find(meta => meta.name === sourceMeta!.name);
 
 			// Derived from the name rather than assumed equal to the bundle id: the point is
-			// that the frame points at whatever this library called the image.
-			expect(stored!.frames[name].asset).toBe(destMeta!.id);
-			expect(await bytesOf(await dest.get(stored!.frames[name].asset))).toEqual(
-				await bytesOf(await source.get(frame.asset))
+			// that the pose points at whatever this library called the image.
+			expect(stored!.poses[name].asset).toBe(destMeta!.id);
+			expect(await bytesOf(await dest.get(stored!.poses[name].asset!))).toEqual(
+				await bytesOf(await source.get(pose.asset!))
 			);
 		}
 	});
 
-	it('repoints frames when the destination already owns their ids', async () => {
+	it('repoints poses when the destination already owns their ids', async () => {
 		const {character, store: source} = await seedSource();
 		const dest = newStore();
-		const squatterIds = Object.values(character.frames).map(
-			frame => frame.asset
+		const squatterIds = Object.values(character.poses).map(
+			pose => pose.asset!
 		);
 
-		// Unrelated local art that happens to hold the ids the bundle's frames want. Four
+		// Unrelated local art that happens to hold the ids the bundle's poses want. Four
 		// hex digits collide across libraries often enough that this is the normal case,
 		// not an edge one.
 		for (const [index, id] of squatterIds.entries()) {
@@ -421,10 +421,10 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 			);
 		}
 
-		for (const [name, frame] of Object.entries(character.frames)) {
-			expect(stored!.frames[name].asset).not.toBe(frame.asset);
-			expect(await bytesOf(await dest.get(stored!.frames[name].asset))).toEqual(
-				await bytesOf(await source.get(frame.asset))
+		for (const [name, pose] of Object.entries(character.poses)) {
+			expect(stored!.poses[name].asset).not.toBe(pose.asset);
+			expect(await bytesOf(await dest.get(stored!.poses[name].asset!))).toEqual(
+				await bytesOf(await source.get(pose.asset!))
 			);
 		}
 	});
@@ -460,7 +460,7 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 		// The index `createNamedResolver` builds, exactly as it builds it. Whatever this
 		// finds is what the passage preview draws.
 		const byName = new Map(
-			(await dest.list({includeFrames: true})).map(meta => [meta.name, meta])
+			(await dest.list({includePoseImages: true})).map(meta => [meta.name, meta])
 		);
 		const drawn = byName.get('tavern-night');
 
@@ -562,10 +562,10 @@ describe('exportStoryBundle into readStoryBundle into applyBundlePlan', () => {
 			'The disk is full.'
 		);
 
-		// A half-applied import leaves frames owned by a character that never got written:
+		// A half-applied import leaves poses owned by a character that never got written:
 		// filtered out of the asset grid and unreachable from the character editor, so the
 		// author can neither see them nor delete them.
-		expect(await dest.list({includeFrames: true})).toEqual([]);
+		expect(await dest.list({includePoseImages: true})).toEqual([]);
 		expect(await dest.listCharacters()).toEqual([]);
 	});
 });

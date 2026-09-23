@@ -16,7 +16,7 @@ import {Character, Vec2} from '@sliders/scene-types';
  * A file on its own says nothing about its role: the same PNG is a backdrop, a prop, a new
  * cast member or one more pose of a cast member already in the story, and the store has to
  * be told which before the bytes can be written — `kind` decides the asset's tab, a
- * character needs a record of its own, and a frame needs an owner. Guessing it from the
+ * character needs a record of its own, and a pose needs an owner. Guessing it from the
  * drop point was the old behaviour (everything became an object) and it was wrong about
  * three cases in four.
  */
@@ -24,10 +24,10 @@ export type DropChoice =
 	| {kind: 'bg'}
 	| {kind: 'object'}
 	| {kind: 'character'}
-	| {kind: 'frame'; character: Character};
+	| {kind: 'pose'; character: Character};
 
 export interface SceneDropMenuProps {
-	/** The cast this story already has, for the "frames of…" branch. */
+	/** The cast this story already has, for the "poses of…" branch. */
 	characters: Character[];
 	/** How many files were dropped. Shown in the heading; the choice applies to all. */
 	count: number;
@@ -50,7 +50,7 @@ export interface SceneDropMenuProps {
  */
 export function SceneDropMenu(props: SceneDropMenuProps) {
 	const {characters, count, onCancel, onChoose, point} = props;
-	const [frames, setFrames] = React.useState(false);
+	const [poses, setPoses] = React.useState(false);
 	const {t} = useTranslation();
 	const rootRef = React.useRef<HTMLDivElement>(null);
 	const [offset, setOffset] = React.useState<Vec2>();
@@ -76,7 +76,7 @@ export function SceneDropMenu(props: SceneDropMenuProps) {
 				Math.min(point.y, window.innerHeight - root.offsetHeight - margin)
 			)
 		});
-	}, [frames, point.x, point.y]);
+	}, [poses, point.x, point.y]);
 
 	// Escape cancels wherever focus is. Bound to the document rather than the menu because
 	// the drop leaves focus on whatever the pointer started from, which may be outside it.
@@ -128,13 +128,13 @@ export function SceneDropMenu(props: SceneDropMenuProps) {
 			<div className="scene-drop-menu-title">
 				{t(`${key}.title`, {count})}
 			</div>
-			{frames ? (
+			{poses ? (
 				<>
 					<div className="scene-drop-menu-characters">
 						{characters.map(character => (
 							<button
 								key={character.id}
-								onClick={() => onChoose({character, kind: 'frame'})}
+								onClick={() => onChoose({character, kind: 'pose'})}
 								type="button"
 							>
 								{character.name || character.id}
@@ -143,7 +143,7 @@ export function SceneDropMenu(props: SceneDropMenuProps) {
 					</div>
 					<button
 						className="scene-drop-menu-back"
-						onClick={() => setFrames(false)}
+						onClick={() => setPoses(false)}
 						type="button"
 					>
 						{t('common.back')}
@@ -176,15 +176,15 @@ export function SceneDropMenu(props: SceneDropMenuProps) {
 						{t(`${key}.character`)}
 					</button>
 					<button
-						data-testid="scene-drop-menu-frame"
+						data-testid="scene-drop-menu-pose"
 						disabled={characters.length === 0}
-						onClick={() => setFrames(true)}
+						onClick={() => setPoses(true)}
 						type="button"
 					>
 						<IconUsers />
 						{characters.length === 0
-							? t(`${key}.frameEmpty`)
-							: t(`${key}.frame`)}
+							? t(`${key}.poseEmpty`)
+							: t(`${key}.pose`)}
 					</button>
 					<button
 						className="scene-drop-menu-cancel"

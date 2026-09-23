@@ -67,18 +67,18 @@ export interface SceneAssetRefs {
 	 */
 	soundRefs?: string[];
 	/**
-	 * Frame names seen in `frame:` on entities and beat patches, keyed by the entity id
-	 * that carried them. Only used to report frames a character does not have — a
-	 * referenced character contributes all of its frames regardless.
+	 * Pose names seen in `pose:` on entities and beat patches, keyed by the entity id
+	 * that carried them. Only used to report poses a character does not have — a
+	 * referenced character contributes all of its poses regardless.
 	 */
-	frameRefs: Record<string, string[]>;
+	poseRefs: Record<string, string[]>;
 }
 
 export function emptySceneAssetRefs(): SceneAssetRefs {
 	return {
 		assetRefs: [],
 		characterRefs: [],
-		frameRefs: {},
+		poseRefs: {},
 		fxRefs: [],
 		optionalAssetRefs: [],
 		soundRefs: []
@@ -181,18 +181,18 @@ export interface AssetPlanItem {
 
 /**
  * A character id is written literally in every scene that casts it, so a clash cannot be
- * renamed either. Merge frames instead: add what is missing, keep what is there.
+ * renamed either. Merge poses instead: add what is missing, keep what is there.
  */
 export type CharacterOutcome = 'imported' | 'merged';
 
 export interface CharacterPlanItem {
-	/** Frame asset ids already remapped to local ones. */
+	/** Pose image ids already remapped to local ones. */
 	character: Character;
 	outcome: CharacterOutcome;
-	/** Frame names this import adds to an existing character. */
-	addedFrames: string[];
-	/** Frame names that clashed and were left alone. */
-	keptFrames: string[];
+	/** Pose names this import adds to an existing character. */
+	addedPoses: string[];
+	/** Pose names that clashed and were left alone. */
+	keptPoses: string[];
 }
 
 export interface BundlePlan {

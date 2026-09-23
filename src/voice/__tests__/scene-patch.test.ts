@@ -6,7 +6,7 @@ const PASSAGE = `Some prose above the block.
 id: tavern
 bg: tavern/night        # the good one
 cast:
-  mara: {at: [0.3, 0.8], frame: idle}
+  mara: {at: [0.3, 0.8], pose: idle}
   joren: {at: 0.7}
 props:
   candle: {at: [0.1, -0.2]}
@@ -44,7 +44,7 @@ describe('patchSceneText', () => {
 		const result = patchSceneText(PASSAGE, 'cast:\n  mara: {at: [0.4, 0.9]}');
 
 		expect(result.error).toBeUndefined();
-		expect(result.text).toContain('frame: idle');
+		expect(result.text).toContain('pose: idle');
 		expect(result.text).toContain('joren: {at: 0.7}');
 		expect(result.changed).toEqual(['cast/mara at']);
 	});
@@ -59,10 +59,10 @@ describe('patchSceneText', () => {
 	it('applies several keys in one call', () => {
 		const result = patchSceneText(
 			PASSAGE,
-			'bg: tavern/dawn\ncast:\n  mara: {frame: angry}'
+			'bg: tavern/dawn\ncast:\n  mara: {pose: angry}'
 		);
 
-		expect(result.changed).toEqual(['bg', 'cast/mara frame']);
+		expect(result.changed).toEqual(['bg', 'cast/mara pose']);
 		expect(result.text).toContain('tavern/dawn');
 		expect(result.text).toContain('angry');
 	});

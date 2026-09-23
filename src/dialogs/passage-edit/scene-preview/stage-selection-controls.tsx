@@ -1,21 +1,21 @@
 /**
- * The controls that only make sense with something selected: flip, depth, frame, delete.
+ * The controls that only make sense with something selected: flip, depth, pose, delete.
  *
  * These live in the preview's toolbar rather than floating over the sprite. A widget drawn
  * on the stage would have to be excluded from hit testing, would move with the camera, and
  * would cover the very thing the author is looking at. The keyboard is the fast path — this
  * row exists so that the gestures are discoverable at all, which a keymap alone never is.
  *
- * `frame:` is cast-only and single-selection-only: props are one image and have no frames
- * (spec 03), and two characters share no frame vocabulary. An `entities:` entry is kind
- * `auto` — the resolver decides. Asking it for frames and showing the menu only when it
+ * `pose:` is cast-only and single-selection-only: props are one image and have no poses
+ * (spec 03), and two characters share no pose vocabulary. An `entities:` entry is kind
+ * `auto` — the resolver decides. Asking it for poses and showing the menu only when it
  * answers with some IS the refinement: a name that turns out to be an asset comes back
  * empty and the menu stays hidden.
  *
- * The frame control is a `MenuButton` and not the `TextSelect` it used to be, for one
+ * The pose control is a `MenuButton` and not the `TextSelect` it used to be, for one
  * reason: hovering an item previews that pose on the stage. A native `<select>` cannot do
  * that — its popup is drawn by the browser, its `<option>`s are not elements the page gets
- * pointer events from, and there is no way to ask which one the pointer is over. Frame
+ * pointer events from, and there is no way to ask which one the pointer is over. Pose
  * names are the case that needs it most; `shock` and `surprise` are the same word until
  * you have seen both.
  */
@@ -50,16 +50,16 @@ export interface StageSelectionControlsProps {
 	note?: string;
 	onDelete: () => void;
 	onFlip: () => void;
-	onFrame: (frame: string | undefined) => void;
+	onPose: (pose: string | undefined) => void;
 	/**
-	 * Draw a frame on the stage without writing it: `AUTO_FRAME` for the fallback, a name
+	 * Draw a pose on the stage without writing it: `AUTO_POSE` for the fallback, a name
 	 * for that pose, `null` to stop previewing and go back to what the scene says.
 	 *
 	 * The stage answers a hover, not a click, because choosing a pose is a question about
 	 * what it LOOKS like and the names alone do not answer it — `shock` and `surprise` are
-	 * the same word until you see them. See `onPreviewFrame` in `scene-preview`.
+	 * the same word until you see them. See `onPreviewPose` in `scene-preview`.
 	 */
-	onPreviewFrame: (frame: string | null) => void;
+	onPreviewPose: (pose: string | null) => void;
 	/** One z step. -1 sends backward, +1 brings forward — same as `[` and `]`. */
 	onStepZ: (delta: number) => void;
 	/**
@@ -73,25 +73,25 @@ export interface StageSelectionControlsProps {
 	onOpenLink?: (to: string) => void;
 }
 
-/** No frame chosen: the renderer falls back to `idle`, or to the manifest's first frame. */
-const AUTO_FRAME = '';
+/** No pose chosen: the renderer falls back to `idle`, or to the manifest's first pose. */
+const AUTO_POSE = '';
 
 /**
- * The frame names a character declares.
+ * The pose names a character declares.
  *
  * Read through the resolver, which is the same path the renderer uses, so the list can
- * never offer a frame that would fail to draw. Characters are looked up by id and props
+ * never offer a pose that would fail to draw. Characters are looked up by id and props
  * never get here, so there is nothing to fetch for a prop selection.
  */
-function useCharacterFrames(
+function useCharacterPoses(
 	assets: AssetResolver,
 	characterId: string | undefined
 ): string[] {
-	const [frames, setFrames] = React.useState<string[]>([]);
+	const [poses, setPoses] = React.useState<string[]>([]);
 
 	React.useEffect(() => {
 		if (!characterId) {
-			setFrames([]);
+			setPoses([]);
 
 			return;
 		}
@@ -102,12 +102,12 @@ function useCharacterFrames(
 			.character(characterId)
 			.then(character => {
 				if (!cancelled) {
-					setFrames(Object.keys(character?.frames ?? {}));
+					setPoses(Object.keys(character?.poses ?? {}));
 				}
 			})
 			.catch(() => {
 				if (!cancelled) {
-					setFrames([]);
+					setPoses([]);
 				}
 			});
 
@@ -116,7 +116,7 @@ function useCharacterFrames(
 		};
 	}, [assets, characterId]);
 
-	return frames;
+	return poses;
 }
 
 export const StageSelectionControls: React.FC<
@@ -129,23 +129,23 @@ export const StageSelectionControls: React.FC<
 		note,
 		onDelete,
 		onFlip,
-		onFrame,
+		onPose,
 		onOpenLink,
-		onPreviewFrame,
+		onPreviewPose,
 		onStepZ
 	} = props;
 	const {t} = useTranslation();
 	const single = entities.length === 1 ? entities[0] : undefined;
-	const frames = useCharacterFrames(
+	const poses = useCharacterPoses(
 		assets,
 		single && single.kind !== 'prop' ? single.ref : undefined
 	);
-	// A `frame:` naming a pose the character does not declare is an error the list cannot
+	// A `pose:` naming a pose the character does not declare is an error the list cannot
 	// show, so it reads as Automatic here — which is what the renderer does NOT do (see
-	// `pickFrameName`: a frame that was asked for and missed draws `? frame`). The menu is
+	// `pickPoseName`: a pose that was asked for and missed draws `? pose`). The menu is
 	// for choosing, not for reporting; the scene errors already carry the complaint.
 	const current =
-		single?.frame && frames.includes(single.frame) ? single.frame : AUTO_FRAME;
+		single?.pose && poses.includes(single.pose) ? single.pose : AUTO_POSE;
 	// Single selection only: two sprites can lead two different places, and a button that
 	// silently picked one of them would be worse than no button.
 	const link = single?.link?.to;
@@ -205,30 +205,30 @@ export const StageSelectionControls: React.FC<
 				label={t('dialogs.passageEdit.scenePreview.zFront')}
 				onClick={() => onStepZ(1)}
 			/>
-			{single && single.kind !== 'prop' && frames.length > 0 && (
+			{single && single.kind !== 'prop' && poses.length > 0 && (
 				<MenuButton
 					icon={<IconMoodSmile />}
-					items={[AUTO_FRAME, ...frames].map(name => ({
+					items={[AUTO_POSE, ...poses].map(name => ({
 						checkable: true as const,
 						checked: name === current,
 						label:
-							name === AUTO_FRAME
-								? t('dialogs.passageEdit.scenePreview.frameAuto')
+							name === AUTO_POSE
+								? t('dialogs.passageEdit.scenePreview.poseAuto')
 								: name,
 						onClick: () => {
 							// The scene says this pose now, so there is nothing left to
 							// preview. Cleared here as well as on close because choosing is
 							// the one case where the answer outlives the question.
-							onPreviewFrame(null);
-							onFrame(name || undefined);
+							onPreviewPose(null);
+							onPose(name || undefined);
 						},
 						onHover: (hovering: boolean) =>
-							onPreviewFrame(hovering ? name : null)
+							onPreviewPose(hovering ? name : null)
 					}))}
-					label={t('dialogs.passageEdit.scenePreview.frameNamed', {
-						frame:
-							current === AUTO_FRAME
-								? t('dialogs.passageEdit.scenePreview.frameAuto')
+					label={t('dialogs.passageEdit.scenePreview.poseNamed', {
+						pose:
+							current === AUTO_POSE
+								? t('dialogs.passageEdit.scenePreview.poseAuto')
 								: current
 					})}
 					// The menu can close without a leave event — a click anywhere does it,
@@ -238,7 +238,7 @@ export const StageSelectionControls: React.FC<
 					// does not say.
 					onChangeOpen={open => {
 						if (!open) {
-							onPreviewFrame(null);
+							onPreviewPose(null);
 						}
 					}}
 					// Upward, because this row sits across the TOP of the stage and a menu
@@ -248,7 +248,7 @@ export const StageSelectionControls: React.FC<
 					// Popper flips it back down when there is no room, which is full
 					// screen, where the stage is large enough not to care.
 					placement="top-end"
-					tooltipLabel={t('dialogs.passageEdit.scenePreview.frameHint')}
+					tooltipLabel={t('dialogs.passageEdit.scenePreview.poseHint')}
 				/>
 			)}
 			<IconButton

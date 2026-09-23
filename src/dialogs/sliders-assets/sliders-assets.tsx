@@ -19,7 +19,7 @@ import {onAssetFocus, takePendingAssetFocus} from './focus-request';
 import type {AssetFocusRequest} from './focus-request';
 import {ImportTab} from './import-tab';
 import {AssetTile} from './asset-tile';
-import {characterFromFile, framesFromFiles} from './character-frames';
+import {characterFromFile, posesFromFiles} from './character-poses';
 import {CharacterTile} from './character-tile';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
@@ -147,8 +147,8 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	/**
 	 * Characters aren't an `AssetKind`, so a dropped file can't just "upload into that
 	 * kind" the way spec 03 has every other tab do it. Dropped on the tab itself, each file
-	 * becomes a new character, with the image as its first frame; dropped on a tile, the
-	 * files become new frames of that character instead (`handleDropOnCharacter`).
+	 * becomes a new character, with the image as its first pose; dropped on a tile, the
+	 * files become new poses of that character instead (`handleDropOnCharacter`).
 	 */
 	async function handleCharacterDrop(files: File[]) {
 		// One free id minted per file without asking the store again, so a drop of forty
@@ -166,11 +166,11 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		library.refresh();
 	}
 
-	/** Files dropped onto a character's own tile join that character as frames. */
+	/** Files dropped onto a character's own tile join that character as poses. */
 	async function handleDropOnCharacter(character: Character, files: File[]) {
-		const frames = await framesFromFiles(library.store, character, files);
+		const poses = await posesFromFiles(library.store, character, files);
 
-		await library.store.putCharacter({...character, frames});
+		await library.store.putCharacter({...character, poses});
 		library.refresh();
 	}
 
@@ -215,7 +215,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 
 	/**
 	 * Names and character ids are ONE namespace (spec 03), so a rename is checked against
-	 * both. Frames count too: they are addressable from a scene, and `store.update` throws
+	 * both. Pose images count too: they are addressable from a scene, and `store.update` throws
 	 * on a clash rather than numbering--the prompt has to catch it before that.
 	 */
 	function nameTaken(name: string, exceptId?: string): boolean {

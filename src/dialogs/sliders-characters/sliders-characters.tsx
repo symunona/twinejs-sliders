@@ -28,7 +28,7 @@ import {
 	useAssetLibrary,
 	useAssetScope
 } from '../sliders-assets/asset-store-context';
-import {framesFromFiles} from '../sliders-assets/character-frames';
+import {posesFromFiles} from '../sliders-assets/character-poses';
 import {CharacterEditor} from './character-editor';
 import './sliders-characters.css';
 
@@ -271,13 +271,13 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		return id !== draft?.id && characters.some(other => other.id === id);
 	}
 
-	async function handleUploadFrames(files: File[]) {
+	async function handleUploadPoses(files: File[]) {
 		if (!draft) {
 			return;
 		}
 
-		const frames = await framesFromFiles(store, draft, files);
-		const updated = {...draft, frames};
+		const poses = await posesFromFiles(store, draft, files);
+		const updated = {...draft, poses};
 
 		setDraft(updated);
 		await store.putCharacter(updated);
@@ -285,14 +285,16 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 	}
 
 	/**
-	 * Frames are ordinary assets, so editing one is just the asset editor pointed at it.
-	 * Replacing reports back the id it came in with and needs no repoint; saving as new
-	 * reports a new id, and the frame has to follow or the edit goes nowhere visible.
+	 * Pose images are ordinary assets, so editing one is just the asset editor pointed at
+	 * it. Replacing reports back the id it came in with and needs no repoint; saving as new
+	 * reports a new id, and the pose has to follow or the edit goes nowhere visible.
+	 *
+	 * A pose with steps has no one image to edit; the list disables the button for it.
 	 */
-	function handleEditFrame(name: string) {
-		const frame = latest.current?.frames[name];
+	function handleEditPose(name: string) {
+		const pose = latest.current?.poses[name];
 
-		if (!frame) {
+		if (!pose?.asset) {
 			return;
 		}
 
@@ -301,17 +303,17 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			component: AssetEditorDialog,
 			maximized: true,
 			props: {
-				assetId: frame.asset,
+				assetId: pose.asset,
 				onSaved: async (assetId: string) => {
 					// Read through the ref: the editor outlives any render this closed over.
 					const current = latest.current;
 
-					if (current && current.frames[name] && current.frames[name].asset !== assetId) {
+					if (current && current.poses[name] && current.poses[name].asset !== assetId) {
 						const updated = {
 							...current,
-							frames: {
-								...current.frames,
-								[name]: {...current.frames[name], asset: assetId}
+							poses: {
+								...current.poses,
+								[name]: {...current.poses[name], asset: assetId}
 							}
 						};
 
@@ -481,8 +483,8 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 									character={draft}
 									onChange={setDraft}
 									onCommit={commit}
-									onEditFrame={handleEditFrame}
-									onUploadFrames={handleUploadFrames}
+									onEditPose={handleEditPose}
+									onUploadPoses={handleUploadPoses}
 								/>
 							)}
 						</TabPanel>

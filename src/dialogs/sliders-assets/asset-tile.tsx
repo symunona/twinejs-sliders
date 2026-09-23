@@ -233,7 +233,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					/>
 				) : (
 					<IconButton
-						// Editing an animation would flatten it to one frame.
+						// Editing an animation would flatten it to one image.
 						disabled={meta.animated}
 						icon={<IconPhotoEdit />}
 						iconOnly

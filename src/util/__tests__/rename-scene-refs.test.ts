@@ -14,7 +14,7 @@ function scene(...lines: string[]) {
 	return ['[scene]', ...lines].join('\n');
 }
 
-/** Every name the collector reports, in one flat set. Frames are per entity, not refs. */
+/** Every name the collector reports, in one flat set. Poses are per entity, not refs. */
 function refsOf(text: string): Set<string> {
 	const refs = collectPassageRefs(text);
 
@@ -128,11 +128,11 @@ describe('renameSceneRefs', () => {
 		);
 	});
 
-	it('leaves prose, frames and marks alone', () => {
+	it('leaves prose, poses and marks alone', () => {
 		const text = scene(
 			'bg: tavern',
 			'cast:',
-			'  mira: {frame: candle}',
+			'  mira: {pose: candle}',
 			'beats:',
 			'  - mark: candle',
 			'  - mira: "The candle gutters."'

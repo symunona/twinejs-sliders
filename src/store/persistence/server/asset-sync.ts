@@ -174,7 +174,7 @@ export async function syncStoryAssets(
 	// author's picture is in the editor, absent from the server, and nothing says so.
 	// References are still resolved below, but only to report the names that resolve to
 	// nothing.
-	const assets = await store.list({includeFrames: true});
+	const assets = await store.list({includePoseImages: true});
 	const characters = await store.listCharacters();
 	const fingerprint = manifestFingerprint(assets, characters);
 

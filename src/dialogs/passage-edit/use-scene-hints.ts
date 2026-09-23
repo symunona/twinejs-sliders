@@ -1,5 +1,5 @@
 /**
- * Autocomplete for the `[scene]` block: asset names, character ids, frames,
+ * Autocomplete for the `[scene]` block: asset names, character ids, poses,
  * layers and effects, pulled from the live asset library.
  *
  * Why this is possible at all: scene YAML refers to assets by NAME, not by id
@@ -42,7 +42,7 @@ import {
 	EASE_KINDS,
 	EASE_NAMES,
 	ENTITY_FITS,
-	FRAME_LOOPS,
+	POSE_LOOPS,
 	LAYERS
 } from '@sliders/scene-types';
 import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-context';
@@ -81,12 +81,12 @@ export type HintSlot =
 	| {kind: 'cast'}
 	| {kind: 'props'}
 	| {kind: 'entities'}
-	| {kind: 'frame'; entity: string}
+	| {kind: 'pose'; entity: string}
 	| {kind: 'layer'}
 	/** `fit:` — draw this entity as a full-bleed plane. */
 	| {kind: 'fit'}
-	/** `frameLoop:` — how an animated `frame:` list ends. */
-	| {kind: 'frameLoop'}
+	/** `poseLoop:` — how a `pose:` list ends. */
+	| {kind: 'poseLoop'}
 	| {kind: 'fx'}
 	/** `music:` / `sfx:` — a sound asset's name. Both take the same list. */
 	| {kind: 'sound'}
@@ -270,7 +270,7 @@ function innerKey(keyPart: string): string | undefined {
 /**
  * The key whose VALUE the cursor is in, or undefined when the cursor is in key
  * position. Understands both `bg: tav` and the flow form
- * `mira: {at: -0.4, frame: ar`, where the innermost key is what matters.
+ * `mira: {at: -0.4, pose: ar`, where the innermost key is what matters.
  */
 function valueKey(before: string, tokenStart: number): string | undefined {
 	// Drop the token being typed, then the whitespace and any container opener
@@ -409,7 +409,7 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 			return keys('entityLink', LINK_ENTITY_KEYS);
 
 		// An `ease:` map is keyed by WHAT is moving, not by an entity key. Its members
-		// collide with real keys elsewhere in the subset (`bg`, `fx`, `frame`, `music`),
+		// collide with real keys elsewhere in the subset (`bg`, `fx`, `pose`, `music`),
 		// which is why the value side below has to ask who owns the line before it
 		// decides what a key like `bg:` wants.
 		case 'ease':
@@ -554,8 +554,8 @@ function promotionContext(
 }
 
 /**
- * Which entity a `frame:` belongs to. The flow form puts it on the same line
- * (`mira: {frame: angry}`); the block form makes it the enclosing key.
+ * Which entity a `pose:` belongs to. The flow form puts it on the same line
+ * (`mira: {pose: angry}`); the block form makes it the enclosing key.
  */
 function entityOfLine(
 	lines: string[],
@@ -688,7 +688,7 @@ export function sceneHintContext(
 		const valueHint = ((): SceneHintContext | undefined => {
 			// Before the switch, and the only slot that has to be: inside an `ease:` map
 			// EVERY key is a transition kind and every value is a curve, and four of those
-			// kinds (`bg`, `fx`, `frame`, `music`) are keys that mean something else one
+			// kinds (`bg`, `fx`, `pose`, `music`) are keys that mean something else one
 			// level out. Asking the key first would offer backdrop names for `ease: {bg: }`.
 			if (owner() === 'ease') {
 				return found({kind: 'ease'});
@@ -716,8 +716,10 @@ export function sceneHintContext(
 				case 'fit':
 					return found({kind: 'fit'});
 
+				// The old spellings still parse, so they still complete.
+				case 'poseLoop':
 				case 'frameLoop':
-					return found({kind: 'frameLoop'});
+					return found({kind: 'poseLoop'});
 
 				case 'fx':
 					return found(owner() === 'bg' ? {kind: 'bgFx'} : {kind: 'fx'});
@@ -726,10 +728,11 @@ export function sceneHintContext(
 				case 'sfx':
 					return found({kind: 'sound'});
 
+				case 'pose':
 				case 'frame': {
 					const entity = entityOfLine(lines, blockStart, cursor.line);
 
-					return entity ? found({kind: 'frame', entity}) : undefined;
+					return entity ? found({kind: 'pose', entity}) : undefined;
 				}
 
 				// `to:` is a link target, which is a passage name. Nothing else in the
@@ -827,11 +830,11 @@ export function sceneHintContext(
 	);
 }
 
-/** MRU bucket for a slot. Frames are per-character; the rest are app-wide. */
+/** MRU bucket for a slot. Poses are per-character; the rest are app-wide. */
 function slotKey(slot: HintSlot): string {
 	switch (slot.kind) {
-		case 'frame':
-			return `frame:${slot.entity}`;
+		case 'pose':
+			return `pose:${slot.entity}`;
 
 		case 'keys':
 			return `keys:${slot.id}`;
@@ -842,8 +845,8 @@ function slotKey(slot: HintSlot): string {
 }
 
 /**
- * Asset names, with `preferred` kinds first. Character frames are left out --
- * they are reached through a character's `frame:`, never named directly.
+ * Asset names, with `preferred` kinds first. Pose images are left out --
+ * they are reached through a character's `pose:`, never named directly.
  */
 function assetNames(all: AssetMeta[], preferred: string[]): string[] {
 	const rank = (asset: AssetMeta) => {
@@ -861,7 +864,7 @@ function assetNames(all: AssetMeta[], preferred: string[]): string[] {
 /**
  * The names offered for a slot, in the order they should appear before recent
  * ones are lifted out. `refs` maps an entity id to what it refers to, since
- * `mira: {ref: villager}` means the frames come from `villager`.
+ * `mira: {ref: villager}` means the poses come from `villager`.
  */
 function namesForSlot(
 	slot: HintSlot,
@@ -914,8 +917,8 @@ function namesForSlot(
 		case 'fit':
 			return [...ENTITY_FITS];
 
-		case 'frameLoop':
-			return [...FRAME_LOOPS];
+		case 'poseLoop':
+			return [...POSE_LOOPS];
 
 		/**
 		 * Whoever is on stage, then the rest of the cast, then the commands.
@@ -983,13 +986,13 @@ function namesForSlot(
 				.map(asset => asset.name)
 				.sort((a, b) => a.localeCompare(b));
 
-		case 'frame': {
+		case 'pose': {
 			// An entity id IS its ref unless `ref:` overrides it -- the parser
 			// does `ref: body.ref ?? id`.
 			const ref = refs.get(slot.entity) ?? slot.entity;
 			const character = characters.find(one => one.id === ref);
 
-			return character ? Object.keys(character.frames).sort() : [];
+			return character ? Object.keys(character.poses).sort() : [];
 		}
 	}
 }

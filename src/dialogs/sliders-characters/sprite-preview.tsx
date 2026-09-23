@@ -1,4 +1,4 @@
-import {AssetId, DEFAULT_FIT, Frac2, FrameFit} from '@sliders/scene-types';
+import {AssetId, DEFAULT_FIT, Frac2, PoseFit} from '@sliders/scene-types';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -9,23 +9,23 @@ import {containRect, fractionLimits} from './sprite-geometry';
 /** Handle identity: either the origin cross, or a named anchor dot. */
 type HandleId = {kind: 'origin'} | {kind: 'anchor'; name: string};
 
-/** A frame shown faintly behind the selected one, to check registration between poses. */
+/** A pose shown faintly behind the selected one, to check registration between poses. */
 export interface SpriteGhost {
 	assetId?: AssetId;
 	/** The ghost's OWN fit — aligning against an unaligned reference proves nothing. */
-	fit?: FrameFit;
+	fit?: PoseFit;
 	name: string;
 }
 
 export interface SpritePreviewProps {
 	anchors: Record<string, Frac2>;
 	assetId?: AssetId;
-	/** The selected frame's registration transform. Absent frame means no panning. */
-	fit?: FrameFit;
-	/** Other frames to draw behind this one, half faded. */
+	/** The selected pose's registration transform. Absent pose means no panning. */
+	fit?: PoseFit;
+	/** Other poses to draw behind this one, half faded. */
 	ghosts?: SpriteGhost[];
 	onChangeAnchor: (name: string, value: Frac2) => void;
-	onChangeFit?: (fit: FrameFit) => void;
+	onChangeFit?: (fit: PoseFit) => void;
 	onChangeOrigin: (value: Frac2) => void;
 	/** Called when a drag or nudge finishes, so the change can be written out at once. */
 	onCommit: () => void;
@@ -34,7 +34,7 @@ export interface SpritePreviewProps {
 	origin: Frac2;
 	/**
 	 * True while a click anywhere on the sprite places the origin, rather than panning the
-	 * frame. Driven by the anchor selector's custom mode, so placing an origin works the
+	 * art. Driven by the anchor selector's custom mode, so placing an origin works the
 	 * same here as it does in the asset editor.
 	 */
 	picking?: boolean;
@@ -49,7 +49,7 @@ function round(value: number): number {
 /**
  * Same precision, but a fit offset runs either side of zero, so it cannot use the clamp
  * the box implies. A whole box in each direction is far more than registration ever needs
- * and still stops a stray drag from flinging a frame out of reach.
+ * and still stops a stray drag from flinging a pose out of reach.
  */
 function roundOffset(value: number): number {
 	return Math.round(Math.min(1, Math.max(-1, value)) * 1000) / 1000;
@@ -63,8 +63,8 @@ function handleKey(handle: HandleId): string {
 	return handle.kind === 'origin' ? 'origin' : `anchor:${handle.name}`;
 }
 
-/** One faded frame behind the selected one. Its own component, because URLs are a hook. */
-const GhostFrame: React.FC<{fitStyle: React.CSSProperties; ghost: SpriteGhost}> =
+/** One faded pose behind the selected one. Its own component, because URLs are a hook. */
+const GhostPose: React.FC<{fitStyle: React.CSSProperties; ghost: SpriteGhost}> =
 	props => {
 		const {fitStyle, ghost} = props;
 		const url = useAssetUrl(ghost.assetId);
@@ -81,8 +81,8 @@ const GhostFrame: React.FC<{fitStyle: React.CSSProperties; ghost: SpriteGhost}> 
 /**
  * The sprite with its draggable origin cross and anchor dots.
  *
- * Everything here is stored as a FRACTION of the frame, never pixels (spec 04). That's
- * what lets uniform sizes today become per-frame sizes tomorrow without the scene YAML
+ * Everything here is stored as a FRACTION of the box, never pixels (spec 04). That's
+ * what lets uniform sizes today become per-pose sizes tomorrow without the scene YAML
  * changing. Fractions are not clamped to 0..1: art routinely spills outside the box, and a
  * hat brim or a sword tip is a fair place to pin an anchor. Handles run to the edges of the
  * preview area instead.
@@ -104,9 +104,9 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	} = props;
 	const area = React.useRef<HTMLDivElement>(null);
 	const art = React.useRef<HTMLImageElement>(null);
-	const frame = React.useRef<HTMLDivElement>(null);
+	const viewport = React.useRef<HTMLDivElement>(null);
 	const [dragging, setDragging] = React.useState<HandleId>();
-	/** The selected frame's own pixels, for drawing an outline around the art itself. */
+	/** The selected pose's own pixels, for drawing an outline around the art itself. */
 	const [natural, setNatural] = React.useState<{height: number; width: number}>();
 	/** Where a pan started: pointer position, and the offset it began from. */
 	const [panning, setPanning] = React.useState<{
@@ -119,7 +119,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 
 	/**
 	 * A cached blob URL can finish loading before React has attached its `onLoad`, so the
-	 * size is read here as well — otherwise the outline never appears on a frame the
+	 * size is read here as well — otherwise the outline never appears on a pose the
 	 * editor has already shown once.
 	 */
 	React.useEffect(() => {
@@ -134,16 +134,16 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 
 	const activeFit = fit ?? DEFAULT_FIT;
 	const canFit = !!onChangeFit && !!url;
-	const artBox = useArtRect(art, frame);
+	const artBox = useArtRect(art, viewport);
 	const artRect = natural && artBox ? containRect(natural, artBox) : undefined;
 
 	/**
-	 * Fit rides on the image alone, so the guides, handles and ghost frames stay put — you
+	 * Fit rides on the image alone, so the guides, handles and ghost poses stay put — you
 	 * are aligning art to the rig, not dragging the rig around. Scaling about the origin
 	 * keeps the feet planted, and the translate percentages read as fractions of the box
-	 * because the image is stretched across it. Matches `applyFrameFit` in the DOM renderer.
+	 * because the image is stretched across it. Matches `applyPoseFit` in the DOM renderer.
 	 */
-	function fitStyle(value: FrameFit): React.CSSProperties {
+	function fitStyle(value: PoseFit): React.CSSProperties {
 		return {
 			transform: `translate(${value.offset.x * 100}%, ${
 				value.offset.y * 100
@@ -157,7 +157,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	 * a handle dropped past the edge would be unreachable afterwards.
 	 */
 	const clampToArea = React.useCallback((value: Frac2): Frac2 => {
-		const box = frame.current?.getBoundingClientRect();
+		const box = viewport.current?.getBoundingClientRect();
 		const bounds = area.current?.getBoundingClientRect();
 
 		if (!box || !bounds) {
@@ -189,7 +189,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 		}
 
 		function handleMouseMove(event: MouseEvent) {
-			const bounds = frame.current?.getBoundingClientRect();
+			const bounds = viewport.current?.getBoundingClientRect();
 
 			if (!bounds || bounds.width === 0 || bounds.height === 0) {
 				return;
@@ -230,7 +230,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 		}
 
 		function handleMouseMove(event: MouseEvent) {
-			const bounds = frame.current?.getBoundingClientRect();
+			const bounds = viewport.current?.getBoundingClientRect();
 
 			if (!bounds || bounds.width === 0 || bounds.height === 0) {
 				return;
@@ -265,7 +265,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 	}, [onChangeFit, onCommit, panning]);
 
 	/**
-	 * Dragging anywhere that isn't a handle pans the frame. No modifier key: the handles
+	 * Dragging anywhere that isn't a handle pans the art. No modifier key: the handles
 	 * are the only other thing in here, and they take their own mousedown first.
 	 */
 	function handlePanStart(event: React.MouseEvent) {
@@ -273,10 +273,10 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 			return;
 		}
 
-		// Picking beats panning, and works with no frame loaded: the origin belongs to the
+		// Picking beats panning, and works with no pose loaded: the origin belongs to the
 		// character, and a character with no art still has one.
 		if (picking) {
-			const bounds = frame.current?.getBoundingClientRect();
+			const bounds = viewport.current?.getBoundingClientRect();
 
 			if (!bounds || bounds.width === 0 || bounds.height === 0) {
 				return;
@@ -363,11 +363,11 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 					picking
 				})}
 				onMouseDown={handlePanStart}
-				ref={frame}
+				ref={viewport}
 				style={{aspectRatio: `${size.w} / ${size.h}`}}
 			>
 				{(ghosts ?? []).map(ghost => (
-					<GhostFrame
+					<GhostPose
 						fitStyle={fitStyle(ghost.fit ?? DEFAULT_FIT)}
 						ghost={ghost}
 						key={ghost.name}
@@ -388,12 +388,12 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 					/>
 				) : (
 					<div className="sprite-preview-empty">
-						{t('dialogs.slidersCharacters.noFrame')}
+						{t('dialogs.slidersCharacters.noPose')}
 					</div>
 				)}
 
 				{/* The art's own edges, which `object-fit: contain` puts inside the box
-				    rather than on it. Follows the fit, so it reads as this frame's outline
+				    rather than on it. Follows the fit, so it reads as this pose's outline
 				    even after a pan or a scale. */}
 				{artRect && (
 					<div
@@ -409,7 +409,7 @@ export const SpritePreview: React.FC<SpritePreviewProps> = props => {
 					/>
 				)}
 
-				{/* The box every frame is registered into: the character's own size, the
+				{/* The box every pose is registered into: the character's own size, the
 				    thing scenes lay out with. Labelled, because a rectangle alone does not
 				    say which of the two rectangles on screen it is. */}
 				<span className="sprite-box-label">

@@ -108,7 +108,10 @@ export function useSceneErrorMarks(
 				continue;
 			}
 
-			const severity = error.severity === 'warning' ? 'warning' : 'error';
+			const severity =
+				error.severity === 'warning' || error.severity === 'info'
+					? error.severity
+					: 'error';
 
 			marks.push(
 				editor.markText(range.from, range.to, {

@@ -3,9 +3,9 @@ import * as path from 'node:path';
 import {BASE_URL, createStory, shot} from './sliders-helpers';
 
 /**
- * Per-frame fit: registration, not expression. Sprite sheets rarely agree, so each frame
+ * Per-pose fit: registration, not expression. Sprite sheets rarely agree, so each pose
  * can be nudged and scaled until the poses line up — and the rig must NOT follow it, or a
- * speech bubble would jitter every time the frame swapped.
+ * speech bubble would jitter every time the pose swapped.
  */
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'assets');
@@ -32,7 +32,7 @@ async function clearAssetLibrary(page: Page) {
 	});
 }
 
-/** Drags a handle to a fraction of the sprite frame. */
+/** Drags a handle to a fraction of the sprite box. */
 async function dragHandle(
 	editor: import('@playwright/test').Locator,
 	page: Page,
@@ -56,7 +56,7 @@ async function dragHandle(
 	await page.mouse.up();
 }
 
-async function openCharacterWithFrames(page: Page, name: string) {
+async function openCharacterWithPoses(page: Page, name: string) {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
 	await expect(assetDialog(page)).toBeVisible();
@@ -77,7 +77,7 @@ async function openCharacterWithFrames(page: Page, name: string) {
 	await editor
 		.locator('input[type="file"]')
 		.setInputFiles([fixture('mira-idle.png'), fixture('mira-angry.png')]);
-	await expect(editor.locator('.frame-list-item')).toHaveCount(2, {
+	await expect(editor.locator('.pose-list-item')).toHaveCount(2, {
 		timeout: 25000
 	});
 
@@ -91,7 +91,7 @@ async function openCharacterWithFrames(page: Page, name: string) {
 const openGroup = (editor: Locator, name: string) =>
 	editor.locator('.character-editor-groups').getByRole('tab', {name}).click();
 
-/** The transform the fit writes onto the frame image. */
+/** The transform the fit writes onto the pose image. */
 const spriteTransform = (page: Page) =>
 	characterDialog(page)
 		.locator('.sprite-preview-frame > img:not(.sprite-onion)')
@@ -99,21 +99,21 @@ const spriteTransform = (page: Page) =>
 		.evaluate(el => el.style.transform);
 
 /**
- * An unfitted frame in the EDITOR still writes the identity transform — only the renderer
+ * An unfitted pose in the EDITOR still writes the identity transform — only the renderer
  * bothers to leave the attribute off. What matters is that it is identity.
  */
 const IDENTITY = 'translate(0%, 0%) scale(1)';
 
-test.describe('Per-frame fit', () => {
-	test('pans a frame, leaves the rig alone, and persists', async ({page}) => {
+test.describe('Per-pose fit', () => {
+	test('pans a pose, leaves the rig alone, and persists', async ({page}) => {
 		test.setTimeout(180000);
 		await clearAssetLibrary(page);
-		await createStory(page, 'Frame fit');
+		await createStory(page, 'Pose fit');
 
-		const editor = await openCharacterWithFrames(page, 'Mira');
+		const editor = await openCharacterWithPoses(page, 'Mira');
 		const frame = editor.locator('.sprite-preview-frame');
 
-		// Untouched frames store no fit at all.
+		// Untouched poses store no fit at all.
 		expect(await spriteTransform(page)).toBe(IDENTITY);
 
 		const originBefore = await editor
@@ -145,20 +145,20 @@ test.describe('Per-frame fit', () => {
 
 		// Zoom is uniform and lands on the same image. Typed, not dragged: the readout is
 		// the labelled control now--the range slider beside it has no name of its own.
-		await openGroup(editor, 'Frame Fit');
-		await editor.getByRole('spinbutton', {name: 'Frame scale'}).fill('1.4');
+		await openGroup(editor, 'Pose Fit');
+		await editor.getByRole('spinbutton', {name: 'Pose scale'}).fill('1.4');
 		await expect
 			.poll(() => spriteTransform(page))
 			.toContain('scale(1.4)');
 
-		await shot(page, 'frame-fit-panned');
+		await shot(page, 'pose-fit-panned');
 
-		// Selecting the other frame shows an unfitted image, proving fit is per frame.
-		await editor.locator('[data-frame="mira-angry"] .frame-list-select').click();
+		// Selecting the other pose shows an unfitted image, proving fit is per pose.
+		await editor.locator('[data-pose="mira-angry"] .pose-list-select').click();
 		await expect.poll(() => spriteTransform(page)).toBe(IDENTITY);
 
 		// Back to the first, and the fit survived a round trip through the store.
-		await editor.locator('[data-frame="mira-idle"] .frame-list-select').click();
+		await editor.locator('[data-pose="mira-idle"] .pose-list-select').click();
 		await expect.poll(() => spriteTransform(page)).toContain('scale(1.4)');
 
 		// Reload: the fit is in the manifest, not just React state. The slider rides the
@@ -179,36 +179,36 @@ test.describe('Per-frame fit', () => {
 		// a fresh test would open on an empty library.
 		const reopened = characterDialog(page);
 
-		await openGroup(reopened, 'Frame Fit');
+		await openGroup(reopened, 'Pose Fit');
 		await reopened
-			.getByRole('button', {name: 'Apply This Fit To All Frames'})
+			.getByRole('button', {name: 'Apply This Fit To All Poses'})
 			.click();
-		await reopened.locator('[data-frame="mira-angry"] .frame-list-select').click();
+		await reopened.locator('[data-pose="mira-angry"] .pose-list-select').click();
 		await expect.poll(() => spriteTransform(page)).toContain('scale(1.4)');
 
-		await reopened.getByRole('button', {name: 'Reset Frame Position'}).click();
+		await reopened.getByRole('button', {name: 'Reset Pose Position'}).click();
 		await expect.poll(() => spriteTransform(page)).toBe(IDENTITY);
 
-		// The frame it was copied from keeps its fit -- reset is per frame too.
-		await reopened.locator('[data-frame="mira-idle"] .frame-list-select').click();
+		// The pose it was copied from keeps its fit -- reset is per pose too.
+		await reopened.locator('[data-pose="mira-idle"] .pose-list-select').click();
 		await expect.poll(() => spriteTransform(page)).toContain('scale(1.4)');
 	});
 
 	/**
-	 * Anchors belong to the frame, not the character.
+	 * Anchors belong to the pose, not the character.
 	 *
 	 * A character drawn in profile, sitting, or turned away has their mouth somewhere else,
 	 * and one rig shared by every pose leaves the speech bubble pointing at the back of
-	 * their head. Dragging on one frame therefore has to leave the others alone.
+	 * their head. Dragging on one pose therefore has to leave the others alone.
 	 */
-	test('rigs each frame separately, and applies one rig to all on request', async ({
+	test('rigs each pose separately, and applies one rig to all on request', async ({
 		page
 	}) => {
 		test.setTimeout(180000);
 		await clearAssetLibrary(page);
-		await createStory(page, 'Per-frame anchors');
+		await createStory(page, 'Per-pose anchors');
 
-		const editor = await openCharacterWithFrames(page, 'Mira');
+		const editor = await openCharacterWithPoses(page, 'Mira');
 		const bubble = editor.locator('[data-handle="anchor:bubble"]');
 		const bubbleX = async () => Number(await bubble.getAttribute('data-x'));
 
@@ -219,19 +219,19 @@ test.describe('Per-frame fit', () => {
 		await dragHandle(editor, page, 'anchor:bubble', {x: 0.8, y: 0.12});
 		await expect.poll(bubbleX).toBeCloseTo(0.8, 1);
 
-		// The other frame still has the rig it started with.
-		await editor.locator('[data-frame="mira-angry"] .frame-list-select').click();
+		// The other pose still has the rig it started with.
+		await editor.locator('[data-pose="mira-angry"] .pose-list-select').click();
 		await expect.poll(bubbleX).toBeCloseTo(before, 2);
 
 		// ...and going back shows the drag, so this is two rigs, not one being reset.
-		await editor.locator('[data-frame="mira-idle"] .frame-list-select').click();
+		await editor.locator('[data-pose="mira-idle"] .pose-list-select').click();
 		await expect.poll(bubbleX).toBeCloseTo(0.8, 1);
 
 		// Copying a rig across is the escape hatch for a sheet whose poses do line up.
 		await editor
-			.getByRole('button', {name: 'Apply This Frame\u2019s Anchors To All Frames'})
+			.getByRole('button', {name: 'Apply This Pose\u2019s Anchors To All Poses'})
 			.click();
-		await editor.locator('[data-frame="mira-angry"] .frame-list-select').click();
+		await editor.locator('[data-pose="mira-angry"] .pose-list-select').click();
 		await expect.poll(bubbleX).toBeCloseTo(0.8, 1);
 
 		// Straight through the store, not just React state.
@@ -254,32 +254,32 @@ test.describe('Per-frame fit', () => {
 			.toBeCloseTo(0.8, 1);
 	});
 
-	test('opens the asset editor on a frame image', async ({page}) => {
+	test('opens the asset editor on a pose image', async ({page}) => {
 		test.setTimeout(180000);
 		await clearAssetLibrary(page);
-		await createStory(page, 'Frame edit');
+		await createStory(page, 'Pose edit');
 
-		const editor = await openCharacterWithFrames(page, 'Mira');
+		const editor = await openCharacterWithPoses(page, 'Mira');
 
-		// Frames are ordinary assets, so cropping and background removal are the asset
-		// editor -- reached straight from the frame rather than the library, which hides
-		// character frames.
+		// Poses are ordinary assets, so cropping and background removal are the asset
+		// editor -- reached straight from the pose rather than the library, which hides
+		// character poses.
 		await editor
-			.locator('[data-frame="mira-idle"]')
+			.locator('[data-pose="mira-idle"]')
 			.getByRole('button', {name: 'Edit Image'})
 			.click();
 
 		const assetEditor = page.getByRole('dialog', {name: /^Edit /});
 
 		await expect(assetEditor).toBeVisible({timeout: 20000});
-		// Overwriting keeps the asset id, so the frame keeps pointing at it; saving as new
-		// reports a fresh id back and the frame is repointed.
+		// Overwriting keeps the asset id, so the pose keeps pointing at it; saving as new
+		// reports a fresh id back and the pose is repointed.
 		await expect(
 			assetEditor.getByRole('button', {name: 'Overwrite Original'})
 		).toBeVisible({timeout: 20000});
 		await expect(
 			assetEditor.getByRole('button', {name: 'Save As New Asset'})
 		).toBeVisible();
-		await shot(page, 'frame-asset-editor');
+		await shot(page, 'pose-asset-editor');
 	});
 });

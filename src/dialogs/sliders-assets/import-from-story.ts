@@ -15,6 +15,7 @@
 
 import type {AssetStore} from '@sliders/asset-store';
 import type {AssetMeta, Character} from '@sliders/scene-types';
+import {poseAssets} from '@sliders/scene-types';
 import {applyBundlePlan, planBundle} from '../../util/sliders-bundle';
 
 export interface StoryImportResult {
@@ -63,10 +64,10 @@ export async function importAssetFromStory(
 }
 
 /**
- * Copies a character across, frames and all.
+ * Copies a character across, poses and all.
  *
- * Every frame, not only the ones some scene names: a character arriving with three of its
- * nine frames makes the character editor useless, which is the same call the bundle
+ * Every pose image, not only the ones some scene names: a character arriving with three of
+ * its nine poses makes the character editor useless, which is the same call the bundle
  * exporter makes.
  */
 export async function importCharacterFromStory(
@@ -77,17 +78,22 @@ export async function importCharacterFromStory(
 	const assets: {meta: AssetMeta; blob: Blob}[] = [];
 	const missing: string[] = [];
 
-	for (const [name, frame] of Object.entries(character.frames)) {
-		const meta = await source.meta(frame.asset);
+	for (const [name, pose] of Object.entries(character.poses)) {
+		for (const image of poseAssets(pose)) {
+			const meta = await source.meta(image);
 
-		if (!meta) {
-			// The other library lost the image. Reported rather than fatal: the rest of the
-			// character is still worth having, and `remapFrames` drops the dead frame.
-			missing.push(name);
-			continue;
+			if (!meta) {
+				// The other library lost the image. Reported rather than fatal: the rest of
+				// the character is still worth having, and `remapPoses` drops the dead image.
+				if (!missing.includes(name)) {
+					missing.push(name);
+				}
+
+				continue;
+			}
+
+			assets.push({meta, blob: await bytesOf(source, meta)});
 		}
-
-		assets.push({meta, blob: await bytesOf(source, meta)});
 	}
 
 	const plan = await planBundle(target, {assets, characters: [character]});
@@ -103,7 +109,7 @@ export async function importCharacterFromStory(
 			...plan.warnings,
 			...(missing.length > 0
 				? [
-						`The other story has no image for these frames of "${character.name}", so they were left out: ${missing.join(
+						`The other story has no image for these poses of "${character.name}", so they were left out: ${missing.join(
 							', '
 						)}.`
 				  ]
@@ -117,7 +123,7 @@ export async function importCharacterFromStory(
  *
  * Bytes, not name: the same picture stored under two names is one asset as far as every
  * other part of the library is concerned, and `ownerCharacter` joins in because a sprite
- * used as a loose prop and as a character frame really are two entries (see `dedupeKey`).
+ * used as a loose prop and as a pose image really are two entries (see `dedupeKey`).
  */
 export function assetIsPresent(
 	meta: AssetMeta,

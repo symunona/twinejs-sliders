@@ -147,23 +147,29 @@ describe('sceneHintContext()', () => {
 		});
 	});
 
-	describe('frames', () => {
+	describe('poses', () => {
 		it('names the entity from a flow map on the same line', () => {
 			expect(
-				contextAt('[scene]\ncast:\n  mira: {at: -0.4, frame: ar|}')
-			).toMatchObject({slot: {entity: 'mira', kind: 'frame'}, typed: 'ar'});
+				contextAt('[scene]\ncast:\n  mira: {at: -0.4, pose: ar|}')
+			).toMatchObject({slot: {entity: 'mira', kind: 'pose'}, typed: 'ar'});
 		});
 
 		it('names the entity from the enclosing key in block form', () => {
 			expect(
-				contextAt('[scene]\ncast:\n  mira:\n    frame: ar|')
-			).toMatchObject({slot: {entity: 'mira', kind: 'frame'}});
+				contextAt('[scene]\ncast:\n  mira:\n    pose: ar|')
+			).toMatchObject({slot: {entity: 'mira', kind: 'pose'}});
 		});
 
 		it('names the entity from a beat', () => {
 			expect(
-				contextAt('[scene]\nbeats:\n  - mira: {frame: ang|, say: "hi"}')
-			).toMatchObject({slot: {entity: 'mira', kind: 'frame'}, typed: 'ang'});
+				contextAt('[scene]\nbeats:\n  - mira: {pose: ang|, say: "hi"}')
+			).toMatchObject({slot: {entity: 'mira', kind: 'pose'}, typed: 'ang'});
+		});
+
+		it('still completes under the old frame: spelling', () => {
+			expect(
+				contextAt('[scene]\ncast:\n  mira: {frame: ar|}')
+			).toMatchObject({slot: {entity: 'mira', kind: 'pose'}, typed: 'ar'});
 		});
 	});
 
@@ -299,8 +305,8 @@ describe('sceneHintContext()', () => {
 		});
 
 		it('still reads a value after a key in the same flow map', () => {
-			expect(contextAt('[scene]\ncast:\n  mira: {frame: an|}')).toMatchObject({
-				slot: {entity: 'mira', kind: 'frame'}
+			expect(contextAt('[scene]\ncast:\n  mira: {pose: an|}')).toMatchObject({
+				slot: {entity: 'mira', kind: 'pose'}
 			});
 		});
 
@@ -313,7 +319,7 @@ describe('sceneHintContext()', () => {
 
 	/**
 	 * `ease:` is the one key in the subset whose MAP is keyed by transition kinds, and four
-	 * of those kinds (`bg`, `fx`, `frame`, `music`) are keys that mean something else one
+	 * of those kinds (`bg`, `fx`, `pose`, `music`) are keys that mean something else one
 	 * level out. So both sides have to ask who owns the line, not just what the key says.
 	 */
 	describe('ease:', () => {
@@ -361,9 +367,9 @@ describe('sceneHintContext()', () => {
 			expect(contextAt('[scene]\nbg: ha|')).toMatchObject({slot: {kind: 'bg'}});
 		});
 
-		it('offers a curve on a frame step', () => {
+		it('offers a curve on a pose step', () => {
 			expect(
-				contextAt('[scene]\ncast:\n  mira: {frame: [{name: a, ease: |}]}')
+				contextAt('[scene]\ncast:\n  mira: {pose: [{name: a, ease: |}]}')
 			).toMatchObject({slot: {kind: 'ease'}});
 		});
 	});

@@ -22,7 +22,7 @@ export interface Rect {
  * The rect an image paints when it is drawn `object-fit: contain` in `box`.
  *
  * The element fills the box, but the picture inside it does not: the shorter axis is
- * letterboxed and centred. Drawing the frame outline against the element would put a line
+ * letterboxed and centred. Drawing the art outline against the element would put a line
  * around empty space, which is exactly the thing an author is trying to see past.
  */
 export function containRect(natural: Box, box: Box): Rect | undefined {

@@ -28,7 +28,7 @@ import {
 const SCENE = `[scene]
 id: visual-editor-scene
 cast:
-  mira:  {at: -0.4, frame: idle}   # keep this comment
+  mira:  {at: -0.4, pose: idle}   # keep this comment
   joren:
     at: 0.35
     layer: back
@@ -91,7 +91,7 @@ test.describe('visual scene editor', () => {
 
 		// The moved value changed...
 		expect(after).not.toContain('at: -0.4,');
-		expect(after).toMatch(/mira: {2}\{at: [-0-9.]+, frame: idle\}/);
+		expect(after).toMatch(/mira: {2}\{at: [-0-9.]+, pose: idle\}/);
 
 		// ...and nothing else did. A naive parse -> mutate -> stringify fails every one of
 		// these: the comment goes, joren collapses to flow style, the quotes change.

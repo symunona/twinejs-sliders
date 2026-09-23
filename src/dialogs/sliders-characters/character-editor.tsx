@@ -7,10 +7,11 @@ import {
 	BubblePlace,
 	BubbleStyle,
 	Character,
-	CharacterFrame,
+	CharacterPose,
 	DEFAULT_FIT,
 	Frac2,
-	FrameFit
+	PoseFit,
+	poseCover
 } from '@sliders/scene-types';
 import {
 	IconArrowBackUp,
@@ -30,7 +31,7 @@ import {TextSelect} from '../../components/control/text-select';
 import {useCommand} from '../../hotkeys';
 import {AdjustSlider} from '../asset-editor/adjust-slider';
 import {UploadDropZone} from '../sliders-assets/upload-drop-zone';
-import {FrameList} from './frame-list';
+import {PoseList} from './pose-list';
 import {SpritePreview} from './sprite-preview';
 
 /** What the box reset buttons go back to--the size a new character starts at. */
@@ -42,9 +43,9 @@ export interface CharacterEditorProps {
 	onChange: (character: Character) => void;
 	/** Write the current character out immediately, rather than on the usual debounce. */
 	onCommit: () => void;
-	/** Open the asset editor on a frame's image — cropping, levels, background removal. */
-	onEditFrame: (name: string) => void;
-	onUploadFrames: (files: File[]) => void;
+	/** Open the asset editor on a pose's image — cropping, levels, background removal. */
+	onEditPose: (name: string) => void;
+	onUploadPoses: (files: File[]) => void;
 }
 
 /**
@@ -67,52 +68,52 @@ function withBubble(character: Character, patch: Partial<BubbleStyle>): Characte
 }
 
 export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
-	const {assets, character, onChange, onCommit, onEditFrame, onUploadFrames} =
+	const {assets, character, onChange, onCommit, onEditPose, onUploadPoses} =
 		props;
-	const frameNames = Object.keys(character.frames);
+	const poseNames = Object.keys(character.poses);
 	const [newAnchor, setNewAnchor] = React.useState('');
 	const [newAnchorOpen, setNewAnchorOpen] = React.useState(false);
-	/** Frames drawn faintly behind the selected one, so poses can be compared at once. */
+	/** Poses drawn faintly behind the selected one, so poses can be compared at once. */
 	const [ghosts, setGhosts] = React.useState<string[]>([]);
 	/** True while a click on the sprite places the origin. Same control as the asset editor. */
 	const [picking, setPicking] = React.useState(false);
-	const [selectedFrame, setSelectedFrame] = React.useState<string | undefined>(
-		frameNames[0]
+	const [selectedPose, setSelectedPose] = React.useState<string | undefined>(
+		poseNames[0]
 	);
 	const {t} = useTranslation();
 
-	// Keep the selection valid as frames come and go.
+	// Keep the selection valid as poses come and go.
 	React.useEffect(() => {
-		if (frameNames.length > 0 && (!selectedFrame || !character.frames[selectedFrame])) {
-			setSelectedFrame(frameNames[0]);
+		if (poseNames.length > 0 && (!selectedPose || !character.poses[selectedPose])) {
+			setSelectedPose(poseNames[0]);
 		}
-	}, [character.frames, frameNames, selectedFrame]);
+	}, [character.poses, poseNames, selectedPose]);
 
-	const activeFrame = selectedFrame ? character.frames[selectedFrame] : undefined;
-	// What the sprite preview draws and what the readout lists: this FRAME's rig. The
+	const activePose = selectedPose ? character.poses[selectedPose] : undefined;
+	// What the sprite preview draws and what the readout lists: this POSE's rig. The
 	// character has no rig of its own — a pose is what decides where a mouth is.
-	const activeAnchors = activeFrame?.anchors ?? {};
+	const activeAnchors = activePose?.anchors ?? {};
 
 	useCommand({
-		enabled: !!selectedFrame,
+		enabled: !!selectedPose,
 		id: 'slidersCharacters.addAnchor',
 		label: t('hotkeys.commands.slidersCharacters.addAnchor'),
 		run: () => setNewAnchorOpen(true),
 		scope: 'sliders-characters'
 	});
 
-	/** Dragging an anchor moves it on the SELECTED frame and nowhere else. */
+	/** Dragging an anchor moves it on the SELECTED pose and nowhere else. */
 	function handleChangeAnchor(name: string, value: Frac2) {
-		if (!selectedFrame || !activeFrame) {
+		if (!selectedPose || !activePose) {
 			return;
 		}
 
 		onChange({
 			...character,
-			frames: {
-				...character.frames,
-				[selectedFrame]: {
-					...activeFrame,
+			poses: {
+				...character.poses,
+				[selectedPose]: {
+					...activePose,
 					anchors: {...activeAnchors, [name]: value}
 				}
 			}
@@ -120,22 +121,22 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	}
 
 	/**
-	 * Adding and removing, unlike dragging, apply to EVERY frame.
+	 * Adding and removing, unlike dragging, apply to EVERY pose.
 	 *
-	 * Positions are per frame; the set of names is not. A scene that says `mouth` has no
-	 * idea which frame will be showing when it is drawn, so an anchor that existed on the
+	 * Positions are per pose; the set of names is not. A scene that says `mouth` has no
+	 * idea which pose will be showing when it is drawn, so an anchor that existed on the
 	 * idle pose and not on the angry one would work until the character got angry.
 	 */
-	function forEachFrameAnchors(
+	function forEachPoseAnchors(
 		change: (anchors: Record<string, Frac2>) => Record<string, Frac2>
 	) {
-		const frames: Character['frames'] = {};
+		const poses: Character['poses'] = {};
 
-		for (const [name, frame] of Object.entries(character.frames)) {
-			frames[name] = {...frame, anchors: change({...(frame.anchors ?? {})})};
+		for (const [name, pose] of Object.entries(character.poses)) {
+			poses[name] = {...pose, anchors: change({...(pose.anchors ?? {})})};
 		}
 
-		onChange({...character, frames});
+		onChange({...character, poses});
 	}
 
 	function handleAddAnchor(name: string) {
@@ -147,13 +148,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 			return;
 		}
 
-		// Seeded at the middle of the box on every frame. Placing it once per pose is the
+		// Seeded at the middle of the box on every pose. Placing it once per pose is the
 		// point of the feature, so there is nothing better to guess.
-		forEachFrameAnchors(anchors => ({...anchors, [key]: {x: 0.5, y: 0.5}}));
+		forEachPoseAnchors(anchors => ({...anchors, [key]: {x: 0.5, y: 0.5}}));
 	}
 
 	function handleRemoveAnchor(name: string) {
-		forEachFrameAnchors(anchors => {
+		forEachPoseAnchors(anchors => {
 			delete anchors[name];
 
 			return anchors;
@@ -162,14 +163,14 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 
 	/**
 	 * The rig that fitted one pose is usually close for the rest — the same favour
-	 * `fitToAllFrames` does for registration.
+	 * `fitToAllPoses` does for registration.
 	 */
 	function handleApplyAnchorsToAll() {
-		if (!activeFrame) {
+		if (!activePose) {
 			return;
 		}
 
-		forEachFrameAnchors(() =>
+		forEachPoseAnchors(() =>
 			Object.fromEntries(
 				Object.entries(activeAnchors).map(([name, value]) => [name, {...value}])
 			)
@@ -177,85 +178,85 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 		onCommit();
 	}
 
-	function handleRenameFrame(name: string, newName: string) {
+	function handleRenamePose(name: string, newName: string) {
 		const key = slugify(newName);
 
-		if (!key || key === name || character.frames[key]) {
+		if (!key || key === name || character.poses[key]) {
 			return;
 		}
 
-		const frames: Character['frames'] = {};
+		const poses: Character['poses'] = {};
 
-		// Rebuild in order, so the first frame stays first.
-		for (const [existingName, frame] of Object.entries(character.frames)) {
-			frames[existingName === name ? key : existingName] = frame;
+		// Rebuild in order, so the first pose stays first.
+		for (const [existingName, pose] of Object.entries(character.poses)) {
+			poses[existingName === name ? key : existingName] = pose;
 		}
 
-		onChange({...character, frames});
+		onChange({...character, poses});
 
-		if (selectedFrame === name) {
-			setSelectedFrame(key);
+		if (selectedPose === name) {
+			setSelectedPose(key);
 		}
 	}
 
-	function handleDeleteFrame(name: string) {
-		const frames = {...character.frames};
+	function handleDeletePose(name: string) {
+		const poses = {...character.poses};
 
-		delete frames[name];
-		onChange({...character, frames});
+		delete poses[name];
+		onChange({...character, poses});
 	}
 
 	function handleChangeLoop(name: string, loop: boolean) {
 		onChange({
 			...character,
-			frames: {...character.frames, [name]: {...character.frames[name], loop}}
+			poses: {...character.poses, [name]: {...character.poses[name], loop}}
 		});
 	}
 
-	function handleChangeFit(fit: FrameFit) {
-		if (!selectedFrame) {
+	function handleChangeFit(fit: PoseFit) {
+		if (!selectedPose) {
 			return;
 		}
 
-		// Identity is stored as absent, so a frame nudged back to zero reads the same as
+		// Identity is stored as absent, so a pose nudged back to zero reads the same as
 		// one never touched--and the manifest stays free of no-op entries.
 		const identity = fit.offset.x === 0 && fit.offset.y === 0 && fit.scale === 1;
-		const frame: CharacterFrame = {...character.frames[selectedFrame]};
+		const pose: CharacterPose = {...character.poses[selectedPose]};
 
 		if (identity) {
-			delete frame.fit;
+			delete pose.fit;
 		} else {
-			frame.fit = fit;
+			pose.fit = fit;
 		}
 
 		onChange({
 			...character,
-			frames: {...character.frames, [selectedFrame]: frame}
+			poses: {...character.poses, [selectedPose]: pose}
 		});
 	}
 
 	/**
 	 * A sprite sheet is usually off by the same amount throughout, so the fit that fixed
-	 * one frame normally fixes all of them.
+	 * one pose normally fixes all of them.
 	 */
 	function handleApplyFitToAll() {
-		if (!activeFrame) {
+		if (!activePose) {
 			return;
 		}
 
-		const frames: Character['frames'] = {};
+		const poses: Character['poses'] = {};
 
-		for (const [name, frame] of Object.entries(character.frames)) {
-			frames[name] = {...frame};
+		for (const [name, pose] of Object.entries(character.poses)) {
+			poses[name] = {...pose};
 
-			if (activeFrame.fit) {
-				frames[name].fit = {...activeFrame.fit, offset: {...activeFrame.fit.offset}};
+			if (activePose.fit) {
+				poses[name].fit = {...activePose.fit, offset: {...activePose.fit.offset}};
 			} else {
-				delete frames[name].fit;
+				delete poses[name].fit;
 			}
 		}
 
-		onChange({...character, frames});
+		onChange({...character, poses});
 		onCommit();
 	}
 
@@ -267,50 +268,50 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 		);
 	}
 
-	// The selected frame draws itself in full, so it is never also a ghost of itself.
-	const ghostFrames = ghosts
-		.filter(name => name !== selectedFrame && character.frames[name])
+	// The selected pose draws itself in full, so it is never also a ghost of itself.
+	const ghostPoses = ghosts
+		.filter(name => name !== selectedPose && character.poses[name])
 		.map(name => ({
-			assetId: character.frames[name].asset,
-			fit: character.frames[name].fit,
+			assetId: poseCover(character.poses[name]),
+			fit: character.poses[name].fit,
 			name
 		}));
 
 	return (
 		<div className="character-editor">
-			{/* One drop target over the whole editor, frame list and stage alike. The stage
+			{/* One drop target over the whole editor, pose list and stage alike. The stage
 			    is the obvious thing to aim a sprite at, and whatever the app does not take
 			    as a drop the BROWSER takes instead--it navigates to the file and the app is
 			    gone. */}
 			<UploadDropZone
 				floatingHint
-				label={t('dialogs.slidersCharacters.dropFrames')}
-				onDrop={onUploadFrames}
+				label={t('dialogs.slidersCharacters.dropPoses')}
+				onDrop={onUploadPoses}
 			>
 				<div className="character-editor-body">
-					<FrameList
+					<PoseList
 						assets={assets}
-						frames={character.frames}
-						onAddFiles={onUploadFrames}
+						poses={character.poses}
+						onAddFiles={onUploadPoses}
 						onChangeLoop={handleChangeLoop}
-						onDelete={handleDeleteFrame}
-						onEdit={onEditFrame}
-						onRename={handleRenameFrame}
-						onSelect={setSelectedFrame}
+						onDelete={handleDeletePose}
+						onEdit={onEditPose}
+						onRename={handleRenamePose}
+						onSelect={setSelectedPose}
 						onToggleGhost={handleToggleGhost}
-						selected={selectedFrame}
+						selected={selectedPose}
 						visible={ghosts}
 					/>
 					<div className="character-editor-stage">
 						<SpritePreview
 							anchors={activeAnchors}
-							assetId={activeFrame?.asset}
-							fit={activeFrame?.fit}
+							assetId={poseCover(activePose)}
+							fit={activePose?.fit}
 							onChangeAnchor={handleChangeAnchor}
 							onChangeFit={handleChangeFit}
 							onChangeOrigin={origin => onChange({...character, origin})}
 							onCommit={onCommit}
-							ghosts={ghostFrames}
+							ghosts={ghostPoses}
 							onPickEnd={() => setPicking(false)}
 							origin={character.origin}
 							picking={picking}
@@ -320,7 +321,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 				</div>
 			</UploadDropZone>
 			{/* Everything under the stage, in groups that say what they act on. Anchors and
-			    the frame fit both move things around on the same picture, and side by side
+			    the pose fit both move things around on the same picture, and side by side
 			    in one row nothing said which was which. */}
 			<Tabs
 				className="react-tabs character-editor-groups"
@@ -361,7 +362,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 							<ButtonBar>
 								<PromptButton
 									commandId="slidersCharacters.addAnchor"
-									disabled={!activeFrame}
+									disabled={!activePose}
 									icon={<IconCrosshair />}
 									label={t('dialogs.slidersCharacters.addAnchor')}
 									onChange={event => setNewAnchor(event.target.value)}
@@ -372,9 +373,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 									value={newAnchor}
 								/>
 								<IconButton
-									disabled={!activeFrame || frameNames.length < 2}
+									disabled={!activePose || poseNames.length < 2}
 									icon={<IconCopy />}
-									label={t('dialogs.slidersCharacters.anchorsToAllFrames')}
+									label={t('dialogs.slidersCharacters.anchorsToAllPoses')}
 									onClick={handleApplyAnchorsToAll}
 								/>
 							</ButtonBar>
@@ -384,8 +385,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 									{character.origin.x.toFixed(3)},{' '}
 									{character.origin.y.toFixed(3)}
 								</dd>
-								{/* This frame's rig. Another frame's `mouth` is somewhere else,
-								    which is the whole point of anchors living on frames. */}
+								{/* This pose's rig. Another pose's `mouth` is somewhere else,
+								    which is the whole point of anchors living on poses. */}
 								{anchorNames(character).map(name => {
 									const value = activeAnchors[name];
 
@@ -414,32 +415,32 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 				</TabPanel>
 				<TabPanel>
 					<div className="character-editor-group character-editor-fit">
-						{activeFrame ? (
+						{activePose ? (
 							<>
 								<AdjustSlider
 									editable
-									label={t('dialogs.slidersCharacters.frameScale')}
+									label={t('dialogs.slidersCharacters.poseScale')}
 									max={3}
 									min={0.2}
 									onChange={scale =>
-										handleChangeFit({...(activeFrame.fit ?? DEFAULT_FIT), scale})
+										handleChangeFit({...(activePose.fit ?? DEFAULT_FIT), scale})
 									}
-									resetLabel={t('dialogs.slidersCharacters.resetFrameScale')}
+									resetLabel={t('dialogs.slidersCharacters.resetPoseScale')}
 									resetTo={DEFAULT_FIT.scale}
 									step={0.01}
-									value={activeFrame.fit?.scale ?? DEFAULT_FIT.scale}
+									value={activePose.fit?.scale ?? DEFAULT_FIT.scale}
 								/>
 								<ButtonBar>
 									<IconButton
-										disabled={!activeFrame.fit}
+										disabled={!activePose.fit}
 										icon={<IconArrowBackUp />}
 										label={t('dialogs.slidersCharacters.resetFit')}
 										onClick={() => handleChangeFit(DEFAULT_FIT)}
 									/>
 									<IconButton
-										disabled={frameNames.length < 2}
+										disabled={poseNames.length < 2}
 										icon={<IconCopy />}
-										label={t('dialogs.slidersCharacters.fitToAllFrames')}
+										label={t('dialogs.slidersCharacters.fitToAllPoses')}
 										onClick={handleApplyFitToAll}
 									/>
 								</ButtonBar>
@@ -449,7 +450,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 							</>
 						) : (
 							<p className="character-editor-note">
-								{t('dialogs.slidersCharacters.noFrame')}
+								{t('dialogs.slidersCharacters.noPose')}
 							</p>
 						)}
 					</div>
@@ -457,7 +458,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 				<TabPanel>
 					<div className="character-editor-group character-editor-box">
 						{/* Sliders, not boxes: these are the character's own rectangle in scene
-						    units, shared by every frame, and a typed number gave no sense of
+						    units, shared by every pose, and a typed number gave no sense of
 						    how big that is next to the art. */}
 						<AdjustSlider
 							editable

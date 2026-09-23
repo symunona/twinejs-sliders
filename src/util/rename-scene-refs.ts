@@ -21,7 +21,8 @@
  *
  * NOT rewritten, on purpose:
  *
- * - `frame:` — a frame belongs to a character, whose frame art is named `<id>-<frame>`.
+ * - `pose:` (and its old spelling `frame:`) — a pose belongs to a character, whose pose art
+ *   is named `<id>-<pose>`.
  * - `id:` — it is the scene's name, and another passage's `from:` points at it. When it was
  *   standing in for the backdrop, the backdrop is spelled out instead; see `insertBg`.
  * - dialogue prose, `mark:` and `if:` expressions.

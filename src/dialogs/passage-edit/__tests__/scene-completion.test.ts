@@ -27,10 +27,10 @@ function asset(
 	};
 }
 
-function character(id: string, frames: string[]): Character {
+function character(id: string, poses: string[]): Character {
 	return {
-		frames: Object.fromEntries(
-			frames.map(frame => [frame, {asset: `a_${id}-${frame}`}])
+		poses: Object.fromEntries(
+			poses.map(pose => [pose, {asset: `a_${id}-${pose}`}])
 		),
 		id,
 		name: id,
@@ -48,7 +48,7 @@ const library: Library = {
 		asset('street', 'bg'),
 		asset('candle', 'object'),
 		asset('table', 'object'),
-		// A character's own frame. Never offered as a standalone asset.
+		// A character's own pose. Never offered as a standalone asset.
 		asset('mira-angry', 'frame', 'mira')
 	],
 	characters: [
@@ -158,7 +158,7 @@ describe('sceneCompletion()', () => {
 		]);
 	});
 
-	it('never offers a character frame as a standalone asset', () => {
+	it('never offers a character pose as a standalone asset', () => {
 		expect(names('[scene]\nbg: |')).not.toContain('mira-angry');
 	});
 
@@ -170,8 +170,8 @@ describe('sceneCompletion()', () => {
 		expect(names('[scene]\ncast:\n  |')).toEqual(['joren', 'mira']);
 	});
 
-	it("offers an entity's own frames", () => {
-		expect(names('[scene]\ncast:\n  mira: {frame: |}')).toEqual([
+	it("offers an entity's own poses", () => {
+		expect(names('[scene]\ncast:\n  mira: {pose: |}')).toEqual([
 			'angry',
 			'arms-crossed',
 			'idle'
@@ -180,12 +180,12 @@ describe('sceneCompletion()', () => {
 
 	it('follows ref: when the entity id is not the character id', () => {
 		expect(
-			names('[scene]\ncast:\n  stranger: {ref: mira, frame: |}')
+			names('[scene]\ncast:\n  stranger: {ref: mira, pose: |}')
 		).toEqual(['angry', 'arms-crossed', 'idle']);
 	});
 
 	it('offers nothing for an entity that names no known character', () => {
-		expect(names('[scene]\ncast:\n  nobody: {frame: |}')).toBeUndefined();
+		expect(names('[scene]\ncast:\n  nobody: {pose: |}')).toBeUndefined();
 	});
 
 	it('offers the fixed layers and effects', () => {
@@ -230,15 +230,15 @@ describe('sceneCompletion()', () => {
 			]);
 		});
 
-		it('keeps each character its own frame history', () => {
-			noteNameUsed('frame:mira', 'angry');
+		it('keeps each character its own pose history', () => {
+			noteNameUsed('pose:mira', 'angry');
 
-			expect(names('[scene]\ncast:\n  mira: {frame: |}')).toEqual([
+			expect(names('[scene]\ncast:\n  mira: {pose: |}')).toEqual([
 				'angry',
 				'arms-crossed',
 				'idle'
 			]);
-			expect(names('[scene]\ncast:\n  joren: {frame: |}')).toEqual(['idle']);
+			expect(names('[scene]\ncast:\n  joren: {pose: |}')).toEqual(['idle']);
 		});
 	});
 
@@ -270,12 +270,12 @@ describe('sceneCompletion()', () => {
 			).toMatchObject({text: 'mira'});
 		});
 
-		it('does not prefill a frame, layer or effect', () => {
+		it('does not prefill a pose, layer or effect', () => {
 			expect(completeAt('[scene]\nfx:\n  - ra|')!.list[0]).toMatchObject({
 				text: 'rain'
 			});
 			expect(
-				completeAt('[scene]\ncast:\n  mira: {frame: ang|}')!.list[0]
+				completeAt('[scene]\ncast:\n  mira: {pose: ang|}')!.list[0]
 			).toMatchObject({text: 'angry'});
 		});
 	});
@@ -313,8 +313,8 @@ describe('sceneCompletion()', () => {
 		});
 
 		it('stops at the YAML around it', () => {
-			expect(range('[scene]\ncast:\n  mira: {frame: an|gry, layer: mid}')).toEqual(
-				[16, 21]
+			expect(range('[scene]\ncast:\n  mira: {pose: an|gry, layer: mid}')).toEqual(
+				[15, 20]
 			);
 		});
 

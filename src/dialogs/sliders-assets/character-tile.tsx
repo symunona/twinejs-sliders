@@ -1,5 +1,5 @@
 import {characterFragment} from '@sliders/asset-store';
-import {Character} from '@sliders/scene-types';
+import {Character, poseCover} from '@sliders/scene-types';
 import {IconEdit, IconTrash} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -19,20 +19,20 @@ export interface CharacterTileProps {
 	focused?: boolean;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
-	/** Image files dropped onto this tile, to become new frames of this character. */
+	/** Image files dropped onto this tile, to become new poses of this character. */
 	onDropFiles: (files: File[]) => void;
 	onEdit: () => void;
 	/** Passage names whose scenes cast this character. */
 	usedIn?: string[];
 	/**
-	 * No scene casts this character, so a push leaves it and its frames behind. Undefined
+	 * No scene casts this character, so a push leaves it and its poses behind. Undefined
 	 * while the scan is still running — see `useSyncedRefs`.
 	 */
 	unreferenced?: boolean;
 }
 
 /**
- * A character is one tile, not one tile per frame (spec 03). Clicking it opens the
+ * A character is one tile, not one tile per pose (spec 03). Clicking it opens the
  * character editor.
  */
 export const CharacterTile: React.FC<CharacterTileProps> = props => {
@@ -47,7 +47,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		unreferenced,
 		usedIn
 	} = props;
-	const frameNames = Object.keys(character.frames);
+	const poseNames = Object.keys(character.poses);
 	const [over, setOver] = React.useState(false);
 	const {t} = useTranslation();
 	const tileRef = React.useRef<HTMLDivElement>(null);
@@ -72,7 +72,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		}
 
 		// Stopped so the tab's own drop zone doesn't also light up--the two mean different
-		// things here (new character vs. new frame of this one).
+		// things here (new character vs. new pose of this one).
 		event.preventDefault();
 		event.stopPropagation();
 		event.dataTransfer.dropEffect = 'copy';
@@ -132,7 +132,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		>
 			{over && (
 				<div className="sliders-tile-drop-hint">
-					{t('dialogs.slidersAssets.dropHintFrames', {name: character.name})}
+					{t('dialogs.slidersAssets.dropHintPoses', {name: character.name})}
 				</div>
 			)}
 			<button
@@ -143,11 +143,11 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 				<span className="sliders-tile-art">
 					<AssetPreview
 						alt={character.name}
-						assetId={character.frames[frameNames[0]]?.asset}
+						assetId={poseCover(character.poses[poseNames[0]])}
 						origin={character.origin}
 					/>
 					<span className="sliders-tile-size">
-						{t('dialogs.slidersAssets.frameCount', {count: frameNames.length})}
+						{t('dialogs.slidersAssets.poseCount', {count: poseNames.length})}
 					</span>
 				</span>
 				<span className="sliders-tile-name">{character.name}</span>

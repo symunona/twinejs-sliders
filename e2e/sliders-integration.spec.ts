@@ -67,19 +67,19 @@ async function uploadInto(page: Page, dialogName: string, files: string[]) {
 		.setInputFiles(files);
 }
 
-/** Frame names default to the filename slug; scenes refer to them by `frame:`. */
-async function renameFrame(page: Page, from: string, to: string) {
+/** Pose names default to the filename slug; scenes refer to them by `pose:`. */
+async function renamePose(page: Page, from: string, to: string) {
 	// One dialog per character (D8), so target the most recently opened.
 	const editor = page.getByRole('dialog', {name: 'Characters'}).last();
-	const item = editor.locator(`[data-frame="${from}"]`);
+	const item = editor.locator(`[data-pose="${from}"]`);
 
 	await item.scrollIntoViewIfNeeded();
-	await item.getByRole('button', {name: 'Rename Frame'}).click();
+	await item.getByRole('button', {name: 'Rename Pose'}).click();
 	await page
-		.getByRole('textbox', {name: /what should this frame be called/i})
+		.getByRole('textbox', {name: /what should this pose be called/i})
 		.fill(to);
 	await page.getByRole('button', {name: 'OK'}).click();
-	await expect(editor.locator(`[data-frame="${to}"]`)).toBeVisible({
+	await expect(editor.locator(`[data-pose="${to}"]`)).toBeVisible({
 		timeout: 10000
 	});
 }
@@ -87,7 +87,7 @@ async function renameFrame(page: Page, from: string, to: string) {
 async function createCharacter(
 	page: Page,
 	name: string,
-	frames: {file: string; as: string}[]
+	poses: {file: string; as: string}[]
 ) {
 	await assetTab(page, 'Characters');
 	await assetDialog(page).getByRole('button', {name: 'New Character'}).click();
@@ -99,16 +99,16 @@ async function createCharacter(
 	const editor = page.getByRole('dialog', {name: 'Characters'}).last();
 
 	await expect(editor).toBeVisible({timeout: 10000});
-	await editor.locator('input[type="file"]').setInputFiles(frames.map(f => fixture(f.file)));
-	await expect(editor.locator('.frame-list-item')).toHaveCount(frames.length, {
+	await editor.locator('input[type="file"]').setInputFiles(poses.map(f => fixture(f.file)));
+	await expect(editor.locator('.pose-list-item')).toHaveCount(poses.length, {
 		timeout: 25000
 	});
 
-	for (const frame of frames) {
-		const slug = frame.file.replace(/\.[a-z]+$/, '');
+	for (const pose of poses) {
+		const slug = pose.file.replace(/\.[a-z]+$/, '');
 
-		if (slug !== frame.as) {
-			await renameFrame(page, slug, frame.as);
+		if (slug !== pose.as) {
+			await renamePose(page, slug, pose.as);
 		}
 	}
 }

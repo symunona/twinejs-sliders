@@ -45,7 +45,7 @@ import {
 	assetDropWrites,
 	deleteWrites,
 	flipWrites,
-	frameWrite,
+	poseWrite,
 	zWrites
 } from './scene-gestures';
 import {
@@ -55,8 +55,8 @@ import {
 } from '../../sliders-assets/asset-store-context';
 import {
 	characterFromFile,
-	framesFromFiles
-} from '../../sliders-assets/character-frames';
+	posesFromFiles
+} from '../../sliders-assets/character-poses';
 import {requestAssetFocus} from '../../sliders-assets/focus-request';
 import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
 import {useDialogsContext} from '../../context';
@@ -189,15 +189,15 @@ const GRID_KEY = 'sliders.preview.grid';
 const SOUND_KEY = 'sliders.preview.sound';
 
 /**
- * How solid the frame menu's hover preview is drawn.
+ * How solid the pose menu's hover preview is drawn.
  *
  * Near enough to opaque to judge the pose by — that is the only reason the preview exists —
  * and far enough off it that the sprite is visibly answering a question rather than showing
  * a change that has been made. Nothing else on the stage is drawn at a fraction, so one
- * step is enough of a signal; a heavier fade would make a dark frame hard to read against
+ * step is enough of a signal; a heavier fade would make a dark pose hard to read against
  * the background it is being judged against.
  */
-const FRAME_PREVIEW_OPACITY = 0.9;
+const POSE_PREVIEW_OPACITY = 0.9;
 
 /**
  * The entity the trace panel's hover preview is drawn as.
@@ -236,7 +236,7 @@ const DROP_STACK_STEP = 0.08;
 interface DropRequest {
 	/** Scene position, for whatever ends up on the stage. */
 	at: Vec2;
-	/** The cast as it was when the drop happened, for the "frames of…" branch. */
+	/** The cast as it was when the drop happened, for the "poses of…" branch. */
 	characters: Character[];
 	files: File[];
 	/** Where to open the menu, in client coordinates. */
@@ -713,7 +713,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 *
 	 * A file says nothing about its role, so the drop only collects it and opens the menu
 	 * (`drop-menu.tsx`); `runDropChoice` below does the work once the author has said what
-	 * the image is. The cast is read here rather than subscribed to, because the "frames
+	 * the image is. The cast is read here rather than subscribed to, because the "poses
 	 * of…" branch is the only thing that needs it and a preview that is always mounted
 	 * should not hold the whole library open to answer a question nobody asked.
 	 */
@@ -755,13 +755,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			setDropRequest(undefined);
 
 			try {
-				if (choice.kind === 'frame') {
-					// Frames are not stage entries: the character they belong to may not even
-					// be in this scene, and a pose is chosen with `frame:` on an entity that
+				if (choice.kind === 'pose') {
+					// Poses are not stage entries: the character they belong to may not even
+					// be in this scene, and a pose is chosen with `pose:` on an entity that
 					// already exists. Nothing is written to the text.
-					const frames = await framesFromFiles(store, choice.character, files);
+					const poses = await posesFromFiles(store, choice.character, files);
 
-					await store.putCharacter({...choice.character, frames});
+					await store.putCharacter({...choice.character, poses});
 				} else if (choice.kind === 'bg') {
 					// One scene has one backdrop, so every file is uploaded — the author
 					// dropped them, they belong in the library — but only the first is
@@ -913,9 +913,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[commit, selection, stage]
 	);
 
-	const setFrame = React.useCallback(
-		(frame: string | undefined) => {
-			const write = frameWrite(stage.entities?.[selection[0]], frame);
+	const setPose = React.useCallback(
+		(pose: string | undefined) => {
+			const write = poseWrite(stage.entities?.[selection[0]], pose);
 
 			if (write) {
 				commit([write], EDIT_ORIGIN);
@@ -997,26 +997,26 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 
 	/**
-	 * The pose the frame menu is hovering: drawn, never written. `null` is not hovering,
-	 * `''` is the Automatic row — the fallback the renderer picks when no frame is named.
+	 * The pose the pose menu is hovering: drawn, never written. `null` is not hovering,
+	 * `''` is the Automatic row — the fallback the renderer picks when no pose is named.
 	 *
 	 * A preview is not an optimistic patch and deliberately does not go through
 	 * `StagePatch`: that map is the value a gesture is PRODUCING, it settles against the
 	 * next parse and it times out, and a hover produces nothing. This one is thrown away
 	 * whole the moment the pointer leaves.
 	 */
-	const [framePreview, setFramePreview] = React.useState<string | null>(null);
-	// Only ever the single selection the frame menu itself needs. Kept apart from the menu
+	const [posePreview, setPosePreview] = React.useState<string | null>(null);
+	// Only ever the single selection the pose menu itself needs. Kept apart from the menu
 	// so the preview cannot outlive the entity: selecting something else clears it below.
 	const previewId = selection.length === 1 ? selection[0] : undefined;
 
-	React.useEffect(() => setFramePreview(null), [previewId]);
+	React.useEffect(() => setPosePreview(null), [previewId]);
 
 	/**
 	 * The past position the trace panel is hovering: drawn as a second sprite, never
 	 * written. `null` is not hovering.
 	 *
-	 * Same bargain as `framePreview` — a hover produces nothing, so it is not a
+	 * Same bargain as `posePreview` — a hover produces nothing, so it is not a
 	 * `StagePatch` — except that this one ADDS art instead of changing it, because the
 	 * question it answers ("would it look right back there?") is about two positions at
 	 * once.
@@ -1042,17 +1042,20 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			? stage.entities?.[tracePreview.id]
 			: undefined;
 
-		if (!(framePreview !== null && previewId && entity) && !traced) {
+		if (!(posePreview !== null && previewId && entity) && !traced) {
 			return stage;
 		}
 
 		const entities = {...stage.entities};
 
-		if (framePreview !== null && previewId && entity) {
+		if (posePreview !== null && previewId && entity) {
+			// One pose, as the menu will write it: a scene step list would otherwise keep
+			// drawing over the pose being asked about.
 			entities[previewId] = {
 				...entity,
-				frame: framePreview || undefined,
-				opacity: entity.opacity * FRAME_PREVIEW_OPACITY
+				pose: posePreview || undefined,
+				steps: undefined,
+				opacity: entity.opacity * POSE_PREVIEW_OPACITY
 			};
 		}
 
@@ -1064,13 +1067,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				...traced,
 				at: tracePreview.at,
 				id: TRACE_PREVIEW_ID,
-				opacity: traced.opacity * FRAME_PREVIEW_OPACITY,
+				opacity: traced.opacity * POSE_PREVIEW_OPACITY,
 				scale: tracePreview.scale
 			};
 		}
 
 		return {...stage, entities};
-	}, [framePreview, previewId, stage, tracePreview]);
+	}, [posePreview, previewId, stage, tracePreview]);
 
 	/**
 	 * Everything that would change the text is off while the lock is on.
@@ -1713,9 +1716,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				note={beatNote}
 				onDelete={remove}
 				onFlip={flip}
-				onFrame={setFrame}
+				onPose={setPose}
 				onOpenLink={onOpenPassage}
-				onPreviewFrame={setFramePreview}
+				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}
 			/>
 			{/* A dropped file is not a background, an object, a cast member or a pose until

@@ -19,7 +19,7 @@ export interface AssetPickerProps {
 }
 
 /**
- * Picks library assets to send along with the prompt. Character frames are included,
+ * Picks library assets to send along with the prompt. Pose images are included,
  * because "the same character, now sitting down" is the main reason to attach anything.
  */
 export const AssetPicker: React.FC<AssetPickerProps> = props => {

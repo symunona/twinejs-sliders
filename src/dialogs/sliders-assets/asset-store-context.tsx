@@ -145,7 +145,7 @@ export interface UploadReport {
 }
 
 export interface AssetLibrary {
-	/** Every asset, including character frames. */
+	/** Every asset, including pose images. */
 	all: AssetMeta[];
 	busy: boolean;
 	characters: Character[];
@@ -181,7 +181,7 @@ export function useAssetLibrary(scope?: string): AssetLibrary {
 		async function load() {
 			try {
 				const [assets, cast] = await Promise.all([
-					store.list({includeFrames: true}),
+					store.list({includePoseImages: true}),
 					store.listCharacters()
 				]);
 

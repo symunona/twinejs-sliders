@@ -11,7 +11,7 @@
 import {sceneBg} from '@sliders/scene-core';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
-import type {FrameStep, Scene} from '@sliders/scene-types';
+import type {SceneStep, Scene} from '@sliders/scene-types';
 import type {SceneAssetRefs} from './bundle.types';
 import type {Story} from '../../store/stories';
 
@@ -21,7 +21,7 @@ interface RefSets {
 	autoRefs: Set<string>;
 	characterRefs: Set<string>;
 	fxRefs: Set<string>;
-	frameRefs: Map<string, Set<string>>;
+	poseRefs: Map<string, Set<string>>;
 	optionalAssetRefs: Set<string>;
 	soundRefs: Set<string>;
 }
@@ -31,9 +31,9 @@ function emptyRefSets(): RefSets {
 		assetRefs: new Set(),
 		autoRefs: new Set(),
 		characterRefs: new Set(),
-		frameRefs: new Map(),
 		fxRefs: new Set(),
 		optionalAssetRefs: new Set(),
+		poseRefs: new Map(),
 		soundRefs: new Set()
 	};
 }
@@ -47,46 +47,46 @@ function add(into: Set<string>, value: string | null | undefined): void {
 	}
 }
 
-function addFrame(
+function addPose(
 	sets: RefSets,
 	entityId: string,
-	frame: string | undefined
+	pose: string | undefined
 ): void {
 	const id = entityId?.trim();
-	const name = frame?.trim();
+	const name = pose?.trim();
 
 	if (!id || !name) {
 		return;
 	}
 
-	let frames = sets.frameRefs.get(id);
+	let poses = sets.poseRefs.get(id);
 
-	if (!frames) {
-		frames = new Set();
-		sets.frameRefs.set(id, frames);
+	if (!poses) {
+		poses = new Set();
+		sets.poseRefs.set(id, poses);
 	}
 
-	frames.add(name);
+	poses.add(name);
 }
 
 /**
- * Every pose one entity or beat patch names — the still `frame`, and each step of a
- * `frame:` cycle.
+ * Every pose one entity or beat patch names — the single `pose`, and each step of a
+ * `pose:` list.
  *
- * A cycle's steps ARE art the story cannot open without, so they go in the same bucket the
- * still pose does. `frame` already holds step 1, which is why this takes the whole body
- * rather than a string: passing it a name would silently bundle a walk cycle's first frame
- * and nothing else.
+ * A list's steps ARE art the story cannot open without, so they go in the same bucket the
+ * single pose does. `pose` already holds step 1, which is why this takes the whole body
+ * rather than a string: passing it a name would silently bundle a walk's first pose and
+ * nothing else.
  */
-function addFrames(
+function addPoses(
 	sets: RefSets,
 	entityId: string,
-	body: {frame?: string; frames?: FrameStep[]} | undefined
+	body: {pose?: string; steps?: SceneStep[]} | undefined
 ): void {
-	addFrame(sets, entityId, body?.frame);
+	addPose(sets, entityId, body?.pose);
 
-	for (const step of body?.frames ?? []) {
-		addFrame(sets, entityId, step.name);
+	for (const step of body?.steps ?? []) {
+		addPose(sets, entityId, step.name);
 	}
 }
 
@@ -114,7 +114,7 @@ function addScene(sets: RefSets, scene: Scene): void {
 				: sets.assetRefs,
 			entity.ref
 		);
-		addFrames(sets, id, entity);
+		addPoses(sets, id, entity);
 	}
 
 	for (const fx of scene.fx ?? []) {
@@ -145,9 +145,9 @@ function addScene(sets: RefSets, scene: Scene): void {
 
 			case 'say':
 			case 'set':
-				// A beat can name a frame for an entity the block never declared — that is
-				// still a frame the character has to have.
-				addFrames(sets, beat.who, beat.patch);
+				// A beat can name a pose for an entity the block never declared — that is
+				// still a pose the character has to have.
+				addPoses(sets, beat.who, beat.patch);
 				break;
 		}
 	}
@@ -164,19 +164,19 @@ function addPassage(sets: RefSets, passageText: string): void {
 }
 
 function freeze(sets: RefSets): SceneAssetRefs {
-	const frameRefs: Record<string, string[]> = {};
+	const poseRefs: Record<string, string[]> = {};
 
-	for (const [id, frames] of sets.frameRefs) {
-		frameRefs[id] = [...frames].sort();
+	for (const [id, poses] of sets.poseRefs) {
+		poseRefs[id] = [...poses].sort();
 	}
 
 	return {
 		assetRefs: [...sets.assetRefs].sort(),
 		autoRefs: [...sets.autoRefs].sort(),
 		characterRefs: [...sets.characterRefs].sort(),
-		frameRefs,
 		fxRefs: [...sets.fxRefs].sort(),
 		optionalAssetRefs: [...sets.optionalAssetRefs].sort(),
+		poseRefs,
 		soundRefs: [...sets.soundRefs].sort()
 	};
 }

@@ -40,7 +40,7 @@ describe('passageLinkSpans', () => {
 			'[scene]',
 			'bg: tavern',
 			'cast:',
-			'  door: {frame: idle, link: stay}',
+			'  door: {pose: idle, link: stay}',
 			'links:',
 			'  stay: Tavern Fight',
 			'  go: {to: Street}  # the long way',

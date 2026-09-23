@@ -2,24 +2,24 @@ import {
 	AssetStore,
 	defaultCharacter,
 	nameFromFilename,
-	newFrameAnchors,
+	newPoseAnchors,
 	slugify,
 	uniqueName
 } from '@sliders/asset-store';
 import {Character} from '@sliders/scene-types';
 
-/** `preferred`, or `preferred-2`, `preferred-3`, … until the character has no such frame. */
-export function uniqueFrameName(
+/** `preferred`, or `preferred-2`, `preferred-3`, … until the character has no such pose. */
+export function uniquePoseName(
 	preferred: string,
-	frames: Character['frames']
+	poses: Character['poses']
 ): string {
-	if (!frames[preferred]) {
+	if (!poses[preferred]) {
 		return preferred;
 	}
 
 	let suffix = 2;
 
-	while (frames[`${preferred}-${suffix}`]) {
+	while (poses[`${preferred}-${suffix}`]) {
 		suffix++;
 	}
 
@@ -27,60 +27,61 @@ export function uniqueFrameName(
 }
 
 /**
- * Uploads each file as a new frame of `character` and returns the frames map to save.
+ * Uploads each file as a new pose of `character` and returns the poses map to save.
  *
- * The frame's asset is named `<character id>-<frame name>`, NOT after the file. A frame is
- * an ordinary asset, so its name shares the one namespace scene YAML reads — and a file
+ * The pose image is named `<character id>-<pose name>`, NOT after the file. A pose image
+ * is an ordinary asset, so its name shares the one namespace scene YAML reads — and a file
  * called `mira.png` dropped to make a character called `mira` would otherwise take that
- * name out from under the character it is a frame of, and `putCharacter` would throw.
- * Scenes address a frame through its character (`frame: wave`), never by asset name, so
+ * name out from under the character it belongs to, and `putCharacter` would throw.
+ * Scenes address a pose through its character (`pose: wave`), never by asset name, so
  * nothing is lost by naming it after its owner.
  *
  * Writes the assets only. The caller owns the character record--the character editor has a
  * draft to fold this into, and a drop onto a tile has no draft at all.
  */
-export async function framesFromFiles(
+export async function posesFromFiles(
 	store: AssetStore,
-	character: Pick<Character, 'id' | 'frames'>,
+	character: Pick<Character, 'id' | 'poses'>,
 	files: File[]
-): Promise<Character['frames']> {
-	const frames = {...character.frames};
+): Promise<Character['poses']> {
+	const poses = {...character.poses};
 
 	for (const file of files) {
-		// The renderer falls back to `idle` when an entity names no frame, so a character's
-		// very first frame takes that name whatever the file was called. Otherwise a
-		// character built by dropping `mira.png` would have exactly one frame, called
+		// The renderer falls back to `idle` when an entity names no pose, so a character's
+		// very first pose takes that name whatever the file was called. Otherwise a
+		// character built by dropping `mira.png` would have exactly one pose, called
 		// `mira`, and render nothing until a scene asked for it by name.
 		const name =
-			Object.keys(frames).length === 0
+			Object.keys(poses).length === 0
 				? 'idle'
-				: uniqueFrameName(slugify(nameFromFilename(file.name)), frames);
+				: uniquePoseName(slugify(nameFromFilename(file.name)), poses);
 
 		try {
+			// `kind: 'frame'` is the stored name for a pose image (see `AssetKind`).
 			const result = await store.putAsset(file, {
 				kind: 'frame',
 				name: `${character.id}-${name}`,
 				ownerCharacter: character.id
 			});
 
-			// A new frame comes in rigged, copying whatever the character's other frames
+			// A new pose comes in rigged, copying whatever the character's other poses
 			// already use — the poses of one sprite sheet are variations on one drawing, so
 			// that is far closer to right than the bare defaults, and the author nudges the
 			// anchors that actually moved.
-			frames[name] = {
-				anchors: newFrameAnchors({frames}),
+			poses[name] = {
+				anchors: newPoseAnchors({poses}),
 				asset: result.id
 			};
 		} catch (error) {
-			console.error(`Could not add ${file.name} as a frame`, error);
+			console.error(`Could not add ${file.name} as a pose`, error);
 		}
 	}
 
-	return frames;
+	return poses;
 }
 
 /**
- * Saves one file as a brand new character whose only frame is that image, and returns the
+ * Saves one file as a brand new character whose only pose is that image, and returns the
  * id — which is the token a scene writes, so a caller that is placing the character on the
  * stage has what it needs.
  *
@@ -98,11 +99,11 @@ export async function characterFromFile(
 
 	taken.add(id);
 
-	const frames = await framesFromFiles(store, {frames: {}, id}, [file]);
+	const poses = await posesFromFiles(store, {id, poses: {}}, [file]);
 
 	await store.putCharacter({
 		...defaultCharacter(id),
-		frames
+		poses
 	});
 
 	return id;

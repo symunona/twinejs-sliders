@@ -4,7 +4,7 @@ import type {Character} from '@sliders/scene-types';
 import {SceneDropMenu} from '../drop-menu';
 
 const mira = {
-	frames: {},
+	poses: {},
 	id: 'mira',
 	name: 'Mira',
 	tags: []
@@ -40,17 +40,17 @@ describe('<SceneDropMenu>', () => {
 		expect(onChoose).toHaveBeenCalledWith({kind});
 	});
 
-	it('names the character a frame choice belongs to', () => {
+	it('names the character a pose choice belongs to', () => {
 		const {onChoose} = renderMenu();
 
-		fireEvent.click(screen.getByTestId('scene-drop-menu-frame'));
+		fireEvent.click(screen.getByTestId('scene-drop-menu-pose'));
 		fireEvent.click(screen.getByText('Mira'));
-		expect(onChoose).toHaveBeenCalledWith({character: mira, kind: 'frame'});
+		expect(onChoose).toHaveBeenCalledWith({character: mira, kind: 'pose'});
 	});
 
-	it('offers no frame branch when the story has no cast', () => {
+	it('offers no pose branch when the story has no cast', () => {
 		renderMenu({characters: []});
-		expect(screen.getByTestId('scene-drop-menu-frame')).toBeDisabled();
+		expect(screen.getByTestId('scene-drop-menu-pose')).toBeDisabled();
 	});
 
 	it('cancels on Escape', () => {

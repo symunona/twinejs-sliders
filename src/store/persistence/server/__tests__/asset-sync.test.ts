@@ -309,7 +309,7 @@ describe('syncStoryAssets', () => {
 		expect(putManifest).toHaveBeenCalledTimes(1);
 	});
 
-	it('syncs again once a character frame is added', async () => {
+	it('syncs again once a character pose is added', async () => {
 		const bytes = webpBytes();
 		const store = newStore();
 
@@ -323,7 +323,7 @@ describe('syncStoryAssets', () => {
 		});
 
 		await store.putCharacter({
-			frames: {idle: {asset: 'a_8f21'}},
+			poses: {idle: {asset: 'a_8f21'}},
 			id: 'bob',
 			name: 'bob',
 			origin: {x: 0.5, y: 1},
