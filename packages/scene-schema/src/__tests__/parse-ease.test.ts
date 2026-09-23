@@ -2,7 +2,7 @@
  * `ease:` — the curve a beat's movement takes, where `dur:` is its length.
  *
  * Three shapes and four places: a scalar or a per-kind map, at the top of the scene, on a
- * beat body, inside a `box:` map, and (scalar only) on one step of a frame cycle.
+ * beat body, inside a `box:` map, and (scalar only) on one step of a pose cycle.
  */
 
 import {parseScene} from '../parse-scene';
@@ -138,30 +138,30 @@ describe('ease: where it is allowed', () => {
 	});
 });
 
-describe('ease: on a frame step', () => {
+describe('ease: on a pose step', () => {
 	it('reads a scalar on one step of a cycle', () => {
 		const {errors, scene: parsed} = scene(
-			'cast:\n  mira: {frame: [{name: step_a, at: 0.1, ease: linear}, step_b]}\nbeats: []\n'
+			'cast:\n  mira: {pose: [{name: step_a, at: 0.1, ease: linear}, step_b]}\nbeats: []\n'
 		);
 
 		expect(errors).toEqual([]);
-		expect(parsed.entities.mira?.frames?.[0].ease).toBe('linear');
-		expect(parsed.entities.mira?.frames?.[1].ease).toBeUndefined();
+		expect(parsed.entities.mira?.steps?.[0].ease).toBe('linear');
+		expect(parsed.entities.mira?.steps?.[1].ease).toBeUndefined();
 	});
 
 	it('warns on an unknown word there too', () => {
 		const {errors, scene: parsed} = scene(
-			'cast:\n  mira: {frame: [{name: step_a, ease: whoosh}]}\nbeats: []\n'
+			'cast:\n  mira: {pose: [{name: step_a, ease: whoosh}]}\nbeats: []\n'
 		);
 
 		expect(errors).toHaveLength(1);
 		expect(errors[0].severity).toBe('warning');
-		expect(parsed.entities.mira?.frames?.[0].ease).toBe('whoosh');
+		expect(parsed.entities.mira?.steps?.[0].ease).toBe('whoosh');
 	});
 
 	it('refuses a per-kind map on a step: one change, one curve', () => {
 		const {errors} = scene(
-			'cast:\n  mira: {frame: [{name: step_a, ease: {move: linear}}]}\nbeats: []\n'
+			'cast:\n  mira: {pose: [{name: step_a, ease: {move: linear}}]}\nbeats: []\n'
 		);
 
 		expect(errors.length).toBeGreaterThan(0);

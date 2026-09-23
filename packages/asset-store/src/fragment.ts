@@ -24,9 +24,9 @@ export function assetFragment(meta: AssetMeta): string {
 			return `- sfx: ${entityKey(meta.name)}`;
 
 		case 'frame':
-			// Frames are addressed through their character, never on their own.
+			// Pose images are addressed through their character, never on their own.
 			return meta.ownerCharacter
-				? `${meta.ownerCharacter}: {at: 0, frame: ${entityKey(meta.name)}}`
+				? `${meta.ownerCharacter}: {at: 0, pose: ${entityKey(meta.name)}}`
 				: `bg: ${meta.name}`;
 	}
 }
@@ -37,9 +37,9 @@ export function musicFragment(meta: AssetMeta): string {
 }
 
 export function characterFragment(character: Character): string {
-	const frame = Object.keys(character.frames)[0] ?? 'idle';
+	const pose = Object.keys(character.poses)[0] ?? 'idle';
 
-	return `${character.id}: {at: 0, frame: ${frame}}`;
+	return `${character.id}: {at: 0, pose: ${pose}}`;
 }
 
 /** `props/candle` addresses an entity named `candle`. */

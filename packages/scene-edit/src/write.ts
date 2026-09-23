@@ -24,6 +24,7 @@ import {
 	type NodeRange,
 	beatsSeqOf,
 	entityMapOf,
+	findEntityKeyPair,
 	findPair,
 	indentAt,
 	keyName,
@@ -350,7 +351,7 @@ function promoteScalarBeat(
 	 * that sentence. Appending instead produced `{say: "Sit down.", say: "Please sit."}` —
 	 * a duplicate key, which is a YAML error and reads back as whichever one the parser
 	 * happened to keep. Unreachable from the visual editor, which only ever sets `at`,
-	 * `frame` and `dur` on a beat; voice mode's `set_beat` is what found it.
+	 * `pose` and `dur` on a beat; voice mode's `set_beat` is what found it.
 	 */
 	const override = entries.find(([key]) => key === textKey);
 	const body = override ? override[1] : source;
@@ -382,18 +383,16 @@ function writeKey(
 
 	if (isMap(body)) {
 		const map = body as YAMLMap;
-		const existing = findPair(map, key);
+		const existing = findEntityKeyPair(map, key);
 
 		if (!existing) {
 			return insertIntoMap(parsed, map, key, formatted);
 		}
 
-		const valueRange = rangeOf(existing.value);
-
-		// Tier 1. This single line is the whole promise of the package.
-		return valueRange
-			? {from: valueRange[0], insert: formatted, to: valueRange[1]}
-			: insertValueAfterKey(text, existing, formatted);
+		// Tier 1. This single line is the whole promise of the package. A pair written under
+		// an old spelling (`frame:`) is renamed in the same splice, so one pair is left, in
+		// today's words.
+		return spliceValue(parsed, existing, formatted, key);
 	}
 
 	const valueRange = rangeOf(body);
@@ -483,7 +482,7 @@ export function removeEntityKey(
 	}
 
 	const map = located.pair.value as YAMLMap;
-	const pair = findPair(map, key);
+	const pair = findEntityKeyPair(map, key);
 
 	return pair ? removePairEdit(parsed, map, pair) : undefined;
 }
@@ -492,7 +491,7 @@ export function removeEntityKey(
 // addEntity / removeEntity
 // ---------------------------------------------------------------------------
 
-/** `{at: -0.4, frame: idle}` — the flow form spec 02 uses for every entity example. */
+/** `{at: -0.4, pose: idle}` — the flow form spec 02 uses for every entity example. */
 function formatEntityBody(id: EntityId, patch: EntityPatch): string {
 	const source = patch as unknown as Record<string, unknown>;
 	const parts: string[] = [];
@@ -1062,14 +1061,14 @@ export function setBeatKey(
 
 	if (isMap(body)) {
 		const map = body as YAMLMap;
-		const existing = findPair(map, key);
+		const existing = findEntityKeyPair(map, key);
 
 		if (value === null) {
 			return existing ? removePairEdit(parsed, map, existing) : undefined;
 		}
 
 		return existing
-			? spliceValue(parsed, existing, formatValue(key, value))
+			? spliceValue(parsed, existing, formatValue(key, value), key)
 			: insertIntoMap(parsed, map, key, formatValue(key, value));
 	}
 
@@ -1125,12 +1124,22 @@ function writeBubbleKeys(
 	return mergeEdits(parsed.text, edits);
 }
 
+/**
+ * `key`, when given, is the name the pair should end up under: a pair found under an old
+ * spelling (`frame:`) is renamed in the same splice.
+ */
 function spliceValue(
 	parsed: Parsed,
 	pair: Pair<unknown, unknown>,
-	formatted: string
+	formatted: string,
+	key?: string
 ): TextEdit | undefined {
 	const range = rangeOf(pair.value);
+	const keyRange = rangeOf(pair.key);
+
+	if (key !== undefined && keyName(pair) !== key && keyRange && range) {
+		return {from: keyRange[0], insert: `${key}: ${formatted}`, to: range[1]};
+	}
 
 	return range
 		? {from: range[0], insert: formatted, to: range[1]}

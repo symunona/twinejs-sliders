@@ -314,7 +314,7 @@ export function syncEffect(
 			}
 
 			// Written inline because the sprite's own is inline too: a stylesheet cannot
-			// outrank `applyFrameFit`, and a layer whose pixels sit a few percent off the
+			// outrank `applyPoseFit`, and a layer whose pixels sit a few percent off the
 			// art's reads as a permanent double image rather than as a tear.
 			if (options.objectPosition) {
 				img.style.objectPosition = options.objectPosition;

@@ -7,7 +7,7 @@ function startStage(): Stage {
 	return applyScene(emptyStage(), {
 		beats: [],
 		entities: {
-			mira: {at: {x: -0.4, y: 0}, frame: 'idle', kind: 'cast', ref: 'mira'}
+			mira: {at: {x: -0.4, y: 0}, pose: 'idle', kind: 'cast', ref: 'mira'}
 		},
 		links: {}
 	});
@@ -20,7 +20,7 @@ const BEATS: Beat[] = [
 	{
 		index: 3,
 		kind: 'say',
-		patch: {frame: 'angry'},
+		patch: {pose: 'angry'},
 		text: 'Two.',
 		who: 'mira'
 	},
@@ -51,7 +51,7 @@ describe('runBeats', () => {
 
 		expect(states[4].entities.mira).toMatchObject({
 			at: {x: 0.2, y: 0},
-			frame: 'angry'
+			pose: 'angry'
 		});
 	});
 

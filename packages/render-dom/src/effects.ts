@@ -39,7 +39,7 @@
  * element it has.
  *
  * The generated rules only ever write `translate`, `rotate`, `clip-path`, `opacity`,
- * `filter` and `background-position`. None of those is touched by `applyFrameFit` or
+ * `filter` and `background-position`. None of those is touched by `applyPoseFit` or
  * `layout`, which own `transform`, `transform-origin`, `object-fit` and `object-position`.
  * So an effect can be layered onto a mirrored, tilted, origin-pinned sprite without the two
  * ever fighting over a property — `translate` and `rotate` are their own longhands and

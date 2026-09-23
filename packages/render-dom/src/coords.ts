@@ -19,9 +19,9 @@ import type {Camera, Character, Frac2, Vec2} from '@sliders/scene-types';
 export const STAGE_ASPECT = 16 / 9;
 
 /**
- * A character frame's full height maps to this fraction of the stage height at zoom 1.
+ * A character box's full height maps to this fraction of the stage height at zoom 1.
  * Characters are normalized against each other by their manifest `size`, not by the pixel
- * size of whichever frame happens to be showing.
+ * size of whichever pose happens to be showing.
  */
 export const CHARACTER_STAGE_HEIGHT = 0.9;
 
@@ -46,10 +46,10 @@ export const DEFAULT_ANCHORS: Readonly<Record<string, Frac2>> = {
 	bottom: {x: 0.5, y: 1}
 };
 
-/** Frame size assumed for an unresolvable character. */
-export const PLACEHOLDER_FRAME = {w: 512, h: 1024};
+/** Box size assumed for an unresolvable character. */
+export const PLACEHOLDER_SIZE = {w: 512, h: 1024};
 
-/** Frame size assumed for an unresolvable prop. */
+/** Box size assumed for an unresolvable prop. */
 export const PLACEHOLDER_PROP = {w: 256, h: 256};
 
 export interface Rect {
@@ -122,7 +122,7 @@ export function boxToMount(box: StageBox, p: Vec2): Vec2 {
 }
 
 /**
- * Where a sprite's frame sits, in BOX pixels, such that its `origin` fraction lands exactly
+ * Where a sprite's box sits, in BOX pixels, such that its `origin` fraction lands exactly
  * on the scene position. For a character the origin is its feet, so `at: {x: 0, y: 0}` means
  * standing on the centre of the stage, not floating with its middle there.
  */
@@ -142,7 +142,7 @@ export function spriteRect(
 }
 
 /**
- * An anchor (a fraction of the sprite frame) resolved to a point inside the sprite's rect.
+ * An anchor (a fraction of the sprite box) resolved to a point inside the sprite's rect.
  *
  * `flip` mirrors the sprite about its origin — the same thing `scaleX(-1)` with the origin as
  * `transform-origin` does on screen — so the anchor has to be mirrored the same way or every
@@ -293,8 +293,8 @@ export function characterMetrics(
 	character: Pick<Character, 'size' | 'origin'>,
 	scale = 1
 ): SpriteMetrics {
-	const h = character.size?.h > 0 ? character.size.h : PLACEHOLDER_FRAME.h;
-	const w = character.size?.w > 0 ? character.size.w : PLACEHOLDER_FRAME.w;
+	const h = character.size?.h > 0 ? character.size.h : PLACEHOLDER_SIZE.h;
+	const w = character.size?.w > 0 ? character.size.w : PLACEHOLDER_SIZE.w;
 	const height = box.height * CHARACTER_STAGE_HEIGHT * safeScale(scale);
 
 	return {

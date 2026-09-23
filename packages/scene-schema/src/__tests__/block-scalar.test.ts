@@ -53,7 +53,7 @@ describe('raggedBlockLines', () => {
 	it('lets a sibling key end the block', () => {
 		expect(
 			raggedBlockLines(
-				['cast:', '  bob:', '    say: |', '      hello', '    frame: idle', ''].join(
+				['cast:', '  bob:', '    say: |', '      hello', '    pose: idle', ''].join(
 					'\n'
 				)
 			)

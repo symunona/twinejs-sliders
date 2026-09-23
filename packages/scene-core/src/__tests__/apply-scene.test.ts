@@ -20,10 +20,10 @@ function baseStage(): Stage {
 			bg: 'tavern/night',
 			entities: {
 				candle: {at: {x: 0.5, y: 0}, kind: 'prop', z: 2, ref: 'candle'},
-				joren: {at: {x: 0.35, y: 0}, frame: 'idle', kind: 'cast', ref: 'joren'},
+				joren: {at: {x: 0.35, y: 0}, pose: 'idle', kind: 'cast', ref: 'joren'},
 				mira: {
 					at: {x: -0.4, y: 0.1},
-					frame: 'arms-crossed',
+					pose: 'arms-crossed',
 					kind: 'cast',
 					ref: 'mira'
 				}
@@ -41,7 +41,7 @@ describe('applyScene', () => {
 			expect(stage.entities.mira).toEqual({
 				at: {x: 0, y: LAYER_BASELINE},
 				flip: false,
-				frame: undefined,
+				pose: undefined,
 				id: 'mira',
 				kind: 'cast',
 				opacity: 1,
@@ -124,14 +124,14 @@ describe('applyScene', () => {
 			const stage = applyScene(
 				baseStage(),
 				scene({
-					entities: {mira: cast({frame: 'angry', ref: 'mira'})},
+					entities: {mira: cast({pose: 'angry', ref: 'mira'})},
 					from: 'tavern-night'
 				})
 			);
 
 			expect(stage.entities.mira).toMatchObject({
 				at: {x: -0.4, y: 0.1}, // inherited
-				frame: 'angry' // overridden
+				pose: 'angry' // overridden
 			});
 		});
 
@@ -203,8 +203,8 @@ describe('applyScene', () => {
 			);
 
 			expect(Object.keys(stage.entities).sort()).toEqual(['candle', 'mira']);
-			// mira is rebuilt from scratch, so the inherited frame is gone.
-			expect(stage.entities.mira.frame).toBeUndefined();
+			// mira is rebuilt from scratch, so the inherited pose is gone.
+			expect(stage.entities.mira.pose).toBeUndefined();
 		});
 
 		it('drops the inherited props for props: !only', () => {

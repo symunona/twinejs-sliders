@@ -1,5 +1,5 @@
 /**
- * `rot:` — a tilt in degrees, on an entity and on one step of a frame cycle.
+ * `rot:` — a tilt in degrees, on an entity and on one step of a pose cycle.
  *
  * The interesting cases are the ones where absent and zero must stay distinguishable, and
  * the warning for a value past a whole turn, which is the only thing about a rotation that
@@ -72,21 +72,21 @@ describe('rot: on a beat', () => {
 	});
 });
 
-describe('rot: on a frame step', () => {
+describe('rot: on a pose step', () => {
 	it('is accepted beside the other placement keys', () => {
 		const {scene, errors} = parseScene(
-			CAST('{frame: [{name: fall_1, rot: 20}, {name: fall_2, rot: 80}]}')
+			CAST('{pose: [{name: fall_1, rot: 20}, {name: fall_2, rot: 80}]}')
 		);
 
 		expect(errors).toEqual([]);
-		expect(scene.entities.mira?.frames).toEqual([
+		expect(scene.entities.mira?.steps).toEqual([
 			{name: 'fall_1', rot: 20},
 			{name: 'fall_2', rot: 80}
 		]);
 	});
 
 	it('warns past a whole turn there too', () => {
-		const {errors} = parseScene(CAST('{frame: [{name: spin, rot: -400}]}'));
+		const {errors} = parseScene(CAST('{pose: [{name: spin, rot: -400}]}'));
 
 		expect(errors).toHaveLength(1);
 		expect(errors[0].severity).toBe('warning');

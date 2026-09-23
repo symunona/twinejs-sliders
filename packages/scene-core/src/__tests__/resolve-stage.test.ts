@@ -156,7 +156,7 @@ describe('resolveStage', () => {
 		stage.entities.candle = {
 			...entity('candle', {x: 0.1, y: 0}, 'table'),
 			flip: true,
-			frame: 'lit',
+			pose: 'lit',
 			opacity: 0.5,
 			scale: 2,
 			z: 3
@@ -164,7 +164,7 @@ describe('resolveStage', () => {
 
 		expect(resolveStage(stage).entities.candle).toMatchObject({
 			flip: true,
-			frame: 'lit',
+			pose: 'lit',
 			kind: 'prop',
 			opacity: 0.5,
 			ref: 'candle',

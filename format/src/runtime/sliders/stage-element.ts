@@ -256,7 +256,7 @@ export class SlidersStage extends CustomElement {
 		// NOT `[entry, ...runBeats(...)]`: runBeats ALREADY returns the entry state as its
 		// first element, so prepending it again made `states[i]` the stage before beat i-1
 		// and every beat's staging landed one beat late — the last beat's never landed at
-		// all. Loudest with a frame cycle, where "one beat late" means the sprite keeps
+		// all. Loudest with a pose step list, where "one beat late" means the sprite keeps
 		// walking through the line that told it to stop.
 		this.states = runBeats(entry, payload.scene.beats ?? []);
 		this.beatIndex = 0;

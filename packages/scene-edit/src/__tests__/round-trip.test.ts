@@ -51,10 +51,10 @@ describe('round-trip on a comment-heavy fixture', () => {
 		const after = expectMinimalSplice(FIXTURE, edit);
 
 		expect(after).toContain(
-			"  mira:  {at: -0.25, frame: 'arms-crossed'}   # flow style on purpose"
+			"  mira:  {at: -0.25, pose: 'arms-crossed'}   # flow style on purpose"
 		);
 		// Two spaces after `mira:`, the single quotes, and the trailing comment survive.
-		expect(castOf(after).mira.frame).toBe('arms-crossed');
+		expect(castOf(after).mira.pose).toBe('arms-crossed');
 	});
 
 	it('splices only the value when at: already exists on a block entity', () => {
@@ -67,7 +67,7 @@ describe('round-trip on a comment-heavy fixture', () => {
 
 		const after = expectMinimalSplice(FIXTURE, edit);
 
-		expect(after).toContain('    at: [0.5, -0.2]\n    frame: idle');
+		expect(after).toContain('    at: [0.5, -0.2]\n    pose: idle');
 		expect(after).toContain('    flip: true       # he faces the door');
 	});
 
@@ -85,7 +85,7 @@ describe('round-trip on a comment-heavy fixture', () => {
 		const after = expectMinimalSplice(FIXTURE, edit);
 
 		expect(after).toContain(
-			"  mira:  {at: -0.4, frame: 'arms-crossed', scale: 1.15}   # flow style on purpose"
+			"  mira:  {at: -0.4, pose: 'arms-crossed', scale: 1.15}   # flow style on purpose"
 		);
 	});
 
@@ -111,7 +111,7 @@ describe('round-trip on a comment-heavy fixture', () => {
 		const after = expectMinimalSplice(FIXTURE, edit);
 
 		expect(after).toContain(
-			'  - mira: {frame: angry, at: -0.1, say: "Get out."}'
+			'  - mira: {pose: angry, at: -0.1, say: "Get out."}'
 		);
 		// The cast entry is NOT the thing that moved.
 		expect(castOf(after).mira.at).toBe(-0.4);
@@ -152,7 +152,7 @@ describe('round-trip on a comment-heavy fixture', () => {
 		expect(after).toContain('camera: {at: [0, 0], zoom: 1}\n\nfx: [rain@0.6]');
 		expect(after).toContain('# The tavern, at night.');
 		expect(after).toContain(
-			'  - mira: {frame: angry, at: -0.25, say: "Get out."}'
+			'  - mira: {pose: angry, at: -0.25, say: "Get out."}'
 		);
 		expect(parse(after).beats).toHaveLength(5);
 	});

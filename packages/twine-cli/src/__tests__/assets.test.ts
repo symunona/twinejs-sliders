@@ -30,7 +30,7 @@ function asset(id: string, name: string, kind: string): AssetMetaRow {
 }
 
 const mira: Character = {
-	frames: {
+	poses: {
 		angry: {asset: 'a_angry'},
 		'arms-crossed': {asset: 'a_crossed'},
 		idle: {asset: 'a_idle'}
@@ -74,17 +74,17 @@ function scene(yaml: string): Scene {
 const TAVERN = `id: tavern-night
 bg: tavern/night
 cast:
-  mira: {at: -0.4, frame: arms-crossed}
+  mira: {at: -0.4, pose: arms-crossed}
 props:
   candle: {at: [0.1, -0.2]}
 beats:
-  - mira: {frame: angry, say: "Get out."}
+  - mira: {pose: angry, say: "Get out."}
 `;
 
 // ---------------------------------------------------------------------------
 
 describe('resolveSceneAssets', () => {
-	it('resolves bg, props and only the frames the scene names', async () => {
+	it('resolves bg, props and only the poses the scene names', async () => {
 		const rows = resolveSceneAssets(scene(TAVERN), await catalog());
 		const byVia = new Map(rows.map(row => [row.via, row]));
 
@@ -94,9 +94,9 @@ describe('resolveSceneAssets', () => {
 			kind: 'object'
 		});
 		expect(byVia.get('cast/mira')).toMatchObject({id: 'a_crossed', kind: 'frame'});
-		expect(byVia.get('beats/0 patch frame: angry')).toMatchObject({id: 'a_angry'});
+		expect(byVia.get('beats/0 patch pose: angry')).toMatchObject({id: 'a_angry'});
 
-		// The default frame is in (the renderer would fall back to it), but nothing else
+		// The default pose is in (the renderer would fall back to it), but nothing else
 		// of Mira's is — narrow resolution is the whole point of step 3.
 		expect(rows.map(row => row.id).sort()).toEqual([
 			'a_angry',
@@ -107,11 +107,11 @@ describe('resolveSceneAssets', () => {
 		]);
 	});
 
-	it('reports a frame whose blob the store has lost', async () => {
+	it('reports a pose whose blob the store has lost', async () => {
 		const rows = resolveSceneAssets(scene(TAVERN), await catalog(['a_angry']));
 		const angry = rows.find(row => row.id === 'a_angry');
 
-		expect(angry).toMatchObject({present: 'missing-blob', via: 'beats/0 patch frame: angry'});
+		expect(angry).toMatchObject({present: 'missing-blob', via: 'beats/0 patch pose: angry'});
 		expect(angry?.path).toBeUndefined();
 		expect(rows.find(row => row.id === 'a_bg')?.path).toBe('/data/assets/a_bg.webp');
 	});
@@ -152,9 +152,9 @@ describe('resolveSceneAssets', () => {
 		expect(rows).toEqual([]);
 	});
 
-	it('names the pose when a character has no such frame', async () => {
+	it('names the pose when a character has no such pose', async () => {
 		const rows = resolveSceneAssets(
-			scene('id: x\ncast:\n  mira: {at: 0, frame: waving}\n'),
+			scene('id: x\ncast:\n  mira: {at: 0, pose: waving}\n'),
 			await catalog()
 		);
 
@@ -165,8 +165,8 @@ describe('resolveSceneAssets', () => {
 		);
 	});
 
-	it('--all-frames widens to the whole character', async () => {
-		const rows = resolveSceneAssets(scene(TAVERN), await catalog(), {allFrames: true});
+	it('--all-poses widens to the whole character', async () => {
+		const rows = resolveSceneAssets(scene(TAVERN), await catalog(), {allPoses: true});
 
 		expect(rows.map(row => row.id)).toEqual(
 			expect.arrayContaining(['a_idle', 'a_crossed', 'a_angry'])
@@ -207,7 +207,7 @@ beats:
 
 	it('walks the from: parent and marks what it brings in', async () => {
 		const parent = scene(TAVERN);
-		const child = scene('id: tavern-fight\nfrom: tavern-night@tense\ncast:\n  mira: {frame: angry}\n');
+		const child = scene('id: tavern-fight\nfrom: tavern-night@tense\ncast:\n  mira: {pose: angry}\n');
 		const rows = resolveSceneAssets(child, await catalog(), {
 			scenes: id => (id === 'tavern-night' ? parent : undefined)
 		});
@@ -235,7 +235,7 @@ describe('unusedAssets', () => {
 	it('finds the blob nothing in the story names', async () => {
 		const unused = unusedAssets([scene(TAVERN)], await catalog());
 
-		// Every frame of a cast member counts as used, so only the prop nobody placed is
+		// Every pose of a cast member counts as used, so only the prop nobody placed is
 		// orphaned.
 		expect(unused.map(row => row.id)).toEqual(['a_orphan', 'a_bed', 'a_slam']);
 		expect(unused[0]).toMatchObject({kind: 'object', name: 'moon'});
@@ -257,7 +257,7 @@ describe('loadCatalog', () => {
 		const loaded = await loadCatalog(source, 'story-1');
 
 		expect(loaded.byName.get('tavern/night')?.id).toBe('a_bg');
-		expect(loaded.characters.get('mira')?.frames.idle.asset).toBe('a_idle');
+		expect(loaded.characters.get('mira')?.poses.idle.asset).toBe('a_idle');
 		expect(loaded.paths.get('a_bg')).toBe('/blobs/a_bg');
 		expect(loaded.missing.has('a_angry')).toBe(true);
 	});

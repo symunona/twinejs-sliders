@@ -1,5 +1,5 @@
 /**
- * `assets <story> [--scene <id>] [--all-frames] [--unused] [--missing] [--fetch -o <dir>]`
+ * `assets <story> [--scene <id>] [--all-poses] [--unused] [--missing] [--fetch -o <dir>]`
  * — spec 12 §4.
  *
  * Two questions. "What is here" is a manifest listing. "What does this scene reach" is the
@@ -68,13 +68,15 @@ export async function run(ctx: Ctx, args: string[]): Promise<number> {
 	const target = positional[0];
 
 	if (target === undefined) {
-		ctx.out('usage: twine-cli assets <story> [--scene <id>] [--all-frames] [--unused] [--missing]');
+		ctx.out('usage: twine-cli assets <story> [--scene <id>] [--all-poses] [--unused] [--missing]');
 
 		return EXIT.usage;
 	}
 
 	const sceneId = typeof ctx.flags.scene === 'string' ? ctx.flags.scene : undefined;
-	const allFrames = ctx.flags['all-frames'] === true;
+	// `--all-frames` is the old spelling, still accepted.
+	const allPoses =
+		ctx.flags['all-poses'] === true || ctx.flags['all-frames'] === true;
 	const onlyUnused = ctx.flags.unused === true;
 	const onlyMissing = ctx.flags.missing === true;
 	const fetch = ctx.flags.fetch === true;
@@ -116,7 +118,7 @@ export async function run(ctx: Ctx, args: string[]): Promise<number> {
 		}
 
 		rows = resolveSceneAssets(scene, catalog, {
-			allFrames,
+			allPoses,
 			scenes: id => scenes.get(id)
 		});
 	} else {

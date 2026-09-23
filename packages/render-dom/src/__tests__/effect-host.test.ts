@@ -216,7 +216,7 @@ describe('syncEffect', () => {
 
 	it('copies the sprite object-position onto the art layers', () => {
 		// A layer a few percent off the art it is torn from reads as a permanent double
-		// image rather than as a tear, and a stylesheet cannot outrank `applyFrameFit`'s
+		// image rather than as a tear, and a stylesheet cannot outrank `applyPoseFit`'s
 		// inline value -- so this has to be inline too.
 		const el = host();
 

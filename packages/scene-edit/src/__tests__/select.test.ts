@@ -22,7 +22,7 @@ describe('entityLines', () => {
 	});
 
 	it('spans the beat line for a beat target', () => {
-		const beat = lineOf(FIXTURE, '  - mira: {frame: angry');
+		const beat = lineOf(FIXTURE, '  - mira: {pose: angry');
 
 		expect(entityLines(FIXTURE, {beat: 2, id: 'mira', kind: 'cast'})).toEqual({
 			end: beat,
@@ -59,7 +59,7 @@ describe('entityAtLine', () => {
 
 	it('finds the beat a caret sits in', () => {
 		expect(
-			entityAtLine(FIXTURE, lineOf(FIXTURE, '  - mira: {frame: angry'))
+			entityAtLine(FIXTURE, lineOf(FIXTURE, '  - mira: {pose: angry'))
 		).toEqual({beat: 2, id: 'mira', kind: 'cast'});
 		expect(
 			entityAtLine(FIXTURE, lineOf(FIXTURE, "  - joren: 'And yet.'"))

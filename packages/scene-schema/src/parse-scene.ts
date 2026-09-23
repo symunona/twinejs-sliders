@@ -20,10 +20,10 @@ import {
 	EASE_NAMES,
 	ENTITY_FITS,
 	FIT_Z,
-	FRAME_LOOPS,
 	LAYERS,
 	LAYER_BASELINE,
 	LAYER_Z,
+	POSE_LOOPS,
 	SCENE_LOCKS,
 	easeValue,
 	type Beat,
@@ -40,19 +40,20 @@ import {
 	type EntityLinkSpan,
 	type EntityPatchBody,
 	type Frac2,
-	type FrameLoop,
-	type FrameStep,
 	type Layer,
 	type LinkListShow,
 	type LinkListStyle,
 	type ParseResult,
+	type PoseLoop,
 	type Scene,
 	type SceneError,
 	type SceneErrorCode,
 	type SceneFix,
 	type SceneLink,
 	type SceneLock,
+	type SceneSeverity,
 	type SceneSpan,
+	type SceneStep,
 	type StageBgFx,
 	type StageFx,
 	type StageSound,
@@ -87,8 +88,8 @@ export const ENTITY_KEYS = [
 	'of',
 	'scale',
 	'rot',
-	'frame',
-	'frameLoop',
+	'pose',
+	'poseLoop',
 	'flip',
 	'fit',
 	'layer',
@@ -98,6 +99,23 @@ export const ENTITY_KEYS = [
 	'link',
 	'highlight'
 ] as const;
+
+/**
+ * Entity keys that were renamed, old spelling -> new. They still parse, forever, to exactly
+ * what the new key gives; the author gets an `info` with a one-click fix.
+ *
+ * NOT in `ENTITY_KEYS`: those are what completion offers and what Scene Help documents,
+ * and neither should teach the old word.
+ */
+export const RETIRED_ENTITY_KEYS = {
+	frame: 'pose',
+	frameLoop: 'poseLoop'
+} as const;
+
+export type RetiredEntityKey = keyof typeof RETIRED_ENTITY_KEYS;
+
+/** Ease-map keys that were renamed, same deal as `RETIRED_ENTITY_KEYS`. */
+export const RETIRED_EASE_KINDS = {frame: 'pose'} as const;
 
 /**
  * Keys inside the long form of an entity's `link:` — `link: {to: Cellar, if: has_key}`.
@@ -119,14 +137,14 @@ export const LINK_ENTITY_KEYS = ['to', 'if'] as const;
 export const FIT_IGNORES = ['at', 'of', 'scale', 'rot'] as const;
 
 /**
- * Keys inside one step of a `frame:` list.
+ * Keys inside one step of a `pose:` list.
  *
  * `name` is the pose; the rest are the entity's own placement keys, meaning what they mean
- * on the entity. `of`, `z`, `ref`, `link` and `highlight` are deliberately NOT here: a cycle
- * animates one sprite in place, and a step that could re-parent it, re-point it or change
- * where it leads would be a beat wearing a frame's clothes.
+ * on the entity. `of`, `z`, `ref`, `link` and `highlight` are deliberately NOT here: a step
+ * list animates one sprite in place, and a step that could re-parent it, re-point it or
+ * change where it leads would be a beat wearing a step's clothes.
  */
-export const FRAME_STEP_KEYS = [
+export const SCENE_STEP_KEYS = [
 	'name',
 	'dur',
 	'ease',
@@ -231,7 +249,7 @@ const MAX_DUR = 60;
 
 /**
  * A rotation past a full turn draws exactly as `rot % 360` does, so writing one is almost
- * always a misunderstanding — an author reaching for a spin, which is a frame cycle's job,
+ * always a misunderstanding — an author reaching for a spin, which is a step list's job,
  * not a pose's. A warning, not an error: the drawing is still well defined.
  */
 const MAX_ROT = 360;
@@ -315,7 +333,7 @@ function addError(
 	node: unknown,
 	options: {
 		hint?: string;
-		severity?: 'error' | 'warning';
+		severity?: SceneSeverity;
 		/**
 		 * A mechanical repair, without its span. The span is the node's own — every caller
 		 * that can offer a fix already points the error at the exact token to replace.
@@ -477,7 +495,7 @@ function asNumber(ctx: Ctx, node: unknown, what: string): number | undefined {
 /**
  * `rot:` — degrees, clockwise, about the entity's own origin.
  *
- * Shared by the entity body and by one step of a frame cycle so the two can never disagree
+ * Shared by the entity body and by one step of a pose list so the two can never disagree
  * about what a rotation is. Negative is anticlockwise and perfectly ordinary, so the only
  * thing worth saying is that a value past a whole turn draws as a smaller one.
  */
@@ -495,7 +513,7 @@ function parseRot(ctx: Ctx, node: unknown): number | undefined {
 			`rot of ${rot} draws the same as ${rot % MAX_ROT}.`,
 			node,
 			{
-				hint: 'rot is degrees clockwise about the entity origin. A spin is a frame cycle, not a pose.',
+				hint: 'rot is degrees clockwise about the entity origin. A spin is a pose list, not one pose.',
 				severity: 'warning'
 			}
 		);
@@ -1166,7 +1184,9 @@ function parseEase(
 			continue;
 		}
 
-		if (!EASE_KINDS.includes(key as (typeof EASE_KINDS)[number])) {
+		const kind = retiredKey(ctx, pair, key, RETIRED_EASE_KINDS);
+
+		if (!EASE_KINDS.includes(kind as (typeof EASE_KINDS)[number])) {
 			addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 				...keyFix(key, EASE_KINDS),
 				hint: `An ease map is keyed by what is moving: ${EASE_KINDS.join(', ')}.`
@@ -1174,10 +1194,10 @@ function parseEase(
 			continue;
 		}
 
-		const token = parseEaseToken(ctx, pair.value, `${label} ${key}`);
+		const token = parseEaseToken(ctx, pair.value, `${label} ${kind}`);
 
 		if (token !== undefined) {
-			out[key] = token;
+			out[kind] = token;
 		}
 	}
 
@@ -1185,22 +1205,71 @@ function parseEase(
 }
 
 /**
- * `frame:` written as a list — a cycle the renderer plays on its own clock.
+ * An old key spelling, read as its new one. Says so at `info`, with the rename as a
+ * one-click fix. Anything not in `retired` comes back untouched.
+ */
+function retiredKey(
+	ctx: Ctx,
+	pair: Pair<unknown, unknown>,
+	key: string,
+	retired: Readonly<Record<string, string>>
+): string {
+	if (!Object.prototype.hasOwnProperty.call(retired, key)) {
+		return key;
+	}
+
+	const next = retired[key];
+
+	addError(ctx, 'retired-key', `\`${key}:\` is now \`${next}:\`.`, pair.key, {
+		fix: {label: `Change '${key}' to '${next}'`, replaces: key, text: next},
+		hint: `The old spelling still works. twine-cli rewrite-poses renames every one in a story.`,
+		severity: 'info'
+	});
+	return next;
+}
+
+/**
+ * `keyFix` for an entity key, where a near miss of an old spelling (`fram`) is offered as
+ * today's key. Without it `fram` would find nothing close: `frame` is no longer a key, and
+ * `pose` is too far off to guess.
+ */
+function entityKeyFix(
+	key: string,
+	valid: readonly string[]
+): ReturnType<typeof keyFix> {
+	const retired: Readonly<Record<string, string>> = RETIRED_ENTITY_KEYS;
+	const near = keyFix(key, [...valid, ...Object.keys(retired)]);
+	const text = near.fix?.text;
+
+	if (text === undefined || !Object.prototype.hasOwnProperty.call(retired, text)) {
+		return near;
+	}
+
+	const next = retired[text];
+
+	return {
+		fix: {label: `Change '${key}' to '${next}'`, replaces: key, text: next},
+		hint: `Did you mean '${next}'?`
+	};
+}
+
+/**
+ * `pose:` written as a list — steps the renderer plays on its own clock.
  *
- * A bare scalar item is the short form of `{name: …}`, so a plain pose cycle stays a list
+ * A bare scalar item is the short form of `{name: …}`, so a plain pose list stays a list
  * of names. `baseline` is the entity's own: a step's `at` means what the entity's `at`
  * means, which under `of:` is an offset from the parent and otherwise sits on the floor.
  */
-function parseFrameSteps(
+function parseSceneSteps(
 	ctx: Ctx,
 	seq: YAMLSeq,
 	baseline: number
-): FrameStep[] {
-	const out: FrameStep[] = [];
+): SceneStep[] {
+	const out: SceneStep[] = [];
 
 	for (const item of seq.items) {
 		if (isScalar(item)) {
-			const name = asSourceString(ctx, item, 'frame');
+			const name = asSourceString(ctx, item, 'pose');
 
 			if (name !== undefined) {
 				out.push({name});
@@ -1213,14 +1282,14 @@ function parseFrameSteps(
 			addError(
 				ctx,
 				'bad-value',
-				'A frame step is a name, or a map of properties.',
+				'A pose step is a name, or a map of properties.',
 				item,
-				{hint: 'frame: [walk_1, walk_2] or frame: [{name: walk_1, dur: 0.1}]'}
+				{hint: 'pose: [walk_1, walk_2] or pose: [{name: walk_1, dur: 0.1}]'}
 			);
 			continue;
 		}
 
-		const step: Partial<FrameStep> = {};
+		const step: Partial<SceneStep> = {};
 
 		for (const pair of (item as YAMLMap).items as Pair<unknown, unknown>[]) {
 			const key = keyName(pair);
@@ -1232,7 +1301,7 @@ function parseFrameSteps(
 
 			switch (key) {
 				case 'name': {
-					const name = asSourceString(ctx, pair.value, 'frame name');
+					const name = asSourceString(ctx, pair.value, 'pose name');
 
 					if (name !== undefined) {
 						step.name = name;
@@ -1248,7 +1317,7 @@ function parseFrameSteps(
 						ctx,
 						pair.value,
 						'dur',
-						'A step is held for at least one screen frame.'
+						'A step is held for at least one screen refresh.'
 					);
 
 					if (dur !== undefined) {
@@ -1262,7 +1331,7 @@ function parseFrameSteps(
 					// Scalar only. A step is one change to one sprite over one hold, so
 					// there is exactly one thing here to give a curve to; a per-kind map
 					// would be asking which of one.
-					const ease = parseEaseToken(ctx, pair.value, 'frame ease');
+					const ease = parseEaseToken(ctx, pair.value, 'step ease');
 
 					if (ease !== undefined) {
 						step.ease = ease;
@@ -1345,19 +1414,19 @@ function parseFrameSteps(
 
 				default:
 					addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-						...keyFix(key, FRAME_STEP_KEYS)
+						...keyFix(key, SCENE_STEP_KEYS)
 					});
 			}
 		}
 
 		if (step.name === undefined) {
-			addError(ctx, 'bad-value', 'A frame step needs a name.', item, {
+			addError(ctx, 'bad-value', 'A pose step needs a name.', item, {
 				hint: 'name: is the pose to draw, e.g. {name: walk_1, dur: 0.1}.'
 			});
 			continue;
 		}
 
-		out.push(step as FrameStep);
+		out.push(step as SceneStep);
 	}
 
 	return out;
@@ -1393,12 +1462,14 @@ function parseEntityBody(
 	const baseline = relative ? 0 : LAYER_BASELINE;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
-		const key = keyName(pair);
+		const written = keyName(pair);
 
-		if (key === undefined) {
+		if (written === undefined) {
 			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
 			continue;
 		}
+
+		const key = retiredKey(ctx, pair, written, RETIRED_ENTITY_KEYS);
 
 		// Held, not judged: whether one of these is a no-op depends on a `fit:` that may be
 		// in another block entirely. `checkFitPlanes` decides once the document is read.
@@ -1494,55 +1565,55 @@ function parseEntityBody(
 				break;
 			}
 
-			case 'frame': {
-				// A list is a cycle. `frame` still carries the first step's name, so
-				// everything that only ever wanted "which pose" — the differ, the frame
+			case 'pose': {
+				// A list is steps. `pose` still carries the first step's name, so
+				// everything that only ever wanted "which pose" — the differ, the pose
 				// picker, the asset collectors — is untouched by animation.
 				if (isSeq(pair.value)) {
-					const steps = parseFrameSteps(
+					const steps = parseSceneSteps(
 						ctx,
 						pair.value as YAMLSeq,
 						baseline
 					);
 
 					if (steps.length > 0) {
-						body.patch.frames = steps;
-						body.patch.frame = steps[0].name;
+						body.patch.steps = steps;
+						body.patch.pose = steps[0].name;
 					}
 
 					break;
 				}
 
-				const frame = asSourceString(ctx, pair.value, 'frame');
+				const pose = asSourceString(ctx, pair.value, 'pose');
 
-				if (frame !== undefined) {
-					// No `frames`, deliberately: `frame:` is ONE key, so a patch that names
-					// a still pose is a patch that stops a cycle. mergePatch reads the
-					// absence, which keeps `frames: null` out of every ordinary patch.
-					body.patch.frame = frame;
+				if (pose !== undefined) {
+					// No `steps`, deliberately: `pose:` is ONE key, so a patch that names
+					// a single pose is a patch that stops a step list. mergePatch reads
+					// the absence, which keeps `steps: null` out of every ordinary patch.
+					body.patch.pose = pose;
 				}
 
 				break;
 			}
 
-			case 'frameLoop': {
-				const loop = asString(ctx, pair.value, 'frameLoop');
+			case 'poseLoop': {
+				const loop = asString(ctx, pair.value, 'poseLoop');
 
 				if (loop === undefined) {
 					break;
 				}
 
-				if ((FRAME_LOOPS as readonly string[]).includes(loop)) {
-					body.patch.frameLoop = loop as FrameLoop;
+				if ((POSE_LOOPS as readonly string[]).includes(loop)) {
+					body.patch.poseLoop = loop as PoseLoop;
 				} else {
 					addError(
 						ctx,
 						'bad-value',
-						`Unknown frameLoop '${loop}'.`,
+						`Unknown poseLoop '${loop}'.`,
 						pair.value,
 						{
-							...keyFix(loop, FRAME_LOOPS),
-							hint: `Must be one of ${FRAME_LOOPS.join(', ')}.`
+							...keyFix(loop, POSE_LOOPS),
+							hint: `Must be one of ${POSE_LOOPS.join(', ')}.`
 						}
 					);
 				}
@@ -1776,7 +1847,7 @@ function parseEntityBody(
 
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-					...keyFix(key, valid)
+					...entityKeyFix(key, valid)
 				});
 		}
 	}
@@ -1824,7 +1895,7 @@ function parseEntityMap(
 			addError(
 				ctx,
 				'bad-value',
-				`'${id}' must be a map of properties, e.g. {at: 0, frame: idle}.`,
+				`'${id}' must be a map of properties, e.g. {at: 0, pose: idle}.`,
 				pair.value
 			);
 			continue;
@@ -2127,7 +2198,7 @@ function collectLinks(ctx: Ctx, text: string, node: unknown): void {
  *
  *     - mira:
  *       at: [0.1, 0.2]     <- same column as `mira`, so a beat key of its own
- *       frame: idle
+ *       pose: idle
  *
  * Told apart from a genuine two-key beat (`- wait: 1` merged into `- mark: x`) by what the
  * extra keys ARE: every one of them belongs to an entity body, and the first key is a
@@ -2140,6 +2211,7 @@ function isExplodedBeat(key: string, extras: Pair<unknown, unknown>[]): boolean 
 
 	const bodyKeys: readonly string[] = [
 		...ENTITY_KEYS,
+		...Object.keys(RETIRED_ENTITY_KEYS),
 		...SAY_KEYS,
 		...BEAT_BODY_KEYS
 	];

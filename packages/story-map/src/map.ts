@@ -136,7 +136,7 @@ export function bytesLabel(bytes: number): string {
 /**
  * "Unused" here is a text search for the id or the manifest name, not the real per-scene
  * walk `resolveSceneAssets` does. It is enough to say "look closer", and it costs one pass
- * over passage text rather than a full resolution of every cast frame in the story.
+ * over passage text rather than a full resolution of every cast pose in the story.
  */
 function unusedCount(story: StoryLike, catalog: AssetCatalog): number {
 	const haystack = story.passages.map(passage => passage.text ?? '').join('\n');

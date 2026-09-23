@@ -16,6 +16,7 @@ import {
 	BEAT_COMMAND_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	RETIRED_ENTITY_KEYS,
 	SAY_KEYS,
 	TOP_LEVEL_KEYS
 } from '@sliders/scene-schema';
@@ -46,6 +47,8 @@ export const SCENE_MODIFIER_LINE = /^\s*\[scene\]\s*$/i;
 /** Keys that are legal somewhere below the top level. */
 const NESTED_KEYS: string[] = [
 	...ENTITY_KEYS,
+	// `frame:` still parses, so it still highlights as a key.
+	...Object.keys(RETIRED_ENTITY_KEYS),
 	...LINK_KEYS,
 	// Camera and bubble geometry, which are not entity keys.
 	'x',

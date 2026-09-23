@@ -7,7 +7,7 @@
  *     SlidersCast    {characters: Character[]}
  *     SlidersAssets  {assets: AssetMeta[], urls: {key: url}}
  *
- * Scene YAML addresses art by NAME (`bg: lighthouse-night`) while character frames carry
+ * Scene YAML addresses art by NAME (`bg: lighthouse-night`) while character poses carry
  * asset IDS, so the editor emits every asset under both keys and this is a bare map read.
  *
  * A story published before the manifests existed — or one played straight out of the
@@ -16,6 +16,7 @@
  */
 
 import {createStubResolver} from '@sliders/render-dom';
+import {upgradeCharacter} from '@sliders/scene-types';
 import type {AssetMeta, Character} from '@sliders/scene-types';
 import {createLoggers} from '../logger';
 import {passageNamed} from '../story';
@@ -84,9 +85,16 @@ function load(): Manifests {
 	const assets = manifestJson(ASSETS_PASSAGE);
 	const urls = assets?.urls;
 
+	const characters = byId<Character>(cast, 'characters');
+
+	// A story published before the rename carries `frames:` where today says `poses:`.
+	for (const [id, character] of Object.entries(characters)) {
+		characters[id] = upgradeCharacter(character);
+	}
+
 	manifests = {
 		assets: byId<AssetMeta>(assets, 'assets'),
-		characters: byId<Character>(cast, 'characters'),
+		characters,
 		empty: cast === undefined && assets === undefined,
 		urls: urls && typeof urls === 'object' ? (urls as Record<string, string>) : {}
 	};

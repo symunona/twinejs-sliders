@@ -99,10 +99,30 @@ describe('setEntityKey', () => {
 		const before = 'cast:\n  mira: {}\n';
 		const after = write(
 			before,
-			setEntityKey(before, {id: 'mira', kind: 'cast'}, 'frame', 'idle')
+			setEntityKey(before, {id: 'mira', kind: 'cast'}, 'pose', 'idle')
 		);
 
-		expect(after).toBe('cast:\n  mira: {frame: idle}\n');
+		expect(after).toBe('cast:\n  mira: {pose: idle}\n');
+	});
+
+	it('renames an old frame: key rather than adding a second one', () => {
+		const flow = 'cast:\n  mira: {at: 0, frame: idle}\n';
+		const block = 'cast:\n  mira:\n    frame: idle   # was idle\n    at: 0\n';
+
+		expect(
+			write(flow, setEntityKey(flow, {id: 'mira', kind: 'cast'}, 'pose', 'angry'))
+		).toBe('cast:\n  mira: {at: 0, pose: angry}\n');
+		expect(
+			write(block, setEntityKey(block, {id: 'mira', kind: 'cast'}, 'pose', 'angry'))
+		).toBe('cast:\n  mira:\n    pose: angry   # was idle\n    at: 0\n');
+	});
+
+	it('removes pose: under its old spelling too', () => {
+		const before = 'cast:\n  mira: {at: 0, frame: idle}\n';
+
+		expect(
+			write(before, removeEntityKey(before, {id: 'mira', kind: 'cast'}, 'pose'))
+		).toBe('cast:\n  mira: {at: 0}\n');
 	});
 
 	it('turns an explicit removal back into an entry', () => {
@@ -156,7 +176,7 @@ describe('setEntityKey on a beat', () => {
 		);
 
 		expect(after).toContain(
-			'  - mira: {frame: angry, at: -0.25, say: "Get out.", flip: true}'
+			'  - mira: {pose: angry, at: -0.25, say: "Get out.", flip: true}'
 		);
 	});
 
@@ -200,7 +220,7 @@ describe('removeEntityKey', () => {
 	it('drops a key from a flow map and takes the separator with it', () => {
 		const after = write(
 			FIXTURE,
-			removeEntityKey(FIXTURE, {id: 'mira', kind: 'cast'}, 'frame')
+			removeEntityKey(FIXTURE, {id: 'mira', kind: 'cast'}, 'pose')
 		);
 
 		expect(after).toContain('  mira:  {at: -0.4}   # flow style on purpose');
@@ -212,7 +232,7 @@ describe('removeEntityKey', () => {
 			removeEntityKey(FIXTURE, {id: 'mira', kind: 'cast'}, 'at')
 		);
 
-		expect(after).toContain("  mira:  {frame: 'arms-crossed'}");
+		expect(after).toContain("  mira:  {pose: 'arms-crossed'}");
 	});
 
 	it('drops a block key with its own trailing comment and nothing else', () => {
@@ -221,7 +241,7 @@ describe('removeEntityKey', () => {
 			removeEntityKey(FIXTURE, {id: 'joren', kind: 'cast'}, 'flip')
 		);
 
-		expect(after).toContain('    frame: idle\n    layer: back\n');
+		expect(after).toContain('    pose: idle\n    layer: back\n');
 		expect(after).not.toContain('he faces the door');
 		expect(after).toContain('# Mira is already inside');
 	});
@@ -236,7 +256,7 @@ describe('removeEntityKey', () => {
 describe('addEntity', () => {
 	const patch: EntityPatch = {
 		at: {x: 0.35, y: LAYER_BASELINE},
-		frame: 'idle',
+		pose: 'idle',
 		kind: 'cast',
 		ref: 'joren'
 	};
@@ -245,7 +265,7 @@ describe('addEntity', () => {
 		const after = write(FIXTURE, addEntity(FIXTURE, 'cast', 'brann', patch));
 
 		expect(after).toContain(
-			'    layer: back\n  brann: {ref: joren, at: 0.35, frame: idle}\n'
+			'    layer: back\n  brann: {ref: joren, at: 0.35, pose: idle}\n'
 		);
 	});
 
@@ -255,7 +275,7 @@ describe('addEntity', () => {
 			addEntity(FIXTURE, 'cast', 'brann', {...patch, ref: 'brann'})
 		);
 
-		expect(after).toContain('  brann: {at: 0.35, frame: idle}');
+		expect(after).toContain('  brann: {at: 0.35, pose: idle}');
 	});
 
 	it('creates an absent props: map in its conventional key slot', () => {
@@ -332,7 +352,7 @@ describe('removeEntity', () => {
 		expect(after).not.toContain('arms-crossed');
 		expect(after).toContain('cast:\n  # Mira is already inside');
 		expect(parse(after).cast).toEqual({
-			joren: {at: 0.35, flip: true, frame: 'idle', layer: 'back'}
+			joren: {at: 0.35, flip: true, pose: 'idle', layer: 'back'}
 		});
 	});
 
@@ -397,7 +417,7 @@ describe('removeEntities', () => {
 		expect(after).toContain('cast:');
 		expect(after).not.toContain('arms-crossed');
 		expect(parse(after).cast).toEqual({
-			joren: {at: 0.35, flip: true, frame: 'idle', layer: 'back'}
+			joren: {at: 0.35, flip: true, pose: 'idle', layer: 'back'}
 		});
 	});
 
@@ -460,7 +480,7 @@ describe('removeEntities', () => {
 describe('half-typed and malformed input', () => {
 	const broken = [
 		'cast:\n  mira: {at: ',
-		'cast:\n  mira: {at: -0.4, frame:',
+		'cast:\n  mira: {at: -0.4, pose:',
 		'cast:\n\tmira: {at: 0}\n',
 		'cast: [1, 2]\n',
 		'just a string',
@@ -516,8 +536,8 @@ describe('half-typed and malformed input', () => {
 			// wants: every writable key at once, so none can go missing.
 			fit: 'cover',
 			flip: true,
-			frame: 'idle',
-			frameLoop: 'once',
+			pose: 'idle',
+			poseLoop: 'once',
 			highlight: 'gold',
 			kind: 'prop',
 			link: {to: 'Cellar'},
@@ -573,6 +593,14 @@ describe('setBeatKey()', () => {
 	it('changes a key that is already there, in place', () => {
 		expect(applied(beats, 2, 'dur', 0.5)).toContain(
 			'- mira: {say: "Again.", dur: 0.5}'
+		);
+	});
+
+	it('renames an old frame: on a beat when pose is set', () => {
+		const old = 'beats:\n  - mira: {frame: idle, say: "Hi."}\n';
+
+		expect(applied(old, 0, 'pose', 'angry')).toBe(
+			'beats:\n  - mira: {pose: angry, say: "Hi."}\n'
 		);
 	});
 

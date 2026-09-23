@@ -5,11 +5,11 @@
  * scene reach" — which is the one an agent asks before generating art, because the gap
  * between the two is the work list.
  *
- * The walk is deliberately narrow on frames. A character may carry a dozen poses; a scene
- * names two of them. Handing back the whole character would bury the one frame that is
- * missing under eleven that are fine, so only the frames the scene actually names come
- * back — the entity's `frame:`, any `frame:` a beat patches onto it, and the default the
- * renderer would fall back to. `--all-frames` is the opt-out, and it is also what the
+ * The walk is deliberately narrow on poses. A character may carry a dozen poses; a scene
+ * names two of them. Handing back the whole character would bury the one pose that is
+ * missing under eleven that are fine, so only the poses the scene actually names come
+ * back — the entity's `pose:`, any `pose:` a beat patches onto it, and the default the
+ * renderer would fall back to. `--all-poses` is the opt-out, and it is also what the
  * "unused" question has to use: an asset is only orphaned if NO pose of NO cast member
  * reaches it.
  */
@@ -17,6 +17,7 @@
 import {sceneBg} from '@sliders/scene-core';
 import {splitSceneRef} from '@sliders/scene-index';
 import type {Character, EntityPatchBody, Scene} from '@sliders/scene-types';
+import {poseAssets, upgradeCharacter} from '@sliders/scene-types';
 import type {AssetMetaRow, Manifest} from './types';
 
 /**
@@ -37,7 +38,7 @@ export interface AssetRow {
 	kind: string;
 	/** Manifest name, or the reference exactly as the scene wrote it. */
 	name: string;
-	/** Where the scene reached it from: `bg:`, `cast/mira`, `beats/2 patch frame: angry`. */
+	/** Where the scene reached it from: `bg:`, `cast/mira`, `beats/2 patch pose: angry`. */
 	via: string;
 	path?: string;
 	bytes: number;
@@ -66,20 +67,20 @@ export interface AssetCatalog {
 }
 
 /**
- * What the renderer falls back to when an entity names no frame — see `pickFrameName` in
+ * What the renderer falls back to when an entity names no pose — see `pickPoseName` in
  * render-dom. Duplicated rather than imported because that module is DOM-only, and the CLI
- * resolving a different frame than the player draws would be a lie in both directions.
+ * resolving a different pose than the player draws would be a lie in both directions.
  */
-const DEFAULT_FRAME_NAME = 'idle';
+const DEFAULT_POSE_NAME = 'idle';
 
-function defaultFrameName(character: Character): string | undefined {
-	const frames = character.frames ?? {};
+function defaultPoseName(character: Character): string | undefined {
+	const poses = character.poses ?? {};
 
-	if (DEFAULT_FRAME_NAME in frames) {
-		return DEFAULT_FRAME_NAME;
+	if (DEFAULT_POSE_NAME in poses) {
+		return DEFAULT_POSE_NAME;
 	}
 
-	return Object.keys(frames)[0];
+	return Object.keys(poses)[0];
 }
 
 /**
@@ -108,7 +109,8 @@ export async function catalogFromManifest(
 	}
 
 	for (const raw of manifest.characters ?? []) {
-		const character = raw as Character;
+		// A manifest written before the rename still says `frames:` for `poses:`.
+		const character = raw ? upgradeCharacter(raw as Character) : undefined;
 
 		if (character && typeof character.id === 'string') {
 			characters.set(character.id, character);
@@ -183,8 +185,8 @@ function rowFor(
 export type SceneLookup = (id: string) => Scene | undefined;
 
 export interface ResolveOptions {
-	/** Widen every cast entry to the character's whole frame set. */
-	allFrames?: boolean;
+	/** Widen every cast entry to the character's whole pose set. */
+	allPoses?: boolean;
 	/** Resolves `from:` targets. Omit and inheritance is simply not walked. */
 	scenes?: SceneLookup;
 }
@@ -298,7 +300,7 @@ export function resolveSceneAssets(
 				continue;
 			}
 
-			// 3 — cast resolve through a character to named frames only.
+			// 3 — cast resolve through a character to named poses only.
 			const character = catalog.characters.get(ref);
 
 			if (!character) {
@@ -318,19 +320,19 @@ export function resolveSceneAssets(
 
 			const wanted: {name: string; via: string}[] = [];
 
-			if (options.allFrames) {
-				for (const name of Object.keys(character.frames ?? {})) {
-					wanted.push({name, via: `cast/${id} frame: ${name}`});
+			if (options.allPoses) {
+				for (const name of Object.keys(character.poses ?? {})) {
+					wanted.push({name, via: `cast/${id} pose: ${name}`});
 				}
 			} else {
-				if (patch.frame) {
-					wanted.push({name: patch.frame, via: `cast/${id}`});
+				if (patch.pose) {
+					wanted.push({name: patch.pose, via: `cast/${id}`});
 				}
 
-				// A `frame:` list is a cycle, and every pose in it is art the story cannot
-				// open without. `frame` above is only its first step.
-				for (const step of patch.frames ?? []) {
-					wanted.push({name: step.name, via: `cast/${id} frame step`});
+				// A `pose:` list is steps, and every pose in it is art the story cannot
+				// open without. `pose` above is only its first step.
+				for (const step of patch.steps ?? []) {
+					wanted.push({name: step.name, via: `cast/${id} pose step`});
 				}
 
 				for (const beat of current.beats ?? []) {
@@ -341,32 +343,33 @@ export function resolveSceneAssets(
 						continue;
 					}
 
-					if (body.frame) {
+					if (body.pose) {
 						wanted.push({
-							name: body.frame,
-							via: `beats/${beat.index} patch frame: ${body.frame}`
+							name: body.pose,
+							via: `beats/${beat.index} patch pose: ${body.pose}`
 						});
 					}
 
-					for (const step of body.frames ?? []) {
+					for (const step of body.steps ?? []) {
 						wanted.push({
 							name: step.name,
-							via: `beats/${beat.index} frame step: ${step.name}`
+							via: `beats/${beat.index} pose step: ${step.name}`
 						});
 					}
 				}
 
-				const fallback = defaultFrameName(character);
+				const fallback = defaultPoseName(character);
 
 				if (fallback) {
-					wanted.push({name: fallback, via: `cast/${id} default frame`});
+					wanted.push({name: fallback, via: `cast/${id} default pose`});
 				}
 			}
 
 			for (const want of wanted) {
-				const frame = character.frames?.[want.name];
+				const pose = character.poses?.[want.name];
+				const images = poseAssets(pose);
 
-				if (!frame) {
+				if (images.length === 0) {
 					push({
 						bytes: 0,
 						hash: '',
@@ -381,19 +384,24 @@ export function resolveSceneAssets(
 					continue;
 				}
 
-				const row = rowFor(
-					catalog,
-					frame.asset,
-					want.via,
-					id,
-					inherited,
-					'frame'
-				);
+				// A pose with steps needs every one of its images; a still needs its one.
+				for (const [index, image] of images.entries()) {
+					const row = rowFor(
+						catalog,
+						image,
+						images.length > 1 ? `${want.via} step ${index + 1}` : want.via,
+						id,
+						inherited,
+						'frame'
+					);
 
-				// A frame's asset id is authored in the character, not the scene, so when the
-				// manifest has lost it the useful name is the pose — `mira/angry`, not the
-				// raw id nobody can look up.
-				push(row.present === 'unknown' ? {...row, name: `${ref}/${want.name}`} : row);
+					// A pose image's asset id is authored in the character, not the scene,
+					// so when the manifest has lost it the useful name is the pose —
+					// `mira/angry`, not the raw id nobody can look up.
+					push(
+						row.present === 'unknown' ? {...row, name: `${ref}/${want.name}`} : row
+					);
+				}
 			}
 		}
 
@@ -452,7 +460,7 @@ export function catalogRows(catalog: AssetCatalog): AssetRow[] {
 /**
  * Every asset id any scene in the story can reach.
  *
- * Widened to all frames on purpose: "unused" is a claim about the whole story, and a pose
+ * Widened to all poses on purpose: "unused" is a claim about the whole story, and a pose
  * that only a beat patch three scenes away names is still named. Narrow resolution is for
  * "what does this scene need"; this is for "what can be deleted".
  */
@@ -463,7 +471,7 @@ export function referencedAssetIds(
 	const out = new Set<string>();
 
 	for (const scene of scenes) {
-		for (const row of resolveSceneAssets(scene, catalog, {allFrames: true})) {
+		for (const row of resolveSceneAssets(scene, catalog, {allPoses: true})) {
 			if (row.id !== '') {
 				out.add(row.id);
 			}

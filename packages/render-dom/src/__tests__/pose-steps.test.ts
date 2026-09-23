@@ -1,5 +1,5 @@
 /**
- * `frame:` written as a list is a cycle the renderer plays on its own clock.
+ * Steps on the renderer's own clock: a scene's `pose:` list, and a pose that owns steps.
  *
  * The clock is the point of these tests: a beat's `dur:` is how long the reader looks, a
  * step's `dur` is how fast the legs move, and the two must not be the same timer. Fake
@@ -74,14 +74,14 @@ afterEach(() => {
 	jest.useRealTimers();
 });
 
-describe('frame cycles', () => {
+describe('a scene pose list', () => {
 	it('advances through the steps on its own clock', async () => {
 		await renderer.apply(
 			stage(
 				entity({
 					id: 'mira',
-					frame: 'idle',
-					frames: [
+					pose: 'idle',
+					steps: [
 						{name: 'idle', dur: 0.1},
 						{name: 'wave', dur: 0.3}
 					]
@@ -105,7 +105,7 @@ describe('frame cycles', () => {
 
 	it('defaults a step with no dur to a tenth of a second', async () => {
 		await renderer.apply(
-			stage(entity({id: 'mira', frames: [{name: 'idle'}, {name: 'wave'}]}))
+			stage(entity({id: 'mira', steps: [{name: 'idle'}, {name: 'wave'}]}))
 		);
 
 		jest.advanceTimersByTime(99);
@@ -115,13 +115,13 @@ describe('frame cycles', () => {
 		expect(shownAsset(mount)).toBe('a_mira_wave');
 	});
 
-	it('holds the last step under frameLoop: once', async () => {
+	it('holds the last step under poseLoop: once', async () => {
 		await renderer.apply(
 			stage(
 				entity({
 					id: 'mira',
-					frameLoop: 'once',
-					frames: [{name: 'idle'}, {name: 'wave'}]
+					poseLoop: 'once',
+					steps: [{name: 'idle'}, {name: 'wave'}]
 				})
 			)
 		);
@@ -136,36 +136,36 @@ describe('frame cycles', () => {
 	it('keeps playing across an apply that did not change the cycle', async () => {
 		const cycle = [{name: 'idle'}, {name: 'wave'}];
 
-		await renderer.apply(stage(entity({id: 'mira', frames: cycle})));
+		await renderer.apply(stage(entity({id: 'mira', steps: cycle})));
 		jest.advanceTimersByTime(100);
 		expect(shownAsset(mount)).toBe('a_mira_wave');
 
 		// The editor re-applies on every keystroke. A cycle restarted each time would never
 		// reach its second step.
 		await renderer.apply(
-			stage(entity({id: 'mira', at: {x: 0.4, y: -0.85}, frames: cycle}))
+			stage(entity({id: 'mira', at: {x: 0.4, y: -0.85}, steps: cycle}))
 		);
 		expect(shownAsset(mount)).toBe('a_mira_wave');
 	});
 
 	it('restarts when the cycle itself changes', async () => {
 		await renderer.apply(
-			stage(entity({id: 'mira', frames: [{name: 'idle'}, {name: 'wave'}]}))
+			stage(entity({id: 'mira', steps: [{name: 'idle'}, {name: 'wave'}]}))
 		);
 		jest.advanceTimersByTime(100);
 		expect(shownAsset(mount)).toBe('a_mira_wave');
 
 		await renderer.apply(
-			stage(entity({id: 'mira', frames: [{name: 'angry'}, {name: 'wave'}]}))
+			stage(entity({id: 'mira', steps: [{name: 'angry'}, {name: 'wave'}]}))
 		);
 		expect(shownAsset(mount)).toBe('a_mira_angry');
 	});
 
 	it('stops when the entity goes back to a still pose', async () => {
 		await renderer.apply(
-			stage(entity({id: 'mira', frames: [{name: 'idle'}, {name: 'wave'}]}))
+			stage(entity({id: 'mira', steps: [{name: 'idle'}, {name: 'wave'}]}))
 		);
-		await renderer.apply(stage(entity({id: 'mira', frame: 'angry'})));
+		await renderer.apply(stage(entity({id: 'mira', pose: 'angry'})));
 
 		expect(shownAsset(mount)).toBe('a_mira_angry');
 
@@ -179,7 +179,7 @@ describe('frame cycles', () => {
 				entity({
 					id: 'mira',
 					at: {x: -0.5, y: -0.85},
-					frames: [
+					steps: [
 						{name: 'idle', at: {x: -0.5, y: -0.85}},
 						{name: 'wave', at: {x: 0.5, y: -0.85}}
 					]
@@ -203,7 +203,7 @@ describe('frame cycles', () => {
 				entity({
 					id: 'mira',
 					at: {x: 0.25, y: -0.85},
-					frames: [{name: 'idle'}, {name: 'wave'}]
+					steps: [{name: 'idle'}, {name: 'wave'}]
 				})
 			)
 		);
@@ -216,11 +216,113 @@ describe('frame cycles', () => {
 
 	it('stops the timer when the entity leaves', async () => {
 		await renderer.apply(
-			stage(entity({id: 'mira', frames: [{name: 'idle'}, {name: 'wave'}]}))
+			stage(entity({id: 'mira', steps: [{name: 'idle'}, {name: 'wave'}]}))
 		);
 		await renderer.apply(stage());
 
 		// Nothing left to draw to, so nothing may still be scheduled against it.
 		expect(jest.getTimerCount()).toBe(0);
+	});
+});
+
+describe('a pose that owns steps', () => {
+	/** Kate: a breathing idle, a wave that plays once, and one still. */
+	function kate(): DomRenderer {
+		renderer.destroy();
+		renderer = new DomRenderer();
+		renderer.mount(
+			mount,
+			createStubResolver({
+				characters: {
+					kate: {
+						poses: {
+							idle: {
+								steps: [
+									{asset: 'a_kate_i1', dur: 0.2},
+									{asset: 'a_kate_i2', dur: 0.2}
+								]
+							},
+							wave: {
+								loop: false,
+								steps: [{asset: 'a_kate_w1'}, {asset: 'a_kate_w2'}]
+							},
+							crossed: {asset: 'a_kate_x'}
+						}
+					}
+				}
+			})
+		);
+
+		return renderer;
+	}
+
+	it('plays the steps and loops by default', async () => {
+		await kate().apply(stage(entity({id: 'kate', pose: 'idle'})));
+
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i1');
+
+		jest.advanceTimersByTime(200);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i2');
+
+		jest.advanceTimersByTime(200);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i1');
+	});
+
+	it('plays with no pose named, when the fallback idle has steps', async () => {
+		await kate().apply(stage(entity({id: 'kate'})));
+
+		jest.advanceTimersByTime(200);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i2');
+	});
+
+	it('holds the last step under loop: false', async () => {
+		await kate().apply(stage(entity({id: 'kate', pose: 'wave'})));
+
+		jest.advanceTimersByTime(100);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_w2');
+
+		jest.advanceTimersByTime(1000);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_w2');
+	});
+
+	it('keeps its place when the same stage is applied again', async () => {
+		await kate().apply(stage(entity({id: 'kate', pose: 'idle'})));
+		jest.advanceTimersByTime(200);
+
+		// The editor re-applies on every keystroke; a restart would never reach step 2.
+		await renderer.apply(stage(entity({id: 'kate', pose: 'idle'})));
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i2');
+	});
+
+	it('stops when the pose changes to a still', async () => {
+		await kate().apply(stage(entity({id: 'kate', pose: 'idle'})));
+		await renderer.apply(stage(entity({id: 'kate', pose: 'crossed'})));
+
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_x');
+
+		jest.advanceTimersByTime(1000);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_x');
+	});
+
+	it('shows its first image when a scene list names it as one step', async () => {
+		await kate().apply(
+			stage(
+				entity({
+					id: 'kate',
+					pose: 'crossed',
+					steps: [
+						{dur: 0.5, name: 'crossed'},
+						{dur: 0.5, name: 'idle'}
+					]
+				})
+			)
+		);
+
+		jest.advanceTimersByTime(500);
+		// The scene's list owns the clock; the idle's own steps do not run inside it.
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i1');
+
+		jest.advanceTimersByTime(200);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i1');
 	});
 });

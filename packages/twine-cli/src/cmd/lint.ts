@@ -150,10 +150,14 @@ function report(ctx: Ctx, findings: LintFinding[]): number {
 
 		if (!ctx.quiet) {
 			const errors = findings.filter(finding => finding.level === 'error').length;
+			const infos = findings.filter(finding => finding.level === 'info').length;
+			const warnings = findings.length - errors - infos;
 
-			ctx.out(`${errors} error${errors === 1 ? '' : 's'}, ${findings.length - errors} warning${
-				findings.length - errors === 1 ? '' : 's'
-			}`);
+			ctx.out(
+				`${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${
+					warnings === 1 ? '' : 's'
+				}${infos > 0 ? `, ${infos} info` : ''}`
+			);
 		}
 	}
 

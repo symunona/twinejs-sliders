@@ -16,7 +16,7 @@ const TAVERN = `mood: tense
 id: tavern-night        # the scene the others hang off
 bg: tavern/night
 cast:
-  mira: {at: -0.4, frame: arms-crossed}
+  mira: {at: -0.4, pose: arms-crossed}
 beats:
   - mira: "Sit down."
   - mark: tense
@@ -29,7 +29,7 @@ const FIGHT = `[scene]
 id: tavern-fight
 from: tavern-night@tense   # pick it up at the mark
 cast:
-  mira: {frame: angry}
+  mira: {pose: angry}
 beats:
   - mira: "Then draw."
 `;

@@ -9,7 +9,7 @@ import {LAYER_BASELINE} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityPatch,
-	FrameStep,
+	SceneStep,
 	Stage,
 	StageEntity,
 	StageFx,
@@ -34,7 +34,7 @@ export function cloneCamera(camera: Camera): Camera {
 	return {at: cloneVec(camera.at), zoom: camera.zoom};
 }
 
-export function cloneFrames(steps: FrameStep[]): FrameStep[] {
+export function cloneSteps(steps: SceneStep[]): SceneStep[] {
 	return steps.map(step => (step.at ? {...step, at: cloneVec(step.at)} : {...step}));
 }
 
@@ -42,7 +42,7 @@ export function cloneEntity(entity: StageEntity): StageEntity {
 	return {
 		...entity,
 		at: cloneVec(entity.at),
-		...(entity.frames ? {frames: cloneFrames(entity.frames)} : {}),
+		...(entity.steps ? {steps: cloneSteps(entity.steps)} : {}),
 		// Copied for the same reason `at` is: a stage sequence is many clones of one
 		// declaration, and a shared object is a beat able to edit the beat before it.
 		...(entity.link ? {link: {...entity.link}} : {})
@@ -97,23 +97,23 @@ export function mergePatch(
 		next.of = patch.of ?? undefined;
 	}
 
-	if (patch.frame !== undefined) {
-		next.frame = patch.frame;
+	if (patch.pose !== undefined) {
+		next.pose = patch.pose;
 	}
 
-	// `frame` and `frames` are two halves of ONE YAML key, so they move together: a patch
-	// naming a still pose STOPS a cycle an earlier beat started. Reading it off the absence
-	// of `frames` is what keeps a `frames: null` out of every ordinary patch — and the rule
-	// is the author's own, since `frame: idle` cannot be written in the same breath as a
-	// list.
-	if (patch.frames !== undefined) {
-		next.frames = cloneFrames(patch.frames);
-	} else if (patch.frame !== undefined) {
-		next.frames = undefined;
+	// `pose` and `steps` are two halves of ONE YAML key, so they move together: a patch
+	// naming a single pose STOPS a step list an earlier beat started. Reading it off the
+	// absence of `steps` is what keeps a `steps: null` out of every ordinary patch — and
+	// the rule is the author's own, since `pose: idle` cannot be written in the same breath
+	// as a list.
+	if (patch.steps !== undefined) {
+		next.steps = cloneSteps(patch.steps);
+	} else if (patch.pose !== undefined) {
+		next.steps = undefined;
 	}
 
-	if (patch.frameLoop !== undefined) {
-		next.frameLoop = patch.frameLoop;
+	if (patch.poseLoop !== undefined) {
+		next.poseLoop = patch.poseLoop;
 	}
 
 	if (patch.flip !== undefined) {
@@ -164,9 +164,6 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		// No default: absent means "an ordinary sprite", which is what every renderer draws
 		// when it sees no key.
 		fit: patch.fit,
-		frame: patch.frame,
-		frameLoop: patch.frameLoop,
-		frames: patch.frames && cloneFrames(patch.frames),
 		id,
 		kind: patch.kind,
 		// No default: an entity with no `of` is in world space, and `of: ~` on a brand-new
@@ -177,11 +174,14 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		// says the same thing.
 		link: patch.link ?? undefined,
 		highlight: patch.highlight ?? undefined,
+		pose: patch.pose,
+		poseLoop: patch.poseLoop,
 		ref: patch.ref,
 		// No default: absent is 0, and 0 is the identity — so an entity that was never
 		// rotated carries no key rather than a number every renderer has to read.
 		rot: patch.rot,
 		scale: patch.scale ?? ENTITY_DEFAULTS.scale,
+		steps: patch.steps && cloneSteps(patch.steps),
 		z: patch.z
 	};
 }

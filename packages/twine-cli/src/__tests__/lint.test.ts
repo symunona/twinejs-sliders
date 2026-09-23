@@ -47,7 +47,7 @@ function asset(id: string, name: string, kind: string): AssetMetaRow {
 }
 
 const mira: Character = {
-	frames: {angry: {asset: 'a_angry'}, idle: {asset: 'a_idle'}},
+	poses: {angry: {asset: 'a_angry'}, idle: {asset: 'a_idle'}},
 	id: 'mira',
 	name: 'Mira',
 	origin: {x: 0.5, y: 1},
@@ -383,11 +383,11 @@ describe('passageExits / buildLinkGraph', () => {
 // ---------------------------------------------------------------------------
 
 describe('tier 4 — assets', () => {
-	it('reports a frame the scene needs whose blob is gone', async () => {
+	it('reports a pose the scene needs whose blob is gone', async () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nbg: tavern/night\ncast:\n  mira: {at: 0, frame: angry}\nlinks:\n  go: {to: Street}\n`
+				`[scene]\nid: tavern-night\nbg: tavern/night\ncast:\n  mira: {at: 0, pose: angry}\nlinks:\n  go: {to: Street}\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);

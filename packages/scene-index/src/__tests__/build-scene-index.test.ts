@@ -16,11 +16,11 @@ function codes(errors: SceneError[]): string[] {
 const TAVERN = `id: tavern-night
 bg: tavern/night
 cast:
-  mira:  {at: -0.4, frame: arms-crossed}
-  joren: {at: 0.35, frame: idle}
+  mira:  {at: -0.4, pose: arms-crossed}
+  joren: {at: 0.35, pose: idle}
 beats:
   - mira: "You shouldn't have come back."
-  - mira: {frame: angry, at: -0.25, say: "Get out."}
+  - mira: {pose: angry, at: -0.25, say: "Get out."}
   - mark: tense
   - joren: {at: 0.5}
 `;
@@ -28,7 +28,7 @@ beats:
 const FIGHT = `id: tavern-fight
 from: tavern-night@tense
 cast:
-  mira: {frame: furious}
+  mira: {pose: furious}
 beats:
   - mira: "Then draw."
 `;
@@ -80,7 +80,7 @@ describe('buildSceneIndex', () => {
 		it('resolves @enter to the state before any beat', () => {
 			expect(index.resolve('tavern-night@enter')?.entities.mira).toMatchObject({
 				at: {x: -0.4, y: LAYER_BASELINE},
-				frame: 'arms-crossed'
+				pose: 'arms-crossed'
 			});
 		});
 
@@ -89,7 +89,7 @@ describe('buildSceneIndex', () => {
 
 			expect(marked?.entities.mira).toMatchObject({
 				at: {x: -0.25, y: LAYER_BASELINE},
-				frame: 'angry'
+				pose: 'angry'
 			});
 			expect(marked?.entities.joren.at).toEqual({x: 0.35, y: LAYER_BASELINE});
 		});
@@ -99,7 +99,7 @@ describe('buildSceneIndex', () => {
 
 			// joren is at his @tense position, not his exit position.
 			expect(fight?.entities.joren.at).toEqual({x: 0.35, y: LAYER_BASELINE});
-			expect(fight?.entities.mira.frame).toBe('furious');
+			expect(fight?.entities.mira.pose).toBe('furious');
 			// And the patch inherited everything it did not mention.
 			expect(fight?.bg).toBe('tavern/night');
 			expect(fight?.entities.mira.at).toEqual({x: -0.25, y: LAYER_BASELINE});
@@ -244,7 +244,7 @@ describe('buildSceneIndex', () => {
 			]);
 
 			expect(index.errors).toEqual([]);
-			expect(index.resolve('fight')?.entities.mira.frame).toBe('arms-crossed');
+			expect(index.resolve('fight')?.entities.mira.pose).toBe('arms-crossed');
 		});
 	});
 

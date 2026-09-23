@@ -8,7 +8,7 @@
  *     table:  {at: -0.3}
  *     candle: {of: table, at: [0.1, 0.2], z: 2}
  *
- * Translation only. The parent's `scale`, `flip` and `frame` do NOT reach the child, which
+ * Translation only. The parent's `scale`, `flip` and `pose` do NOT reach the child, which
  * is the whole reason this can live here: resolution is a vector add, needs no sprite
  * metrics, no asset resolver and no stage box, and so it can run in `scene-core` where the
  * DIFFER can see it. That matters more than it looks — see below.
