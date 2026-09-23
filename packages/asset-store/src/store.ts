@@ -1,5 +1,6 @@
 import type {
 	AssetId,
+	AssetKind,
 	AssetMeta,
 	Character,
 	SidecarEntries,
@@ -208,13 +209,23 @@ export class BackedAssetStore implements AssetStore {
 	): Promise<PutAssetResult> {
 		const prepared = await prepareUpload(file);
 		const hash = await contentHash(await blobBytes(prepared.blob));
+		// Bytes beat the caller here. A sound dropped on the Backgrounds tab is a
+		// mis-aim, not a request for a backdrop made of an mp3, and the old
+		// `kind ?? 'bg'` fallthrough is exactly how pose images once became backgrounds
+		// in silence. Settled before the dedupe runs, because the dedupe is per kind.
+		const kind: AssetKind = prepared.audio
+			? 'sound'
+			: options.kind ?? (options.ownerCharacter ? 'frame' : 'bg');
 
 		return await this.mutate(async manifest => {
-			const existing = Object.values(manifest.assets).find(
-				asset =>
-					asset.hash === hash &&
-					asset.ownerCharacter === options.ownerCharacter
-			);
+			const existing = options.allowDuplicate
+				? undefined
+				: Object.values(manifest.assets).find(
+						asset =>
+							asset.hash === hash &&
+							asset.kind === kind &&
+							asset.ownerCharacter === options.ownerCharacter
+				  );
 
 			if (existing) {
 				return {id: existing.id, meta: existing, duplicate: true, transcoded: false};
@@ -230,13 +241,7 @@ export class BackedAssetStore implements AssetStore {
 					options.name ?? nameFromFilename(file.name),
 					this.namesIn(manifest)
 				),
-				// Bytes beat the caller here. A sound dropped on the Backgrounds tab is a
-				// mis-aim, not a request for a backdrop made of an mp3, and the old
-				// `kind ?? 'bg'` fallthrough is exactly how pose images once became backgrounds
-				// in silence.
-				kind: prepared.audio
-					? 'sound'
-					: options.kind ?? (options.ownerCharacter ? 'frame' : 'bg'),
+				kind,
 				tags: options.tags ?? [],
 				animated: prepared.animated,
 				w: prepared.width,

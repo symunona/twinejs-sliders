@@ -81,8 +81,13 @@
 }
 
 .asset-generator-history .sliders-tiles {
-	/* Wider than a library tile: three save buttons on one line beats six lines. */
-	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	/* Each tile is as tall as its own picture. Stretched rows--the grid default--size
+	   every tile in a row to the tallest, so one 9:16 portrait leaves its neighbours
+	   with a hand's width of empty tile under the buttons. */
+	align-items: start;
+	/* The picture is the tile now--the buttons are icons and the metadata is in the
+	   preview pane--so the column is as narrow as six icons, and more of them fit. */
+	grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
 }
 
 .asset-generator-detail {
@@ -96,6 +101,27 @@
 	border-radius: var(--corner-round);
 	margin: 0 var(--grid-size);
 	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-generator-notice p {
+	margin: 0;
+}
+
+/* A refused save. Yellow like the other warnings, but it holds controls: the author has
+   to be able to answer it here, not hunt for where the copy would be made. */
+
+.asset-generator-conflict {
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	display: flex;
+	flex-direction: column;
+	gap: var(--control-inner-padding);
+	margin: 0 var(--grid-size);
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.asset-generator-conflict p {
+	margin: 0;
 }
 
 .asset-generator-warning {
@@ -325,13 +351,34 @@
 	box-shadow: 0 0 0 1px var(--blue);
 }
 
+/* The picture keeps the shape it was generated at (`aspectRatio`, set per tile) and fills
+   the tile's width. A grid of identical squares hides the one thing a glance is for:
+   whether the 16:9 backdrop that was asked for is what came back. */
+
 .generation-tile-image {
-	background: none;
+	align-items: center;
+	background: var(--white);
 	border: none;
+	border-radius: var(--corner-round);
 	cursor: zoom-in;
-	display: block;
+	display: flex;
 	font: inherit;
+	justify-content: center;
+	overflow: hidden;
 	padding: 0;
+	width: 100%;
+}
+
+/* A portrait twice the height of a landscape would set the scroll height of the whole
+   grid. Capped, `object-fit` keeps the picture's own shape inside the box. */
+
+.generation-tile-image {
+	max-height: calc(var(--grid-size) * 18);
+}
+
+.generation-tile-image img {
+	height: 100%;
+	object-fit: contain;
 	width: 100%;
 }
 
@@ -339,8 +386,10 @@
 	outline: 2px solid var(--blue);
 }
 
-.generation-tile .asset-preview {
-	height: calc(var(--grid-size) * 9);
+.generation-tile .asset-preview-empty {
+	display: block;
+	height: 100%;
+	width: 100%;
 }
 
 /* Preview pane: the big look at whatever tile was clicked last. */
@@ -410,13 +459,30 @@
 .generation-tile-prompt {
 	color: var(--black);
 	display: -webkit-box;
+	font-size: 85%;
 	margin: 0;
 	overflow: hidden;
 	overflow-wrap: anywhere;
 	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 3;
+	/* Two lines. The whole prompt is one hover away, and in the preview pane. */
+	-webkit-line-clamp: 2;
 }
 
 .generation-tile .button-bar:last-of-type {
 	margin-top: auto;
+}
+
+/* The action row wraps rather than pushing the tile wide: six icon buttons on one line
+   would set the grid's column width for every tile in it. */
+
+.generation-tile .button-bar {
+	flex-wrap: wrap;
+	gap: 2px;
+	margin-top: auto;
+}
+
+/* The preview pane's copy of the same buttons, with their labels showing. */
+
+.generator-preview .button-bar {
+	flex-wrap: wrap;
 }

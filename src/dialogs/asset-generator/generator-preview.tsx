@@ -9,6 +9,14 @@ export type GeneratorSelection =
 	| {id: string; kind: 'generation'};
 
 export interface GeneratorPreviewProps {
+	/**
+	 * What can be done with whatever is on show.
+	 *
+	 * The pane is where an author decides -- it is the first place the image is big
+	 * enough to judge -- so the buttons have to be here too, or deciding means going
+	 * back to the thumbnail to press them.
+	 */
+	actions?: React.ReactNode;
 	/** Model, aspect, date--whatever the source knows about itself. */
 	detail?: string;
 	name?: string;
@@ -21,7 +29,7 @@ export interface GeneratorPreviewProps {
  * judge a background at anything like its real size.
  */
 export const GeneratorPreview: React.FC<GeneratorPreviewProps> = props => {
-	const {detail, name, url} = props;
+	const {actions, detail, name, url} = props;
 	const [fullScreen, setFullScreen] = React.useState(false);
 	const {t} = useTranslation();
 
@@ -68,6 +76,7 @@ export const GeneratorPreview: React.FC<GeneratorPreviewProps> = props => {
 					</button>
 					{name && <p className="generator-preview-name">{name}</p>}
 					{detail && <p className="asset-generator-detail">{detail}</p>}
+					{actions}
 				</>
 			) : (
 				<p className="sliders-empty">

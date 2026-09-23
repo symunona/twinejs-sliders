@@ -31,6 +31,16 @@ export interface AssetFilter {
 
 export interface PutAssetOptions {
 	kind?: AssetKind;
+	/**
+	 * Store these bytes even though the library already holds them.
+	 *
+	 * The dedupe exists so a re-dropped folder does not double the library, and it is
+	 * right by default. It is wrong when the author has been TOLD about the clash and
+	 * asked for a second copy anyway -- a generated image they want under a second name
+	 * -- because the only thing left to do otherwise is re-encode the same pixels by
+	 * hand to defeat the hash.
+	 */
+	allowDuplicate?: boolean;
 	/** Defaults to a slug derived from the filename. */
 	name?: string;
 	tags?: string[];
@@ -138,9 +148,14 @@ export interface PutAssetResult {
 	id: AssetId;
 	meta: AssetMeta;
 	/**
-	 * True when a file with this content hash was already in the library. The existing
-	 * asset is returned rather than a second copy being made — the UI warns instead of
-	 * silently duplicating (spec 03).
+	 * True when a file with this content hash AND this kind was already in the library.
+	 * The existing asset is returned rather than a second copy being made — the UI warns
+	 * instead of silently duplicating (spec 03), and can ask again with `allowDuplicate`.
+	 *
+	 * Kind is part of it because the library is shown one kind per tab: the same pixels
+	 * saved as a background and as an object are two entries the author looks for in two
+	 * places, and handing back the object when a background was asked for leaves them
+	 * staring at an empty Backgrounds tab being told it was already saved.
 	 */
 	duplicate: boolean;
 	/** Set when the upload was re-encoded to WebP. */

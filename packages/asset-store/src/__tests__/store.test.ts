@@ -85,6 +85,44 @@ describe('BackedAssetStore', () => {
 		expect(await store.list({kind: 'bg'})).toHaveLength(1);
 	});
 
+	// The bug: a generated backdrop was saved, the author was told the library already
+	// had those pixels, and the Backgrounds tab stayed empty -- the match was an OBJECT
+	// made from the same image, on a tab they were not looking at.
+	it('keeps the same bytes saved under two kinds as two assets', async () => {
+		const store = newStore();
+		const background = await store.putAsset(
+			file(pngBytes(), 'a.png', 'image/png'),
+			{kind: 'bg', name: 'desert'}
+		);
+		const object = await store.putAsset(file(pngBytes(), 'a.png', 'image/png'), {
+			kind: 'object',
+			name: 'desert-prop'
+		});
+
+		expect(object.duplicate).toBe(false);
+		expect(object.id).not.toBe(background.id);
+		expect(await store.list({kind: 'bg'})).toHaveLength(1);
+		expect(await store.list({kind: 'object'})).toHaveLength(1);
+	});
+
+	it('makes a second copy under its own name when asked to', async () => {
+		const store = newStore();
+		const first = await store.putAsset(file(pngBytes(), 'a.png', 'image/png'), {
+			kind: 'bg',
+			name: 'desert'
+		});
+		const second = await store.putAsset(file(pngBytes(), 'a.png', 'image/png'), {
+			allowDuplicate: true,
+			kind: 'bg',
+			name: 'desert-at-dusk'
+		});
+
+		expect(second.duplicate).toBe(false);
+		expect(second.id).not.toBe(first.id);
+		expect(second.meta.name).toBe('desert-at-dusk');
+		expect(await store.list({kind: 'bg'})).toHaveLength(2);
+	});
+
 	it('treats genuinely different files as separate assets', async () => {
 		const store = newStore();
 		const first = await store.putAsset(

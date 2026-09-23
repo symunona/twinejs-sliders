@@ -43,13 +43,26 @@ async function freeCharacterId(
 
 export interface SaveResult {
 	/**
-	 * True when the library already held these exact bytes and pointed at the existing
-	 * asset instead of making a second copy--saving one generation as both a background
-	 * and an object gets you one asset, not two.
+	 * True when the library already held these exact bytes AS THIS KIND, and pointed at
+	 * the existing asset instead of making a second copy. Saving one generation as both a
+	 * background and an object still gets two assets: they live on two tabs.
+	 *
+	 * The caller is expected to offer a way out (`allowDuplicate`), because the author
+	 * who meant a second copy under a second name has no other move.
 	 */
 	duplicate: boolean;
 	/** How the save should read in the tile's badges. */
 	label: string;
+	/**
+	 * What a scene would name this by, so the asset manager can be asked to show it --
+	 * an asset name, or a character id. The answer to "then where did it go?".
+	 */
+	ref: string;
+}
+
+export interface SaveOptions {
+	/** Store a second copy even if the library already holds these bytes. */
+	allowDuplicate?: boolean;
 }
 
 /**
@@ -64,22 +77,28 @@ export async function saveGeneration(
 	store: AssetStore,
 	generation: Generation,
 	target: SaveTarget,
-	name: string
+	name: string,
+	options: SaveOptions = {}
 ): Promise<SaveResult> {
 	if (target !== 'character') {
 		const result = await store.putAsset(generationFile(generation, name), {
+			allowDuplicate: options.allowDuplicate,
 			kind: target,
 			name
 		});
 
 		return {
 			duplicate: result.duplicate,
-			label: `${result.meta.kind}: ${result.meta.name}`
+			label: `${result.meta.kind}: ${result.meta.name}`,
+			ref: result.meta.name
 		};
 	}
 
 	const id = await freeCharacterId(store, slugify(name));
 	const image = await store.putAsset(generationFile(generation, name), {
+		// A character is minted under a free id every time, so its pose image is always a
+		// new one -- there is no existing pose of THIS character to dedupe against.
+		allowDuplicate: true,
 		kind: 'frame',
 		name: `${id}/idle`,
 		ownerCharacter: id
@@ -95,5 +114,5 @@ export async function saveGeneration(
 	};
 
 	await store.putCharacter(character);
-	return {duplicate: false, label: `character: ${id}`};
+	return {duplicate: false, label: `character: ${id}`, ref: id};
 }

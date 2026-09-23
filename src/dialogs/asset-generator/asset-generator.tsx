@@ -1,10 +1,11 @@
 import {AssetId} from '@sliders/scene-types';
-import {IconWand, IconX} from '@tabler/icons';
+import {IconCopy, IconPhoto, IconWand, IconX} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {ButtonBar} from '../../components/container/button-bar';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
+import {TextInput} from '../../components/control/text-input';
 import {TextSelect} from '../../components/control/text-select';
 import {keyStringTokens, useCommand, useHotkeysContext} from '../../hotkeys';
 import {setPref, usePrefsContext} from '../../store/prefs';
@@ -17,6 +18,7 @@ import {
 	useAssetStore,
 	useAssetUrl
 } from '../sliders-assets/asset-store-context';
+import {requestAssetFocus} from '../sliders-assets/focus-request';
 import {AssetPicker} from './asset-picker';
 import {generateImage, GenerateError} from './generate';
 import {
@@ -26,11 +28,12 @@ import {
 	removeGeneration,
 	updateGeneration
 } from './generation-store';
+import {GenerationActions, nameFromPrompt} from './generation-actions';
 import {GenerationTile} from './generation-tile';
 import {GeneratorPreview, GeneratorSelection} from './generator-preview';
 import {ModelSelect} from './model-select';
 import {aspectRatios, modelFromKey, provider, ProviderId} from './models';
-import {SaveTarget, saveGeneration} from './save-generation';
+import {SaveOptions, SaveTarget, saveGeneration} from './save-generation';
 import {refreshGenerations, useGenerations} from './use-generations';
 import './asset-generator.css';
 
@@ -74,6 +77,16 @@ function writePromptDraft(prompt: string): void {
 	}
 }
 
+/** A save that stopped on a duplicate, and everything needed to finish it either way. */
+interface SaveConflict {
+	generation: Generation;
+	/** How the asset already in the library reads--`bg: tavern-night`. */
+	label: string;
+	/** Its name, for asking the asset manager to show it. */
+	ref: string;
+	target: SaveTarget;
+}
+
 export const AssetGeneratorDialog: React.FC<
 	AssetGeneratorDialogProps
 > = props => {
@@ -90,6 +103,17 @@ export const AssetGeneratorDialog: React.FC<
 	const [notice, setNotice] = React.useState<string>();
 	const [prompt, setPrompt] = React.useState(readPromptDraft);
 	const [saving, setSaving] = React.useState<string>();
+	/**
+	 * A save the library refused because it already holds these pixels as this kind.
+	 *
+	 * Held rather than reported and forgotten: "already saved" is useless on its own --
+	 * the author cannot find the asset it means, and cannot get the second copy they
+	 * asked for. This is what the choice between those two is drawn from.
+	 */
+	const [conflict, setConflict] = React.useState<SaveConflict>();
+	const [copyName, setCopyName] = React.useState('');
+	/** What the last save landed as, so the notice can offer to go and show it. */
+	const [savedRef, setSavedRef] = React.useState<string>();
 	const [selection, setSelection] = React.useState<GeneratorSelection>();
 	const library = useAssetLibrary();
 	const {keymap, platform} = useHotkeysContext();
@@ -235,24 +259,46 @@ export const AssetGeneratorDialog: React.FC<
 	async function handleSave(
 		generation: Generation,
 		target: SaveTarget,
-		name: string
+		name: string,
+		options: SaveOptions = {}
 	) {
 		setError(undefined);
 		setNotice(undefined);
+		setSavedRef(undefined);
 		setSaving(generation.id);
 
 		try {
-			const result = await saveGeneration(store, generation, target, name);
+			const result = await saveGeneration(
+				store,
+				generation,
+				target,
+				name,
+				options
+			);
 
-			await updateGeneration(generation.id, {
-				savedAs: [...new Set([...generation.savedAs, result.label])]
-			});
+			if (result.duplicate) {
+				// Nothing was written. The author picks: go and look at what is already
+				// there, or say the name a second copy should have.
+				setConflict({generation, label: result.label, ref: result.ref, target});
+				setCopyName(name);
+				return;
+			}
+
+			setConflict(undefined);
 			refreshAssetLibrary();
+			setNotice(t('dialogs.assetGenerator.saved', {name: result.label}));
+			setSavedRef(result.ref);
+
+			// The history is a scratchpad for what has not been kept yet. Once these
+			// pixels are in the library, a tile of them here is a second copy of the same
+			// picture to look after--and the library is where the author will look for it
+			// from now on.
+			await removeGeneration(generation.id);
 			refreshGenerations();
-			setNotice(
-				result.duplicate
-					? t('dialogs.assetGenerator.alreadySaved', {name: result.label})
-					: t('dialogs.assetGenerator.saved', {name: result.label})
+			setSelection(current =>
+				current?.kind === 'generation' && current.id === generation.id
+					? undefined
+					: current
 			);
 		} catch (saveError) {
 			console.error('Could not save a generated image', saveError);
@@ -260,6 +306,21 @@ export const AssetGeneratorDialog: React.FC<
 		} finally {
 			setSaving(undefined);
 		}
+	}
+
+	/**
+	 * Opens the asset manager on one asset.
+	 *
+	 * Imported here rather than at the top of the file: the manager imports this dialog,
+	 * and a cycle between two modules that each render the other is exactly the kind that
+	 * evaluates to `undefined` at the wrong moment. The target rides the focus bus because
+	 * the dialog reducer dedupes on props--see `focus-request`.
+	 */
+	async function showInLibrary(ref: string) {
+		const {SlidersAssetsDialog} = await import('../sliders-assets');
+
+		requestAssetFocus(ref);
+		dispatch({type: 'addDialog', component: SlidersAssetsDialog});
 	}
 
 	async function handleDelete(generation: Generation) {
@@ -349,9 +410,58 @@ export const AssetGeneratorDialog: React.FC<
 				</p>
 			)}
 			{notice && (
-				<p className="asset-generator-notice" role="status">
-					{notice}
-				</p>
+				<div className="asset-generator-notice" role="status">
+					<p>{notice}</p>
+					{savedRef && (
+						<ButtonBar>
+							<IconButton
+								icon={<IconPhoto />}
+								label={t('dialogs.assetGenerator.showInLibrary')}
+								onClick={() => showInLibrary(savedRef)}
+							/>
+						</ButtonBar>
+					)}
+				</div>
+			)}
+			{conflict && (
+				<div className="asset-generator-conflict" role="alert">
+					<p>
+						{t('dialogs.assetGenerator.duplicateAsk', {name: conflict.label})}
+					</p>
+					<TextInput
+						onChange={event => setCopyName(event.target.value)}
+						orientation="vertical"
+						value={copyName}
+					>
+						{t('dialogs.assetGenerator.copyName')}
+					</TextInput>
+					<ButtonBar>
+						<IconButton
+							disabled={copyName.trim() === '' || saving !== undefined}
+							icon={<IconCopy />}
+							label={t('dialogs.assetGenerator.saveCopy')}
+							onClick={() =>
+								handleSave(
+									conflict.generation,
+									conflict.target,
+									copyName.trim(),
+									{allowDuplicate: true}
+								)
+							}
+							variant="create"
+						/>
+						<IconButton
+							icon={<IconPhoto />}
+							label={t('dialogs.assetGenerator.showInLibrary')}
+							onClick={() => showInLibrary(conflict.ref)}
+						/>
+						<IconButton
+							icon={<IconX />}
+							label={t('common.cancel')}
+							onClick={() => setConflict(undefined)}
+						/>
+					</ButtonBar>
+				</div>
 			)}
 			<div className="asset-generator">
 				<div className="asset-generator-compose">
@@ -447,6 +557,18 @@ export const AssetGeneratorDialog: React.FC<
 				</div>
 				<div className="asset-generator-side">
 					<GeneratorPreview
+						actions={
+							previewed && (
+								<GenerationActions
+									busy={saving === previewed.id}
+									defaultName={nameFromPrompt(previewed.prompt)}
+									onDelete={() => handleDelete(previewed)}
+									onEdit={() => handleEdit(previewed)}
+									onReuse={() => handleReuse(previewed)}
+									onSave={(target, name) => handleSave(previewed, target, name)}
+								/>
+							)
+						}
 						detail={preview.detail}
 						name={preview.name}
 						url={preview.url}
