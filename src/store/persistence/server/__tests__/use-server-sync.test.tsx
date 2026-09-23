@@ -2,14 +2,18 @@ import {act, render, screen, waitFor} from '@testing-library/react';
 import * as React from 'react';
 import {FakeStateProvider} from '../../../../test-util';
 import type {Story} from '../../../stories';
+import * as assetSync from '../asset-sync';
+import {ServerError} from '../client';
+import * as pullAssetsModule from '../pull-assets';
+import {clearSyncLog, setSyncLogEnabled, syncLog} from '../sync-log';
 import {
 	resetSyncRecordsForTests,
 	syncRecord,
 	updateSyncRecord
 } from '../sync-record';
 import {storyHash} from '../sync-record';
-import {testStory} from '../test-fixtures';
-import {useServerSync} from '../use-server-sync';
+import {settle, testStory} from '../test-fixtures';
+import {useServerSync, type ServerSyncContextProps} from '../use-server-sync';
 
 interface Route {
 	body?: unknown;
@@ -352,5 +356,278 @@ describe('useServerSync over the websocket', () => {
 		socket.deliver({by: 'jules', id: 'story-1', t: 'deleted'});
 
 		await waitFor(() => expect(syncRecord('story-1')?.state).toBe('gone'));
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Art: If-Match on push, one bounded retry, pull warnings
+// ---------------------------------------------------------------------------
+
+/**
+ * `syncStoryAssets` and `pullStoryAssets` are spied, not run: what is under test is the
+ * hook's DECISIONS — which rev it sends, how often it pulls and retries, what it shows.
+ * The two functions have their own suites, including a two-device one in
+ * `asset-sync.test.ts`.
+ */
+describe('useServerSync asset push', () => {
+	const BASE = 'https://example.test/api/v1';
+	let sync: ServerSyncContextProps;
+	let indexRows: Record<string, unknown>[];
+	let syncSpy: jest.SpyInstance;
+	let pullSpy: jest.SpyInstance;
+	let logWas: boolean;
+
+	const AssetProbe: React.FC = () => {
+		sync = useServerSync();
+
+		return <span data-testid="last-error">{sync.lastError ?? ''}</span>;
+	};
+
+	function pullResult(
+		overrides: Partial<pullAssetsModule.AssetPullResult> = {}
+	): pullAssetsModule.AssetPullResult {
+		return {
+			changed: false,
+			downloaded: [],
+			missing: [],
+			missingSidecars: [],
+			rev: 7,
+			skipped: true,
+			warnings: [],
+			...overrides
+		};
+	}
+
+	function pushResult(
+		overrides: Partial<assetSync.AssetSyncResult> = {}
+	): assetSync.AssetSyncResult {
+		return {
+			assetCount: 1,
+			characterCount: 0,
+			fingerprint: 'fp-1',
+			missingLocally: [],
+			missingSidecars: [],
+			rev: 8,
+			skipped: [],
+			syncedHashes: new Map([['a_8f21', 'hash-1']]),
+			unchanged: false,
+			unresolved: [],
+			uploaded: [],
+			uploadedSidecars: [],
+			...overrides
+		};
+	}
+
+	function conflict(rev = 9) {
+		return new ServerError('rev mismatch', {
+			code: 'conflict',
+			rev,
+			status: 412
+		});
+	}
+
+	function row(overrides: Record<string, unknown> = {}) {
+		return {
+			assetBytes: 4096,
+			assetCount: 1,
+			assetRev: 7,
+			bytes: 10,
+			deleted: false,
+			id: 'story-1',
+			ifid: 'IFID-1',
+			lastClient: 'jules',
+			name: 'Lighthouse',
+			passageCount: 1,
+			rev: 4,
+			updatedAt: '2026-01-01T00:00:00.000Z',
+			...overrides
+		};
+	}
+
+	/** `ifMatch` of every `syncStoryAssets` call, in order. */
+	function sentRevs() {
+		return syncSpy.mock.calls.map(
+			([options]) => (options as {ifMatch?: number}).ifMatch
+		);
+	}
+
+	function assetNotes() {
+		return syncLog({event: 'asset', storyId: 'story-1'}).map(
+			entry => entry.note
+		);
+	}
+
+	async function mount(story: Story) {
+		render(
+			<FakeStateProvider
+				prefs={{
+					backendAutosave: false,
+					backendClientId: 'client-a',
+					backendToken: 'sekrit',
+					backendUrl: 'https://example.test',
+					backendUsername: 'mira'
+				}}
+				stories={[story]}
+			>
+				<AssetProbe />
+			</FakeStateProvider>
+		);
+
+		await waitFor(() => expect(sync.connected).toBe(true));
+		await act(async () => {
+			await settle();
+		});
+	}
+
+	async function publish(story: Story) {
+		await act(async () => {
+			await sync.actions.publish(story);
+			await settle();
+		});
+	}
+
+	async function poll() {
+		await act(async () => {
+			await sync.actions.refresh();
+			await settle();
+		});
+	}
+
+	beforeEach(() => {
+		logWas = setSyncLogEnabled(true);
+		clearSyncLog();
+		indexRows = [];
+		syncSpy = jest
+			.spyOn(assetSync, 'syncStoryAssets')
+			.mockResolvedValue(pushResult());
+		pullSpy = jest
+			.spyOn(pullAssetsModule, 'pullStoryAssets')
+			.mockResolvedValue(pullResult());
+		fetchMock.mockImplementation(
+			async (url: string, init: {method?: string} = {}) => {
+				const path = String(url).replace(BASE, '');
+
+				if (path === '/stories') {
+					// A copy per response, or React bails on the identical array and the
+					// index effect never re-runs (see `asset-wakeup.test.tsx`).
+					return json(200, {stories: indexRows.map(item => ({...item}))});
+				}
+
+				if (path === '/stories/story-1' && init.method === 'PUT') {
+					return json(200, {
+						bytes: 10,
+						id: 'story-1',
+						rev: 5,
+						updatedAt: '2026-01-01T00:00:00.000Z'
+					});
+				}
+
+				return json(404, {error: {code: 'not_found', message: path}});
+			}
+		);
+	});
+
+	afterEach(() => {
+		syncSpy.mockRestore();
+		pullSpy.mockRestore();
+		setSyncLogEnabled(logWas);
+	});
+
+	it('pulls first when it has no rev, then pushes with If-Match at that rev', async () => {
+		await mount(testStory({id: 'story-1', sync: false}));
+		await publish(testStory({id: 'story-1', sync: false}));
+
+		expect(pullSpy).toHaveBeenCalledTimes(1);
+		expect(pullSpy.mock.invocationCallOrder[0]).toBeLessThan(
+			syncSpy.mock.invocationCallOrder[0]
+		);
+		expect(sentRevs()).toEqual([7]);
+	});
+
+	it('on a 412 pulls once and pushes once more at the new rev', async () => {
+		pullSpy
+			.mockResolvedValueOnce(pullResult({rev: 7}))
+			.mockResolvedValueOnce(pullResult({rev: 9, skipped: false}));
+		syncSpy
+			.mockRejectedValueOnce(conflict(9))
+			.mockResolvedValueOnce(pushResult({rev: 10}));
+
+		await mount(testStory({id: 'story-1', sync: false}));
+		await publish(testStory({id: 'story-1', sync: false}));
+
+		expect(sentRevs()).toEqual([7, 9]);
+		expect(pullSpy).toHaveBeenCalledTimes(2);
+		expect(screen.getByTestId('last-error')).toHaveTextContent('');
+	});
+
+	it('stops after a second 412, quietly', async () => {
+		syncSpy.mockRejectedValue(conflict());
+
+		await mount(testStory({id: 'story-1', sync: false}));
+		await publish(testStory({id: 'story-1', sync: false}));
+		await act(async () => {
+			await settle(20);
+		});
+
+		// One attempt, one pull, one retry. No loop, no banner.
+		expect(syncSpy).toHaveBeenCalledTimes(2);
+		expect(pullSpy).toHaveBeenCalledTimes(2);
+		expect(screen.getByTestId('last-error')).toHaveTextContent('');
+		expect(assetNotes()).toEqual([
+			'push 412: pulling once',
+			'push 412 again: waiting'
+		]);
+	});
+
+	it('does not pull or push again on polls where nothing moved', async () => {
+		await mount(testStory({id: 'story-1', sync: false}));
+		await publish(testStory({id: 'story-1', sync: false}));
+
+		// The server row now carries our own manifest write.
+		indexRows = [row({assetRev: 8, rev: 5})];
+		await poll();
+
+		const pulls = pullSpy.mock.calls.length;
+
+		await poll();
+		await poll();
+		await poll();
+
+		expect(pullSpy).toHaveBeenCalledTimes(pulls);
+		expect(syncSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows pull warnings once, not on every poll', async () => {
+		const story = testStory({id: 'story-1', sync: true});
+		const clash = 'Your library already has a different image named "night".';
+
+		updateSyncRecord('story-1', {pushedHash: storyHash(story), rev: 4});
+		pullSpy.mockResolvedValue(pullResult({skipped: false, warnings: [clash]}));
+		indexRows = [row()];
+		await mount(story);
+
+		expect(screen.getByTestId('last-error')).toHaveTextContent(clash);
+
+		// The same unlandable row comes back on every manifest rev.
+		for (const assetRev of [8, 9, 10]) {
+			indexRows = [row({assetRev})];
+			await poll();
+		}
+
+		expect(pullSpy.mock.calls.length).toBeGreaterThanOrEqual(4);
+		expect(assetNotes().filter(note => note === 'pull warnings')).toHaveLength(
+			1
+		);
+
+		// A different set is news again.
+		pullSpy.mockResolvedValue(
+			pullResult({skipped: false, warnings: [clash, 'another']})
+		);
+		indexRows = [row({assetRev: 11})];
+		await poll();
+
+		expect(assetNotes().filter(note => note === 'pull warnings')).toHaveLength(
+			2
+		);
 	});
 });

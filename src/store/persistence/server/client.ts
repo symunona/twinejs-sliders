@@ -461,7 +461,9 @@ class FetchServerClient implements ServerClient {
 			'Content-Type': 'application/json'
 		};
 
-		if (ifMatch) {
+		// `!== undefined`, not truthy: rev 0 is a story with no manifest yet, and two
+		// devices racing to write its first one is still a race.
+		if (ifMatch !== undefined) {
 			headers['If-Match'] = quoted(ifMatch);
 		}
 

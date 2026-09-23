@@ -536,11 +536,26 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 				};
 			},
 
-			async putManifest(id: string, manifest: AssetManifestBody) {
+			async putManifest(
+				id: string,
+				manifest: AssetManifestBody,
+				ifMatch?: number
+			) {
 				record('putManifest', id);
 				maybeFail();
 
 				const entry = require(id);
+
+				// Own rev, own precondition — `PutManifest` in `server/store/assets.go`.
+				if (ifMatch !== undefined && ifMatch !== entry.assetRev) {
+					throw new ServerError('asset rev mismatch', {
+						code: 'conflict',
+						lastClient: entry.lastClient,
+						rev: entry.assetRev,
+						status: 412,
+						updatedAt: entry.updatedAt
+					});
+				}
 
 				entry.assets = clone(manifest);
 				entry.assetRev += 1;

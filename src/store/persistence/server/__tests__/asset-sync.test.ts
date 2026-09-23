@@ -9,8 +9,14 @@ import {
 } from '@sliders/asset-store';
 import type {AssetMeta} from '@sliders/scene-types';
 import {webpBytes} from '../../../../../packages/asset-store/src/test-fixtures';
-import {syncStoryAssets, type AssetSyncProgress} from '../asset-sync';
-import type {ServerClient} from '../client';
+import {
+	syncStoryAssets,
+	type AssetSyncProgress,
+	type AssetSyncResult
+} from '../asset-sync';
+import {isServerError, type ServerClient} from '../client';
+import {fakeServer} from '../fake-server';
+import {pullStoryAssets} from '../pull-assets';
 import {testPassage, testStory} from '../test-fixtures';
 
 beforeAll(() => {
@@ -503,5 +509,263 @@ describe('syncStoryAssets sidecars', () => {
 		expect(result.uploaded).toEqual(['a_8f21']);
 		expect(putAssetBlob).toHaveBeenCalledTimes(1);
 		expect(putManifest).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// If-Match and the stale-device guard
+// ---------------------------------------------------------------------------
+
+/** `fakeClient` plus a manifest GET, for the freshness check `ifMatch` turns on. */
+function fakeClientAt(
+	serverRev: number,
+	diff: {missing?: string[]; present?: string[]; stale?: string[]}
+) {
+	const fake = fakeClient(diff);
+	const getManifest = jest.fn(async () => ({
+		assets: [],
+		characters: [],
+		missing: [],
+		rev: serverRev,
+		version: 1
+	}));
+
+	return {
+		...fake,
+		client: {...fake.client, getManifest} as unknown as ServerClient,
+		getManifest
+	};
+}
+
+async function conflictOf(run: Promise<unknown>) {
+	try {
+		await run;
+	} catch (error) {
+		return isServerError(error) && error.conflict ? error : undefined;
+	}
+
+	return undefined;
+}
+
+describe('syncStoryAssets preconditions', () => {
+	it('sends If-Match with the rev it was given', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+
+		const {client, putManifest} = fakeClientAt(7, {present: ['a_8f21']});
+
+		await syncStoryAssets({
+			client,
+			ifMatch: 7,
+			story: storyReferencing(),
+			store
+		});
+
+		expect(putManifest).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.anything(),
+			7
+		);
+	});
+
+	it('refuses before any upload when the server rev has moved', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+
+		const {client, putAssetBlob, putManifest} = fakeClientAt(9, {
+			stale: ['a_8f21']
+		});
+		const conflict = await conflictOf(
+			syncStoryAssets({client, ifMatch: 7, story: storyReferencing(), store})
+		);
+
+		expect(conflict?.rev).toBe(9);
+		expect(putAssetBlob).not.toHaveBeenCalled();
+		expect(putManifest).not.toHaveBeenCalled();
+	});
+
+	it('refuses a stale asset whose local bytes are still the agreed ones', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+
+		const {client, putAssetBlob, putManifest} = fakeClientAt(7, {
+			stale: ['a_8f21']
+		});
+		const conflict = await conflictOf(
+			syncStoryAssets({
+				client,
+				ifMatch: 7,
+				story: storyReferencing(),
+				store,
+				syncedHashes: new Map([['a_8f21', await contentHash(bytes)]])
+			})
+		);
+
+		expect(conflict).toBeDefined();
+		expect(putAssetBlob).not.toHaveBeenCalled();
+		expect(putManifest).not.toHaveBeenCalled();
+	});
+
+	it('uploads a stale asset this device changed since the agreed base', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+
+		await store.importAsset(await meta(bytes), new Blob([bytes]));
+
+		const {client, putAssetBlob} = fakeClientAt(7, {stale: ['a_8f21']});
+		const result = await syncStoryAssets({
+			client,
+			ifMatch: 7,
+			story: storyReferencing(),
+			store,
+			syncedHashes: new Map([['a_8f21', 'older-hash']])
+		});
+
+		expect(putAssetBlob).toHaveBeenCalledTimes(1);
+		expect(result.syncedHashes).toEqual(
+			new Map([['a_8f21', await contentHash(bytes)]])
+		);
+	});
+});
+
+/**
+ * Two devices, one fake server, real stores and the real pull. `device()` does what
+ * `pushAssets` / `pullAssets` in the hook do with the rev, the fingerprint and the base.
+ */
+describe('asset sync between two devices', () => {
+	function device(client: ServerClient, storyId: string) {
+		const store = newStore();
+		const state: {
+			rev?: number;
+			fingerprint?: string;
+			synced?: Map<string, string>;
+		} = {};
+
+		return {
+			state,
+			store,
+			async pull() {
+				const result = await pullStoryAssets({
+					client,
+					lastRev: state.rev,
+					store,
+					storyId
+				});
+
+				state.rev = result.rev;
+
+				return result;
+			},
+			async push(story = storyReferencing()): Promise<AssetSyncResult> {
+				const result = await syncStoryAssets({
+					client,
+					ifMatch: state.rev,
+					lastFingerprint: state.fingerprint,
+					story,
+					store,
+					syncedHashes: state.synced
+				});
+
+				state.fingerprint = result.fingerprint;
+
+				if (result.syncedHashes) {
+					state.synced = result.syncedHashes;
+				}
+
+				if (!result.unchanged) {
+					state.rev = result.rev;
+				}
+
+				return result;
+			}
+		};
+	}
+
+	async function twoDevices() {
+		const server = fakeServer();
+		const story = storyReferencing();
+
+		server.seed(story);
+
+		const a = device(server.client({id: 'a'}), story.id);
+		const b = device(server.client({id: 'b'}), story.id);
+		const bytes = webpBytes();
+
+		// Both hold the same picture under the same id, agreed with the server at rev 1.
+		await a.store.importAsset(await meta(bytes), new Blob([bytes]));
+		await b.store.importAsset(await meta(bytes), new Blob([bytes]));
+		await a.pull();
+		await a.push();
+		await b.pull();
+		b.state.synced = new Map(a.state.synced);
+
+		return {a, b, server, story};
+	}
+
+	async function serverHash(
+		server: ReturnType<typeof fakeServer>,
+		storyId: string
+	) {
+		return (await server.client().headAsset(storyId, 'a_8f21'))?.hash;
+	}
+
+	it('a stale device cannot put its old bytes over a newer blob', async () => {
+		const {a, b, server, story} = await twoDevices();
+		const newer = webpBytes(300, 150);
+
+		await a.store.replace(
+			'a_8f21',
+			new File([newer], 'night.webp', {type: 'image/webp'})
+		);
+		await a.push();
+
+		const newHash = await contentHash(newer);
+
+		expect(await serverHash(server, story.id)).toBe(newHash);
+
+		// B never pulled rev 2: refused on the rev, before any byte goes up.
+		expect(await conflictOf(b.push())).toBeDefined();
+		expect(await serverHash(server, story.id)).toBe(newHash);
+
+		// B pulls (the rev moves; its bytes may not land) and tries once more: refused
+		// on the base, because B never changed that picture.
+		await b.pull();
+		b.state.fingerprint = undefined;
+		expect(await conflictOf(b.push())).toBeDefined();
+		expect(await serverHash(server, story.id)).toBe(newHash);
+		expect(
+			server.calls.filter(
+				call => call.by === 'b' && call.method === 'putAssetBlob'
+			)
+		).toEqual([]);
+	});
+
+	it('settles: polls with nothing new stop moving the manifest rev', async () => {
+		const {a, b, server, story} = await twoDevices();
+		const revs: number[] = [];
+
+		for (let tick = 0; tick < 5; tick++) {
+			for (const side of [a, b]) {
+				const pulled = await side.pull();
+
+				// A landed pull refreshes the library, which schedules a push.
+				if (pulled.changed) {
+					await side.push();
+				}
+
+				await side.push();
+			}
+
+			revs.push(server.assetRevOf(story.id));
+		}
+
+		expect(new Set(revs.slice(1)).size).toBe(1);
+		expect(revs[revs.length - 1]).toBe(revs[0]);
 	});
 });
