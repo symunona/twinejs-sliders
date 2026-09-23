@@ -122,6 +122,11 @@ export interface SyncedProvenance {
 	 */
 	walk?: WalkArea;
 	/**
+	 * How to draw the bytes. Symmetric like `walk` -- `importAsset` keeps it -- so both
+	 * libraries can hold it and landing it cannot ping-pong.
+	 */
+	effect?: AssetEffect;
+	/**
 	 * Blobs that actually arrived, by kind. Only syncable kinds ever appear here — a
 	 * `src` cannot cross the wire, so naming one would be a claim this device could
 	 * never make good on.
@@ -218,6 +223,22 @@ export interface AssetStore extends AssetResolver {
 	applySyncedProvenance(
 		id: AssetId,
 		incoming: SyncedProvenance
+	): Promise<AssetMeta>;
+	/**
+	 * Fast-forwards an asset's BYTES to another device's newer version of the same asset:
+	 * same id, same owner, the far side ran `replace`. The pull calls this; nothing else
+	 * should.
+	 *
+	 * Identity (id, name, kind, tags, owner, `sourceAsset`) stays local. Everything
+	 * measured from the bytes comes from `incoming`, after the blob is checked against
+	 * `incoming.hash` -- a mismatch throws, so the manifest never records a hash its blob
+	 * does not have. Provenance is left as it was: the pull lands it next, through
+	 * `applySyncedProvenance`, once the bytes agree.
+	 */
+	applySyncedBytes(
+		id: AssetId,
+		incoming: AssetMeta,
+		blob: Blob
 	): Promise<AssetMeta>;
 	/**
 	 * Edits metadata in place. A `name` that another asset or character already answers to

@@ -568,7 +568,8 @@ export class BackedAssetStore implements AssetStore {
 				origin: incoming.origin,
 				sidecars: Object.keys(sidecars).length ? sidecars : undefined,
 				tuning: incoming.tuning,
-				walk: incoming.walk
+				walk: incoming.walk,
+				effect: incoming.effect
 			};
 
 			manifest.assets[id] = meta;
@@ -577,6 +578,57 @@ export class BackedAssetStore implements AssetStore {
 			// still points at the right picture.
 			return meta;
 		});
+	}
+
+	async applySyncedBytes(
+		id: AssetId,
+		incoming: AssetMeta,
+		blob: Blob
+	): Promise<AssetMeta> {
+		// Measured before the write: a blob overwritten on the server between the manifest
+		// GET and this one would otherwise land under a hash it does not have, and the
+		// next push would claim bytes this library does not hold.
+		const hash = await contentHash(await blobBytes(blob));
+
+		if (hash !== incoming.hash) {
+			throw new Error(
+				`The server's bytes for ${id} do not match its manifest. Try again later.`
+			);
+		}
+
+		const updated = await this.mutate(async manifest => {
+			const existing = manifest.assets[id];
+
+			if (!existing) {
+				throw new Error(`There is no asset with ID ${id}.`);
+			}
+
+			// `replace`'s split: identity is local, measurements follow the bytes.
+			// Provenance is untouched here -- the caller lands it once the bytes agree.
+			const meta: AssetMeta = {
+				...existing,
+				animated: incoming.animated,
+				bytes: incoming.bytes,
+				h: incoming.h,
+				hash,
+				mime: incoming.mime,
+				w: incoming.w,
+				duration: incoming.duration
+			};
+
+			if (meta.duration === undefined) {
+				// Absent, not `undefined`: a still keeps the manifest entry it always had.
+				delete meta.duration;
+			}
+
+			await this.storage.writeBlob(id, blob);
+			manifest.assets[id] = meta;
+			return meta;
+		});
+
+		// The cached object URL still points at the old bytes.
+		this.revoke(id);
+		return updated;
 	}
 
 	async update(id: AssetId, changes: Partial<AssetMeta>): Promise<AssetMeta> {

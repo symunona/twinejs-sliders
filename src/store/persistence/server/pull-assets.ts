@@ -38,8 +38,10 @@ import {upgradeCharacter} from '@sliders/scene-types';
 import {
 	checkoutAssets,
 	dedupeKey,
+	fastForwardOf,
 	provenanceOf,
-	sameProvenance
+	sameProvenance,
+	serverHashes
 } from './checkout-story';
 import type {AssetDownloadProgress} from './checkout-story';
 import type {ServerClient} from './client';
@@ -79,6 +81,15 @@ export interface AssetPullResult {
 	skipped: boolean;
 }
 
+export interface PullStoryAssetsResult extends AssetPullResult {
+	/**
+	 * Asset id → hash this client now agrees with the server on. Keep it and pass it back
+	 * as `syncedHashes`. Echoes the input when no manifest was read or the rev had not
+	 * moved -- nothing was learned, so the old base stands.
+	 */
+	syncedHashes: Map<string, string>;
+}
+
 export interface PullStoryAssetsOptions {
 	client: ServerClient;
 	storyId: string;
@@ -86,6 +97,11 @@ export interface PullStoryAssetsOptions {
 	/** `rev` from the last pull or push of this story's manifest. */
 	lastRev?: number;
 	onProgress?: (progress: AssetPullProgress) => void;
+	/**
+	 * Asset id → hash as of this client's last successful pull or push, in memory only.
+	 * Tells "the server replaced these bytes" from "I did". See `fastForwardOf`.
+	 */
+	syncedHashes?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -126,9 +142,18 @@ function castShape(characters: Character[]): string {
  * Ids the server lists in `missing` are dropped from both halves. It is telling us it has
  * no bytes for them; the manifest row is all that is left of that asset, and comparing a
  * local twin against it would ask for a download that 404s on every poll.
+ *
+ * A row with no twin that is a newer version of a local asset THIS device replaced since
+ * the last sync (`ahead`) is not wanted either: pulling it would undo the local edit, and
+ * asking every poll would download bytes the checkout then drops.
  */
-function needsPull(manifest: AssetManifest, local: AssetMeta[]): AssetMeta[] {
+function needsPull(
+	manifest: AssetManifest,
+	local: AssetMeta[],
+	syncedHashes?: ReadonlyMap<string, string>
+): AssetMeta[] {
 	const here = new Map<string, AssetMeta>();
+	const byId = new Map(local.map(meta => [meta.id, meta]));
 	const serverMissing = new Set(manifest.missing ?? []);
 
 	for (const meta of local) {
@@ -144,21 +169,29 @@ function needsPull(manifest: AssetManifest, local: AssetMeta[]): AssetMeta[] {
 
 		const twin = here.get(dedupeKey(meta));
 
-		return !twin || !sameProvenance(provenanceOf(meta), provenanceOf(twin));
+		if (!twin) {
+			return fastForwardOf(meta, byId, syncedHashes)?.kind !== 'ahead';
+		}
+
+		return !sameProvenance(provenanceOf(meta), provenanceOf(twin));
 	});
 }
 
 export async function pullStoryAssets(
 	options: PullStoryAssetsOptions
-): Promise<AssetPullResult> {
-	const {client, lastRev, onProgress, store, storyId} = options;
-	const nothing = (rev: number): AssetPullResult => ({
+): Promise<PullStoryAssetsResult> {
+	const {client, lastRev, onProgress, store, storyId, syncedHashes} = options;
+	const nothing = (
+		rev: number,
+		agreed: ReadonlyMap<string, string> = syncedHashes ?? new Map()
+	): PullStoryAssetsResult => ({
 		changed: false,
 		downloaded: [],
 		missing: [],
 		missingSidecars: [],
 		rev,
 		skipped: true,
+		syncedHashes: new Map(agreed),
 		warnings: []
 	});
 
@@ -177,21 +210,24 @@ export async function pullStoryAssets(
 	}
 
 	const local = await store.list({includePoseImages: true});
-	const wanted = needsPull(manifest, local);
+	const wanted = needsPull(manifest, local, syncedHashes);
 	const castMoved =
 		castShape(manifest.characters ?? []) !==
 		castShape(await store.listCharacters());
 
 	if (wanted.length === 0 && !castMoved) {
-		return nothing(manifest.rev);
+		// Every row agrees or is local-ahead; either way the server's hash is the base.
+		return nothing(manifest.rev, serverHashes(manifest));
 	}
 
 	const {
 		downloaded,
+		fastForwarded,
 		missingAssets,
 		missingSidecars,
 		provenanceApplied,
 		stored,
+		syncedHashes: agreed,
 		warnings
 	} = await checkoutAssets({
 		client,
@@ -204,7 +240,8 @@ export async function pullStoryAssets(
 			}),
 		phase: 'download',
 		store,
-		storyId
+		storyId,
+		syncedHashes
 	});
 
 	return {
@@ -219,12 +256,17 @@ export async function pullStoryAssets(
 		// difference cannot be closed by any pull, so reporting it would push, wake the
 		// peer, and arrive back here on the next rev with the same unfetchable blob. Both
 		// stand unreported here and are named in `missingSidecars` and `warnings` instead.
-		changed: stored.length > 0 || provenanceApplied.length > 0 || castMoved,
+		changed:
+			stored.length > 0 ||
+			fastForwarded.length > 0 ||
+			provenanceApplied.length > 0 ||
+			castMoved,
 		downloaded,
 		missing: missingAssets,
 		missingSidecars,
 		rev: manifest.rev,
 		skipped: false,
+		syncedHashes: agreed,
 		warnings
 	};
 }

@@ -7,7 +7,7 @@ import type {
 import {AssetManifest} from '../asset-store.types';
 import {MemoryBackend} from '../backends/memory-backend';
 import {blobBytes} from '../blob-bytes';
-import {sidecarKey} from '../ids';
+import {contentHash, sidecarKey} from '../ids';
 import {migrateSidecars} from '../migrate-sidecars';
 import {BackedAssetStore, sidecarSyncs} from '../store';
 import {jpegBytes, pngBytes} from '../test-fixtures';
@@ -856,5 +856,85 @@ describe('applySyncedProvenance', () => {
 		await expect(
 			store.applySyncedProvenance('a_0000', {edits: edits()})
 		).rejects.toThrow('a_0000');
+	});
+});
+
+describe('applySyncedBytes', () => {
+	/** What a pull hands over: the far side's row for the same asset, new bytes. */
+	async function farRow(
+		bytes: Uint8Array,
+		overrides: Partial<AssetMeta> = {}
+	): Promise<AssetMeta> {
+		return {
+			animated: false,
+			bytes: bytes.length,
+			h: 150,
+			hash: await contentHash(bytes),
+			id: 'a_far',
+			kind: 'frame',
+			mime: 'image/jpeg',
+			name: 'far-name',
+			tags: ['far'],
+			w: 300,
+			...overrides
+		};
+	}
+
+	it('writes the new bytes under the local id, keeping identity and provenance', async () => {
+		const store = newStore();
+		const id = await store.put(file(pngBytes(), 'tavern.png', 'image/png'), {
+			kind: 'bg',
+			tags: ['night']
+		});
+
+		await store.applySyncedProvenance(id, {
+			edits: edits(),
+			walk: {shapes: []}
+		});
+
+		const bytes = jpegBytes();
+		const meta = await store.applySyncedBytes(
+			id,
+			await farRow(bytes),
+			new Blob([bytes], {type: 'image/jpeg'})
+		);
+
+		// Identity and provenance stay local; the pull lands provenance separately.
+		expect(meta).toMatchObject({
+			bytes: bytes.length,
+			edits: edits(),
+			h: 150,
+			hash: await contentHash(bytes),
+			id,
+			kind: 'bg',
+			mime: 'image/jpeg',
+			name: 'tavern',
+			tags: ['night'],
+			w: 300,
+			walk: {shapes: []}
+		});
+		expect(await store.meta(id)).toEqual(meta);
+		expect(
+			new Uint8Array(await blobBytes((await store.get(id)) as Blob))
+		).toEqual(bytes);
+	});
+
+	it('refuses bytes that do not match the row’s hash', async () => {
+		const store = newStore();
+		const id = await store.put(file(pngBytes(), 'tavern.png', 'image/png'), {
+			kind: 'bg'
+		});
+		const before = await store.meta(id);
+
+		// A blob overwritten between the manifest GET and this one must not land under
+		// a hash it does not have.
+		await expect(
+			store.applySyncedBytes(
+				id,
+				await farRow(jpegBytes()),
+				new Blob([pngBytes(10, 10)], {type: 'image/png'})
+			)
+		).rejects.toThrow(id);
+		expect(await store.meta(id)).toEqual(before);
 	});
 });

@@ -24,6 +24,7 @@
 import {sidecarKey, sidecarSyncs} from '@sliders/asset-store';
 import type {AssetStore} from '@sliders/asset-store';
 import type {
+	AssetEffect,
 	AssetId,
 	AssetMask,
 	AssetMeta,
@@ -116,7 +117,7 @@ export function dedupeKey(
  *
  * - `id`: libraries mint their own, and `planBundle` re-ids on collision. Assets are
  *   matched by `dedupeKey` — same bytes, same owner — and the manifest's id is never
- *   written onto a local asset.
+ *   written onto a local asset. One exception, bytes only: `fastForwardOf`.
  * - `sourceAsset`: an id too, remapped or dropped per library. Guaranteed to differ.
  * - `name`, `kind`, `tags`, `w`, `h`, `bytes`, `mime`, `animated`, `duration`:
  *   legitimately different names and measurements for the same bytes.
@@ -151,6 +152,8 @@ export interface AssetProvenance {
 	 * symmetric one -- both libraries can hold it -- so it cannot ping-pong.
 	 */
 	walk?: WalkArea;
+	/** How to draw the bytes. Symmetric -- `importAsset` keeps it -- so no ping-pong. */
+	effect?: AssetEffect;
 	/** Syncable, hashed sidecar kinds only, by content hash. */
 	sidecars: Record<string, string>;
 }
@@ -172,6 +175,7 @@ export function syncableSidecarHashes(meta: AssetMeta): Record<string, string> {
 export function provenanceOf(meta: AssetMeta): AssetProvenance {
 	return {
 		edits: meta.edits,
+		effect: meta.effect,
 		mask: meta.mask,
 		origin: meta.origin,
 		sidecars: syncableSidecarHashes(meta),
@@ -185,6 +189,72 @@ export function sameProvenance(
 	b: AssetProvenance
 ): boolean {
 	return stable(a) === stable(b);
+}
+
+/**
+ * A manifest row that is a NEWER VERSION of a local asset rather than a new asset: the
+ * far side ran `replace` -- same id, same owner, same name, new bytes.
+ *
+ * `dedupeKey` cannot see this, because the hash is the thing that changed, and
+ * `planBundle` would settle it `kept-existing` -- local wins, forever
+ * (docs/2026-09-23-asset-sync-bytes.md). Matching by id is safe only because of what else
+ * must line up: per-story libraries keep the server's ids on checkout, and an id that
+ * collided was re-minted there, so a stranger's asset under the same id would also have to
+ * share its name (loose) or its character (pose image).
+ *
+ * Only asked for rows with NO dedupe twin; a twin means the bytes are here already.
+ *
+ * `syncedHashes` is the caller's memory of the last agreed hash per id, in memory only.
+ * Local hash still at that base → local untouched → `forward`. Anything else → `ahead`:
+ * this device replaced the bytes itself and the push side sends them. No entry, or no map
+ * at all → `forward`, which is what a checkout into an empty library would do anyway.
+ */
+export type FastForward =
+	| {kind: 'forward'; local: AssetMeta}
+	| {kind: 'ahead'; local: AssetMeta};
+
+export function fastForwardOf(
+	incoming: AssetMeta,
+	localById: ReadonlyMap<string, AssetMeta>,
+	syncedHashes?: ReadonlyMap<string, string>
+): FastForward | undefined {
+	const local = localById.get(incoming.id);
+
+	if (!local || local.hash === incoming.hash) {
+		return undefined;
+	}
+
+	if ((local.ownerCharacter ?? '') !== (incoming.ownerCharacter ?? '')) {
+		return undefined;
+	}
+
+	// A pose image is addressed through its character, never by name (see `planBundle`).
+	if (!incoming.ownerCharacter && local.name !== incoming.name) {
+		return undefined;
+	}
+
+	const base = syncedHashes?.get(incoming.id);
+
+	return base === undefined || base === local.hash
+		? {kind: 'forward', local}
+		: {kind: 'ahead', local};
+}
+
+/**
+ * What the server holds now, id → hash, for the caller to keep as its `syncedHashes`.
+ * `missing` rows are left out: there are no bytes behind them to agree on.
+ */
+export function serverHashes(manifest: AssetManifest): Map<string, string> {
+	const missing = new Set(manifest.missing ?? []);
+	const hashes = new Map<string, string>();
+
+	for (const meta of manifest.assets ?? []) {
+		if (!missing.has(meta.id)) {
+			hashes.set(meta.id, meta.hash);
+		}
+	}
+
+	return hashes;
 }
 
 export async function checkoutStory(
@@ -368,6 +438,7 @@ async function landProvenance(options: {
 		try {
 			const stored = await store.applySyncedProvenance(local.id, {
 				edits: target.edits,
+				effect: target.effect,
 				mask: target.mask,
 				origin: target.origin,
 				sidecars: blobs,
@@ -437,6 +508,7 @@ async function landingFor(
 	const blobs: Partial<Record<SidecarKind, Blob>> = {};
 	const target: AssetProvenance = {
 		edits: incoming.edits,
+		effect: incoming.effect,
 		// Missing until the walk area needed the same line: without it a pull compared the
 		// mask, found it different, and landed `undefined` over it.
 		mask: incoming.mask,
@@ -485,8 +557,12 @@ export async function checkoutAssets(options: {
 	/** What to call this in progress reports. Defaults to a checkout. */
 	phase?: 'assets' | 'download';
 	onProgress?: (progress: AssetDownloadProgress) => void;
+	/** Asset id → hash as of this client's last pull or push. See `fastForwardOf`. */
+	syncedHashes?: ReadonlyMap<string, string>;
 }): Promise<{
 	downloaded: string[];
+	/** LOCAL ids whose bytes this run moved forward to the server's newer version. */
+	fastForwarded: string[];
 	missingAssets: string[];
 	missingSidecars: string[];
 	/** LOCAL ids whose edit settings or sidecars this run brought over. */
@@ -497,6 +573,12 @@ export async function checkoutAssets(options: {
 	 * are already here.
 	 */
 	stored: string[];
+	/**
+	 * Id → hash the caller should remember as agreed: the server's hash per row, except a
+	 * fast-forward that failed keeps the local hash, so the next pull retries it rather
+	 * than reading the old bytes as a local edit.
+	 */
+	syncedHashes: Map<string, string>;
 	warnings: string[];
 }> {
 	const {client, onProgress, store, storyId} = options;
@@ -515,10 +597,13 @@ export async function checkoutAssets(options: {
 		// Nothing to download, and nothing worth failing the checkout over.
 		return {
 			downloaded,
+			fastForwarded: [],
 			missingAssets,
 			missingSidecars,
 			provenanceApplied: [],
 			stored: [],
+			// Nothing learned; the old base stands.
+			syncedHashes: new Map(options.syncedHashes ?? []),
 			warnings: [messageOf(error)]
 		};
 	}
@@ -529,15 +614,41 @@ export async function checkoutAssets(options: {
 
 	onProgress?.({done: 0, phase, total});
 
+	const listed = await store.list({includePoseImages: true});
+	const localById = new Map(listed.map(meta => [meta.id, meta]));
+	const keyed = new Set(listed.map(meta => dedupeKey(meta)));
+	const forwards = new Map<string, FastForward>();
+
+	for (const meta of assets) {
+		if (serverMissing.has(meta.id) || keyed.has(dedupeKey(meta))) {
+			continue;
+		}
+
+		const forward = fastForwardOf(meta, localById, options.syncedHashes);
+
+		if (forward) {
+			forwards.set(meta.id, forward);
+		}
+	}
+
+	// A local asset about to be moved forward is nobody's twin any more: another row
+	// matching its OLD bytes would otherwise read the new ones out of the store.
 	const localByKey = new Map<string, AssetMeta>();
 
-	for (const meta of await store.list({includePoseImages: true})) {
+	for (const meta of listed) {
+		if (forwards.get(meta.id)?.kind === 'forward') {
+			continue;
+		}
+
 		if (!localByKey.has(dedupeKey(meta))) {
 			localByKey.set(dedupeKey(meta), meta);
 		}
 	}
 
 	const contents: BundleAsset[] = [];
+	const fastForwarded: string[] = [];
+	const syncedHashes = serverHashes(manifest);
+	const warnings: string[] = [];
 	let done = 0;
 
 	for (const meta of assets) {
@@ -547,6 +658,60 @@ export async function checkoutAssets(options: {
 			// The server told us up front it does not have these bytes — an old revision
 			// whose art the orphan sweep took. Say so; do not try to fetch it.
 			missingAssets.push(meta.id);
+			onProgress?.({done, phase, total});
+			continue;
+		}
+
+		const forward = forwards.get(meta.id);
+
+		if (forward) {
+			const landed =
+				forward.kind === 'forward' &&
+				(await fastForward({
+					client,
+					downloaded,
+					fastForwarded,
+					local: forward.local,
+					meta,
+					missingAssets,
+					store,
+					storyId,
+					warnings
+				}));
+
+			if (landed) {
+				// Now a plain hash twin: the plan says `reused` and maps poses id → id,
+				// and `landProvenance` finds it by `dedupeKey`. It has no twin to borrow
+				// sidecars from, so all of them are fetched.
+				contents.push({blob: landed, meta});
+
+				const sidecars = await fetchSidecars({
+					client,
+					meta,
+					missingSidecars,
+					storyId
+				});
+
+				if (sidecars.size > 0) {
+					arrived.set(meta.id, sidecars);
+				}
+			} else {
+				// Local ahead, or the fast-forward failed: the local bytes stay. They ride
+				// along as themselves so the plan maps poses onto them instead of dropping
+				// the pose, and no provenance lands (the hashes differ, so no twin).
+				if (forward.kind === 'forward') {
+					// Base stays at the old bytes: the next pull retries, the push does not
+					// mistake them for an edit.
+					syncedHashes.set(meta.id, forward.local.hash);
+				}
+
+				const kept = await store.get(forward.local.id);
+
+				if (kept) {
+					contents.push({blob: kept, meta: forward.local});
+				}
+			}
+
 			onProgress?.({done, phase, total});
 			continue;
 		}
@@ -592,7 +757,6 @@ export async function checkoutAssets(options: {
 		onProgress?.({done, phase, total});
 	}
 
-	const warnings: string[] = [];
 	/**
 	 * What the library actually GAINED, which is not what came down the wire.
 	 *
@@ -639,12 +803,63 @@ export async function checkoutAssets(options: {
 
 	return {
 		downloaded,
+		fastForwarded,
 		missingAssets,
 		missingSidecars,
 		provenanceApplied,
 		stored,
+		syncedHashes,
 		warnings
 	};
+}
+
+/**
+ * Downloads the newer bytes and writes them over the local asset in place. Scenes resolve
+ * by name and the name does not move, so nothing needs repointing.
+ *
+ * Returns the blob when the store now holds `meta.hash` under the local id -- read off
+ * what the store returned, never assumed -- and undefined otherwise, with the reason in
+ * `missingAssets` or `warnings`.
+ */
+async function fastForward(options: {
+	client: ServerClient;
+	storyId: string;
+	store: AssetStore;
+	meta: AssetMeta;
+	local: AssetMeta;
+	downloaded: string[];
+	fastForwarded: string[];
+	missingAssets: string[];
+	warnings: string[];
+}): Promise<Blob | undefined> {
+	const {client, local, meta, store, storyId} = options;
+	let blob: Blob;
+
+	try {
+		blob = await client.getAssetBlob(storyId, meta.id);
+		options.downloaded.push(meta.id);
+	} catch {
+		options.missingAssets.push(meta.id);
+		return undefined;
+	}
+
+	try {
+		const stored = await store.applySyncedBytes(local.id, meta, blob);
+
+		if (stored.hash !== meta.hash) {
+			return undefined;
+		}
+
+		options.fastForwarded.push(stored.id);
+		return blob;
+	} catch (error) {
+		options.warnings.push(
+			`The newer version of "${local.name}" could not be saved: ${messageOf(
+				error
+			)}`
+		);
+		return undefined;
+	}
 }
 
 function messageOf(error: unknown): string {

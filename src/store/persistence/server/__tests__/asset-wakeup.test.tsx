@@ -22,7 +22,11 @@ import {act, render, screen, waitFor} from '@testing-library/react';
 import * as React from 'react';
 import {FakeStateProvider} from '../../../../test-util';
 import type {Story} from '../../../stories';
-import {pullStoryAssets, type AssetPullResult} from '../pull-assets';
+import {
+	pullStoryAssets,
+	type AssetPullResult,
+	type PullStoryAssetsResult
+} from '../pull-assets';
 import type {StoryIndexEntry} from '../server.types';
 import {
 	resetSyncRecordsForTests,
@@ -91,7 +95,9 @@ function oldServerEntry(overrides: Partial<StoryIndexEntry> = {}) {
 	return entry as StoryIndexEntry;
 }
 
-function pullResult(overrides: Partial<AssetPullResult> = {}): AssetPullResult {
+function pullResult(
+	overrides: Partial<PullStoryAssetsResult> = {}
+): PullStoryAssetsResult {
 	return {
 		changed: false,
 		downloaded: [],
@@ -99,6 +105,7 @@ function pullResult(overrides: Partial<AssetPullResult> = {}): AssetPullResult {
 		missingSidecars: [],
 		rev: 7,
 		skipped: true,
+		syncedHashes: new Map(),
 		warnings: [],
 		...overrides
 	};
@@ -317,10 +324,10 @@ describe('pullAssets on the context', () => {
 		pullMock.mockClear();
 
 		// Held open so both asks are demonstrably in flight at once.
-		let land: (result: AssetPullResult) => void = () => undefined;
+		let land: (result: PullStoryAssetsResult) => void = () => undefined;
 
 		pullMock.mockReturnValue(
-			new Promise<AssetPullResult>(resolve => {
+			new Promise<PullStoryAssetsResult>(resolve => {
 				land = resolve;
 			})
 		);
