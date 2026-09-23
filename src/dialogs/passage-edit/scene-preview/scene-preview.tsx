@@ -92,6 +92,7 @@ import {
 	type EntityKeyWrite,
 	type SceneWrite
 } from './use-scene-writer';
+import {useWalkHere, WalkHereInfo, WalkHereRequest} from './use-walk-here';
 import './scene-preview.css';
 
 export interface ScenePreviewProps {
@@ -147,6 +148,16 @@ export interface ScenePreviewProps {
 	 */
 	fullScreen: boolean;
 	onFullScreenChange: (next: boolean) => void;
+	/**
+	 * Walk-here (point-and-click/walk-area.md): a click on the stage walks a cast member
+	 * over the current backdrop's walk area. Preview only, never a text edit. Owned by the
+	 * dialog, which also owns the walker picker.
+	 */
+	walkHere?: WalkHereRequest;
+	/** What walk-here found on the beat on screen: who can walk, and why a click will not. */
+	onWalkInfo?: (info: WalkHereInfo) => void;
+	/** The dialog's own controls, drawn in the bar beside the preview's. */
+	barExtra?: React.ReactNode;
 }
 
 /**
@@ -285,7 +296,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	passages,
 	storyId,
 	stylesheet,
-	text
+	text,
+	walkHere: walkHereRequest,
+	onWalkInfo,
+	barExtra
 }) => {
 	const {t} = useTranslation();
 	const store = useAssetStore();
@@ -1076,6 +1090,36 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	}, [posePreview, previewId, stage, tracePreview]);
 
 	/**
+	 * Walk-here, laid over what is drawn and nothing else: the overlay, the selection and
+	 * every write keep reading `stage`, so a walk the author is only looking at can never
+	 * reach the YAML.
+	 */
+	const walkHere = useWalkHere({
+		assets,
+		libraryVersion,
+		renderer,
+		request: walkHereRequest,
+		stage
+	});
+	const {decorate: decorateWalk, info: walkInfo} = walkHere;
+	const shownStage = React.useMemo(
+		() => decorateWalk(drawnStage),
+		[decorateWalk, drawnStage]
+	);
+	const lastWalkInfo = React.useRef<string>();
+
+	// Told only when it changed: the info is a fresh object every render, and a parent that
+	// sets state from it would otherwise re-render this forever.
+	React.useEffect(() => {
+		const next = JSON.stringify(walkInfo);
+
+		if (next !== lastWalkInfo.current) {
+			lastWalkInfo.current = next;
+			onWalkInfo?.(walkInfo);
+		}
+	});
+
+	/**
 	 * Everything that would change the text is off while the lock is on.
 	 *
 	 * One flag, checked in one place: the overlay already treats "not editable" as "select
@@ -1637,6 +1681,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={locked}
 			/>
+			{barExtra}
 			{/* Entering full screen is a header control on the dialog card, next to
 			    maximize. LEAVING it cannot be: full screen portals out of the card and
 			    the header goes with it, so the way back has to live in the bar. */}
@@ -1694,9 +1739,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onLink={handleLink}
 				onRenderer={handleRenderer}
 				sceneEase={parse.result?.scene.ease}
-				stage={drawnStage}
+				stage={shownStage}
 				stylesheet={stylesheet}
 			/>
+			{walkHere.layer}
 			{/* Over the stage rather than above it. A row that appeared with the
 			    selection would resize the stage under the pointer, and the whole scene
 			    would jump on the very click that selected a sprite. A click on the

@@ -98,6 +98,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// the chord is the shifted one. The bare `l` is the key that actually gets used, in the
 	// same family as `f` and `k` above.
 	'scene.toggleLock': {bindings: ['l', 'mod+shift+l']},
+	'scene.walkHere': {bindings: ['w']},
 
 	// Visual editor. The nudges take the arrow keys back off the scrubber while something
 	// is selected, and Escape hands them over again. Both variants of each arrow are bound
@@ -148,6 +149,8 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// the time it's wanted.
 
 	'assetEditor.removeBackground': {bindings: ['b']},
+	// Walk tool: click-to-walk the ghost. W, the same key the scene preview's toggle takes.
+	'assetEditor.walkHere': {bindings: ['w']},
 	'assetEditor.saveAsNew': {bindings: ['mod+s']},
 	'assetEditor.replace': {bindings: ['mod+shift+s']},
 

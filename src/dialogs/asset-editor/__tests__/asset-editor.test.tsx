@@ -458,4 +458,94 @@ describe('<AssetEditorDialog>', () => {
 			expect(mockPullAssets).toHaveBeenCalledTimes(1);
 		});
 	});
+
+	describe('the walk tool', () => {
+		const WALK = {
+			shapes: [
+				{
+					id: 's1',
+					op: 'walk' as const,
+					points: [
+						{x: 0.1, y: 0.5},
+						{x: 0.9, y: 0.5},
+						{x: 0.9, y: 0.95}
+					]
+				}
+			]
+		};
+		let update: jest.Mock;
+
+		function renderAsset(overrides: Partial<AssetMeta>) {
+			const assetMeta = fakeMeta(overrides);
+
+			sidecar = jest.fn(async () => undefined);
+			update = jest.fn(async () => assetMeta);
+			mockStore = {
+				get: async () => fakeImage(BASE),
+				list: async () => [assetMeta],
+				listCharacters: async () => [],
+				meta: async () => assetMeta,
+				sidecar,
+				takenNames: async () => new Set<string>(),
+				update
+			} as unknown as AssetStore;
+
+			return render(
+				<AssetEditorDialog
+					assetId={ASSET_ID}
+					collapsed={false}
+					onChangeCollapsed={jest.fn()}
+					onChangeHighlighted={jest.fn()}
+					onChangeMaximized={jest.fn()}
+					onChangeProps={jest.fn()}
+					onClose={jest.fn()}
+				/>
+			);
+		}
+
+		function walkRadio() {
+			return screen.queryByRole('radio', {
+				name: 'dialogs.assetEditor.toolHint.walk'
+			});
+		}
+
+		it('is offered for a backdrop', async () => {
+			renderAsset({kind: 'bg'});
+			await screen.findByTestId('asset-editor-dirty');
+			expect(walkRadio()).not.toBeNull();
+		});
+
+		it('is not offered for a prop', async () => {
+			renderAsset({kind: 'object'});
+			await screen.findByTestId('asset-editor-dirty');
+			expect(walkRadio()).toBeNull();
+		});
+
+		it('opens clean on a stored walk area, and lists its shapes', async () => {
+			renderAsset({kind: 'bg', walk: WALK});
+			await screen.findByTestId('asset-editor-dirty');
+			await waitFor(() => expect(sidecar).toHaveBeenCalled());
+			expectClean();
+
+			fireEvent.click(walkRadio()!);
+			expect(await screen.findAllByTestId('walk-row')).toHaveLength(1);
+			expectClean();
+		});
+
+		it('counts a depth change as unsaved', async () => {
+			renderAsset({kind: 'bg', walk: WALK});
+			await screen.findByTestId('asset-editor-dirty');
+			fireEvent.click(walkRadio()!);
+			fireEvent.click(
+				await screen.findByRole('checkbox', {
+					name: 'dialogs.assetEditor.walk.depth'
+				})
+			);
+
+			expect(screen.getByTestId('walk-depth-fields')).toBeInTheDocument();
+			expect(screen.getByTestId('asset-editor-dirty')).toHaveTextContent(
+				'dialogs.assetEditor.unsavedChanges'
+			);
+		});
+	});
 });

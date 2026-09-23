@@ -16,6 +16,15 @@ import type {AssetMask, Frac2, MaskShape} from '@sliders/scene-types';
 // themselves belong to scene-types, which `AssetMeta` compiles against.
 export type {AssetMask, MaskOp, MaskShape} from '@sliders/scene-types';
 
+/**
+ * What the drawing helpers below need of a shape: an id and a ring. Mask shapes and walk
+ * shapes are both this, plus their own op.
+ */
+export interface RingShape {
+	id: string;
+	points: Frac2[];
+}
+
 /** Which of the three previews the editor is showing. */
 export type MaskMode = 'rendered' | 'paint' | 'alpha';
 
@@ -105,7 +114,7 @@ export function drawnInverted(points: Frac2[]): boolean {
  * mask, they are what the shape list numbers itself from, and a mask of a dozen shapes
  * rides sync inside `AssetMeta`, where thirty-six characters a shape is real weight.
  */
-export function newShapeId(existing: MaskShape[]): string {
+export function newShapeId(existing: RingShape[]): string {
 	let next = 1;
 
 	for (const shape of existing) {
@@ -265,7 +274,7 @@ export function simplifyRing(points: Frac2[], tolerance: number): Frac2[] {
  * image size into a hit test that has no other use for it.
  */
 export function hitVertex(
-	shapes: MaskShape[],
+	shapes: RingShape[],
 	point: Frac2,
 	radius: number
 ): {shapeId: string; index: number} | undefined {
@@ -301,7 +310,7 @@ export function hitVertex(
  * then no gesture left that drops the selection.
  */
 export function hitShape(
-	shapes: MaskShape[],
+	shapes: RingShape[],
 	point: Frac2
 ): string | undefined {
 	for (let order = shapes.length - 1; order >= 0; order--) {
@@ -324,7 +333,7 @@ export function hitShape(
  * `<path d="">` renders nothing, which is what a one-point gesture should look like.
  */
 export function shapePath(
-	shape: MaskShape,
+	shape: Pick<RingShape, 'points'>,
 	width: number,
 	height: number
 ): string {

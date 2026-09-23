@@ -336,26 +336,26 @@ value is the one that has to be right, and the rule keeps a stray class from
 arming a sheet that the rendered preview needs to be able to click through.
 */
 
-.mask-overlay {
+.shape-overlay {
 	overflow: visible;
 	pointer-events: none;
 	position: absolute;
 	touch-action: none;
 }
 
-.mask-overlay.live {
+.shape-overlay.live {
 	pointer-events: auto;
 }
 
 /* The gesture the next press will make, named by the cursor -- the art
    underneath already shows a crosshair for cropping, so drawing must not. */
 
-.mask-overlay.live.tool-polygon,
-.mask-overlay.live.tool-freehand {
+.shape-overlay.live.tool-polygon,
+.shape-overlay.live.tool-freehand {
 	cursor: crosshair;
 }
 
-.mask-overlay.live.tool-edit {
+.shape-overlay.live.tool-edit {
 	cursor: pointer;
 }
 
@@ -409,14 +409,16 @@ coordinates, so the handle is exactly as big as the area that grabs it -- a
 handle smaller than its hit box is a miss that looks like a bug.
 */
 
-.mask-vertex {
+.mask-vertex,
+.walk-vertex {
 	fill: var(--white);
 	stroke: var(--dark-gray);
 	stroke-width: 1.5;
 	vector-effect: non-scaling-stroke;
 }
 
-.mask-vertex.start {
+.mask-vertex.start,
+.walk-vertex.start {
 	fill: var(--orange);
 }
 
@@ -541,4 +543,191 @@ wrapper and not the host itself.
 
 .asset-editor-loop p {
 	margin-top: calc(var(--grid-size) / 2);
+}
+
+/* ======================================================================
+   Walk — where a character may stand on a backdrop. Everything below this
+   line belongs to `walk-stage.tsx`, `depth-gizmo.tsx` and `walk-ghost.tsx`.
+   The drawing surface itself is the shared `.shape-overlay` above.
+   ====================================================================== */
+
+/* Floor: a translucent green wash, so the picture still reads through it. */
+
+.walk-shape {
+	stroke-width: 1.5;
+}
+
+.walk-shape.walk {
+	fill: rgba(40, 190, 90, 0.22);
+	stroke: var(--green);
+}
+
+/* Hole: red hatch, dashed edge -- apart from the floor without colour too. */
+
+.walk-shape.block {
+	fill: url(#walk-block-hatch);
+	stroke: var(--red);
+	stroke-dasharray: 6 4;
+}
+
+.walk-shape.selected {
+	stroke-width: 2.5;
+}
+
+.walk-hatch {
+	stroke: rgba(220, 40, 40, 0.55);
+	stroke-width: 3;
+}
+
+/* Everything that is not floor, dimmed. */
+
+.walk-outside {
+	fill: rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+.walk-draft {
+	fill: none;
+	stroke-dasharray: 4 3;
+	stroke-width: 1.5;
+}
+
+.walk-draft.walk {
+	stroke: var(--green);
+}
+
+.walk-draft.block {
+	stroke: var(--red);
+}
+
+/* The last walk-here. Solid where it went, dashed to a click it could not reach. */
+
+.walk-path {
+	fill: none;
+	stroke: var(--orange);
+	stroke-linejoin: round;
+	stroke-width: 2.5;
+}
+
+.walk-path-miss {
+	fill: none;
+	stroke: var(--orange);
+	stroke-dasharray: 3 4;
+	stroke-width: 1.5;
+}
+
+/* Walk-here: a sheet over the art that turns any press into a walk. */
+
+.walk-here-sheet {
+	cursor: pointer;
+	position: absolute;
+	touch-action: none;
+}
+
+/* The ghost: a character standing where the author put it. */
+
+.walk-ghost {
+	opacity: 0.85;
+	pointer-events: none;
+	position: absolute;
+}
+
+.walk-ghost.draggable {
+	cursor: grab;
+	pointer-events: auto;
+}
+
+.walk-ghost.walking {
+	opacity: 1;
+}
+
+.walk-ghost img {
+	height: 100%;
+	object-fit: contain;
+	pointer-events: none;
+	user-select: none;
+	width: 100%;
+}
+
+/* Off the floor: red and see-through, until it is dropped and snaps back on. */
+
+.walk-ghost.invalid img {
+	filter: sepia(1) saturate(6) hue-rotate(-50deg);
+	opacity: 0.55;
+}
+
+.walk-ghost-placeholder {
+	border: 2px dashed var(--orange);
+	border-radius: 40% 40% 0 0;
+	box-sizing: border-box;
+	display: block;
+	height: 100%;
+	width: 100%;
+}
+
+/* Depth lines: far dashed, near double. Only the grip and the chip take presses. */
+
+.depth-line {
+	border-top: 2px dashed var(--blue);
+	height: 0;
+	pointer-events: none;
+	position: absolute;
+}
+
+.depth-line.near {
+	border-top: 4px double var(--blue);
+}
+
+.depth-line-grip {
+	cursor: ns-resize;
+	height: 12px;
+	left: 0;
+	pointer-events: auto;
+	position: absolute;
+	right: 0;
+	top: -7px;
+}
+
+.depth-chip {
+	background: var(--blue);
+	border-radius: var(--corner-round);
+	color: var(--white);
+	cursor: ew-resize;
+	font-size: 75%;
+	padding: 1px 6px;
+	pointer-events: auto;
+	position: absolute;
+	right: 4px;
+	top: 2px;
+	user-select: none;
+	white-space: nowrap;
+}
+
+/* A silhouette at the line's scale, feet on the line, at its left end. */
+
+.depth-silhouette {
+	bottom: 0;
+	left: 4px;
+	opacity: 0.6;
+	pointer-events: none;
+	position: absolute;
+}
+
+.depth-silhouette img {
+	filter: brightness(0);
+	height: 100%;
+	object-fit: contain;
+	object-position: 50% 100%;
+	width: 100%;
+}
+
+.depth-silhouette:empty {
+	background: rgba(0, 0, 0, 0.5);
+	border-radius: 40% 40% 0 0;
+}
+
+.walk-depth-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }

@@ -414,7 +414,8 @@
 				"mask": "Mask",
 				"size": "Sizing",
 				"tile": "Seamless",
-				"effect": "Effect"
+				"effect": "Effect",
+				"walk": "Walk area"
 			},
 			"toolHint": {
 				"adjust": "Color \u2014 brightness, contrast and gamma.",
@@ -422,7 +423,8 @@
 				"mask": "Mask \u2014 cut holes by hand, where no model is going to find the edge for you.",
 				"size": "Sizing \u2014 anchor, resize and crop.",
 				"tile": "Seamless \u2014 fold one edge over the facing one, so the picture loops.",
-				"effect": "Effect \u2014 a live look drawn over the asset. Changes no pixels."
+				"effect": "Effect \u2014 a live look drawn over the asset. Changes no pixels.",
+				"walk": "Walk area \u2014 where a character may walk on this backdrop, and how big it is at each height."
 			},
 			"tile": "Seamless loop",
 			"tileNote": "A scrolling backdrop travels a whole frame and starts over. The restart itself is hidden\u2014a second copy is already in place\u2014but art whose facing edges do not match jumps once per lap. Overlap folds one edge back over the other until they do. It costs size: the two strips become one, so the picture is saved that much smaller the way it loops.",
@@ -479,6 +481,37 @@
 				"burst": "Corrupted share",
 				"scanlines": "Scanlines",
 				"noise": "Snow"
+			},
+			"walk": {
+				"title": "Walk area",
+				"note": "Where a character may walk on this backdrop. Draw the floor, then cut holes in it where furniture stands. Depth sets how big a character is at each height: far away small, close up big. Nothing here changes the picture; it is stored with the backdrop and travels wherever it goes.",
+				"hint": "Click out the floor's corners, or drag to trace it; Enter or a double click closes it. Drag the ghost to check the depth by eye.",
+				"empty": "No floor yet. Draw one on the picture.",
+				"op": {
+					"walk": "Floor",
+					"block": "Hole"
+				},
+				"opHint": {
+					"walk": "Floor \u2014 a character may walk here.",
+					"block": "Hole \u2014 cut out of the floor: a table, a pillar."
+				},
+				"shapeLabel": "{{op}} {{index}}",
+				"depth": "Depth",
+				"depthY": "{{line}} line",
+				"depthScale": "{{line}} size",
+				"depthLine": {
+					"far": "Far",
+					"near": "Near"
+				},
+				"depthChip": "{{line}} size \u00d7{{scale}}. Drag sideways to change.",
+				"ghost": "Ghost",
+				"noCharacters": "No characters yet",
+				"walkHere": "Walk Here",
+				"walkHereHint": "Click on the picture and the ghost walks there, round the holes.",
+				"ghostHint": "Drag the ghost around. It turns red off the floor and snaps back on when you let go.",
+				"walkHereSheet": "Walk here",
+				"noWalkPose": "This character has no walk pose, so it glides.",
+				"unreachable": "That spot is on another piece of floor. The ghost walked as close as it could."
 			}
 		},
 		"passageEdit": {
@@ -589,6 +622,17 @@
 					"character": "New character",
 					"pose": "Poses of a character…",
 					"poseEmpty": "Poses of a character (none yet)"
+				},
+				"walk": {
+					"walkHere": "Walk Here",
+					"walkHereHint": "Walk here \u2014 click on the stage and the picked character walks there over the backdrop's walk area. Preview only; nothing is written.",
+					"walker": "Walker",
+					"noCast": "No cast in this scene",
+					"noArea": "This backdrop has no walk area. Draw one in the asset editor's Walk area tool.",
+					"noBg": "This beat has no backdrop.",
+					"moving": "The backdrop moves ({{fx}}), so the floor would not stay under the feet. Walk here is off.",
+					"noWalkPose": "{{name}} has no walk pose, so it glides.",
+					"unreachable": "That spot is on another piece of floor. Walked as close as possible."
 				}
 			},
 			"lock": {
@@ -1346,7 +1390,8 @@
 				"zBack": "Send Entity Backward",
 				"zFront": "Bring Entity Forward",
 				"undo": "Undo Scene Edit",
-				"redo": "Redo Scene Edit"
+				"redo": "Redo Scene Edit",
+				"walkHere": "Walk Here in Scene Preview"
 			},
 			"slidersAssets": {
 				"upload": "Add Files",
@@ -1360,6 +1405,7 @@
 				"resetCrop": "Reset Crop",
 				"cycleMaskMode": "Cycle Preview",
 				"clearMask": "Clear Mask",
+				"walkHere": "Walk Here",
 				"saveAsNew": "Save as New Asset",
 				"replace": "Overwrite Original"
 			},
