@@ -9,6 +9,8 @@
  *   A character's origin is its FEET, so `at: 0` means "standing centre".
  */
 
+import type {WalkArea} from './walk';
+
 /**
  * Legacy layer vocabulary. NOT a stage concept any more — entities live in one z space and
  * `layer:` is parse-time sugar that desugars to a `z` seed (see `LAYER_Z`).
@@ -1353,7 +1355,11 @@ export interface Character {
 	poses: Record<string, CharacterPose>;
 	/** Which way the art looks. Default `right`. A walk flips from it. */
 	faces?: 'left' | 'right';
-	/** Stage widths per second when walking. See point-and-click/walk-area.md. Unused yet. */
+	/**
+	 * Walking speed at depth scale 1, in scene x units per second (half a stage width), the
+	 * same distance measure both ways across. Default `DEFAULT_WALK_SPEED`. See
+	 * point-and-click/walk-area.md.
+	 */
 	walkSpeed?: number;
 	tags: string[];
 }
@@ -1741,6 +1747,11 @@ export interface AssetMeta {
 	 */
 	effect?: AssetEffect;
 	/**
+	 * Where a character may walk on this backdrop, and how big it is at each height. `bg`
+	 * only. Like `effect`: says how to use the bytes, so it survives `replace` and bundles.
+	 */
+	walk?: WalkArea;
+	/**
 	 * Which extra blobs this asset owns, and what is known about each. An explicit index
 	 * rather than a probe, so that `remove` can delete them without any backend having to
 	 * scan for keys by prefix.
@@ -1791,3 +1802,4 @@ export interface Renderer {
 
 export * from './passage-name';
 export * from './bubble-fonts';
+export * from './walk';
