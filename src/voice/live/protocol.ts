@@ -17,6 +17,8 @@ import {INPUT_SAMPLE_RATE} from './models';
 export interface SetupOptions {
 	model: string;
 	systemInstruction: string;
+	/** Per model — see `LiveModel.thinkingLevel`. Omitted entirely when undefined. */
+	thinkingLevel?: 'low' | 'medium' | 'high';
 	tools: VoiceToolDecl[];
 	/** One of the API's voice names. Undefined takes the default. */
 	voice?: string;
@@ -37,6 +39,9 @@ export function setupMessage(options: SetupOptions): Record<string, unknown> {
 			contextWindowCompression: {slidingWindow: {}},
 			generationConfig: {
 				responseModalities: ['AUDIO'],
+				...(options.thinkingLevel
+					? {thinkingConfig: {thinkingLevel: options.thinkingLevel}}
+					: {}),
 				...(options.voice
 					? {
 							speechConfig: {
@@ -67,13 +72,14 @@ export function toFunctionDeclaration(
 	};
 }
 
-/** A chunk of microphone audio. */
+/**
+ * A chunk of microphone audio. `realtimeInput.audio`, not the older `mediaChunks` list:
+ * the server still accepts both (2026-09), the docs only show this one.
+ */
 export function audioMessage(base64Pcm: string): Record<string, unknown> {
 	return {
 		realtimeInput: {
-			mediaChunks: [
-				{data: base64Pcm, mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}`}
-			]
+			audio: {data: base64Pcm, mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}`}
 		}
 	};
 }
@@ -150,6 +156,12 @@ export interface LiveEvent {
 	calls: LiveFunctionCall[];
 	/** Ids of calls it no longer wants — the author interrupted. */
 	cancelled: string[];
+	/**
+	 * Extended-thinking models end a spoken turn with `interactionStatus: IN_PROGRESS`
+	 * while they keep reasoning; a tool call can still follow. `turnComplete` alone does
+	 * not mean idle there.
+	 */
+	stillThinking: boolean;
 	error?: string;
 	/** The author's own words, as the API heard them. */
 	inputText?: string;
@@ -169,6 +181,7 @@ const EMPTY: LiveEvent = {
 	cancelled: [],
 	interrupted: false,
 	setupComplete: false,
+	stillThinking: false,
 	turnComplete: false
 };
 
@@ -206,6 +219,7 @@ export function parseLiveMessage(raw: string): LiveEvent {
 		cancelled: [],
 		interrupted: false,
 		setupComplete: root.setupComplete !== undefined,
+		stillThinking: false,
 		turnComplete: false
 	};
 
@@ -214,6 +228,7 @@ export function parseLiveMessage(raw: string): LiveEvent {
 	if (serverContent) {
 		event.interrupted = serverContent.interrupted === true;
 		event.turnComplete = serverContent.turnComplete === true;
+		event.stillThinking = serverContent.interactionStatus === 'IN_PROGRESS';
 
 		const modelTurn = asRecord(serverContent.modelTurn);
 		const parts = Array.isArray(modelTurn?.parts) ? modelTurn!.parts : [];

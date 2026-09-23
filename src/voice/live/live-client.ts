@@ -8,7 +8,7 @@
  */
 
 import type {TranscriptRow, VoiceToolDecl, VoiceUsage} from '../voice.types';
-import {defaultLiveModel, liveEndpoint} from './models';
+import {liveEndpoint, pickLiveModel} from './models';
 import {seedTurnMessage} from './seed';
 import {
 	audioMessage,
@@ -47,7 +47,11 @@ export interface LiveClientOptions {
 	seed?: TranscriptRow[];
 	/** The model finished a turn. Re-arms per-turn caps. */
 	onTurnComplete?: () => void;
-	/** A turn, as text. `role` says whose. Both go in the transcript. */
+	/**
+	 * A turn, as text. `role` says whose. Both go in the transcript. The API streams
+	 * transcription a few words per frame; the adapter joins them and calls this once per
+	 * side per turn, or every fragment would be its own chat bubble.
+	 */
 	onTranscript: (role: 'user' | 'model', text: string) => void;
 	systemInstruction: string;
 	tools: VoiceToolDecl[];
@@ -94,12 +98,40 @@ function takePicture(
 	return {data, mime: mime ?? 'image/png'};
 }
 
+/**
+ * The server's close reason, with the one case it words badly spelled out. A retired
+ * model id closes 1008 "…not found for API version v1beta…", which reads as a wrong
+ * endpoint and is not: the path is fine, the id is gone.
+ */
+export function closeReason(code: number, reason: string, modelId: string): string {
+	if (code === 1008 && /not found|not supported/i.test(reason)) {
+		return `model ${modelId} is not available on this key — pick another model`;
+	}
+
+	return reason || `closed (${code})`;
+}
+
 export function connectLive(options: LiveClientOptions): LiveClient {
 	const socket = new WebSocket(liveEndpoint(options.apiKey));
 	let state: LiveState = 'connecting';
 	let ready = false;
 	/** Frames recorded before `setupComplete`. Dropped, not queued — see `sendAudio`. */
 	let closed = false;
+	/** Transcription fragments not yet handed on. See `onTranscript`. */
+	const heard = {model: '', user: ''};
+
+	const flush = (role: 'user' | 'model') => {
+		const text = heard[role].trim();
+
+		heard[role] = '';
+
+		if (text !== '') {
+			options.onTranscript(role, text);
+		}
+	};
+
+	/** `working` because the model is reasoning (`stillThinking`), not because a tool runs. */
+	let thinking = false;
 
 	const setState = (next: LiveState, detail?: string) => {
 		state = next;
@@ -114,11 +146,14 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 		}
 	};
 
+	const model = pickLiveModel(options.model);
+
 	socket.onopen = () =>
 		send(
 			setupMessage({
-				model: options.model ?? defaultLiveModel,
+				model: model.id,
 				systemInstruction: options.systemInstruction,
+				thinkingLevel: model.thinkingLevel,
 				tools: options.tools
 			})
 		);
@@ -155,22 +190,41 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 			options.onAudio(chunk);
 		}
 
-		if (event.audio.length > 0 && state !== 'working') {
+		if (event.audio.length > 0 && (state !== 'working' || thinking)) {
+			thinking = false;
 			setState('speaking');
 		}
 
 		if (event.inputText) {
-			options.onTranscript('user', event.inputText);
+			heard.user += event.inputText;
+		}
+
+		// The model answering is the end of what the author said; theirs goes first.
+		if (event.outputText || event.audio.length > 0 || event.calls.length > 0) {
+			flush('user');
 		}
 
 		if (event.outputText) {
-			options.onTranscript('model', event.outputText);
+			heard.model += event.outputText;
+		}
+
+		// A tool card between two halves of a sentence would split it anyway, so the text
+		// before a call is its own row, in the order it was said.
+		if (event.turnComplete || event.interrupted || event.calls.length > 0) {
+			flush('user');
+			flush('model');
 		}
 
 		if (event.turnComplete) {
 			options.onTurnComplete?.();
 
-			if (state === 'speaking') {
+			// Not `working` from a tool: the server sends `turnComplete` right behind a
+			// `toolCall`, while the call is still running here.
+			if (event.stillThinking) {
+				thinking = true;
+				setState('working');
+			} else if (state === 'speaking' || thinking) {
+				thinking = false;
 				setState('listening');
 			}
 		}
@@ -179,6 +233,7 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 			return;
 		}
 
+		thinking = false;
 		setState('working');
 
 		// Sequentially, not in parallel: two writes to the same passage race through the
@@ -260,14 +315,18 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 		}
 
 		closed = true;
+		flush('user');
+		flush('model');
 		setState(
 			event.code === 1000 ? 'off' : 'error',
-			event.code === 1000 ? undefined : event.reason || `closed (${event.code})`
+			event.code === 1000 ? undefined : closeReason(event.code, event.reason, model.id)
 		);
 	};
 
 	return {
 		close() {
+			flush('user');
+			flush('model');
 			closed = true;
 			state = 'off';
 			socket.close(1000);

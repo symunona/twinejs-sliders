@@ -1090,6 +1090,7 @@
 			"send": "Send",
 			"sendPlaceholder": "Say something, or /read_passage Tavern Night",
 			"sendDisabled": "Turn the microphone on to talk to the model.",
+			"model": "Live model",
 			"jumpToLatest": "Jump to latest",
 			"empty": "Nothing yet. Turn the microphone on and talk.",
 			"needsKey": "Add a Gemini API key in AI preferences to talk.",

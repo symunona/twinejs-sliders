@@ -7,7 +7,8 @@
  * having forgotten the conversation, or the meter never moves.
  */
 
-import {connectLive} from '../live-client';
+import {closeReason, connectLive} from '../live-client';
+import {liveModels} from '../models';
 import type {LiveClient, LiveState} from '../live-client';
 import type {TranscriptRow} from '../../voice.types';
 
@@ -95,6 +96,148 @@ describe('setup', () => {
 		expect(socket.sent[0].setup.contextWindowCompression).toEqual({
 			slidingWindow: {}
 		});
+	});
+});
+
+describe('model', () => {
+	it('opens on a model the API still lists — the retired default closed 1008', () => {
+		const {socket} = open();
+
+		expect(socket.sent[0].setup.model).toBe(`models/${liveModels[0].id}`);
+		expect(socket.sent[0].setup.model).not.toBe(
+			'models/gemini-live-2.5-flash-preview'
+		);
+	});
+
+	it('falls back to the default when the saved choice is no longer listed', () => {
+		const {socket} = open({model: 'gemini-live-2.5-flash-preview'});
+
+		expect(socket.sent[0].setup.model).toBe(`models/${liveModels[0].id}`);
+	});
+
+	it('sends the chosen model with its own thinking level', () => {
+		const {socket} = open({model: 'gemini-3.8-live-extended-thinking'});
+
+		expect(socket.sent[0].setup.model).toBe(
+			'models/gemini-3.8-live-extended-thinking'
+		);
+		expect(socket.sent[0].setup.generationConfig.thinkingConfig).toEqual({
+			thinkingLevel: 'low'
+		});
+	});
+
+	it('names the model when the server says it is not found', () => {
+		expect(
+			closeReason(
+				1008,
+				'models/x is not found for API version v1beta, or is not supported for bidiGenerateContent.',
+				'x'
+			)
+		).toMatch(/model x is not available/);
+		expect(closeReason(1011, 'internal', 'x')).toBe('internal');
+		expect(closeReason(1006, '', 'x')).toBe('closed (1006)');
+	});
+
+	it('shows the close reason as an error state', () => {
+		const details: (string | undefined)[] = [];
+		const states: LiveState[] = [];
+		const {socket} = open({
+			onState: (next: LiveState, detail?: string) => {
+				details.push(detail);
+				states.push(next);
+			}
+		});
+
+		socket.onclose?.({code: 1008, reason: 'models/x is not found'});
+
+		expect(states[states.length - 1]).toBe('error');
+		expect(details[details.length - 1]).toMatch(/not available/);
+	});
+});
+
+describe('state', () => {
+	it('stays working through the turnComplete that trails a tool call', async () => {
+		let release!: () => void;
+		const {socket, states} = open({
+			onCall: () => new Promise(resolve => (release = () => resolve({ok: true})))
+		});
+
+		await socket.deliver({setupComplete: {}});
+		const call = socket.deliver({
+			toolCall: {functionCalls: [{args: {}, id: 'a', name: 'map'}]}
+		});
+
+		await socket.deliver({serverContent: {turnComplete: true}});
+		expect(states[states.length - 1]).toBe('working');
+
+		release();
+		await call;
+		expect(states[states.length - 1]).toBe('listening');
+	});
+
+	it('reads as working while an extended-thinking model reasons past its turn', async () => {
+		const {socket, states} = open();
+
+		await socket.deliver({setupComplete: {}});
+		await socket.deliver({
+			serverContent: {interactionStatus: 'IN_PROGRESS', turnComplete: true}
+		});
+		expect(states[states.length - 1]).toBe('working');
+
+		await socket.deliver({serverContent: {interactionStatus: 'IDLE', turnComplete: true}});
+		expect(states[states.length - 1]).toBe('listening');
+	});
+});
+
+describe('transcript', () => {
+	function openHearing() {
+		const said: [string, string][] = [];
+		const harness = open({
+			onTranscript: (role: 'user' | 'model', text: string) => said.push([role, text])
+		});
+
+		return {...harness, said};
+	}
+
+	it('joins streamed fragments into one row per side per turn', async () => {
+		const {said, socket} = openHearing();
+
+		await socket.deliver({setupComplete: {}});
+		await socket.deliver({serverContent: {inputTranscription: {text: 'how many'}}});
+		await socket.deliver({serverContent: {inputTranscription: {text: ' passages?'}}});
+		await socket.deliver({serverContent: {outputTranscription: {text: 'The story'}}});
+		await socket.deliver({
+			serverContent: {outputTranscription: {text: ' has one passage.'}}
+		});
+		expect(said).toEqual([['user', 'how many passages?']]);
+
+		await socket.deliver({serverContent: {turnComplete: true}});
+		expect(said).toEqual([
+			['user', 'how many passages?'],
+			['model', 'The story has one passage.']
+		]);
+	});
+
+	it('ends the model row at a tool call, so the card lands after what was said', async () => {
+		const {said, socket} = openHearing();
+
+		await socket.deliver({setupComplete: {}});
+		await socket.deliver({serverContent: {outputTranscription: {text: 'Looking.'}}});
+		await socket.deliver({
+			toolCall: {functionCalls: [{args: {}, id: 'a', name: 'map'}]}
+		});
+
+		expect(said).toEqual([['model', 'Looking.']]);
+	});
+
+	it('keeps what was heard when the socket closes mid-turn', async () => {
+		const {client, said, socket} = openHearing();
+
+		await socket.deliver({setupComplete: {}});
+		await socket.deliver({serverContent: {outputTranscription: {text: 'Half a'}}});
+		client.close();
+
+		expect(said).toEqual([['model', 'Half a']]);
 	});
 });
 

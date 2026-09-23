@@ -1,12 +1,12 @@
 /**
  * Which Live model voice mode talks to, and the few numbers the protocol fixes.
  *
- * Half-cascade rather than native audio, deliberately. Native audio sounds better and
- * calls functions worse, and this is a tool-calling app — a model that narrates an edit it
- * did not make is worse than one that sounds synthetic while making it.
- *
- * Model ids move. They live here, next to `generatorModels`, so the next rename is one
- * file rather than a hunt through the adapter.
+ * Model ids move, and a retired one does not degrade — the socket closes 1008 "not found
+ * for API version v1beta" before setup completes. 2026-09 that happened to every id this
+ * list shipped with. They live here, next to `generatorModels`, so the next rename is one
+ * file rather than a hunt through the adapter. Check the live list with
+ * `GET /v1beta/models?key=…`, filtered on `supportedGenerationMethods` ∋
+ * `bidiGenerateContent` — the docs page lags it.
  */
 
 export interface LiveModel {
@@ -24,25 +24,36 @@ export interface LiveModel {
 	id: string;
 	label: string;
 	note?: string;
+	/**
+	 * Sent as `generationConfig.thinkingConfig.thinkingLevel`. Per model, not a preference:
+	 * extended-thinking REQUIRES it (1007 without), and 3.8 Live REJECTS it (1007 with).
+	 */
+	thinkingLevel?: 'low' | 'medium' | 'high';
 }
 
 export const liveModels: LiveModel[] = [
 	{
-		contextTokens: 1_048_576,
-		id: 'gemini-live-2.5-flash-preview',
-		label: 'Gemini 2.5 Flash Live',
-		note: 'Half-cascade. Weaker voice, stronger function calling — the right trade here.'
+		id: 'gemini-3.8-live',
+		label: 'Gemini 3.8 Live',
+		note: 'Default. Fast, calls tools well, no reasoning delay.'
 	},
 	{
-		contextTokens: 1_048_576,
-		id: 'gemini-2.0-flash-live-001',
-		label: 'Gemini 2.0 Flash Live'
+		id: 'gemini-3.8-live-extended-thinking',
+		label: 'Gemini 3.8 Live, extended thinking',
+		note: 'Reasons in the background. Slower to act; tool calls arrive after a pause.',
+		thinkingLevel: 'low'
 	},
 	{
+		id: 'gemini-3.1-flash-live-preview',
+		label: 'Gemini 3.1 Flash Live',
+		note: 'Legacy preview. Tool calls run one at a time.'
+	},
+	{
+		// The docs give native-audio models a 128k window and publish nothing for the rest.
 		contextTokens: 128_000,
-		id: 'gemini-2.5-flash-native-audio-preview-09-2025',
+		id: 'gemini-2.5-flash-native-audio-preview-12-2025',
 		label: 'Gemini 2.5 Flash Native Audio',
-		note: 'Sounds best. Calls tools least reliably.'
+		note: 'Best voice. Weakest at tools.'
 	}
 ];
 
@@ -50,6 +61,14 @@ export const defaultLiveModel = liveModels[0].id;
 
 export function liveModel(id: string): LiveModel | undefined {
 	return liveModels.find(model => model.id === id);
+}
+
+/**
+ * The saved choice, or the default when it is empty or no longer listed. A pref naming a
+ * retired id must not reproduce the 1008 this file was rewritten to fix.
+ */
+export function pickLiveModel(id: string | undefined): LiveModel {
+	return liveModel(id ?? '') ?? liveModels[0];
 }
 
 /**

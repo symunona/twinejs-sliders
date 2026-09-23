@@ -167,6 +167,11 @@ export interface PrefsState {
 	 */
 	storyTagColors: Record<string, Color>;
 	/**
+	 * Live model id for voice mode. Empty, or an id `liveModels` no longer lists, falls
+	 * back to the default — see `pickLiveModel`.
+	 */
+	voiceLiveModel: string;
+	/**
 	 * Use CodeMirror for text editing?
 	 */
 	useCodeMirror: boolean;

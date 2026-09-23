@@ -19,14 +19,14 @@ describe('setupMessage', () => {
 	const setup = () =>
 		(
 			setupMessage({
-				model: 'gemini-live-2.5-flash-preview',
+				model: 'gemini-3.8-live',
 				systemInstruction: 'be brief',
 				tools: voiceTools
 			}) as any
 		).setup;
 
 	it('prefixes the model with models/, which the API requires', () => {
-		expect(setup().model).toBe('models/gemini-live-2.5-flash-preview');
+		expect(setup().model).toBe('models/gemini-3.8-live');
 	});
 
 	it('asks for exactly one response modality — both is rejected', () => {
@@ -40,6 +40,23 @@ describe('setupMessage', () => {
 
 	it('declares every tool', () => {
 		expect(setup().tools[0].functionDeclarations).toHaveLength(voiceTools.length);
+	});
+
+	it('omits thinkingConfig when the model has no thinking level — 3.8 Live rejects it', () => {
+		expect(setup().generationConfig).not.toHaveProperty('thinkingConfig');
+	});
+
+	it('sends the thinking level when the model needs one', () => {
+		expect(
+			(
+				setupMessage({
+					model: 'gemini-3.8-live-extended-thinking',
+					systemInstruction: '',
+					thinkingLevel: 'low',
+					tools: []
+				}) as any
+			).setup.generationConfig.thinkingConfig
+		).toEqual({thinkingLevel: 'low'});
 	});
 
 	it('omits speechConfig entirely when no voice was named', () => {
@@ -65,7 +82,7 @@ describe('toFunctionDeclaration', () => {
 
 describe('outbound messages', () => {
 	it('labels microphone audio with the rate the API expects', () => {
-		expect((audioMessage('AAA') as any).realtimeInput.mediaChunks[0]).toEqual({
+		expect((audioMessage('AAA') as any).realtimeInput.audio).toEqual({
 			data: 'AAA',
 			mimeType: 'audio/pcm;rate=16000'
 		});
@@ -166,6 +183,17 @@ describe('parseLiveMessage', () => {
 		expect(
 			parseLiveMessage('{"toolCallCancellation":{"ids":["c1","c2"]}}').cancelled
 		).toEqual(['c1', 'c2']);
+	});
+
+	it('reads a turn that ends while the model is still reasoning', () => {
+		const event = parseLiveMessage(
+			JSON.stringify({
+				serverContent: {interactionStatus: 'IN_PROGRESS', turnComplete: true}
+			})
+		);
+
+		expect(event.turnComplete).toBe(true);
+		expect(event.stillThinking).toBe(true);
 	});
 
 	it('turns goAway into an error the panel can show', () => {

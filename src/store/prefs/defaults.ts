@@ -44,5 +44,6 @@ export const defaults = (): PrefsState => ({
 	storyListTagFilter: [],
 	storyTagColors: {},
 	useCodeMirror: true,
+	voiceLiveModel: '',
 	welcomeSeen: false
 });

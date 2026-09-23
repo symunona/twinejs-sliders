@@ -141,13 +141,37 @@ anything ran.
 | barge-in | `interrupted` frame → drop every queued source |
 | AEC | requested, **and** the panel says wear headphones — AEC on laptop speakers is best-effort |
 
-Model ids in `live/models.ts`, next to `generatorModels`. Half-cascade by default: native
-audio sounds better and calls functions worse, and this is a tool-calling app.
+## Models
+
+Ids in `live/models.ts`. Picker in the status row, pref `voiceLiveModel`, locked while the mic
+is on (model fixed at setup).
+
+| id | note |
+|---|---|
+| `gemini-3.8-live` | default. Rejects `thinkingConfig` (1007) |
+| `gemini-3.8-live-extended-thinking` | **requires** `thinkingLevel` (1007). Ends turns `interactionStatus: IN_PROGRESS` → panel shows `working` |
+| `gemini-3.1-flash-live-preview` | legacy preview |
+| `gemini-2.5-flash-native-audio-preview-12-2025` | best voice, weakest tools |
+
+- Retired id = close **1008** "not found for API version v1beta". Endpoint path is fine; the
+  id is gone. Panel rewrites that reason to name the model.
+- Saved pref naming a dropped id → falls back to default (`pickLiveModel`).
+- Live list, truer than the docs page:
+  `GET /v1beta/models?key=…` where `supportedGenerationMethods` has `bidiGenerateContent`.
+- Mic audio sent as `realtimeInput.audio`. `mediaChunks` still accepted 2026-09, undocumented.
+- Transcription streams a few words per frame. Client joins them: one row per side per turn,
+  split at tool calls.
+
+## Panel states
+
+Pill + dot, coloured: listening green (pulse), speaking blue, working orange (pulse),
+error red with the server reason, off grey. Theme vars only — `colors.css`.
 
 ## Not done
 
-- No e2e. Audio and rasterising are both unprovable under jest; verified by hand in Chrome.
-  The socket's wiring is not: `live-client.test.ts` drives a fake `WebSocket`.
+- No committed e2e. Verified 2026-09-23 in headless Chrome with a real key
+  (`--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`): connect, `/map`,
+  typed turn → `toolCall map` → response → spoken answer. Wiring: `live-client.test.ts`
+  drives a fake `WebSocket`.
 - `revs` and `checkpoint` need a server; local-only stories get an honest error.
 - Threads are per browser. Nothing is written to the story, and nothing syncs.
-- `live/models.ts` is stale — the three ids there are 2025 previews.

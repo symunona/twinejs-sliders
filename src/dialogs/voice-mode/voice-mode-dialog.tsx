@@ -6,15 +6,16 @@ import {
 	IconPlus,
 	IconSend
 } from '@tabler/icons';
+import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
-import {usePrefsContext} from '../../store/prefs';
+import {setPref, usePrefsContext} from '../../store/prefs';
 import {storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
-import {defaultLiveModel} from '../../voice/live/models';
+import {liveModels, pickLiveModel} from '../../voice/live/models';
 import {useLiveVoice} from '../../voice/live/use-live-voice';
 import {sceneIdsOf} from '../../voice/runner';
 import {parseToolLine, useVoiceSession} from '../../voice/use-voice-session';
@@ -52,7 +53,7 @@ export interface VoiceModeDialogProps extends DialogComponentProps {
  */
 export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 	const {getCenter, setCenter, storyId, ...other} = props;
-	const {prefs} = usePrefsContext();
+	const {dispatch, prefs} = usePrefsContext();
 	const {stories} = useUndoableStoriesContext();
 	const story = storyWithId(stories, storyId);
 	const {capture, host} = useSceneScreenshot(story);
@@ -73,8 +74,10 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 
 	rowsRef.current = session.rows;
 
+	const model = pickLiveModel(prefs.voiceLiveModel);
 	const voice = useLiveVoice({
 		apiKey: prefs.geminiApiKey,
+		model: model.id,
 		onCall: session.call,
 		onSay: session.say,
 		onTurnComplete: session.endTurn,
@@ -193,6 +196,23 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 		voice.sendText(trimmed);
 	}, [line, session, voice]);
 
+	/**
+	 * Grows with its text up to the CSS `max-height`, then scrolls. Measured rather than
+	 * left to `field-sizing: content`, which Firefox does not ship.
+	 */
+	const box = React.useRef<HTMLTextAreaElement>(null);
+
+	React.useLayoutEffect(() => {
+		const node = box.current;
+
+		if (!node) {
+			return;
+		}
+
+		node.style.height = 'auto';
+		node.style.height = `${node.scrollHeight}px`;
+	}, [line]);
+
 	const stateLabel = t(`dialogs.voiceMode.${voice.state}`, {
 		defaultValue: voice.state
 	});
@@ -222,7 +242,7 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 			maximizable
 		>
 			<CardContent>
-				<div className="voice-status">
+				<div className={classNames('voice-status', `voice-status-${voice.state}`)}>
 					<IconButton
 						icon={voice.on ? <IconMicrophone /> : <IconMicrophoneOff />}
 						// The label is next to it in the live region, and printing it twice
@@ -238,7 +258,27 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 					<span aria-live="polite" className="voice-state">
 						{voice.detail ?? stateLabel}
 					</span>
-					<ContextMeter modelId={defaultLiveModel} usage={voice.usage} />
+					{/*
+					 * Locked while the socket is up: the model is fixed at setup, so a
+					 * change here would silently apply only to the NEXT session.
+					 */}
+					<select
+						aria-label={t('dialogs.voiceMode.model')}
+						className="voice-model"
+						disabled={voice.on}
+						onChange={event =>
+							dispatch(setPref('voiceLiveModel', event.target.value))
+						}
+						title={model.note}
+						value={model.id}
+					>
+						{liveModels.map(entry => (
+							<option key={entry.id} value={entry.id}>
+								{entry.label}
+							</option>
+						))}
+					</select>
+					<ContextMeter modelId={model.id} usage={voice.usage} />
 					<IconButton
 						disabled={!session.undo}
 						icon={<IconArrowBackUp />}
@@ -266,15 +306,28 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 						void handleSend();
 					}}
 				>
-					<input
+					<textarea
 						disabled={!voice.on}
 						onChange={event => setLine(event.target.value)}
+						// Enter sends, Shift+Enter breaks the line — the chat convention. Not
+						// while an IME is composing, or confirming a candidate sends it.
+						onKeyDown={event => {
+							if (
+								event.key === 'Enter' &&
+								!event.shiftKey &&
+								!event.nativeEvent.isComposing
+							) {
+								event.preventDefault();
+								void handleSend();
+							}
+						}}
 						placeholder={
 							voice.on
 								? t('dialogs.voiceMode.sendPlaceholder')
 								: t('dialogs.voiceMode.sendDisabled')
 						}
-						type="text"
+						ref={box}
+						rows={1}
 						value={line}
 					/>
 					<IconButton

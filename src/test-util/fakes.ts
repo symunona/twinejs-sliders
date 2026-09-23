@@ -154,6 +154,7 @@ export function fakePrefs(overrides?: Partial<PrefsState>): PrefsState {
 		// Changing this preference should be explicit in a test because it affects
 		// editorCursorBlinks in some contexts.
 		useCodeMirror: true,
+		voiceLiveModel: '',
 		welcomeSeen: faker.datatype.boolean(),
 		...overrides
 	};
