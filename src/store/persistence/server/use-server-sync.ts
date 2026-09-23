@@ -367,6 +367,18 @@ export const ServerSyncProvider: React.FC<ServerSyncProviderProps> = ({
  * Everything above, wired up. Exported on its own so a test can drive it without a
  * provider, and so the mount point can be a one-liner beside `<StateLoader>`.
  */
+/**
+ * `syncedHashes` off a pull result, when the pull side reports one. Read structurally so
+ * this compiles against a `pull-assets.ts` that does not declare the field yet.
+ */
+function syncedHashesOf(
+	result: AssetPullResult
+): Map<string, string> | undefined {
+	return 'syncedHashes' in result && result.syncedHashes instanceof Map
+		? result.syncedHashes
+		: undefined;
+}
+
 export function useServerSync(): ServerSyncContextProps {
 	const {dispatch, stories} = useStoriesContext();
 	const {dispatch: prefsDispatch, prefs} = usePrefsContext();
@@ -464,11 +476,25 @@ export function useServerSync(): ServerSyncContextProps {
 	);
 	/** Story id -> the index row's asset signature as the index last reported it. */
 	const assetSignatures = React.useRef(new Map<string, string>());
+	/**
+	 * Story id -> (asset id -> hash) as last agreed with the server, by a push that wrote
+	 * or a pull that reported it. In memory only: a reload starts blank and the first
+	 * push pulls before it writes.
+	 */
+	const assetSyncedHashes = React.useRef(
+		new Map<string, Map<string, string>>()
+	);
+	/** Story id -> the pull warnings last shown, so a poll does not repeat them. */
+	const assetPullWarnings = React.useRef(new Map<string, string>());
 	const pullAssetsRef = React.useRef<
 		(
 			storyId: string,
 			signature?: string
 		) => Promise<AssetPullResult | undefined>
+	>(async () => undefined);
+	/** `pullAssets` minus the "does this browser sync it" gate. Push reaches it here. */
+	const runAssetPullRef = React.useRef<
+		(storyId: string) => Promise<AssetPullResult | undefined>
 	>(async () => undefined);
 
 	const client = React.useMemo<ServerClient | undefined>(() => {
@@ -620,16 +646,16 @@ export function useServerSync(): ServerSyncContextProps {
 				return;
 			}
 
-			try {
-				const result = await syncStoryAssets({
+			const store = slidersAssetStore(story.id);
+			const attempt = (ifMatch: number | undefined, lastFingerprint?: string) =>
+				syncStoryAssets({
 					client,
-					// The autosave path runs this after every push. Scanning and diffing
-					// are not news; only bytes actually going up are worth a progress row,
-					// or the story card blinks on every keystroke batch.
-					lastFingerprint: options.quiet
-						? assetFingerprints.current.get(story.id)
-						: undefined,
+					ifMatch,
+					lastFingerprint,
 					onProgress: next => {
+						// The autosave path runs this after every push. Scanning and diffing
+						// are not news; only bytes actually going up are worth a progress
+						// row, or the story card blinks on every keystroke batch.
 						if (
 							options.quiet &&
 							(next.phase === 'scan' || next.phase === 'diff')
@@ -640,12 +666,71 @@ export function useServerSync(): ServerSyncContextProps {
 						setStoryProgress(story.id, next);
 					},
 					story,
-					store: slidersAssetStore(story.id)
+					store,
+					syncedHashes: assetSyncedHashes.current.get(story.id)
 				});
+
+			try {
+				// Never push blind. No rev yet means this tab has not seen the server's art
+				// for this story, and an unconditional write is how a stale device put its
+				// old bytes over another's edit. Pull (which merges) to learn the rev.
+				if (!assetPullRevs.current.has(story.id)) {
+					if (!(await runAssetPullRef.current(story.id))) {
+						return;
+					}
+				}
+
+				let result;
+
+				try {
+					result = await attempt(
+						assetPullRevs.current.get(story.id),
+						options.quiet ? assetFingerprints.current.get(story.id) : undefined
+					);
+				} catch (error) {
+					if (!isServerError(error) || !error.conflict) {
+						throw error;
+					}
+
+					// Someone else wrote first. ONE pull and ONE retry, never a loop: two
+					// tabs trading 412s would each pull and push forever. A second refusal
+					// waits for the next library event or poll.
+					const theirRev = error.rev;
+
+					logSync('asset', 'push 412: pulling once', story.id, () => ({
+						rev: theirRev
+					}));
+
+					if (!(await runAssetPullRef.current(story.id))) {
+						return;
+					}
+
+					try {
+						result = await attempt(assetPullRevs.current.get(story.id));
+					} catch (retryError) {
+						if (!isServerError(retryError) || !retryError.conflict) {
+							throw retryError;
+						}
+
+						// Quiet on purpose: not an error the author can act on, and a
+						// banner per text push would be noise. The next event tries again.
+						const againRev = retryError.rev;
+
+						assetFingerprints.current.delete(story.id);
+						logSync('asset', 'push 412 again: waiting', story.id, () => ({
+							rev: againRev
+						}));
+						return;
+					}
+				}
 
 				// Only a run that reached the manifest counts. Remembering a half-finished
 				// one would skip the retry that finishes it.
 				assetFingerprints.current.set(story.id, result.fingerprint);
+
+				if (result.syncedHashes) {
+					assetSyncedHashes.current.set(story.id, result.syncedHashes);
+				}
 
 				// Our own manifest write moves the rev, and the index row with it. Claim it
 				// here or the next poll reads it as somebody else's art and pulls it back.
@@ -710,6 +795,29 @@ export function useServerSync(): ServerSyncContextProps {
 	}, [scheduleAssetSync]);
 
 	/**
+	 * A pull's warnings — "your library already has a different image named …" — on the
+	 * same channel as every other asset problem. Once per distinct set per story: the
+	 * same unlandable row comes back on every manifest rev, and a poll must not repeat it.
+	 */
+	const reportPullWarnings = React.useCallback(
+		(storyId: string, warnings: string[]) => {
+			const key = [...warnings].sort().join('\n');
+
+			if (key === (assetPullWarnings.current.get(storyId) ?? '')) {
+				return;
+			}
+
+			assetPullWarnings.current.set(storyId, key);
+
+			if (warnings.length > 0) {
+				logSync('asset', 'pull warnings', storyId, () => ({warnings}));
+				setLastError(warnings.join(' '));
+			}
+		},
+		[]
+	);
+
+	/**
 	 * Art coming DOWN into a story this browser already holds.
 	 *
 	 * Checkout used to be the only path, so a picture added by another editor never
@@ -724,25 +832,12 @@ export function useServerSync(): ServerSyncContextProps {
 	 * — no client, or not a story this browser syncs — or that one ran and threw, which is
 	 * reported on `lastError` and is not something a caller can do anything else about.
 	 */
-	const pullAssets = React.useCallback(
+	const runAssetPull = React.useCallback(
 		(
 			storyId: string,
 			signature?: string
 		): Promise<AssetPullResult | undefined> => {
-			// The index signature is claimed only by a pull that actually ran. Claiming it
-			// up front looks harmless and is not: a pull refused because the client was
-			// mid-rebuild (the credentials just changed) would leave the signature saying
-			// "seen", and the poll would never look at that story again — art stuck until
-			// the page was reloaded. Measured exactly that way.
 			if (!client) {
-				return Promise.resolve(undefined);
-			}
-
-			// Only a story this browser holds AND syncs. A ghost's art arrives with its
-			// checkout, and an unsynced local story has no business reading the server's.
-			if (
-				storiesRef.current.find(item => item.id === storyId)?.sync !== true
-			) {
 				return Promise.resolve(undefined);
 			}
 
@@ -764,15 +859,27 @@ export function useServerSync(): ServerSyncContextProps {
 
 			const run = (async (): Promise<AssetPullResult | undefined> => {
 				try {
-					const result = await pullStoryAssets({
+					const pullOptions = {
 						client,
 						lastRev: assetPullRevs.current.get(storyId),
-						onProgress: next => setStoryProgress(storyId, next),
+						onProgress: (next: AssetPullProgress) =>
+							setStoryProgress(storyId, next),
 						store: slidersAssetStore(storyId),
-						storyId
-					});
+						storyId,
+						syncedHashes: assetSyncedHashes.current.get(storyId)
+					};
+					const result = await pullStoryAssets(pullOptions);
+					const synced = syncedHashesOf(result);
 
 					assetPullRevs.current.set(storyId, result.rev);
+
+					if (synced) {
+						assetSyncedHashes.current.set(storyId, synced);
+					}
+
+					if (!result.skipped) {
+						reportPullWarnings(storyId, result.warnings);
+					}
 
 					if (signature !== undefined) {
 						assetSignatures.current.set(storyId, signature);
@@ -806,12 +913,40 @@ export function useServerSync(): ServerSyncContextProps {
 
 			return run;
 		},
-		[client, setStoryProgress]
+		[client, reportPullWarnings, setStoryProgress]
+	);
+
+	const pullAssets = React.useCallback(
+		(
+			storyId: string,
+			signature?: string
+		): Promise<AssetPullResult | undefined> => {
+			// The index signature is claimed only by a pull that actually ran. Claiming it
+			// up front looks harmless and is not: a pull refused because the client was
+			// mid-rebuild (the credentials just changed) would leave the signature saying
+			// "seen", and the poll would never look at that story again — art stuck until
+			// the page was reloaded. Measured exactly that way.
+			if (!client) {
+				return Promise.resolve(undefined);
+			}
+
+			// Only a story this browser holds AND syncs. A ghost's art arrives with its
+			// checkout, and an unsynced local story has no business reading the server's.
+			if (
+				storiesRef.current.find(item => item.id === storyId)?.sync !== true
+			) {
+				return Promise.resolve(undefined);
+			}
+
+			return runAssetPull(storyId, signature);
+		},
+		[client, runAssetPull]
 	);
 
 	React.useEffect(() => {
 		pullAssetsRef.current = pullAssets;
-	}, [pullAssets]);
+		runAssetPullRef.current = runAssetPull;
+	}, [pullAssets, runAssetPull]);
 
 	React.useEffect(() => {
 		const timers = assetTimers.current;

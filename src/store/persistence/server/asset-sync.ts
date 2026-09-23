@@ -25,7 +25,7 @@ import {
 	resolveBundleRefs
 } from '../../../util/sliders-bundle';
 import type {Story} from '../../stories';
-import type {ServerClient} from './client';
+import {ServerError, type ServerClient} from './client';
 import {stable} from './stable-json';
 
 export interface AssetSyncProgress {
@@ -65,14 +65,29 @@ export interface AssetSyncResult {
 	unchanged: boolean;
 	/** Pass back as `lastFingerprint` to get the skip above. */
 	fingerprint: string;
+	/**
+	 * Asset id -> hash of every row in the manifest this run wrote. The base the next
+	 * push checks `stale` rows against. Absent when `unchanged`: nothing was written.
+	 */
+	syncedHashes?: Map<string, string>;
 }
 
 export interface SyncStoryAssetsOptions {
 	client: ServerClient;
 	story: Story;
 	store: AssetStore;
-	/** Manifest rev this client last saw, for `If-Match`. */
+	/**
+	 * Manifest rev this client last saw, for `If-Match`. Also checked BEFORE any blob goes
+	 * up: blobs are keyed by asset id and overwritten, so a manifest 412 after the uploads
+	 * would come too late for the bytes.
+	 */
 	ifMatch?: number;
+	/**
+	 * Asset id -> hash as this client last agreed with the server (its last push or pull).
+	 * A `stale` asset whose local hash is still the agreed one means the SERVER moved and
+	 * we did not — uploading would put our old bytes over someone's new ones.
+	 */
+	syncedHashes?: ReadonlyMap<string, string>;
 	/**
 	 * `fingerprint` from the last successful sync of this story. Equal means skip, with no
 	 * network at all. Only ever set it from a sync that finished — a run that uploaded
@@ -163,7 +178,15 @@ export function manifestFingerprint(
 export async function syncStoryAssets(
 	options: SyncStoryAssetsOptions
 ): Promise<AssetSyncResult> {
-	const {client, ifMatch, lastFingerprint, onProgress, story, store} = options;
+	const {
+		client,
+		ifMatch,
+		lastFingerprint,
+		onProgress,
+		story,
+		store,
+		syncedHashes
+	} = options;
 	const report = (progress: AssetSyncProgress) => onProgress?.(progress);
 
 	report({done: 0, phase: 'scan', total: 1});
@@ -210,6 +233,34 @@ export async function syncStoryAssets(
 	);
 
 	report({done: 1, phase: 'diff', total: 1});
+
+	// Freshness, before a single byte goes up. The manifest's own If-Match fires only after
+	// the uploads, and by then a stale device has already overwritten the newer blob under
+	// the same id. A GET is not atomic with the PUTs below; the window is small, not zero.
+	if (ifMatch !== undefined) {
+		const current = await client.getManifest(story.id);
+
+		if (current.rev !== ifMatch) {
+			throw assetConflict('asset manifest moved on the server', current.rev);
+		}
+	}
+
+	if (syncedHashes) {
+		for (const row of rows) {
+			if (
+				!row.sidecar &&
+				diff.stale.includes(row.key) &&
+				syncedHashes.get(row.key) === row.hash
+			) {
+				// Same rev can still hide this: a pull that saw the new bytes and did not
+				// land them records the rev all the same.
+				throw assetConflict(
+					`server holds newer bytes for ${row.name}`,
+					ifMatch
+				);
+			}
+		}
+	}
 
 	// `stale` is present-under-a-different-hash, which for our purposes is missing: the
 	// bytes the manifest names are not the bytes the server holds.
@@ -279,7 +330,13 @@ export async function syncStoryAssets(
 		skipped: assets.map(meta => meta.id).filter(id => !wanted.has(id)),
 		unchanged: false,
 		unresolved: resolved.unresolved,
+		syncedHashes: new Map(assets.map(meta => [meta.id, meta.hash])),
 		uploaded,
 		uploadedSidecars
 	};
+}
+
+/** The 412 a manifest PUT would give, raised before the uploads instead of after. */
+function assetConflict(message: string, rev?: number): ServerError {
+	return new ServerError(message, {code: 'conflict', rev, status: 412});
 }
