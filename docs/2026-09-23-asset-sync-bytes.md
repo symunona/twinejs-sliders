@@ -1,6 +1,6 @@
 # Asset sync: replaced bytes and `effect` never reach a device that holds the asset
 
-Status: plan. No code yet.
+Status: implementing the minimal fix (below). The `uid` + base model was dropped: too heavy for how rarely two people edit one asset at once.
 Found: demo sync test, story "DEMO point and click", 2026-09-23.
 
 ## Symptoms
@@ -58,7 +58,21 @@ B side pull (`pull-assets.ts`, `checkout-story.ts`):
 - Bug 2 hole: the FIELD LIST. Twin found; `effect` just not listed.
 - Fixing the whitelist fixes 2, not 1. Fixing identity fixes 1, not 2. The model change below fixes both and removes the whitelist-drift class.
 
-## Proposed model: stable uid + 3-way merge against a synced base
+## Decided: minimal fix, no format change
+
+Why not the full model: the asset editor has no lock (locks are per passage, `presence.ts:189`), but two people editing one asset in parallel is rare. Bug 1, though, is NOT a concurrency bug: it fires on every overwrite.
+
+- **Fast-forward.** A manifest row with no hash twin, but a local asset with the same `id` + `ownerCharacter` (+ `name` when loose) and a different `hash`, is treated as a replace. Server wins: the bytes are written over the local asset in place, keeping the local id and name, and the provenance is landed after. Ids line up because each story has its own library and checkout keeps the server's ids.
+- **In-memory guard.** `syncedHashes` = id → hash as of this client's last pull or push. Fast-forward only if local hash == synced hash, or if there is no entry. Otherwise local is ahead: skip the row and let the push send it. After a reload the map is empty, so the server wins.
+- **`effect`** added to provenance.
+- **Push `If-Match`.** Blobs are not uploaded when the server rev has moved. On a 412: one pull, one retry, no loop.
+- **Pull warnings** shown once, not on every poll.
+
+Accepted loss: B has an unpushed pixel edit and reloads inside the 3 s debounce → the server wins.
+
+The rest of this doc is the heavier model, kept for reference only.
+
+## Proposed model: stable uid + 3-way merge against a synced base (not doing)
 
 ### Wire
 
