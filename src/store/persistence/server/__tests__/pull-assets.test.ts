@@ -4,6 +4,7 @@
 import {
 	BackedAssetStore,
 	MemoryBackend,
+	blobBytes,
 	contentHash
 } from '@sliders/asset-store';
 import type {
@@ -665,5 +666,231 @@ describe('pullStoryAssets', () => {
 		});
 
 		expect(phases).toContain('download');
+	});
+});
+
+/**
+ * A `replace` on the far side: same id, same name, new bytes. No dedupe twin, so before
+ * the fast-forward the plan settled it `kept-existing` and this side kept the old pixels
+ * forever. See docs/2026-09-23-asset-sync-bytes.md.
+ */
+describe('pullStoryAssets fast-forward', () => {
+	const GLITCH = {
+		amount: 40,
+		bands: 6,
+		burst: 0.5,
+		kind: 'glitch' as const,
+		noise: 10,
+		period: 2,
+		rotate: 0,
+		scanlines: 20,
+		speed: 12,
+		split: 30
+	};
+
+	/** This device's copy, under the server's id, as a checkout leaves it. */
+	async function held(
+		store: BackedAssetStore,
+		bytes: Uint8Array,
+		overrides: Partial<AssetMeta> = {}
+	) {
+		return await store.importAsset(
+			await meta(bytes, overrides),
+			new Blob([bytes], {type: 'image/webp'})
+		);
+	}
+
+	async function bytesOf(store: BackedAssetStore, id: string) {
+		return new Uint8Array(await blobBytes((await store.get(id)) as Blob));
+	}
+
+	it('lands an effect-only change, then stops', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+		const local = await held(store, bytes);
+		const {client, getAssetBlob} = fakeClient({
+			manifest: {assets: [await meta(bytes, {effect: GLITCH})], rev: 9}
+		});
+
+		const first = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's'
+		});
+
+		expect(first.changed).toBe(true);
+		expect((await store.meta(local.id))?.effect).toEqual(GLITCH);
+
+		const second = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's'
+		});
+
+		expect(second.changed).toBe(false);
+		expect(second.skipped).toBe(true);
+		expect(getAssetBlob).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['no synced base', false],
+		['a base equal to the local hash', true]
+	])('fast-forwards untouched bytes (%s)', async (_, withBase) => {
+		const old = webpBytes();
+		const next = jpegBytes();
+		const cutout = new Uint8Array([9, 8, 7]);
+		const store = newStore();
+		const local = await held(store, old, {tags: ['night']});
+		const row = await meta(next, {
+			edits: EDITS,
+			effect: GLITCH,
+			h: 150,
+			mime: 'image/jpeg',
+			sidecars: {cutout: await sidecarEntry(cutout)},
+			tags: ['far'],
+			tuning: TUNING,
+			w: 300
+		});
+		const {client, getAssetBlob} = fakeClient({
+			blobs: {
+				[row.id]: new Blob([next], {type: 'image/jpeg'}),
+				[`${row.id}.cutout`]: new Blob([cutout], {type: 'image/png'})
+			},
+			manifest: {assets: [row], rev: 9}
+		});
+
+		const first = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's',
+			syncedHashes: withBase ? new Map([[local.id, local.hash]]) : undefined
+		});
+
+		expect(first.changed).toBe(true);
+		expect(first.warnings).toEqual([]);
+		expect(first.syncedHashes).toEqual(new Map([[row.id, row.hash]]));
+		// One asset, same id and name, new bytes, far side's provenance landed.
+		expect(await store.list({includePoseImages: true})).toHaveLength(1);
+		expect(await store.meta(local.id)).toMatchObject({
+			edits: EDITS,
+			effect: GLITCH,
+			hash: row.hash,
+			id: local.id,
+			name: local.name,
+			tags: ['night'],
+			tuning: TUNING,
+			w: 300
+		});
+		expect(await bytesOf(store, local.id)).toEqual(next);
+		expect((await store.sidecar(local.id, 'cutout'))?.size).toBe(cutout.length);
+
+		const calls = getAssetBlob.mock.calls.length;
+		const second = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's',
+			syncedHashes: first.syncedHashes
+		});
+
+		expect(second.changed).toBe(false);
+		expect(second.skipped).toBe(true);
+		expect(getAssetBlob).toHaveBeenCalledTimes(calls);
+	});
+
+	it('leaves bytes this device replaced since the last sync', async () => {
+		const base = webpBytes();
+		const mine = webpBytes(320, 240);
+		const theirs = jpegBytes();
+		const store = newStore();
+		const local = await held(store, mine);
+		const row = await meta(theirs, {mime: 'image/jpeg'});
+		const {client, getAssetBlob} = fakeClient({
+			manifest: {assets: [row], rev: 9}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's',
+			syncedHashes: new Map([[local.id, await contentHash(base)]])
+		});
+
+		// Local is ahead; the push side sends it. Nothing fetched, nothing to warn about.
+		expect(result.changed).toBe(false);
+		expect(result.warnings).toEqual([]);
+		expect(getAssetBlob).not.toHaveBeenCalled();
+		expect(await bytesOf(store, local.id)).toEqual(mine);
+		expect((await store.meta(local.id))?.hash).toBe(local.hash);
+		expect(result.syncedHashes.get(local.id)).toBe(row.hash);
+	});
+
+	it('keeps the old base when the newer bytes will not come down', async () => {
+		const old = webpBytes();
+		const store = newStore();
+		const local = await held(store, old);
+		const row = await meta(jpegBytes(), {mime: 'image/jpeg'});
+		const {client} = fakeClient({
+			blobs: {},
+			manifest: {assets: [row], rev: 9}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's'
+		});
+
+		expect(result.changed).toBe(false);
+		expect(result.missing).toEqual([row.id]);
+		expect(await bytesOf(store, local.id)).toEqual(old);
+		// Not the server's hash: that would read the old bytes as a local edit next time,
+		// and the push side would send them over the newer ones.
+		expect(result.syncedHashes.get(row.id)).toBe(local.hash);
+	});
+
+	it('moves a pose image forward and leaves the character intact', async () => {
+		const old = webpBytes();
+		const next = jpegBytes();
+		const store = newStore();
+		const pose = {
+			kind: 'frame' as const,
+			name: 'mira-idle',
+			ownerCharacter: 'mira'
+		};
+		const local = await held(store, old, pose);
+		const mira = character({poses: {idle: {asset: local.id}}});
+
+		await store.putCharacter(mira);
+
+		const before = await store.getCharacter('mira');
+		const row = await meta(next, {...pose, mime: 'image/jpeg'});
+		const {client} = fakeClient({
+			blobs: {[row.id]: new Blob([next], {type: 'image/jpeg'})},
+			manifest: {assets: [row], characters: [mira], rev: 9}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 's'
+		});
+
+		expect(result.changed).toBe(true);
+		// The cast merge always says so; what must not appear is a dropped pose.
+		expect(result.warnings.join('\n')).not.toMatch(/has no image/);
+		expect(await store.list({includePoseImages: true})).toHaveLength(1);
+		expect(await store.meta(local.id)).toMatchObject({
+			hash: row.hash,
+			ownerCharacter: 'mira'
+		});
+		expect(await bytesOf(store, local.id)).toEqual(next);
+		expect(await store.getCharacter('mira')).toEqual(before);
 	});
 });
