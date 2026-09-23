@@ -647,6 +647,10 @@ to match the real one.
 Link props: `to`, `if`, `icon`, `transition`. `to:` is optional when the target is inline;
 the parser fills it in.
 
+**Ctrl-Space under `links:` lists every passage** and writes the whole entry:
+`Street: Street`. On `links:` itself it brings the map — `links: {Street: Street}`. The
+label starts as the target's own name; retype it when the reader needs other words.
+
 **Targets match case-insensitively.** `to: start` finds the passage `Start`; an exact match
 always wins, and case is the only looseness — nothing else about a name is folded. The
 player does this in `passageNamed()` (`matchPassageName` in `@sliders/scene-types`), and

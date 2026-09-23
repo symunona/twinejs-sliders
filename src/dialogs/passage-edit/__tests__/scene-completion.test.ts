@@ -491,4 +491,61 @@ describe('sceneCompletion()', () => {
 			expect(names('Walk to [[Street]] |now')).toBeUndefined();
 		});
 	});
+
+	describe('link names', () => {
+		it('offers every passage on an empty line under links:', () => {
+			expect(names('[scene]\nlinks:\n  |')).toEqual([
+				'Cellar',
+				'Street',
+				'Tavern Fight'
+			]);
+		});
+
+		it('writes the whole entry, label and target', () => {
+			expect(
+				completeAt('[scene]\nlinks:\n  |')!.list.find(
+					one => one.displayText === 'Tavern Fight'
+				)!.text
+			).toBe('Tavern Fight: Tavern Fight');
+		});
+
+		it('writes an entry for a name being typed over', () => {
+			expect(completeAt('[scene]\nlinks:\n  Cel|')!.list[0]).toMatchObject({
+				displayText: 'Cellar',
+				text: 'Cellar: Cellar'
+			});
+		});
+
+		it('writes an entry in flow form, where the line is not empty', () => {
+			expect(
+				completeAt('[scene]\nlinks: {stay: Street, |}')!.list.find(
+					one => one.displayText === 'Cellar'
+				)!.text
+			).toBe('Cellar: Cellar');
+		});
+
+		it('opens the map when links: is the key being given a value', () => {
+			expect(
+				completeAt('[scene]\nlinks: |')!.list.find(
+					one => one.displayText === 'Street'
+				)!.text
+			).toBe('{Street: Street}');
+		});
+
+		it('brings its own space when the cursor is on the links: colon', () => {
+			expect(
+				completeAt('[scene]\nlinks:|')!.list.find(
+					one => one.displayText === 'Street'
+				)!.text
+			).toBe(' {Street: Street}');
+		});
+
+		it('leaves the cursor after the entry, with nothing selected', () => {
+			expect(
+				completeAt('[scene]\nlinks:\n  |')!.list.find(
+					one => one.displayText === 'Street'
+				)!.hint
+			).toBeUndefined();
+		});
+	});
 });

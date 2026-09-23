@@ -215,6 +215,38 @@ describe('sceneHintContext()', () => {
 				typed: 'Tav'
 			});
 		});
+
+		it('offers passages as link names on an empty line', () => {
+			expect(contextAt('[scene]\nlinks:\n  |')).toMatchObject({
+				scaffold: true,
+				slot: {kind: 'linkName'},
+				typed: ''
+			});
+		});
+
+		it('offers passages as link names for a name being typed', () => {
+			expect(contextAt('[scene]\nlinks:\n  Ta|')).toMatchObject({
+				scaffold: true,
+				slot: {kind: 'linkName'},
+				typed: 'Ta'
+			});
+		});
+
+		it('scaffolds a link name in flow form, where the line is not empty', () => {
+			expect(contextAt('[scene]\nlinks: {stay: Street, st|}')).toMatchObject({
+				scaffold: true,
+				slot: {kind: 'linkName'}
+			});
+		});
+
+		it('opens the map when links: itself is the key taking a value', () => {
+			expect(contextAt('[scene]\nlinks: |')).toMatchObject({
+				prefix: '{',
+				scaffold: true,
+				slot: {kind: 'linkName'},
+				suffix: '}'
+			});
+		});
 	});
 
 	describe('staying quiet', () => {
@@ -238,9 +270,6 @@ describe('sceneHintContext()', () => {
 			).toBeUndefined();
 		});
 
-		it('says nothing for a link name, which is the author\'s own', () => {
-			expect(contextAt('[scene]\nlinks: {st|')).toBeUndefined();
-		});
 	});
 
 	describe('keys', () => {

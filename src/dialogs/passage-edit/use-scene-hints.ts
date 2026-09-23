@@ -78,6 +78,13 @@ const SCALAR_BEAT_COMMANDS: readonly string[] = ['wait', 'fx', 'sfx', 'mark'];
 export type HintSlot =
 	| {kind: 'bg'}
 	| {kind: 'passage'}
+	/**
+	 * A link's own NAME, in key position under `links:`. Passages, the same list as
+	 * `passage`, but picking one writes the whole entry — `Street: Street` — because a
+	 * bare key is not an entry, and the label an author wants nine times in ten is the
+	 * target's own name.
+	 */
+	| {kind: 'linkName'}
 	| {kind: 'cast'}
 	| {kind: 'props'}
 	| {kind: 'entities'}
@@ -146,6 +153,12 @@ export interface SceneHintContext {
 	scaffold: boolean;
 	/** Written after the picked name, to close a `[[link` the author left open. */
 	suffix?: string;
+	/**
+	 * Written before the picked name. Only `links:` uses it, to open the flow map its
+	 * value has to be: `links: ` completes to `links: {Street: Street}`, not to a bare
+	 * passage name, which is not a map and would not parse.
+	 */
+	prefix?: string;
 	/**
 	 * Set when the line has no map to put a key in yet, and picking one has to
 	 * rewrite the value into a flow map: `- mira: "Hello."` becomes
@@ -436,9 +449,12 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'fx':
 			return {kind: 'fx'};
 
-		// A link's key is its own name, which only the author knows.
+		// A link's key is its own name -- the author's word, not a name anything knows.
+		// The passages are offered anyway, because naming the target is how an entry
+		// starts and `Street: Street` is a working link the moment it lands; a label that
+		// wants different words is one word to retype.
 		case 'links':
-			return undefined;
+			return {kind: 'linkName'};
 	}
 
 	// Anything else in key position is an id -- an entity, or a link -- and what
@@ -665,12 +681,22 @@ export function sceneHintContext(
 	// Measured past the END of the name, not past the cursor: `mi|ra` on its own line is
 	// still an author writing one entity, and should still get a body written for it.
 	const restIsEmpty = line.slice(end).trim() === '';
-	const found = (slot: HintSlot, scaffold = false): SceneHintContext => ({
+	// `scaffold` is taken as given: a caller that needs room for a body on the line says
+	// so with `restIsEmpty` itself, because what counts as room differs -- a flow map's
+	// key has none left over and still has nowhere to collide.
+	const found = (
+		slot: HintSlot,
+		scaffold = false,
+		prefix?: string,
+		suffix?: string
+	): SceneHintContext => ({
 		end,
 		needsSpace: key !== undefined && line.slice(0, start).endsWith(':'),
-		scaffold: scaffold && restIsEmpty,
+		prefix,
+		scaffold,
 		slot,
 		start,
+		suffix,
 		typed
 	});
 
@@ -751,6 +777,13 @@ export function sceneHintContext(
 						links: [...sceneLinkTargets(lines.slice(blockStart).join('\n')).keys()]
 					});
 
+				// The value of `links:` ITSELF, which is a map and not a name: the empty
+				// spot right after the key, where the dropdown reopens on its own once
+				// `links` is picked from the top-level list. A bare passage name here is
+				// not a map and does not parse, so the entry brings its own braces.
+				case 'links':
+					return found({kind: 'linkName'}, true, '{', '}');
+
 				case 'highlight':
 					return found({kind: 'highlight'});
 
@@ -808,7 +841,7 @@ export function sceneHintContext(
 	// the link completion's business, not a list of characters.
 	if (chain[0] === 'beats') {
 		return /^\s*(?:-\s*)?$/.test(line.slice(0, start))
-			? found({kind: 'speaker'}, true)
+			? found({kind: 'speaker'}, restIsEmpty)
 			: promote();
 	}
 
@@ -818,6 +851,13 @@ export function sceneHintContext(
 		return promote();
 	}
 
+	// A link's name scaffolds in flow form as well as block form: key position inside
+	// `{}` means the key has no value yet, so `Street: Street` has nothing to collide
+	// with even though the `}` after it means the line is not empty.
+	if (slot.kind === 'linkName') {
+		return promote() ?? found(slot, restIsEmpty || flow.keyPosition);
+	}
+
 	// At the end of a line that already declares an entity, a key belongs to that
 	// entity: `mira: {at: 0}` wants `scale` next, not a second id glued onto the
 	// same line, which would not even be YAML.
@@ -825,7 +865,10 @@ export function sceneHintContext(
 		promote() ??
 		found(
 			slot,
-			slot.kind === 'cast' || slot.kind === 'props' || slot.kind === 'entities'
+			(slot.kind === 'cast' ||
+				slot.kind === 'props' ||
+				slot.kind === 'entities') &&
+				restIsEmpty
 		)
 	);
 }
@@ -884,6 +927,7 @@ function namesForSlot(
 			return assetNames(all, ['bg']);
 
 		case 'passage':
+		case 'linkName':
 			return [...passages].sort((a, b) => a.localeCompare(b));
 
 		case 'linkTarget':
@@ -1231,7 +1275,7 @@ export function sceneCompletion(
 		return undefined;
 	}
 
-	const {end, needsSpace, promote, scaffold, slot, start, suffix, typed} =
+	const {end, needsSpace, prefix, promote, scaffold, slot, start, suffix, typed} =
 		context;
 	const candidate = typed.toLowerCase();
 	const refs = block ? entityRefs(block.text) : new Map<string, string>();
@@ -1276,6 +1320,13 @@ export function sceneCompletion(
 	const indent = /^[ \t]*$/.test(lead) ? lead : '';
 	const propsBlock = (name: string) =>
 		slot.kind === 'keys' && slot.id === 'top' && name === 'props';
+	// A whole link entry, `Street: Street`, with whatever the spot needs around it: a
+	// space when the cursor sits on the colon, braces when `links:`' own value is what
+	// is being written. No `hint` function goes with it, unlike every other scaffold --
+	// there is no placeholder to select, because both halves are already the name the
+	// author picked, and the cursor lands after them ready for the next line.
+	const linkEntry = (name: string) =>
+		`${needsSpace ? ' ' : ''}${prefix ?? ''}${name}: ${name}${suffix ?? ''}`;
 	const completion = {
 		from: {ch: start, line: cursor.line},
 		// Read back by the caller, which reopens the dropdown after a key is
@@ -1294,7 +1345,9 @@ export function sceneCompletion(
 				: scaffold
 					? slot.kind === 'speaker'
 						? insertBeat(name)
-						: insertEntity(name)
+						: slot.kind === 'linkName'
+							? undefined
+							: insertEntity(name)
 					: undefined,
 			text:
 				// A key is only ever half a line, so it writes its own colon and
@@ -1307,7 +1360,9 @@ export function sceneCompletion(
 					: scaffold
 						? slot.kind === 'speaker'
 							? beatText(name)
-							: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
+							: slot.kind === 'linkName'
+								? linkEntry(name)
+								: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
 						: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
 		}))
 	};
