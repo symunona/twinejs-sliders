@@ -54,6 +54,12 @@ export interface CharacterEditorProps {
 	/** Opens Import set, with files if some were already chosen. */
 	onImportSet: (files?: File[]) => void;
 	onUploadPoses: (files: File[]) => void;
+	/**
+	 * "Open on this pose" — a ctrl-click on a `pose:` in a passage. Carries a serial rather
+	 * than only a name so that asking twice for the same pose selects it twice: the author
+	 * may have clicked something else in between.
+	 */
+	selectPose?: {name: string; serial: number};
 }
 
 /**
@@ -129,7 +135,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 		onCommit,
 		onEditPose,
 		onImportSet,
-		onUploadPoses
+		onUploadPoses,
+		selectPose
 	} = props;
 	const poseNames = Object.keys(character.poses);
 	const [newAnchor, setNewAnchor] = React.useState('');
@@ -139,7 +146,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 	/** True while a click on the sprite places the origin. Same control as the asset editor. */
 	const [picking, setPicking] = React.useState(false);
 	const [selectedPose, setSelectedPose] = React.useState<string | undefined>(
-		poseNames[0]
+		selectPose && character.poses[selectPose.name] ? selectPose.name : poseNames[0]
 	);
 	const {t} = useTranslation();
 
@@ -149,6 +156,18 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = props => {
 			setSelectedPose(poseNames[0]);
 		}
 	}, [character.poses, poseNames, selectedPose]);
+
+	// Keyed on the serial, not the name: the character can arrive after the request does,
+	// and a pose the author asked for twice must be selected both times. A pose this
+	// character does not have is left alone -- the scene names poses that may not exist yet.
+	const requestedPose = selectPose?.name;
+	const requestedSerial = selectPose?.serial;
+
+	React.useEffect(() => {
+		if (requestedPose && character.poses[requestedPose]) {
+			setSelectedPose(requestedPose);
+		}
+	}, [character.poses, requestedPose, requestedSerial]);
 
 	const activePose = selectedPose ? character.poses[selectedPose] : undefined;
 	/** A step picked in the strip. Undefined = the pose plays in the preview. */

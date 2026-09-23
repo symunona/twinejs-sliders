@@ -23,6 +23,8 @@ export {
 	emptyScene,
 	parseScene
 } from './parse-scene';
+export {sceneRefSpans} from './asset-refs';
+export type {SceneRefKind, SceneRefSpan} from './asset-refs';
 export {
 	parsePassageReferences,
 	scanLinkTargets,

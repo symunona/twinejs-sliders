@@ -20,6 +20,13 @@ import {
 } from '../../store/undoable-stories';
 import type {SceneFix} from '@sliders/scene-types';
 import {addPassageEditors, useDialogsContext} from '../context';
+import {AssetEditorDialog} from '../asset-editor';
+import {useAssetStore} from '../sliders-assets/asset-store-context';
+import {
+	SlidersCharactersDialog,
+	requestCharacterFocus
+} from '../sliders-characters';
+import {PassageRefSpan} from '../../util/passage-ref-spans';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
 import {SceneErrors} from './scene-errors/scene-errors';
@@ -66,6 +73,7 @@ export const PassageEditContents: React.FC<
 		useServerSyncContext();
 	const {dispatch, stories} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
+	const assetStore = useAssetStore();
 	const {formats} = useStoryFormatsContext();
 	const passage = passageWithId(stories, storyId, passageId);
 	const story = storyWithId(stories, storyId);
@@ -155,7 +163,72 @@ export const PassageEditContents: React.FC<
 		[dialogsDispatch, story]
 	);
 
-	useCtrlClickLinks(cmEditor, handleOpenPassage);
+	/**
+	 * Ctrl/cmd-click on a name in a scene: open the editor that owns what it names.
+	 *
+	 * The sibling of `handleOpenPassage` — same gesture, other half of the scene. A `bg:` or
+	 * a prop id lands in the asset editor, a character id or a `pose:` in the character
+	 * editor, on that pose.
+	 *
+	 * `cast:` and `props:` are ONE namespace (see the architecture note), so an entity id is
+	 * resolved character-first and then by asset name, the same order `resolveEntity` uses
+	 * when it draws the sprite. A `bg:` skips that: a backdrop is always art.
+	 *
+	 * A name nothing answers to does nothing. The gesture navigates to art that exists; it
+	 * does not offer to create it, the same way a link to a missing passage does not.
+	 */
+	const handleOpenRef = React.useCallback(
+		(span: PassageRefSpan) => {
+			async function open() {
+				if (span.kind !== 'bg') {
+					const id = span.kind === 'pose' ? span.owner : span.ref;
+					const character = id ? await assetStore.character(id) : undefined;
+
+					if (character) {
+						// No props: the reducer dedupes on them, so a second character — or the
+						// same one at a different pose — would open a second editor. The target
+						// rides on the focus channel instead.
+						dialogsDispatch({
+							component: SlidersCharactersDialog,
+							type: 'addDialog'
+						});
+						requestCharacterFocus(
+							character.id,
+							span.kind === 'pose' ? span.ref : undefined
+						);
+
+						return;
+					}
+
+					// A pose of something that is not a character has no editor to open. Its
+					// owner is a prop, and a prop has no poses.
+					if (span.kind === 'pose') {
+						return;
+					}
+				}
+
+				// `list()` hides pose images, which is right: those belong to their character.
+				const asset = (await assetStore.list()).find(
+					meta => meta.name === span.ref
+				);
+
+				if (asset) {
+					dialogsDispatch({
+						component: AssetEditorDialog,
+						// Editing needs the room -- the preview is the point.
+						maximized: true,
+						props: {assetId: asset.id},
+						type: 'addDialog'
+					});
+				}
+			}
+
+			void open();
+		},
+		[assetStore, dialogsDispatch]
+	);
+
+	useCtrlClickLinks(cmEditor, handleOpenPassage, handleOpenRef);
 
 	/**
 	 * The fix offered on a link whose target does not exist. Shared with the ghost card on

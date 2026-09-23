@@ -35,6 +35,11 @@ import {
 	stepImagesFromFiles
 } from '../sliders-assets/character-poses';
 import {CharacterEditor} from './character-editor';
+import {
+	CharacterFocusRequest,
+	onCharacterFocus,
+	takePendingCharacterFocus
+} from './character-focus';
 import {ImportSet} from './import-set';
 import {decodeImage} from './import-set-images';
 import {looksLikeSheet} from './import-set-logic';
@@ -71,12 +76,42 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 	const [idError, setIdError] = React.useState<string>();
 	const [pendingRename, setPendingRename] = React.useState<PendingRename>();
 	const [selectedId, setSelectedId] = React.useState(characterId);
+	/** A ctrl-click in a passage asking for a character, and maybe one of its poses. */
+	const [focus, setFocus] = React.useState<CharacterFocusRequest>();
 	/** Set while Import set has the editor's place, with any files it was opened with. */
 	const [importing, setImporting] = React.useState<{files?: File[]}>();
 	const {t} = useTranslation();
 
 	const {characters, refresh, store} = library;
 	const activeId = selectedId ?? characters[0]?.id;
+
+	React.useEffect(() => {
+		// The dialog may be opening because of this request, in which case it was published
+		// before anything was here to hear it.
+		setFocus(takePendingCharacterFocus());
+
+		return onCharacterFocus(setFocus);
+	}, []);
+
+	// Keyed on the serial so that asking for a character already open still counts: the
+	// author may have been reading someone else in the meantime.
+	const focusedId = focus?.characterId;
+	const focusSerial = focus?.serial;
+
+	React.useEffect(() => {
+		if (focusedId) {
+			setSelectedId(focusedId);
+		}
+	}, [focusedId, focusSerial]);
+
+	/**
+	 * The pose to open on, if the request that is current still belongs to the character on
+	 * screen. It does not survive the author selecting someone else by hand.
+	 */
+	const selectPose =
+		focus?.pose && focus.characterId === activeId
+			? {name: focus.pose, serial: focus.serial}
+			: undefined;
 	const story = stories.find(candidate => candidate.id === storyId);
 
 	// Load the selected character into a local draft. Everything the editor does happens
@@ -592,6 +627,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 									onEditPose={handleEditPose}
 									onImportSet={files => setImporting({files})}
 									onUploadPoses={files => void handleUploadPoses(files)}
+									selectPose={selectPose}
 								/>
 							)}
 						</TabPanel>
