@@ -59,6 +59,8 @@ export interface LiveClientOptions {
 
 export interface LiveClient {
 	close(): void;
+	/** Is the socket past `setupComplete`? Typed turns queue until it is. */
+	readonly ready: boolean;
 	/** A picture, as its own user turn. See `imageTurnMessage`. */
 	sendImage(base64: string, mime: string, caption: string): void;
 	sendAudio(base64: string): void;
@@ -115,6 +117,14 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 	const socket = new WebSocket(liveEndpoint(options.apiKey));
 	let state: LiveState = 'connecting';
 	let ready = false;
+	/**
+	 * Turns typed before `setupComplete`, in order.
+	 *
+	 * Audio is dropped rather than queued — see `sendAudio` — but a typed turn is not the
+	 * author clearing their throat. Somebody typed a sentence and pressed send; replaying
+	 * it a beat later is exactly right, and dropping it loses work.
+	 */
+	const pending: Record<string, unknown>[] = [];
 	/** Frames recorded before `setupComplete`. Dropped, not queued — see `sendAudio`. */
 	let closed = false;
 	/** Transcription fragments not yet handed on. See `onTranscript`. */
@@ -146,6 +156,15 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 		}
 	};
 
+	/** A turn, held until the session is up. */
+	const sendTurn = (message: Record<string, unknown>) => {
+		if (ready) {
+			send(message);
+		} else {
+			pending.push(message);
+		}
+	};
+
 	const model = pickLiveModel(options.model);
 
 	socket.onopen = () =>
@@ -171,6 +190,12 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 			}
 
 			setState('listening');
+
+			// After the seed, so a thread being resumed is history BEFORE the sentence
+			// that was typed while the socket was still opening.
+			for (const message of pending.splice(0)) {
+				send(message);
+			}
 		}
 
 		if (event.usage) {
@@ -339,11 +364,14 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 				send(audioMessage(base64));
 			}
 		},
+		get ready() {
+			return ready;
+		},
 		sendImage(base64, mime, caption) {
-			send(imageTurnMessage(base64, mime, caption));
+			sendTurn(imageTurnMessage(base64, mime, caption));
 		},
 		sendText(text) {
-			send(textTurnMessage(text));
+			sendTurn(textTurnMessage(text));
 		},
 		get state() {
 			return state;

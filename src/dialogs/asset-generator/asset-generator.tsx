@@ -10,6 +10,7 @@ import {TextSelect} from '../../components/control/text-select';
 import {keyStringTokens, useCommand, useHotkeysContext} from '../../hotkeys';
 import {setPref, usePrefsContext} from '../../store/prefs';
 import {AssetEditorDialog} from '../asset-editor';
+import {AiPrefsLink} from '../ai-prefs-link';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {
@@ -401,7 +402,7 @@ export const AssetGeneratorDialog: React.FC<
 		>
 			{!anyKey && (
 				<p className="asset-generator-warning" role="status">
-					{t('dialogs.assetGenerator.noKeys')}
+					{t('dialogs.assetGenerator.noKeys')} <AiPrefsLink />
 				</p>
 			)}
 			{error && (
@@ -532,7 +533,8 @@ export const AssetGeneratorDialog: React.FC<
 						<p className="asset-generator-warning">
 							{t('dialogs.assetGenerator.needsKey', {
 								provider: provider(model.provider).label
-							})}
+							})}{' '}
+							<AiPrefsLink />
 						</p>
 					)}
 					{!model && (

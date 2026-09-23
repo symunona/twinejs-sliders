@@ -189,6 +189,40 @@ describe('state', () => {
 	});
 });
 
+describe('typed turns', () => {
+	it('holds a sentence typed before setup and sends it once, in order', async () => {
+		const {client, socket} = open();
+
+		client.sendText('rename the tavern');
+		expect(socket.keys()).toEqual(['setup']);
+
+		await socket.deliver({setupComplete: {}});
+		expect(socket.keys()).toEqual(['setup', 'clientContent']);
+		expect(socket.sent[1].clientContent.turns[0].parts[0].text).toBe(
+			'rename the tavern'
+		);
+
+		client.sendText('and the cellar');
+		expect(socket.keys()).toEqual(['setup', 'clientContent', 'clientContent']);
+	});
+
+	it('sends the restored thread before the sentence typed while it opened', async () => {
+		const {client, socket} = open({
+			seed: [row({kind: 'model', text: 'we renamed the tavern'})]
+		});
+
+		client.sendText('carry on');
+		await socket.deliver({setupComplete: {}});
+
+		const texts = socket.sent
+			.slice(1)
+			.map((message: any) => message.clientContent.turns[0].parts[0].text);
+
+		expect(texts[0]).toContain('we renamed the tavern');
+		expect(texts[1]).toBe('carry on');
+	});
+});
+
 describe('transcript', () => {
 	function openHearing() {
 		const said: [string, string][] = [];

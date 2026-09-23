@@ -106,6 +106,25 @@ dying on `goAway`.
 The bar needs a denominator the API does not report. `LiveModel.contextTokens` is a
 published figure copied by hand; unset means the panel shows tokens and no bar.
 
+## Two switches
+
+Mic and socket are separate.
+
+| Author does | Socket | Mic |
+|---|---|---|
+| types a sentence | opens on demand | stays shut |
+| clicks the mic | opens if needed | opens |
+| clicks the mic again | stays up | track stopped, light out |
+| closes the panel, new/other thread | closed | stopped |
+
+- Box is **never disabled**. `/tool` needs no socket and no key — straight to the runner.
+- Typed turns queue until `setupComplete`, sent after the thread seed. Mic audio is still
+  dropped before ready: that is stale throat-clearing, a typed sentence is work.
+- `listening` with the mic shut reads **"Connected, mic off"**, grey not green. Green = hot mic.
+- Checkpoint pins when the SOCKET opens, not the mic — a model that can write is the risk.
+- No key → yellow warning with an `Open AI preferences` link
+  (`dialogs/ai-prefs-link.tsx`, shared with the asset generator's two key warnings).
+
 ## The text box is the debugger
 
 Step 2 shipped the whole tool surface with **no audio**, driven by typed calls. That is not
@@ -113,8 +132,8 @@ a fallback — it is how a bad session is reproduced. Now it is `/read_passage T
 with the leading slash, and it still works unquoted when a tool has exactly one required
 argument (`parseToolLine`).
 
-Without the slash the box talks to the model. **Disabled with the mic off** — a box whose
-meaning flips on a mic state the author can barely see is a box they use wrong.
+Without the slash the box talks to the model, mic on or off — the prefix is the switch, not
+a mode the author has to remember.
 
 ## Eyes
 

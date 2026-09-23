@@ -337,6 +337,34 @@
 	margin: calc(var(--grid-size) / 2) 0;
 }
 
+/* A missing key is not chatter: it is the reason nothing will happen. */
+.voice-mode-dialog .voice-note-warning {
+	align-items: flex-start;
+	background: var(--faint-yellow);
+	border-radius: var(--corner-round);
+	color: var(--black);
+	padding: calc(var(--grid-size) / 2) var(--grid-size);
+}
+
+.voice-mode-dialog .voice-note-warning svg {
+	margin-top: 0.15em;
+}
+
+/* Connected with the microphone shut: no green, because nothing is being heard. */
+.voice-mode-dialog .voice-status-muted.voice-status-listening .voice-state {
+	background: var(--faint-gray);
+	box-shadow: none;
+	color: var(--dark-gray);
+}
+
+.voice-mode-dialog .voice-status-muted.voice-status-listening .voice-state::before {
+	animation: none;
+}
+
+.voice-mode-dialog .voice-status-muted.voice-status-listening > .icon-button {
+	color: inherit;
+}
+
 .voice-mode-dialog .voice-note svg {
 	flex: 0 0 auto;
 }

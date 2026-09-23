@@ -1,10 +1,15 @@
 /**
- * Mic + socket + runner, as one switch.
+ * Mic, socket and runner — TWO switches, not one.
  *
- * Off means OFF: the socket is closed and the microphone TRACK is stopped, so the
- * operating system's recording light goes out. There is no idle-but-connected state,
- * because an author cannot verify a flag and will not trust a microphone they cannot
- * verify is off.
+ * The socket is what the author is talking to; the microphone is only one of the two ways
+ * to reach it. Typing is the other, and it works with the microphone off, so `connect`
+ * and `startMic` are separate: a typed session opens a socket and never touches the
+ * recording light.
+ *
+ * Off still means OFF for the microphone: `stopMic` stops the TRACK, so the operating
+ * system's indicator goes out. There is no muted-but-open mic, because an author cannot
+ * verify a flag and will not trust a microphone they cannot verify is off. The socket
+ * outliving it is visible in the panel and costs no privacy — nothing is being recorded.
  */
 
 import * as React from 'react';
@@ -36,21 +41,31 @@ export interface UseLiveVoiceOptions {
 }
 
 export interface LiveVoice {
+	/** Open the socket without the microphone, for an author who would rather type. */
+	connect: () => Promise<void>;
+	/** Is there a session to talk to at all? True while it is still connecting. */
+	connected: boolean;
 	detail?: string;
-	on: boolean;
+	/** Is the microphone TRACK open? Not a mute flag — see the file comment. */
+	micOn: boolean;
 	/** Reset when the socket closes: it is the SOCKET's context, not the thread's. */
 	usage?: VoiceUsage;
-	/** Type at the model rather than talking, with the socket already up. */
+	/** Type at the model. Queued if the socket is still opening. */
 	sendText: (text: string) => void;
-	start: () => Promise<void>;
+	/** Connect if needed, then open the microphone. */
+	startMic: () => Promise<void>;
 	state: LiveState;
+	/** Close the socket and the microphone both. */
 	stop: () => void;
+	/** Stop the microphone track and keep the session. */
+	stopMic: () => void;
 }
 
 export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 	const [state, setState] = React.useState<LiveState>('off');
 	const [detail, setDetail] = React.useState<string>();
 	const [usage, setUsage] = React.useState<VoiceUsage>();
+	const [micOn, setMicOn] = React.useState(false);
 	const client = React.useRef<LiveClient>();
 	const mic = React.useRef<MicStream>();
 	const player = React.useRef<SpeechPlayer>();
@@ -60,9 +75,16 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 
 	optionsRef.current = options;
 
+	const stopMic = React.useCallback(() => {
+		mic.current?.stop();
+		mic.current = undefined;
+		setMicOn(false);
+	}, []);
+
 	const stop = React.useCallback(() => {
 		mic.current?.stop();
 		mic.current = undefined;
+		setMicOn(false);
 		player.current?.close();
 		player.current = undefined;
 		client.current?.close();
@@ -72,9 +94,13 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 		setUsage(undefined);
 	}, []);
 
-	const start = React.useCallback(async () => {
+	/**
+	 * Open the socket, or do nothing if it is already open. Returns whether there is a
+	 * session to send to — a caller that is about to send a turn has to know.
+	 */
+	const connect = React.useCallback(async (): Promise<boolean> => {
 		if (client.current) {
-			return;
+			return true;
 		}
 
 		const current = optionsRef.current;
@@ -82,7 +108,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 		if (current.apiKey.trim() === '') {
 			setState('error');
 			setDetail('no API key');
-			return;
+			return false;
 		}
 
 		const speech = new SpeechPlayer();
@@ -115,30 +141,56 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 		});
 
 		client.current = live;
+		return true;
+	}, []);
+
+	const startMic = React.useCallback(async () => {
+		// Whether this call opened the socket decides what a failed microphone leaves
+		// behind: a session the author was already typing into stays, one opened purely
+		// to talk into does not sit there billing.
+		const wasOpen = client.current !== undefined;
+
+		if (!(await connect())) {
+			return;
+		}
+
+		const live = client.current!;
+
+		if (mic.current) {
+			return;
+		}
 
 		try {
 			mic.current = await openMic(frame => live.sendAudio(frame));
+			setMicOn(true);
 		} catch (error) {
 			// Denied permission, no device, or an insecure origin. All three are the same
-			// thing to the author — the microphone did not open — and all three leave a
-			// socket behind that would otherwise sit there billing.
-			stop();
-			setState('error');
+			// thing to the author: the microphone did not open.
+			if (!wasOpen) {
+				stop();
+				setState('error');
+			}
+
 			setDetail((error as Error).message);
 			optionsRef.current.onSay('system', `microphone: ${(error as Error).message}`);
 		}
-	}, [stop]);
+	}, [connect, stop]);
 
 	// A route change or a closed panel must not leave the microphone live.
 	React.useEffect(() => stop, [stop]);
 
 	return {
+		connect: React.useCallback(async () => {
+			await connect();
+		}, [connect]),
+		connected: state !== 'off' && state !== 'error',
 		detail,
-		on: state !== 'off' && state !== 'error',
+		micOn,
 		sendText: React.useCallback(text => client.current?.sendText(text), []),
-		start,
+		startMic,
 		state,
 		stop,
+		stopMic,
 		usage
 	};
 }

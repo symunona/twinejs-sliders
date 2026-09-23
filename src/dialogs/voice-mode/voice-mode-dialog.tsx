@@ -12,6 +12,7 @@ import {useTranslation} from 'react-i18next';
 import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
+import {AiPrefsLink} from '../ai-prefs-link';
 import {setPref, usePrefsContext} from '../../store/prefs';
 import {storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
@@ -45,11 +46,14 @@ export interface VoiceModeDialogProps extends DialogComponentProps {
  * and since threads restore, it is also the only thing the model is told about a
  * conversation it is being dropped back into.
  *
- * The text box talks to the MODEL and is disabled with the microphone off, because a box
- * whose meaning flips on a mic state the author can barely see is a box they will use
- * wrong. Tool calls are still reachable by hand, behind a `/` — that is how a bad session
- * is reproduced (§ The text box is the debugger), and it is now explicit rather than
- * implied by a mode.
+ * The text box talks to the MODEL, microphone or no microphone: typing is a way of
+ * reaching the session, not a fallback for when the microphone fails. A plain sentence
+ * with nothing connected opens the socket and sends it — the mic stays shut, and the
+ * recording light stays out.
+ *
+ * Tool calls are reachable by hand behind a `/`, and those need no socket at all: they go
+ * straight to the runner. That is how a bad session is reproduced (§ The text box is the
+ * debugger).
  */
 export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 	const {getCenter, setCenter, storyId, ...other} = props;
@@ -89,9 +93,10 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 	const hasKey = prefs.geminiApiKey.trim() !== '';
 
 	/**
-	 * The session's escape hatch, pinned when the microphone opens rather than when the
-	 * panel does: an author who opened the panel to type three tool calls does not need a
-	 * revision pinned, and an author who started talking does.
+	 * The session's escape hatch, pinned when the SESSION opens rather than when the panel
+	 * does. The microphone is not what makes this necessary — a model that can write is,
+	 * and typing reaches the same model. An author who only runs `/` tool lines still
+	 * pins nothing, because that never opens a socket.
 	 */
 	const pinned = React.useRef(false);
 
@@ -164,13 +169,13 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 	const handleSend = React.useCallback(async () => {
 		const trimmed = line.trim();
 
-		if (trimmed === '' || !voice.on) {
+		if (trimmed === '') {
 			return;
 		}
 
-		// `/tool {json}` runs the tool directly, exactly as the old box did. The whole
-		// surface stays reachable by hand; it just no longer depends on guessing which
-		// mode the box is in.
+		// `/tool {json}` runs the tool directly, through the runner, with or without a
+		// session. The whole surface stays reachable by hand, and it is the one thing in
+		// this panel that still works with no key at all.
 		if (trimmed.startsWith('/')) {
 			const parsed = parseToolLine(trimmed.slice(1));
 
@@ -193,6 +198,13 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 
 		setLine('');
 		session.say('user', trimmed);
+
+		// Connect on demand rather than refusing: a typed sentence is as much a turn as a
+		// spoken one. `sendText` queues until setup lands, so this does not race.
+		if (!voice.connected) {
+			await voice.connect();
+		}
+
 		voice.sendText(trimmed);
 	}, [line, session, voice]);
 
@@ -213,9 +225,15 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 		node.style.height = `${node.scrollHeight}px`;
 	}, [line]);
 
-	const stateLabel = t(`dialogs.voiceMode.${voice.state}`, {
-		defaultValue: voice.state
-	});
+	const stateLabel =
+		voice.state === 'listening' && !voice.micOn
+			? // `listening` is the socket's word for idle. With the microphone shut nothing
+				// is being heard, and a panel that says otherwise is lying about a mic.
+				t('dialogs.voiceMode.connected')
+			: t(`dialogs.voiceMode.${voice.state}`, {defaultValue: voice.state});
+	const micLabel = t(
+		voice.micOn ? 'dialogs.voiceMode.micOff' : 'dialogs.voiceMode.micOn'
+	);
 
 	return (
 		<DialogCard
@@ -242,17 +260,23 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 			maximizable
 		>
 			<CardContent>
-				<div className={classNames('voice-status', `voice-status-${voice.state}`)}>
+				<div
+					className={classNames('voice-status', `voice-status-${voice.state}`, {
+						'voice-status-muted': !voice.micOn
+					})}
+				>
 					<IconButton
-						icon={voice.on ? <IconMicrophone /> : <IconMicrophoneOff />}
+						icon={voice.micOn ? <IconMicrophone /> : <IconMicrophoneOff />}
 						// The label is next to it in the live region, and printing it twice
 						// makes a narrow panel read as a stutter.
 						iconOnly
-						label={stateLabel}
-						onClick={() => (voice.on ? voice.stop() : void voice.start())}
+						label={micLabel}
+						onClick={() =>
+							voice.micOn ? voice.stopMic() : void voice.startMic()
+						}
 						preventDefault={false}
 						selectable
-						selected={voice.on}
+						selected={voice.micOn}
 					/>
 					{/* A live region, so a screen reader hears the state change it cannot see. */}
 					<span aria-live="polite" className="voice-state">
@@ -265,7 +289,7 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 					<select
 						aria-label={t('dialogs.voiceMode.model')}
 						className="voice-model"
-						disabled={voice.on}
+						disabled={voice.connected}
 						onChange={event =>
 							dispatch(setPref('voiceLiveModel', event.target.value))
 						}
@@ -287,8 +311,15 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 						onClick={() => session.undo?.()}
 					/>
 				</div>
-				{!hasKey && <p className="voice-note">{t('dialogs.voiceMode.needsKey')}</p>}
-				{voice.on && (
+				{!hasKey && (
+					<p className="voice-note voice-note-warning" role="status">
+						<IconAlertTriangle />
+						<span>
+							{t('dialogs.voiceMode.needsKey')} <AiPrefsLink />
+						</span>
+					</p>
+				)}
+				{voice.micOn && (
 					<p className="voice-note">
 						<IconAlertTriangle /> {t('dialogs.voiceMode.headphones')}
 					</p>
@@ -307,7 +338,6 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 					}}
 				>
 					<textarea
-						disabled={!voice.on}
 						onChange={event => setLine(event.target.value)}
 						// Enter sends, Shift+Enter breaks the line — the chat convention. Not
 						// while an IME is composing, or confirming a candidate sends it.
@@ -321,17 +351,13 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 								void handleSend();
 							}
 						}}
-						placeholder={
-							voice.on
-								? t('dialogs.voiceMode.sendPlaceholder')
-								: t('dialogs.voiceMode.sendDisabled')
-						}
+						placeholder={t('dialogs.voiceMode.sendPlaceholder')}
 						ref={box}
 						rows={1}
 						value={line}
 					/>
 					<IconButton
-						disabled={!voice.on || busy || line.trim() === ''}
+						disabled={busy || line.trim() === ''}
 						icon={<IconSend />}
 						iconOnly
 						label={t('dialogs.voiceMode.send')}

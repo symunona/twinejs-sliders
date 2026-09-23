@@ -1,0 +1,19 @@
+@import '../styles/colors.css';
+
+/*
+ * A link, not a button: it sits inside a sentence in a warning, and a button there would
+ * break the line it belongs to.
+ */
+.ai-prefs-link {
+	background: none;
+	border: none;
+	color: var(--dark-blue);
+	cursor: pointer;
+	font: inherit;
+	padding: 0;
+	text-decoration: underline;
+}
+
+.ai-prefs-link:hover {
+	color: var(--blue);
+}

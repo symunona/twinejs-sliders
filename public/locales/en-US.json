@@ -212,7 +212,8 @@
 			"title": "Support Twine Development"
 		},
 		"aiPrefs": {
-			"title": "AI"
+			"title": "AI",
+			"open": "Open AI preferences"
 		},
 		"syncPrefs": {
 			"title": "Sync Settings"
@@ -1026,9 +1027,9 @@
 			"libraryAsset": "Asset library",
 			"model": "Model",
 			"nameRequired": "Give this a name.",
-			"needsKey": "Needs a {{provider}} API key, set in Preferences.",
+			"needsKey": "Needs a {{provider}} API key.",
 			"noAssets": "No assets to attach yet.",
-			"noKeys": "No API keys are set. Add a Google or OpenAI key in Preferences before generating.",
+			"noKeys": "No API keys are set. Add a Google or OpenAI key before generating.",
 			"noModels": "No models match that search. Type a full model id to use one this list doesn’t know about.",
 			"pickModel": "Choose a model to generate with.",
 			"preview": "Preview",
@@ -1088,12 +1089,14 @@
 			"off": "Voice off",
 			"undoLast": "Undo that",
 			"send": "Send",
-			"sendPlaceholder": "Say something, or /read_passage Tavern Night",
-			"sendDisabled": "Turn the microphone on to talk to the model.",
+			"sendPlaceholder": "Type or talk. /read_passage Tavern Night runs a tool.",
+			"connected": "Connected, mic off",
+			"micOn": "Turn the microphone on",
+			"micOff": "Turn the microphone off",
 			"model": "Live model",
 			"jumpToLatest": "Jump to latest",
-			"empty": "Nothing yet. Turn the microphone on and talk.",
-			"needsKey": "Add a Gemini API key in AI preferences to talk.",
+			"empty": "Nothing yet. Type below, or turn the microphone on and talk.",
+			"needsKey": "No Gemini API key \u2014 the model cannot be reached. Tool lines starting with / still work.",
 			"headphones": "Use headphones \u2014 without them the model hears itself through the speakers and answers itself.",
 			"checkpointLabel": "before voice session, {{time}}",
 			"newThread": "New thread",

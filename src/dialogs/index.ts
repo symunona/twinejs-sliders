@@ -1,5 +1,6 @@
 export * from './about-twine';
 export * from './ai-prefs';
+export * from './ai-prefs-link';
 export * from './app-donation';
 export * from './app-prefs';
 export * from './asset-editor';
