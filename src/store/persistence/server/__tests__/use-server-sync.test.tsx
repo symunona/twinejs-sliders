@@ -384,8 +384,8 @@ describe('useServerSync asset push', () => {
 	};
 
 	function pullResult(
-		overrides: Partial<pullAssetsModule.AssetPullResult> = {}
-	): pullAssetsModule.AssetPullResult {
+		overrides: Partial<pullAssetsModule.PullStoryAssetsResult> = {}
+	): pullAssetsModule.PullStoryAssetsResult {
 		return {
 			changed: false,
 			downloaded: [],
@@ -393,6 +393,7 @@ describe('useServerSync asset push', () => {
 			missingSidecars: [],
 			rev: 7,
 			skipped: true,
+			syncedHashes: new Map(),
 			warnings: [],
 			...overrides
 		};

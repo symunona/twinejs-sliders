@@ -367,18 +367,6 @@ export const ServerSyncProvider: React.FC<ServerSyncProviderProps> = ({
  * Everything above, wired up. Exported on its own so a test can drive it without a
  * provider, and so the mount point can be a one-liner beside `<StateLoader>`.
  */
-/**
- * `syncedHashes` off a pull result, when the pull side reports one. Read structurally so
- * this compiles against a `pull-assets.ts` that does not declare the field yet.
- */
-function syncedHashesOf(
-	result: AssetPullResult
-): Map<string, string> | undefined {
-	return 'syncedHashes' in result && result.syncedHashes instanceof Map
-		? result.syncedHashes
-		: undefined;
-}
-
 export function useServerSync(): ServerSyncContextProps {
 	const {dispatch, stories} = useStoriesContext();
 	const {dispatch: prefsDispatch, prefs} = usePrefsContext();
@@ -859,23 +847,17 @@ export function useServerSync(): ServerSyncContextProps {
 
 			const run = (async (): Promise<AssetPullResult | undefined> => {
 				try {
-					const pullOptions = {
+					const result = await pullStoryAssets({
 						client,
 						lastRev: assetPullRevs.current.get(storyId),
-						onProgress: (next: AssetPullProgress) =>
-							setStoryProgress(storyId, next),
+						onProgress: next => setStoryProgress(storyId, next),
 						store: slidersAssetStore(storyId),
 						storyId,
 						syncedHashes: assetSyncedHashes.current.get(storyId)
-					};
-					const result = await pullStoryAssets(pullOptions);
-					const synced = syncedHashesOf(result);
+					});
 
 					assetPullRevs.current.set(storyId, result.rev);
-
-					if (synced) {
-						assetSyncedHashes.current.set(storyId, synced);
-					}
+					assetSyncedHashes.current.set(storyId, result.syncedHashes);
 
 					if (!result.skipped) {
 						reportPullWarnings(storyId, result.warnings);

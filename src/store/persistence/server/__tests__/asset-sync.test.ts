@@ -733,11 +733,16 @@ describe('asset sync between two devices', () => {
 		expect(await conflictOf(b.push())).toBeDefined();
 		expect(await serverHash(server, story.id)).toBe(newHash);
 
-		// B pulls (the rev moves; its bytes may not land) and tries once more: refused
-		// on the base, because B never changed that picture.
-		await b.pull();
+		// B pulls: same id, new hash, B untouched since the base -- a fast-forward. B now
+		// holds A's bytes, so the retry has nothing stale to send.
+		const pulled = await b.pull();
+
+		expect(pulled.changed).toBe(true);
+		const held = (await b.store.list()).find(item => item.id === 'a_8f21');
+
+		expect(held?.hash).toBe(newHash);
 		b.state.fingerprint = undefined;
-		expect(await conflictOf(b.push())).toBeDefined();
+		await b.push();
 		expect(await serverHash(server, story.id)).toBe(newHash);
 		expect(
 			server.calls.filter(
