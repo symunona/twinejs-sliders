@@ -14,7 +14,7 @@ import type {LiveClient, LiveState} from './live-client';
 import type {MicStream} from './audio';
 import {systemInstruction} from './system-instruction';
 import {voiceTools} from '../tools';
-import type {ToolResult} from '../voice.types';
+import type {ToolResult, TranscriptRow, VoiceUsage} from '../voice.types';
 
 export interface UseLiveVoiceOptions {
 	apiKey: string;
@@ -26,12 +26,20 @@ export interface UseLiveVoiceOptions {
 	/** The model's turn ended. Re-arms the runner's per-turn caps. */
 	onTurnComplete: () => void;
 	sceneIds: string[];
+	/**
+	 * The rows the session should open already knowing — a restored thread. Read when the
+	 * socket opens, not when the panel renders, so restoring a thread and then talking
+	 * seeds the right conversation.
+	 */
+	seed?: () => TranscriptRow[];
 	storyName: string;
 }
 
 export interface LiveVoice {
 	detail?: string;
 	on: boolean;
+	/** Reset when the socket closes: it is the SOCKET's context, not the thread's. */
+	usage?: VoiceUsage;
 	/** Type at the model rather than talking, with the socket already up. */
 	sendText: (text: string) => void;
 	start: () => Promise<void>;
@@ -42,6 +50,7 @@ export interface LiveVoice {
 export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 	const [state, setState] = React.useState<LiveState>('off');
 	const [detail, setDetail] = React.useState<string>();
+	const [usage, setUsage] = React.useState<VoiceUsage>();
 	const client = React.useRef<LiveClient>();
 	const mic = React.useRef<MicStream>();
 	const player = React.useRef<SpeechPlayer>();
@@ -60,6 +69,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 		client.current = undefined;
 		setState('off');
 		setDetail(undefined);
+		setUsage(undefined);
 	}, []);
 
 	const start = React.useCallback(async () => {
@@ -95,6 +105,8 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 			},
 			onTranscript: (role, text) => optionsRef.current.onSay(role, text),
 			onTurnComplete: () => optionsRef.current.onTurnComplete(),
+			onUsage: setUsage,
+			seed: optionsRef.current.seed?.(),
 			systemInstruction: systemInstruction({
 				sceneIds: current.sceneIds,
 				storyName: current.storyName
@@ -126,6 +138,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 		sendText: React.useCallback(text => client.current?.sendText(text), []),
 		start,
 		state,
-		stop
+		stop,
+		usage
 	};
 }

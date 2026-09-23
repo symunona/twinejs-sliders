@@ -22,6 +22,7 @@ story-edit route
 | runner | `src/voice/runner.ts` | `VoiceToolEnv` only. No React, no socket |
 | env | `src/voice/use-voice-tool-env.ts` | the editor's contexts |
 | session | `src/voice/use-voice-session.ts` | transcript, undo |
+| threads | `src/voice/threads.ts` | `localStorage`. Nothing else |
 | socket | `src/voice/live/live-client.ts` | **the only file that knows Gemini exists** |
 | eyes | `src/voice/screenshot/` | `html-to-image`, offscreen `<SceneStage>` |
 | map | `packages/story-map` | nothing. Shared with `twine-cli` |
@@ -57,14 +58,63 @@ UI: `goto` `open_preview` `open_passage_editor` `highlight` `checkpoint`
 
 Schemas are `tools.ts`. It is the spec.
 
+## Threads
+
+One conversation open at a time, out of a per-story list. New / list / restore / delete in
+the panel's title bar.
+
+| | |
+|---|---|
+| store | `localStorage`, key `sliders-voice-threads`, `Record<storyId, VoiceThread[]>` |
+| shape | copied from `store/persistence/server/sync-record.ts` — one blob, module cache, every access in try/catch |
+| caps | **20 threads/story**, 300 rows/thread. First unbounded blob in the app; the cap IS the quota defence |
+| save | debounced 500 ms, plus a flush on unmount and before anything that replaces the open thread |
+| never | not a `Story` prop, not synced, not on the undo stack, not exported |
+
+**New thread** stops the mic, banks the open thread, and **rebuilds the runner** — the
+`read before write` gate is per session, so a new thread must re-arm it. `clear` never did
+this; wiping rows is not the same as telling the model it may write from memory.
+
+**Deleting a story leaves its threads behind.** `deleteSyncRecord` has the same gap.
+
+## Restoring loads the context
+
+`seed.ts` renders the thread into ONE user turn with `turnComplete: false`, sent after
+`setupComplete` and before the panel says `listening`. The model opens knowing what was
+said; it does not answer it.
+
+- **Not `sessionResumption`.** A handle resumes a session that already existed and expires
+  2 h after it ended. Neither survives closing the laptop and picking the thread up on
+  Tuesday.
+- **Not a per-role replay.** The API is strict about turn sequences and a rejected
+  `clientContent` does not error — it hangs the turn. A single narrated block has no
+  sequence to get wrong.
+- System rows are left out. They are our notices, not the conversation.
+- The seed says the story may have moved on and to call `map`.
+- Restoring while the mic is on tears the socket down and reopens it, or the model answers
+  thread A inside thread B.
+
+## Context usage
+
+`usageMetadata.promptTokenCount` is what is in the window and the only figure that can go
+DOWN. A drop is a sliding-window compaction and the panel says so — it is the one thing
+that happens to a long session without anybody asking.
+
+`contextWindowCompression: {slidingWindow: {}}` is on, so a long thread compacts instead of
+dying on `goAway`.
+
+The bar needs a denominator the API does not report. `LiveModel.contextTokens` is a
+published figure copied by hand; unset means the panel shows tokens and no bar.
+
 ## The text box is the debugger
 
 Step 2 shipped the whole tool surface with **no audio**, driven by typed calls. That is not
-a fallback — it is how a bad session is reproduced. `read_passage Tavern Night` works
-unquoted when a tool has exactly one required argument (`parseToolLine`).
+a fallback — it is how a bad session is reproduced. Now it is `/read_passage Tavern Night`,
+with the leading slash, and it still works unquoted when a tool has exactly one required
+argument (`parseToolLine`).
 
-With the socket up, the same box talks **to the model** instead. Which one the author wants
-is exactly whether the mic is on.
+Without the slash the box talks to the model. **Disabled with the mic off** — a box whose
+meaning flips on a mic state the author can barely see is a box they use wrong.
 
 ## Eyes
 
@@ -97,5 +147,7 @@ audio sounds better and calls functions worse, and this is a tool-calling app.
 ## Not done
 
 - No e2e. Audio and rasterising are both unprovable under jest; verified by hand in Chrome.
+  The socket's wiring is not: `live-client.test.ts` drives a fake `WebSocket`.
 - `revs` and `checkpoint` need a server; local-only stories get an honest error.
-- Transcript is memory-only, capped at 300 rows. Nothing is written to the story.
+- Threads are per browser. Nothing is written to the story, and nothing syncs.
+- `live/models.ts` is stale — the three ids there are 2025 previews.

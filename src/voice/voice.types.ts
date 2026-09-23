@@ -75,6 +75,36 @@ export interface TranscriptRow {
 }
 
 /**
+ * One saved conversation, per story, in `localStorage`. See `threads.ts`.
+ *
+ * `rows` is the whole thread — the transcript IS the thread, there is no second
+ * representation. Restoring one replays these rows at the model as context, so anything
+ * dropped here is something the model will not remember.
+ */
+export interface VoiceThread {
+	createdAt: number;
+	id: string;
+	rows: TranscriptRow[];
+	/** The author's first line. Absent until they say something. */
+	title?: string;
+	/** Last `promptTokenCount` the socket reported while this thread was live. */
+	tokens?: number;
+	updatedAt: number;
+}
+
+/**
+ * What the Live socket says it is spending.
+ *
+ * `prompt` is the number that matters: it is what is in the context window right now, and
+ * it is the one that falls when the window compacts. `total` is cumulative and billed.
+ */
+export interface VoiceUsage {
+	prompt: number;
+	response: number;
+	total: number;
+}
+
+/**
  * Everything the runner is allowed to touch, injected rather than imported.
  *
  * The React hook below builds one of these out of the editor's contexts; a test builds one

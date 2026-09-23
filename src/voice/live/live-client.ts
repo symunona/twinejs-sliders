@@ -7,8 +7,9 @@
  * written to be driven by typed text first.
  */
 
-import type {VoiceToolDecl} from '../voice.types';
+import type {TranscriptRow, VoiceToolDecl, VoiceUsage} from '../voice.types';
 import {defaultLiveModel, liveEndpoint} from './models';
+import {seedTurnMessage} from './seed';
 import {
 	audioMessage,
 	imageTurnMessage,
@@ -37,6 +38,13 @@ export interface LiveClientOptions {
 	/** The author stopped the model mid-sentence. Drop queued audio. */
 	onInterrupt: () => void;
 	onState: (state: LiveState, detail?: string) => void;
+	/** What the session has spent, each time the server says. */
+	onUsage?: (usage: VoiceUsage) => void;
+	/**
+	 * A thread being resumed. Replayed as one user turn before the author can talk, so
+	 * the model opens knowing what was already said. See `seed.ts`.
+	 */
+	seed?: TranscriptRow[];
 	/** The model finished a turn. Re-arms per-turn caps. */
 	onTurnComplete?: () => void;
 	/** A turn, as text. `role` says whose. Both go in the transcript. */
@@ -118,7 +126,20 @@ export function connectLive(options: LiveClientOptions): LiveClient {
 	async function handle(event: LiveEvent): Promise<void> {
 		if (event.setupComplete) {
 			ready = true;
+
+			// Before `listening`, so there is no window in which the author can talk into
+			// a session that does not yet know what thread it is in.
+			const seed = options.seed && seedTurnMessage(options.seed);
+
+			if (seed) {
+				send(seed);
+			}
+
 			setState('listening');
+		}
+
+		if (event.usage) {
+			options.onUsage?.(event.usage);
 		}
 
 		if (event.error) {

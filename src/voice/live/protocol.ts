@@ -7,7 +7,7 @@
  * has tests at all.
  */
 
-import type {VoiceToolDecl} from '../voice.types';
+import type {VoiceToolDecl, VoiceUsage} from '../voice.types';
 import {INPUT_SAMPLE_RATE} from './models';
 
 // ---------------------------------------------------------------------------
@@ -32,6 +32,9 @@ export interface SetupOptions {
 export function setupMessage(options: SetupOptions): Record<string, unknown> {
 	return {
 		setup: {
+			// Without this a long session dies on `goAway` mid-sentence. With it the window
+			// compacts instead, which the panel shows as `promptTokenCount` falling.
+			contextWindowCompression: {slidingWindow: {}},
 			generationConfig: {
 				responseModalities: ['AUDIO'],
 				...(options.voice
@@ -156,6 +159,8 @@ export interface LiveEvent {
 	outputText?: string;
 	setupComplete: boolean;
 	turnComplete: boolean;
+	/** What the session has spent, when the frame carries it. Not every frame does. */
+	usage?: VoiceUsage;
 }
 
 const EMPTY: LiveEvent = {
@@ -255,6 +260,19 @@ export function parseLiveMessage(raw: string): LiveEvent {
 		event.cancelled = cancellation.ids.filter(
 			(id): id is string => typeof id === 'string'
 		);
+	}
+
+	const usage = asRecord(root.usageMetadata);
+
+	if (usage) {
+		// `promptTokenCount` is the context window's occupancy and the only one that can
+		// go DOWN — a sliding-window compaction is visible here and nowhere else.
+		event.usage = {
+			prompt: typeof usage.promptTokenCount === 'number' ? usage.promptTokenCount : 0,
+			response:
+				typeof usage.responseTokenCount === 'number' ? usage.responseTokenCount : 0,
+			total: typeof usage.totalTokenCount === 'number' ? usage.totalTokenCount : 0
+		};
 	}
 
 	// The API closes with a `goAway` before it drops the socket, which is the only warning

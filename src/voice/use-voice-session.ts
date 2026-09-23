@@ -72,11 +72,23 @@ export interface VoiceSession {
 	/** Run a tool and append its row. What the panel's text box and the socket both call. */
 	call(name: string, args: Record<string, unknown>): Promise<ToolResult>;
 	clear(): void;
-	rows: TranscriptRow[];
 	/** The model's turn ended. Re-arms the one-screenshot-per-turn cap. */
 	endTurn(): void;
 	/** Append a row this session did not produce — a spoken turn, a connection notice. */
 	say(kind: TranscriptRow['kind'], text: string): void;
+	/**
+	 * Drop the transcript AND rebuild the runner, for a new thread.
+	 *
+	 * The rebuild is the point, and it is the one case where it is correct. The runner's
+	 * `read before write` gate is per session; a new thread is a new session, so a model
+	 * that read a passage in the last conversation must read it again in this one.
+	 * `clear` deliberately does not do this — wiping the visible rows is not the same as
+	 * telling the model it may now write from memory.
+	 */
+	reset(): void;
+	rows: TranscriptRow[];
+	/** Replace the transcript with a restored thread's rows. */
+	restore(rows: TranscriptRow[]): void;
 	/** Undo the last change, whoever made it. The escape hatch, always reachable. */
 	undo?: () => void;
 	undoLabel?: string;
@@ -95,6 +107,13 @@ export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 	 * computes undo against a story that no longer exists.
 	 */
 	const runner = React.useRef<ToolRunner>();
+	/*
+	 * `env` is stable (see above), but `reset` and `restore` rebuild the runner long after
+	 * mount and must not close over the render that happened to create them.
+	 */
+	const envRef = React.useRef(env);
+
+	envRef.current = env;
 
 	if (!runner.current) {
 		runner.current = createToolRunner(env);
@@ -146,10 +165,22 @@ export function useVoiceSession(env: VoiceToolEnv): VoiceSession {
 		[append]
 	);
 
+	const reset = React.useCallback(() => {
+		setRows([]);
+		runner.current = createToolRunner(envRef.current);
+	}, []);
+
 	return {
 		call,
 		clear: React.useCallback(() => setRows([]), []),
 		endTurn: React.useCallback(() => runner.current!.endTurn(), []),
+		reset,
+		restore: React.useCallback(rows => {
+			// A restored thread is history, not this session's reads: the gate stays shut
+			// until the model reads the passage again. It may well have changed since.
+			setRows(rows.slice(-MAX_ROWS));
+			runner.current = createToolRunner(envRef.current);
+		}, []),
 		rows,
 		say,
 		undo,

@@ -10,6 +10,17 @@
  */
 
 export interface LiveModel {
+	/**
+	 * Roughly how many tokens fit in this model's window.
+	 *
+	 * DISPLAY ONLY, and approximate. The Live API exposes no window size — the closest
+	 * thing on the wire is `ContextWindowCompressionConfig.triggerTokens`, documented as
+	 * "80% of the model's context window limit", which is a default we do not receive.
+	 * So this is a published figure copied by hand, it drifts with every model rename,
+	 * and nothing but a progress bar is allowed to depend on it. Leave it unset rather
+	 * than guess: the panel then shows the token count with no percentage.
+	 */
+	contextTokens?: number;
 	id: string;
 	label: string;
 	note?: string;
@@ -17,15 +28,18 @@ export interface LiveModel {
 
 export const liveModels: LiveModel[] = [
 	{
+		contextTokens: 1_048_576,
 		id: 'gemini-live-2.5-flash-preview',
 		label: 'Gemini 2.5 Flash Live',
 		note: 'Half-cascade. Weaker voice, stronger function calling — the right trade here.'
 	},
 	{
+		contextTokens: 1_048_576,
 		id: 'gemini-2.0-flash-live-001',
 		label: 'Gemini 2.0 Flash Live'
 	},
 	{
+		contextTokens: 128_000,
 		id: 'gemini-2.5-flash-native-audio-preview-09-2025',
 		label: 'Gemini 2.5 Flash Native Audio',
 		note: 'Sounds best. Calls tools least reliably.'
@@ -33,6 +47,10 @@ export const liveModels: LiveModel[] = [
 ];
 
 export const defaultLiveModel = liveModels[0].id;
+
+export function liveModel(id: string): LiveModel | undefined {
+	return liveModels.find(model => model.id === id);
+}
 
 /**
  * Rates the protocol fixes, not preferences. The API takes 16 kHz mono PCM16 in and
