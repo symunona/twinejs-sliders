@@ -603,10 +603,23 @@ export class BackedAssetStore implements AssetStore {
 				throw new Error(`There is no asset with ID ${id}.`);
 			}
 
+			// Non-syncable sidecars (`src`) go: this device's original of its OLD pixels,
+			// paired with the far side's edits, would re-edit from the wrong base -- worse
+			// than no base. Syncable ones stay for the provenance landing to reconcile.
+			const sidecars: SidecarEntries = {...existing.sidecars};
+
+			for (const kind of Object.keys(sidecars)) {
+				if (!sidecarSyncs(kind)) {
+					await this.storage.deleteBlob(sidecarKey(id, kind));
+					delete sidecars[kind];
+				}
+			}
+
 			// `replace`'s split: identity is local, measurements follow the bytes.
 			// Provenance is untouched here -- the caller lands it once the bytes agree.
 			const meta: AssetMeta = {
 				...existing,
+				sidecars: Object.keys(sidecars).length ? sidecars : undefined,
 				animated: incoming.animated,
 				bytes: incoming.bytes,
 				h: incoming.h,

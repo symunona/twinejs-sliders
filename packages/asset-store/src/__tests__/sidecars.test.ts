@@ -919,6 +919,37 @@ describe('applySyncedBytes', () => {
 		).toEqual(bytes);
 	});
 
+	it('drops the local src, keeps the syncable cutout', async () => {
+		const backend = new MemoryBackend();
+		const store = new BackedAssetStore(backend);
+		const id = await store.put(file(pngBytes(), 'tavern.png', 'image/png'), {
+			kind: 'bg'
+		});
+
+		await store.replace(id, file(jpegBytes(), 'tavern.jpg', 'image/jpeg'), {
+			edits: edits(),
+			sidecars: {
+				cutout: new Blob(['local mask'], {type: 'image/png'}),
+				src: new Blob([pngBytes()], {type: 'image/png'})
+			}
+		});
+
+		const bytes = pngBytes(64, 32);
+		const meta = await store.applySyncedBytes(
+			id,
+			await farRow(bytes, {mime: 'image/png'}),
+			new Blob([bytes], {type: 'image/png'})
+		);
+
+		// `src` is the original of the OLD pixels; paired with the far side's edits it
+		// would re-edit from the wrong base. The cutout is the provenance landing's call.
+		expect(meta.sidecars?.src).toBeUndefined();
+		expect(await store.sidecar(id, 'src')).toBeUndefined();
+		expect(await backend.readBlob(sidecarKey(id, 'src'))).toBeUndefined();
+		expect(meta.sidecars?.cutout).toBeDefined();
+		expect(await store.sidecar(id, 'cutout')).toBeDefined();
+	});
+
 	it('refuses bytes that do not match the row’s hash', async () => {
 		const store = newStore();
 		const id = await store.put(file(pngBytes(), 'tavern.png', 'image/png'), {
