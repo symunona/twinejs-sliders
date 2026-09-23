@@ -33,7 +33,8 @@ import {
 	DEFAULT_STEP_SECONDS,
 	FIT_Z,
 	bgMotionTiles,
-	cssEase
+	cssEase,
+	splitPoseImage
 } from '@sliders/scene-types';
 import {
 	DEFAULT_ANCHORS,
@@ -152,6 +153,8 @@ interface ResolvedEntity {
 	fit?: PoseFit;
 	/** The pose being drawn, so its anchors are the ones `measure` reports. */
 	poseName?: string;
+	/** Set when the entity named ONE image of the pose (`walk#3`), so it does not play. */
+	oneImage?: boolean;
 	/** Set when we cannot draw the real thing — render a labelled placeholder instead. */
 	placeholderLabel?: string;
 	/** The id that failed to resolve. Exposed as `data-asset-id` for tests to assert on. */
@@ -765,7 +768,8 @@ export class DomRenderer implements Renderer {
 	): Promise<ResolvedEntity> {
 		const pose = still.poseName ? character.poses?.[still.poseName] : undefined;
 
-		if (!pose?.steps?.length) {
+		// `walk#3` asked for one image of the pose, not for the pose to play.
+		if (!pose?.steps?.length || still.oneImage) {
 			return still;
 		}
 
@@ -806,11 +810,22 @@ export class DomRenderer implements Renderer {
 		character: Character,
 		wanted: string | undefined
 	): Promise<ResolvedEntity> {
-		const poseName = pickPoseName(character, wanted);
+		// `walk#3`: one image of a pose, not the pose. What a compiled walk names, because a
+		// step naming a stepped pose only ever shows its first image. An exact pose name
+		// wins, so a pose somebody really called `a#1` still resolves to itself.
+		const image =
+			wanted && !(wanted in (character.poses ?? {}))
+				? splitPoseImage(wanted)
+				: undefined;
+		const poseName = pickPoseName(character, image ? image.pose : wanted);
 		const pose = poseName ? character.poses?.[poseName] : undefined;
 		// A pose with steps stands on its first image until `resolvePoseSteps` takes over.
-		const first = pose?.steps?.[0];
-		const assetId = first ? first.asset : pose?.asset;
+		const first = pose?.steps?.[image?.index ?? 0];
+		const assetId = first
+			? first.asset
+			: image && image.index > 0
+			? undefined
+			: pose?.asset;
 
 		if (!pose || !assetId) {
 			const missingPose = `${entity.ref}/${wanted ?? DEFAULT_POSE_NAME}`;
@@ -832,6 +847,7 @@ export class DomRenderer implements Renderer {
 			url,
 			fit: first?.fit ?? pose.fit,
 			poseName,
+			...(image ? {oneImage: true} : {}),
 			placeholderId: url ? undefined : assetId,
 			placeholderLabel: url ? undefined : `? asset\n${assetId}`
 		};

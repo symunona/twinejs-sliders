@@ -24,3 +24,29 @@ export {
 	resolveZ,
 	upsertFx
 } from './stage';
+export {
+	IDLE_POSE,
+	WALK_NUDGE,
+	WALK_POSE,
+	WALK_STAGE_ASPECT,
+	clipRingToUnit,
+	compileWalk,
+	defaultWalkDepth,
+	depthScale,
+	findWalkPath,
+	hasWalkArea,
+	idlePoseName,
+	imageToStage,
+	isWalkable,
+	pointInRing,
+	remapWalkArea,
+	snapToWalk,
+	stageToImage,
+	walkPathLength
+} from './walk-path';
+export type {
+	CompileWalkOptions,
+	CompiledWalk,
+	ImageSize,
+	WalkPath
+} from './walk-path';

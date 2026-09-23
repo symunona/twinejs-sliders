@@ -248,6 +248,7 @@ export class BackedAssetStore implements AssetStore {
 				sourceAsset: options.sourceAsset,
 				origin: options.origin,
 				effect: options.effect,
+				walk: options.walk,
 				edits: options.edits,
 				tuning: options.tuning,
 				mask: options.mask,
@@ -566,7 +567,8 @@ export class BackedAssetStore implements AssetStore {
 				mask: incoming.mask,
 				origin: incoming.origin,
 				sidecars: Object.keys(sidecars).length ? sidecars : undefined,
-				tuning: incoming.tuning
+				tuning: incoming.tuning,
+				walk: incoming.walk
 			};
 
 			manifest.assets[id] = meta;

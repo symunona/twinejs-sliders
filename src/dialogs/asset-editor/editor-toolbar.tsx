@@ -6,6 +6,7 @@ import {
 	IconRepeat,
 	IconResize,
 	IconScissors,
+	IconShoe,
 	IconVector,
 	IconWand
 } from '@tabler/icons';
@@ -29,7 +30,8 @@ export type ToolId =
 	| 'tile'
 	| 'background'
 	| 'mask'
-	| 'effect';
+	| 'effect'
+	| 'walk';
 
 // Roughly the order the pixels pass through: Seamless folds the finished picture's right
 // edge over its left, so it sits after the tool that decides how wide that picture is.
@@ -41,7 +43,10 @@ export const TOOL_IDS: ToolId[] = [
 	'tile',
 	'background',
 	'mask',
-	'effect'
+	'effect',
+	// After effect, and like it bakes nothing: where a character may stand on a backdrop.
+	// Only offered for `bg` assets -- see `editorTools` in the editor.
+	'walk'
 ];
 
 const TOOL_ICONS: Record<ToolId, React.ReactNode> = {
@@ -50,7 +55,8 @@ const TOOL_ICONS: Record<ToolId, React.ReactNode> = {
 	background: <IconWand />,
 	mask: <IconScissors />,
 	size: <IconResize />,
-	tile: <IconRepeat />
+	tile: <IconRepeat />,
+	walk: <IconShoe />
 };
 
 const MODE_ICONS: Record<MaskMode, React.ReactNode> = {

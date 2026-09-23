@@ -548,6 +548,70 @@ describe('pullStoryAssets', () => {
 		expect(second.skipped).toBe(true);
 	});
 
+	it('lands a walk area and a mask drawn on the other side, then stops', async () => {
+		const bytes = webpBytes();
+		const store = newStore();
+		const saved = await store.putAsset(
+			new File([bytes], 'tavern.webp', {type: 'image/webp'}),
+			{kind: 'bg'}
+		);
+		const walk = {
+			depth: {far: {scale: 0.5, y: 0.5}, near: {scale: 1, y: 0.95}},
+			shapes: [
+				{
+					id: 's1',
+					op: 'walk' as const,
+					points: [
+						{x: 0.1, y: 0.5},
+						{x: 0.9, y: 0.5},
+						{x: 0.9, y: 0.95}
+					]
+				}
+			]
+		};
+		const mask = {
+			shapes: [
+				{
+					feather: 0,
+					id: 's1',
+					op: 'cut' as const,
+					points: [
+						{x: 0.1, y: 0.1},
+						{x: 0.2, y: 0.1},
+						{x: 0.2, y: 0.2}
+					]
+				}
+			]
+		};
+		const {client} = fakeClient({
+			manifest: {
+				assets: [
+					await meta(bytes, {hash: saved.meta.hash, id: 'a_other', mask, walk})
+				],
+				rev: 9
+			}
+		});
+
+		const first = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1'
+		});
+
+		expect(first.changed).toBe(true);
+		expect(await store.meta(saved.id)).toMatchObject({mask, walk});
+
+		const second = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1'
+		});
+
+		expect(second.changed).toBe(false);
+	});
+
 	it('reports no change when the plan drops the bytes it fetched', async () => {
 		// A name clash: the library already has `tavern/night`, holding different bytes.
 		// `planBundle` settles that `kept-existing` -- the local asset stays, the incoming

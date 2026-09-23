@@ -24,3 +24,18 @@
 .scene-preview-dialog .scene-preview.full-screen {
 	display: none;
 }
+
+/* Walk-here's walker picker and its note live in the preview bar. The note truncates:
+   the bar is one line, and the full text is in the title. */
+.scene-preview-walker {
+	max-width: 10em;
+}
+
+.scene-preview-walk-note {
+	color: var(--gray);
+	font-size: 85%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

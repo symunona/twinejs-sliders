@@ -112,6 +112,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},
 	{id: 'scene.toggleLock', scope: 'scene-preview'},
+	{id: 'scene.walkHere', scope: 'scene-preview'},
 	{id: 'scene.deselect', scope: 'scene-preview'},
 
 	// The scrubber and the nudges share the arrow keys. Nudging requires a selection and
@@ -176,6 +177,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'assetEditor.resetCrop', scope: 'asset-editor'},
 	{id: 'assetEditor.cycleMaskMode', scope: 'asset-editor'},
 	{id: 'assetEditor.clearMask', scope: 'asset-editor'},
+	{id: 'assetEditor.walkHere', scope: 'asset-editor'},
 	{id: 'assetEditor.saveAsNew', scope: 'asset-editor'},
 	{id: 'assetEditor.replace', scope: 'asset-editor'},
 

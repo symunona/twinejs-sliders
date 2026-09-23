@@ -30,7 +30,8 @@ import type {
 	CutoutTuning,
 	Frac2,
 	ImageEdits,
-	SidecarKind
+	SidecarKind,
+	WalkArea
 } from '@sliders/scene-types';
 import {applyBundlePlan, planBundle} from '../../../util/sliders-bundle';
 import type {BundleAsset} from '../../../util/sliders-bundle';
@@ -145,6 +146,11 @@ export interface AssetProvenance {
 	 * produced them, and the far side cannot move one corner of a polygon it never got.
 	 */
 	mask?: AssetMask;
+	/**
+	 * Where a character may walk. Same bytes, different floor is a real difference, and a
+	 * symmetric one -- both libraries can hold it -- so it cannot ping-pong.
+	 */
+	walk?: WalkArea;
 	/** Syncable, hashed sidecar kinds only, by content hash. */
 	sidecars: Record<string, string>;
 }
@@ -169,7 +175,8 @@ export function provenanceOf(meta: AssetMeta): AssetProvenance {
 		mask: meta.mask,
 		origin: meta.origin,
 		sidecars: syncableSidecarHashes(meta),
-		tuning: meta.tuning
+		tuning: meta.tuning,
+		walk: meta.walk
 	};
 }
 
@@ -364,7 +371,8 @@ async function landProvenance(options: {
 				mask: target.mask,
 				origin: target.origin,
 				sidecars: blobs,
-				tuning: target.tuning
+				tuning: target.tuning,
+				walk: target.walk
 			});
 
 			// Rule 1 of the sync model in its asset form: what is reported is what the store
@@ -429,9 +437,13 @@ async function landingFor(
 	const blobs: Partial<Record<SidecarKind, Blob>> = {};
 	const target: AssetProvenance = {
 		edits: incoming.edits,
+		// Missing until the walk area needed the same line: without it a pull compared the
+		// mask, found it different, and landed `undefined` over it.
+		mask: incoming.mask,
 		origin: incoming.origin,
 		sidecars: {},
-		tuning: incoming.tuning
+		tuning: incoming.tuning,
+		walk: incoming.walk
 	};
 
 	for (const [kind, hash] of Object.entries(syncableSidecarHashes(incoming))) {

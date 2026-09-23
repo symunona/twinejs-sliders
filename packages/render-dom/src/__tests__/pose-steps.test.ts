@@ -325,4 +325,46 @@ describe('a pose that owns steps', () => {
 		jest.advanceTimersByTime(200);
 		expect(shownAsset(mount, 'kate')).toBe('a_kate_i1');
 	});
+
+	it('addresses one image of a stepped pose as name#n, 1-based', async () => {
+		await kate().apply(
+			stage(
+				entity({
+					id: 'kate',
+					pose: 'idle#2',
+					poseLoop: 'all',
+					steps: [
+						{dur: 0.1, name: 'idle#2'},
+						{dur: 0.1, name: 'idle#1'},
+						{dur: 0.1, name: 'crossed#1'}
+					]
+				})
+			)
+		);
+
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i2');
+
+		jest.advanceTimersByTime(100);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i1');
+
+		jest.advanceTimersByTime(100);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_x');
+	});
+
+	it('holds one image named as the pose, rather than playing the pose', async () => {
+		await kate().apply(stage(entity({id: 'kate', pose: 'idle#2'})));
+
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i2');
+
+		jest.advanceTimersByTime(1000);
+		expect(shownAsset(mount, 'kate')).toBe('a_kate_i2');
+	});
+
+	it('placeholders an image past the end', async () => {
+		await kate().apply(stage(entity({id: 'kate', pose: 'idle#9'})));
+
+		expect(
+			mount.querySelector('[data-entity-id="kate"] .sliders-placeholder')
+		).not.toBeNull();
+	});
 });

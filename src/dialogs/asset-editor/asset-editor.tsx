@@ -4,7 +4,8 @@ import {
 	AssetMask,
 	AssetMeta,
 	Frac2,
-	MaskOp
+	MaskOp,
+	WalkArea
 } from '@sliders/scene-types';
 import {normalizeEffect, sameEffect} from '@sliders/render-dom';
 import classNames from 'classnames';
@@ -115,6 +116,10 @@ import {
 } from './mask-shapes';
 import {MaskTool} from './mask-tool';
 import {TileTool} from './tile-tool';
+import {useWalkEditor} from './use-walk-editor';
+import {WalkStage} from './walk-stage';
+import {WalkTool} from './walk-tool';
+import {sameWalk, WalkFrame, walkToBaked, walkToSource} from './walk-shapes';
 import './asset-editor.css';
 
 /** Longest edge the live preview is drawn at. Full size is only used on save. */
@@ -262,6 +267,7 @@ function sameShownAsset(a: AssetMeta, b: AssetMeta): boolean {
 		a.hash === b.hash &&
 		sameAnchor(a.origin ?? DEFAULT_ANCHOR, b.origin ?? DEFAULT_ANCHOR) &&
 		sameTuning(a.tuning, b.tuning) &&
+		sameWalk(a.walk, b.walk) &&
 		(a.edits && b.edits
 			? sameEdits(a.edits, b.edits)
 			: a.edits === undefined && b.edits === undefined) &&
@@ -415,6 +421,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [maskOp, setMaskOp] = React.useState<MaskOp>('cut');
 	const [maskFeather, setMaskFeather] = React.useState(DEFAULT_FEATHER);
 	/**
+	 * Where a character may walk, in fractions of the SOURCE image like the mask -- the
+	 * editor draws on the whole original. A save folds the crop in (`walkToBaked`), because
+	 * the meta stores it against the finished bytes the player draws.
+	 */
+	const [walk, setWalk] = React.useState<WalkArea>({shapes: []});
+	/**
 	 * The bytes `original` was decoded from, kept so a save can store them as the asset's
 	 * `src` sidecar -- the base every later edit of it is re-rendered from.
 	 */
@@ -436,6 +448,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		effect?: AssetEffect;
 		mask?: AssetMask;
 		tuning?: CutoutTuning;
+		walk?: WalkArea;
 	}>({});
 	/**
 	 * Which control panel the right pane is showing. Colour first: it is the only tool
@@ -602,6 +615,18 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			setComposed({canvas});
 			setEdits(restored ?? defaultEdits(canvas.width, canvas.height));
 			setMask(restoredMask ?? {shapes: []});
+
+			// Stored against the baked bytes. Put back over what is on screen: the whole
+			// original when the edit is being redone from its base, the bytes themselves
+			// otherwise.
+			const restoredWalk = walkToSource(
+				assetMeta?.walk,
+				restored?.crop,
+				canvas.width,
+				canvas.height
+			);
+
+			setWalk(restoredWalk);
 			// Normalized on the way in, so a value an older build or a hand-edited manifest
 			// put out of range does not read as an unsaved change the moment the dialog opens.
 			const restoredEffect = normalizeEffect(assetMeta?.effect);
@@ -611,7 +636,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// never reaches the canvas below, and `saved` is a record of what the dialog
 			// is SHOWING -- see the comment on the state itself. `mask` and `effect` need
 			// no such guard: both are already what the setters just put on screen.
-			setSaved({edits: restored, effect: restoredEffect, mask: restoredMask});
+			setSaved({
+				edits: restored,
+				effect: restoredEffect,
+				mask: restoredMask,
+				walk: restoredWalk
+			});
 
 			// A stored cutout goes back through the path a fresh one takes, so its two
 			// sliders keep working without the model having to run for a second time.
@@ -789,8 +819,28 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * pane there would be a tool whose every control silently did nothing.
 	 */
 	const editorTools = detached
-		? TOOL_IDS.filter(id => id !== 'effect')
-		: TOOL_IDS;
+		? TOOL_IDS.filter(id => id !== 'effect' && id !== 'walk')
+		: // A floor belongs to a backdrop. A prop or a pose image has none to stand on.
+		  TOOL_IDS.filter(id => id !== 'walk' || meta?.kind === 'bg');
+	/** How the picture on screen relates to the one a save bakes. Walk maths runs on that. */
+	const walkFrame = React.useMemo<WalkFrame | undefined>(
+		() =>
+			source && edits
+				? {
+						crop: edits.crop,
+						out: outputSize(edits),
+						sourceHeight: source.height,
+						sourceWidth: source.width
+				  }
+				: undefined,
+		[edits, source]
+	);
+	const walkEditor = useWalkEditor({
+		active: tool === 'walk',
+		frame: walkFrame,
+		store,
+		walk
+	});
 
 	// Deleting the last shape, or restoring the background, can leave the stage in a mode
 	// that no longer means anything. Fall back rather than leave the author looking at an
@@ -879,7 +929,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		// The mirror of that. An effect is judged against the finished picture, and the two
 		// transparency previews draw an alpha map -- landing in one would tear a black and
 		// white sheet and tell the author nothing about how the asset will look.
-		if (next === 'effect') {
+		// The floor is drawn over the picture the player will show, not over an alpha map.
+		if (next === 'effect' || next === 'walk') {
 			setMaskMode('rendered');
 		}
 	}
@@ -1184,6 +1235,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				metaChanges.effect = effect;
 			}
 
+			// Compared baked-to-baked: a crop changed since the floor was drawn moves every
+			// stored fraction, so it is a change even with no ring touched.
+			const bakedWalk = walkToBaked(walk, edits.crop, source.width, source.height);
+
+			if (!sameWalk(bakedWalk, meta.walk)) {
+				metaChanges.walk = bakedWalk;
+			}
+
 			if (Object.keys(metaChanges).length > 0) {
 				await store.update(meta.id, metaChanges);
 			}
@@ -1266,7 +1325,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				origin: savedAnchor(),
 				ownerCharacter: meta.ownerCharacter,
 				sourceAsset: meta.id,
-				tags: meta.tags
+				tags: meta.tags,
+				walk: walkToBaked(walk, edits.crop, source.width, source.height)
 			});
 
 			refreshAssetLibrary();
@@ -1393,6 +1453,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			!sameEffect(effect, saved.effect) ||
 			!sameTuning(savedTuning, saved.tuning) ||
 			!sameMask(mask, saved.mask) ||
+			!sameWalk(walk, saved.walk) ||
 			!sameEdits(
 				edits,
 				saved.edits ?? defaultEdits(source.width, source.height)
@@ -1539,6 +1600,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			setMask({shapes: []});
 			setSelectedShape(undefined);
 		},
+		scope: 'asset-editor'
+	});
+
+	useCommand({
+		enabled: tool === 'walk' && !!walkEditor.ghost && !busy,
+		id: 'assetEditor.walkHere',
+		label: t('hotkeys.commands.assetEditor.walkHere'),
+		run: () => walkEditor.setWalkHere(!walkEditor.walkHere),
 		scope: 'asset-editor'
 	});
 
@@ -1785,6 +1854,22 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 								{/* Last, so the layers blend against the finished preview. It
 								    is `aria-hidden` and `pointer-events: none`, so it takes
 								    nothing away from the overlays above it. */}
+								{/* Pointer gating is by tool: nothing here exists outside `walk`,
+								    and inside it the overlay, the ghost and the depth handles
+								    stop their own presses before the crop drag below sees them. */}
+								{tool === 'walk' && walkFrame && (
+									<WalkStage
+										art={preview}
+										container={canvasBox}
+										disabled={busy}
+										editor={walkEditor}
+										frame={walkFrame}
+										height={source.height}
+										onChange={setWalk}
+										walk={walk}
+										width={source.width}
+									/>
+								)}
 								{tool === 'effect' && (
 									<EffectPreview
 										art={preview}
@@ -1800,6 +1885,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										? 'dialogs.assetEditor.anchorHint'
 										: tool === 'effect'
 										? 'dialogs.assetEditor.effectHint'
+										: tool === 'walk'
+										? 'dialogs.assetEditor.walk.hint'
 										: tool === 'mask'
 										? 'dialogs.assetEditor.maskHint'
 										: tool === 'size'
@@ -2215,6 +2302,15 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									disabled={busy}
 									effect={effect}
 									onChange={setEffect}
+								/>
+							)}
+							{tool === 'walk' && walkFrame && (
+								<WalkTool
+									disabled={busy}
+									editor={walkEditor}
+									frame={walkFrame}
+									onChange={setWalk}
+									walk={walk}
 								/>
 							)}
 							{tool === 'mask' && (

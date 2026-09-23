@@ -1,6 +1,6 @@
 # Walk area — polygon, depth, walk-here preview
 
-Status: planned. 2026-09-23. One spec. Depends on [character-poses.md](character-poses.md)
+Status: shipped on `walk-area`, see Shipped. 2026-09-23. One spec. Depends on [character-poses.md](character-poses.md)
 for the `walk` pose name.
 
 ## Goal
@@ -230,3 +230,68 @@ Speed: `Character.walkSpeed?` in stage units/s at scale 1. Default 0.6.
 - Walk-behinds. `z` + a front plane already covers most of it.
 - 8-direction walk poses (`walk_up`, `walk_down`). The pose naming leaves room.
 - Scene-level `walk:` override.
+
+## Shipped — 2026-09-23
+
+Branch `walk-area` (on `char-poses`). All of the plan, with the deviations below.
+
+### Where things are
+
+| thing | file |
+|---|---|
+| types | `packages/scene-types/src/walk.ts` (re-exported). `AssetMeta.walk`, `DEFAULT_WALK_SPEED`, `poseImageName`/`splitPoseImage` |
+| path, depth, mapping, compile | `packages/scene-core/src/walk-path.ts` |
+| image steps in renderer | `render-dom` `resolvePose` (`oneImage`) |
+| shape overlay | `asset-editor/shape-overlay.tsx`. `mask-overlay.tsx` is now a wrapper |
+| walk tool | `walk-tool.tsx` (pane), `walk-stage.tsx` (over the art), `depth-gizmo.tsx`, `walk-ghost.tsx`, `use-walk-editor.ts`, `walk-shapes.ts` |
+| scene preview | `passage-edit/scene-preview/use-walk-here.tsx`; toggle + walker picker in `scene-preview-dialog.tsx` |
+
+### Decided
+
+- **Walk steps address images as `pose#n`, 1-based.** `walk#3` = third image of pose `walk`. Renderer
+  shows that one image and never plays the pose. Exact pose name wins (`a#1` pose still
+  resolves to itself). Past the end = placeholder. No type change, no parser change; works in
+  hand-written YAML too (`pose: walk#2`). Still / animated-file `walk` = name repeated; an
+  unchanged image keeps an animated file playing.
+- **Step durations = the walk pose's own step `dur`s**, not a fixed fps. A step also ends at
+  every path corner, so a glide never cuts a block corner.
+- **Speed unit:** `walkSpeed` = scene x units (half a stage width) per second, y rescaled by
+  aspect so up and down count the same. Default 0.6. × depth scale where the feet are.
+  Not × entity `scale`.
+- **Visibility graph uses ALL ring corners**, nudged 0.002 onto the floor, not only reflex
+  ones. Same answers, simpler with overlapping rings. Segment test cuts at every crossing and
+  tests each piece's middle, so overlapping walk rings work.
+- **Island:** nearest point to the click that a reached node can see (reached nodes + nudged
+  edge points). `reached: false`, dashed line to the click.
+- **Crop trap:** the editor holds the walk area in SOURCE fractions (like the anchor), crop
+  folded in on save (`walkToBaked`, rings clipped to the picture, emptied shapes dropped),
+  unfolded on load (`walkToSource`). A crop after drawing moves nothing on screen. Tile overlap
+  ignored, as the anchor ignores it.
+- **Sync:** `walk` is in `AssetProvenance` + `SyncedProvenance` + `applySyncedProvenance`, so a
+  pull lands a floor edited elsewhere. Bundles and checkout carry it through `importAsset`
+  (not stripped). Go server stores raw JSON, no change.
+- **Walk-here blocked** on bg `fx:` `parallax_*`, `scroll_*`, `circling`. `earthquake` and a
+  story's own tokens do not block.
+- Hotkeys: `assetEditor.walkHere` and `scene.walkHere`, both `W`.
+- Ghost remembers the last character in `localStorage` `sliders.walk.ghost`.
+
+### Deviations
+
+- Ghost is dragged, not glued to the cursor. A cursor-following ghost fights the polygon
+  clicks. Drag it anywhere; red off floor; snaps on drop.
+- Walk-here in the preview lives in the preview's bar (dialog passes `barExtra`), so it also
+  works full screen. `ScenePreview` got three optional props: `walkHere`, `onWalkInfo`,
+  `barExtra`.
+- Ghost ignores pose `fit` (registration offset). The renderer does not.
+- A flip inside a step animates `scaleX` over that step's hold (≤ 0.1 s squash-turn). Left as
+  is; reads as a turn.
+- `landingFor` in `checkout-story.ts` never carried `mask`; a pull compared the mask, found it
+  different and landed `undefined`. Fixed in passing (same line as walk).
+- Found, NOT fixed: `effect` is not in `AssetProvenance` either, so an effect changed on one
+  device never lands on another that already holds the bytes.
+
+### Left undone
+
+- Player click-to-walk (next spec). The path code is ready in `scene-core`.
+- Lint for a scene step naming a stepped pose (from phase A).
+- Depth silhouettes sit at the lines' left end and overlap each other when the lines are close.

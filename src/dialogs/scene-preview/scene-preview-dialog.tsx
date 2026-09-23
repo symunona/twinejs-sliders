@@ -1,8 +1,13 @@
-import {IconArrowsMaximize, IconArrowsMinimize} from '@tabler/icons';
+import {
+	IconArrowsMaximize,
+	IconArrowsMinimize,
+	IconWalk
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
+import {useCommand} from '../../hotkeys';
 import {useScenePreviewSource} from '../../routes/story-edit/scene-preview-source-context';
 import {passageMatchingName, storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
@@ -11,6 +16,7 @@ import {DialogComponentProps} from '../dialogs.types';
 import {ScenePreview} from '../passage-edit/scene-preview/scene-preview';
 import {usePreviewResolver} from '../passage-edit/scene-preview/use-preview-resolver';
 import {useSceneParse} from '../passage-edit/scene-preview/use-scene-parse';
+import type {WalkHereInfo} from '../passage-edit/scene-preview/use-walk-here';
 import {setScenePreviewDismissed} from './preview-dismissal';
 import './scene-preview-dialog.css';
 
@@ -41,6 +47,13 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const assets = usePreviewResolver();
 	const published = useScenePreviewSource();
 	const [fullScreen, setFullScreen] = React.useState(false);
+	/**
+	 * Walk-here: preview only, never written. Off by default, and not remembered -- it is
+	 * a question asked of one backdrop, not a way of working.
+	 */
+	const [walkOn, setWalkOn] = React.useState(false);
+	const [walker, setWalker] = React.useState<string>();
+	const [walkInfo, setWalkInfo] = React.useState<WalkHereInfo>();
 	const {t} = useTranslation();
 	// An editor for another story would be a leftover; this dialog belongs to one story.
 	const source = published?.storyId === story.id ? published : undefined;
@@ -70,6 +83,69 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			}
 		},
 		[dialogsDispatch, story]
+	);
+
+	useCommand({
+		id: 'scene.walkHere',
+		label: t('hotkeys.commands.scene.walkHere'),
+		run: () => setWalkOn(on => !on),
+		scope: 'scene-preview'
+	});
+
+	/** Why a click will not walk, in words. Absent when it will. */
+	const walkNote = !walkOn
+		? undefined
+		: walkInfo?.blocked
+		? t(`dialogs.passageEdit.scenePreview.walk.${walkInfo.blocked}`, {
+				fx: walkInfo.fx
+		  })
+		: walkInfo?.unreachable
+		? t('dialogs.passageEdit.scenePreview.walk.unreachable')
+		: walkInfo?.noWalkPose
+		? t('dialogs.passageEdit.scenePreview.walk.noWalkPose', {
+				name:
+					walkInfo.cast.find(member => member.id === walkInfo.walker)?.name ??
+					walkInfo.walker
+		  })
+		: undefined;
+
+	const walkControls = (
+		<>
+			<IconButton
+				commandId="scene.walkHere"
+				icon={<IconWalk />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.walk.walkHere')}
+				onClick={() => setWalkOn(!walkOn)}
+				selectable
+				selected={walkOn}
+				tooltipLabel={t('dialogs.passageEdit.scenePreview.walk.walkHereHint')}
+			/>
+			{walkOn && (walkInfo?.cast.length ?? 0) > 0 && (
+				<select
+					aria-label={t('dialogs.passageEdit.scenePreview.walk.walker')}
+					className="scene-preview-walker"
+					data-testid="scene-preview-walker"
+					onChange={event => setWalker(event.target.value)}
+					value={walkInfo?.walker ?? ''}
+				>
+					{walkInfo?.cast.map(member => (
+						<option key={member.id} value={member.id}>
+							{member.name}
+						</option>
+					))}
+				</select>
+			)}
+			{walkNote && (
+				<span
+					className="scene-preview-walk-note"
+					data-testid="scene-preview-walk-note"
+					title={walkNote}
+				>
+					{walkNote}
+				</span>
+			)}
+		</>
 	);
 
 	// Closing is a decision, not an accident: it stops the preview letting itself in the
@@ -115,6 +191,9 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			>
 				<ScenePreview
 					assets={assets}
+					barExtra={walkControls}
+					onWalkInfo={setWalkInfo}
+					walkHere={{on: walkOn, walker}}
 					editor={source?.editor}
 					fullScreen={fullScreen}
 					onFullScreenChange={setFullScreen}

@@ -9,7 +9,8 @@ import type {
 	CutoutTuning,
 	Frac2,
 	ImageEdits,
-	SidecarKind
+	SidecarKind,
+	WalkArea
 } from '@sliders/scene-types';
 
 /** Which persistence layer ended up being used. Surfaced in the UI for support reasons. */
@@ -41,6 +42,8 @@ export interface PutAssetOptions {
 	origin?: Frac2;
 	/** The live look the asset is drawn with. Absent means none. */
 	effect?: AssetEffect;
+	/** Where a character may walk on this backdrop. Absent means nowhere drawn. */
+	walk?: WalkArea;
 	/** What the asset editor baked these bytes with, so the edit can be re-opened. */
 	edits?: ImageEdits;
 	/** What the cutout controls were set to. Only meaningful with a `cutout` sidecar. */
@@ -112,6 +115,12 @@ export interface SyncedProvenance {
 	mask?: AssetMask;
 	tuning?: CutoutTuning;
 	origin?: Frac2;
+	/**
+	 * The walk area. Not provenance in the sense the others are -- it describes no render --
+	 * but it is metadata two libraries holding the same bytes can disagree on, and a pull
+	 * that compared only pixels would never land an edited floor on the far side.
+	 */
+	walk?: WalkArea;
 	/**
 	 * Blobs that actually arrived, by kind. Only syncable kinds ever appear here — a
 	 * `src` cannot cross the wire, so naming one would be a claim this device could
