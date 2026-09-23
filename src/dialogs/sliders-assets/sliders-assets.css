@@ -54,6 +54,25 @@
 	outline: 2px solid var(--blue);
 }
 
+/* Opens the generator dialog. Sits in the tab list, but is not a tab--no panel. */
+
+.sliders-tab-link button {
+	background: none;
+	border: none;
+	color: var(--blue);
+	cursor: pointer;
+	font: inherit;
+	padding: var(--control-inner-padding) var(--grid-size);
+}
+
+.sliders-tab-link button:hover {
+	text-decoration: underline;
+}
+
+.sliders-tab-link button:focus-visible {
+	outline: 2px solid var(--blue);
+}
+
 /* Upload button hides its native input but keeps it operable. */
 
 .upload-button input[type='file'] {

@@ -11,6 +11,9 @@ import {TextInput} from '../../components/control/text-input';
 import {TagCardButton} from '../../components/tag/tag-card-button';
 import {useCommand} from '../../hotkeys';
 import {AssetEditorDialog} from '../asset-editor';
+// Deep import, not the `../asset-generator` barrel: the barrel pulls the whole generator
+// (and its store) into this dialog's module graph. Only the dialog component is wanted.
+import {AssetGeneratorDialog} from '../asset-generator/asset-generator';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {SlidersCharactersDialog} from '../sliders-characters';
@@ -129,6 +132,15 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			// Editing needs the room--the preview is the point.
 			maximized: true,
 			props: {assetId}
+		});
+	}
+
+	function openGenerator() {
+		dispatch({
+			type: 'addDialog',
+			component: AssetGeneratorDialog,
+			// The history grid and the model list both want room.
+			maximized: true
 		});
 	}
 
@@ -383,6 +395,16 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 					<Tab className="sliders-tab">
 						{t('dialogs.slidersAssets.importTab')}
 					</Tab>
+					{/*
+					Not a tab--it opens the generator dialog instead of switching panels.
+					It sits here because "where do new assets come from" is one question,
+					and Import is the other half of the answer.
+					*/}
+					<li className="sliders-tab-link">
+						<button onClick={openGenerator} type="button">
+							{t('dialogs.slidersAssets.generateTab')}
+						</button>
+					</li>
 				</TabList>
 				{TABS.map(tab => {
 					const tiles = tab.kind ? (

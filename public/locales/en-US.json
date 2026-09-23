@@ -689,6 +689,7 @@
 			"editImageAnimated": "Animated images can't be edited",
 			"dragToStage": "Drag onto the scene preview to place it",
 			"importTab": "Import…",
+			"generateTab": "Generate…",
 			"import": "Import",
 			"importFrom": "Import from",
 			"importLegacy": "Shared library (before assets were per story)",
