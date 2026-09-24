@@ -142,12 +142,15 @@ describe('buildSceneIndex', () => {
 			expect(index.scenes.size).toBe(1);
 		});
 
-		it('does not index an anonymous scene, but still reports its errors', () => {
+		it('indexes an anonymous scene under its passage name, errors and all', () => {
 			const index = buildSceneIndex([
 				passage('Anon', 'char: 1\ncast:\n  mira: {at: 0}\n')
 			]);
 
-			expect(index.scenes.size).toBe(0);
+			// It has no `id:`, so the passage name is the only way to name it -- which is
+			// also the only way `from:` can reach it.
+			expect([...index.scenes.keys()]).toEqual(['Anon']);
+			expect(index.scenes.get('Anon')?.id).toBeUndefined();
 			expect(codes(index.errors)).toEqual(['unknown-key']);
 		});
 

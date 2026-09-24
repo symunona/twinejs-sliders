@@ -164,7 +164,7 @@ links:
 | Key | Type | Notes |
 |---|---|---|
 | `id` | string | globally unique. Dupe = error. Doubles as the default `bg`. |
-| `from` | ref | inherit a state. Flips merge semantics — see Reuse. |
+| `from` | ref | inherit a state, from a scene `id` or a passage name. Flips merge semantics — see Reuse. |
 | `bg` | asset id or map | backdrop. Not a layer. Defaults to `id`, `~` for none. Map form adds motion. |
 | `camera` | map | optional. `{at, zoom}`. |
 | `cast` | map of id → entity | characters |
@@ -900,6 +900,20 @@ S₀ (enter) ─beat1→ S₁ ─beat2→ … ─beatN→ Sₙ (exit)
 | `tavern-night@enter` | state at beat 0 |
 | `tavern-night@tense` | state at the beat marked `tense` |
 
+A ref names a scene **`id`**, or the **name of a passage** that has a scene. The id wins
+when both spell the same. So a passage can be a template without being given an id:
+
+```
+Official Landing Template   [scene] bg: oasis-landing-site     # no id:
+Official Landing            [scene] from: Official Landing Template
+```
+
+Give the template an `id:` once more than one thing points at it — renaming the passage
+then does not break the patches, and Ctrl-Space offers the id instead of the name.
+
+A passage name matches the way a `[[link]]` does: exact first, then case-insensitively.
+A scene `id` is matched exactly, and nothing else.
+
 ### Continuing / branching
 
 ```yaml
@@ -929,6 +943,9 @@ collide.
 ### The safety property
 
 > **`from:` resolves by name, never by "the passage the player came from."**
+>
+> Naming a PASSAGE is still naming it — the passage the ref spells out, not the one the
+> reader walked in from.
 
 A passage renders identically regardless of path taken. A patch scene isn't self-contained,
 but it names its own base — that is not the same as depending on runtime history.
@@ -1009,7 +1026,8 @@ Lock this before `render-dom` ships.
 ## Runtime validation (tier 3)
 
 The engine sees all passages at boot. Build the scene index there and report:
-duplicate `id`, unknown `from:` target, unknown `@mark`, `from:` cycles.
+duplicate `id`, unknown `from:` target, unknown `@mark`, `from:` cycles. Every scene is
+checked, including one with no `id:` of its own.
 
 Surface in Chapbook's existing `<warning-list>` / Backstage. **This is the net that still
 fires in stock Twine**, which is what keeps the fork-independence rule real.

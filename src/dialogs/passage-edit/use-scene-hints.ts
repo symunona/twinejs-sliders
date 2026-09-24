@@ -77,6 +77,7 @@ const SCALAR_BEAT_COMMANDS: readonly string[] = ['wait', 'fx', 'sfx', 'mark'];
 /** What the cursor is sitting in, and therefore what to offer. */
 export type HintSlot =
 	| {kind: 'bg'}
+	| {kind: 'from'}
 	| {kind: 'passage'}
 	/**
 	 * A link's own NAME, in key position under `links:`. Passages, the same list as
@@ -727,6 +728,11 @@ export function sceneHintContext(
 				case 'bg':
 					return found({kind: 'bg'});
 
+				// Top level only. `from:` is not a key in any nested map, and offering the
+				// story's templates inside one would be noise.
+				case 'from':
+					return owner() === undefined ? found({kind: 'from'}) : undefined;
+
 				case 'id':
 					// The scene's own `id:` is a name only the author knows; inside a map it
 					// is that map's asset.
@@ -916,7 +922,9 @@ function namesForSlot(
 	refs: Map<string, string>,
 	passages: string[],
 	/** Entity ids this scene declares, in the order it declares them. */
-	sceneIds: string[] = []
+	sceneIds: string[] = [],
+	/** What `from:` can name across the story — see `sceneTemplateNames`. */
+	templates: string[] = []
 ): string[] {
 	switch (slot.kind) {
 		// Schema order, not alphabetical: the arrays read the way the docs do.
@@ -925,6 +933,9 @@ function namesForSlot(
 
 		case 'bg':
 			return assetNames(all, ['bg']);
+
+		case 'from':
+			return [...templates].sort((a, b) => a.localeCompare(b));
 
 		case 'passage':
 		case 'linkName':
@@ -1241,6 +1252,43 @@ function insertEntity(name: string) {
 }
 
 /**
+ * A scene block's own top-level `id:`, or undefined.
+ *
+ * A regex rather than `parseScene`, because this runs on every keystroke while the
+ * dropdown is open and the only thing wanted is one line. Top level means column zero,
+ * which is what keeps it off the `id:` inside a `bg:` or `music:` map.
+ */
+function ownSceneId(blockText: string): string | undefined {
+	const match = /^id:[ \t]*(\S.*?)[ \t]*(?:#.*)?$/m.exec(blockText);
+
+	return match ? match[1] : undefined;
+}
+
+/**
+ * What `from:` can name, one entry per passage that has a scene.
+ *
+ * A scene's `id:` when it has one, its PASSAGE NAME when it does not -- the two names
+ * `buildSceneIndex` resolves, in its own precedence. Only one of them is offered per
+ * passage: they address the same scene, so listing both would double the dropdown and
+ * make the author choose between two spellings of one thing.
+ */
+export function sceneTemplateNames(
+	passages: readonly {name: string; text: string}[]
+): string[] {
+	const out: string[] = [];
+
+	for (const passage of passages) {
+		const block = extractSceneBlock(passage.text);
+
+		if (block) {
+			out.push(ownSceneId(block.text) ?? passage.name);
+		}
+	}
+
+	return out;
+}
+
+/**
  * Builds the completion for wherever the cursor is now, or undefined when
  * there's nothing to offer. Recomputed on every keystroke while the dropdown is
  * open, which is what narrows the list as the author types.
@@ -1251,7 +1299,9 @@ function insertEntity(name: string) {
 export function sceneCompletion(
 	editor: Editor,
 	library: Pick<AssetLibrary, 'all' | 'characters'>,
-	passages: string[] = []
+	passages: string[] = [],
+	/** What `from:` can name across the story — see `sceneTemplateNames`. */
+	templates: string[] = []
 ) {
 	const text = editor.getValue();
 	const lines = text.split('\n');
@@ -1285,7 +1335,10 @@ export function sceneCompletion(
 		library.characters,
 		refs,
 		passages,
-		[...refs.keys()]
+		[...refs.keys()],
+		// A scene cannot inherit from itself, and picking its own name from a dropdown is
+		// the easiest way to write that cycle.
+		block ? templates.filter(name => name !== ownSceneId(block.text)) : templates
 	);
 	const matched = all.filter(name => name.toLowerCase().includes(candidate));
 	// The whole name under the cursor, not just the part before it.
@@ -1394,21 +1447,25 @@ export function sceneCompletion(
  * would re-set every option on the editor, `prefixTrigger` included.
  */
 export function useSceneHints(
-	passageNames: string[] = []
+	passageNames: string[] = [],
+	templates: string[] = []
 ): (editor: Editor) => void {
 	const library = useAssetLibrary();
 	const libraryRef = React.useRef(library);
 	const passagesRef = React.useRef(passageNames);
+	const templatesRef = React.useRef(templates);
 
 	libraryRef.current = library;
 	passagesRef.current = passageNames;
+	templatesRef.current = templates;
 
 	return React.useCallback(function open(editor: Editor) {
 		const complete = () => {
 			const result = sceneCompletion(
 				editor,
 				libraryRef.current,
-				passagesRef.current
+				passagesRef.current,
+				templatesRef.current
 			);
 
 			// Picking a key writes `key: ` and stops. The value is what the author

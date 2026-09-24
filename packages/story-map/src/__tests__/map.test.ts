@@ -64,6 +64,7 @@ describe('buildStoryMap', () => {
 
 		expect(map.scenes).toEqual([
 			{
+				anonymous: false,
 				beats: 2,
 				cast: ['mara'],
 				from: undefined,

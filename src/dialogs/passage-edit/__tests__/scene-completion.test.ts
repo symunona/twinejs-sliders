@@ -58,12 +58,15 @@ const library: Library = {
 };
 
 const PASSAGES = ['Street', 'Tavern Fight', 'Cellar'];
+/** What `from:` can name: a scene id where there is one, else the passage name. */
+const TEMPLATES = ['tavern-night', 'Cellar', 'official-landing-template'];
 
 /** Drives the completion with `|` marking the cursor, as the classifier tests do. */
 function completeAt(
 	passage: string,
 	lib: Library = library,
-	passages: string[] = PASSAGES
+	passages: string[] = PASSAGES,
+	templates: string[] = TEMPLATES
 ) {
 	const lines = passage.split('\n');
 	const line = lines.findIndex(one => one.includes('|'));
@@ -76,7 +79,7 @@ function completeAt(
 		getValue: () => lines.join('\n')
 	} as unknown as Editor;
 
-	return sceneCompletion(editor, lib, passages);
+	return sceneCompletion(editor, lib, passages, templates);
 }
 
 /** Just the names, in the order they'd appear in the dropdown. */
@@ -547,5 +550,34 @@ describe('sceneCompletion()', () => {
 				)!.hint
 			).toBeUndefined();
 		});
+	});
+});
+
+/**
+ * `from:` had no completion at all, which is half of why a story ended up with
+ * `from: official-landing-template` pointing at a passage the index could not reach.
+ */
+describe('from:', () => {
+	it('offers every template the story has', () => {
+		expect(names('[scene]\nfrom: |\n')).toEqual([
+			'Cellar',
+			'official-landing-template',
+			'tavern-night'
+		]);
+	});
+
+	it('narrows as the author types', () => {
+		expect(names('[scene]\nfrom: off|\n')).toEqual(['official-landing-template']);
+	});
+
+	it('leaves out the scene’s own id — that would be a cycle', () => {
+		expect(names('[scene]\nid: tavern-night\nfrom: |\n')).toEqual([
+			'Cellar',
+			'official-landing-template'
+		]);
+	});
+
+	it('is a top-level key only, so a map offers nothing at all', () => {
+		expect(names('[scene]\nbg: {id: x, from: |}\n')).toBeUndefined();
 	});
 });

@@ -489,15 +489,34 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 
 	// --- 4. assets -----------------------------------------------------------
 	if (catalog) {
+		// The two names `from:` accepts, kept apart so an id always wins over a passage
+		// that happens to share its spelling — the same precedence `buildSceneIndex` uses.
 		const byId = new Map<string, Scene>();
+		const byPassage = new Map<string, Scene>();
 
 		for (const entry of scenes) {
 			if (entry.scene.id !== undefined) {
 				byId.set(entry.scene.id, entry.scene);
 			}
+
+			if (!byPassage.has(entry.passage.name)) {
+				byPassage.set(entry.passage.name, entry.scene);
+			}
 		}
 
-		const lookup = (id: string): Scene | undefined => byId.get(id);
+		const lookup = (id: string): Scene | undefined => {
+			const hit = byId.get(id);
+
+			if (hit) {
+				return hit;
+			}
+
+			// Same rule as `buildSceneIndex.nodeFor`: a passage name folds case, an id
+			// does not.
+			const matched = matchPassageName(byPassage.keys(), id);
+
+			return matched === undefined ? undefined : byPassage.get(matched);
+		};
 		const seenMissing = new Set<string>();
 
 		for (const entry of scenes) {

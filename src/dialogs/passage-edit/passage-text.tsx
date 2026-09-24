@@ -8,7 +8,7 @@ import {StoryFormat} from '../../store/story-formats';
 import {useCodeMirrorPassageHints} from '../../store/use-codemirror-passage-hints';
 import {useFormatCodeMirrorMode} from '../../store/use-format-codemirror-mode';
 import {codeMirrorOptionsFromPrefs} from '../../util/codemirror-options';
-import {useSceneHints} from './use-scene-hints';
+import {sceneTemplateNames, useSceneHints} from './use-scene-hints';
 
 export interface PassageTextProps {
 	disabled?: boolean;
@@ -44,7 +44,17 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		() => story.passages.map(passage => passage.name),
 		[story.passages]
 	);
-	const autocompleteSceneNames = useSceneHints(passageNames);
+	const sceneTemplates = React.useMemo(
+		() =>
+			sceneTemplateNames(
+				story.passages.map(passage => ({
+					name: passage.name,
+					text: passage.text
+				}))
+			),
+		[story.passages]
+	);
+	const autocompleteSceneNames = useSceneHints(passageNames, sceneTemplates);
 	const mode =
 		useFormatCodeMirrorMode(storyFormat.name, storyFormat.version) ?? 'text';
 	const codeAreaContainerRef = React.useRef<HTMLDivElement>(null);
