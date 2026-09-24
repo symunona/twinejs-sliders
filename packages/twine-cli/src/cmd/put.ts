@@ -28,6 +28,7 @@ import {
 	threeWay
 } from '../passage';
 import type {PassageEdits} from '../passage';
+import type {AssetKind} from '@sliders/scene-types';
 import {parseRef, pickAsset, resolveStory} from '../ref';
 import {HttpError} from '../source/http';
 import {CliError, EXIT} from '../types';
@@ -213,7 +214,8 @@ async function putAsset(
 		}
 	}
 
-	const kind = typeof ctx.flags.kind === 'string' ? ctx.flags.kind : (asset?.kind ?? 'object');
+	const kind =
+		typeof ctx.flags.kind === 'string' ? assetKind(ctx.flags.kind) : (asset?.kind ?? 'object');
 	const taken = new Set(manifest.assets.map(entry => entry.id));
 	let id = asset?.id;
 
@@ -258,6 +260,29 @@ async function putAsset(
 	return EXIT.ok;
 }
 
+/** Every stored `AssetKind`. */
+const ASSET_KINDS: readonly AssetKind[] = ['bg', 'object', 'frame', 'fx', 'sound'];
+
+/** Short spellings `--kind` takes. `obj` is what the docs and the `assets` listing print. */
+const KIND_ALIASES: Record<string, AssetKind> = {obj: 'object'};
+
+/**
+ * `--kind` as a stored kind. Unknown throws: the manifest keeps whatever it is given, and the
+ * editor files an unknown kind under nothing.
+ */
+export function assetKind(flag: string): AssetKind {
+	const kind = KIND_ALIASES[flag] ?? flag;
+
+	if (!(ASSET_KINDS as readonly string[]).includes(kind)) {
+		throw new CliError(
+			`--kind ${flag}: not a kind. One of ${ASSET_KINDS.join(', ')} (obj = object).`,
+			EXIT.usage
+		);
+	}
+
+	return kind as AssetKind;
+}
+
 /**
  * `put --new`: a passage that does not exist yet, from a file that has no receipt.
  *
@@ -298,28 +323,35 @@ async function createPassage(ctx: Ctx, spec: string, file: string): Promise<numb
 }
 
 export async function run(ctx: Ctx, args: string[]): Promise<number> {
-	const deleting = typeof ctx.flags.delete === 'string' ? ctx.flags.delete : undefined;
+	const deleting = ctx.flags.delete;
 
-	if (deleting !== undefined) {
+	if (deleting === true) {
+		throw new CliError('put <story> --delete "<passage>"', EXIT.usage);
+	}
+
+	if (Array.isArray(deleting)) {
 		const spec = args[0];
 
-		if (!spec) {
-			throw new CliError('put <story> --delete "<passage>"', EXIT.usage);
+		if (!spec || (ctx.flags.all === true && args.length < 2)) {
+			throw new CliError('put <story> [--all <dir>] --delete "<passage>" ...', EXIT.usage);
 		}
 
 		// Deletion is explicit or it does not happen: `put --all` never removes a passage
-		// just because no file mentioned it.
+		// just because no file mentioned it. Every name in one write, so a typo in the last
+		// one leaves the story untouched.
 		const meta = await resolveStory(ctx.source, spec);
 		const body = await ctx.source.body(meta.id);
 		const written = await ctx.write.putStory(
 			meta.id,
-			removePassage(body, deleting),
+			deleting.reduce(removePassage, body),
 			meta.rev
 		);
 
-		ctx.out(`deleted  ${deleting}  rev ${written.rev}`);
+		ctx.out(`deleted  ${deleting.join(', ')}  rev ${written.rev}`);
 
-		return EXIT.ok;
+		if (ctx.flags.all !== true) {
+			return EXIT.ok;
+		}
 	}
 
 	if (ctx.flags.new === true) {

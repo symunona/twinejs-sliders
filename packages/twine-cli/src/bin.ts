@@ -17,10 +17,11 @@
  * command is a file plus one line in `COMMANDS` — there is no registry to keep in step.
  */
 
+import {parseArgs} from './args';
 import {resolveConfig} from './config';
 import {makeSource} from './source';
 import {CliError, EXIT} from './types';
-import type {Ctx} from './types';
+import type {Ctx, Flags} from './types';
 import {makeWriteClient} from './write';
 
 import * as assets from './cmd/assets';
@@ -64,78 +65,6 @@ const COMMANDS: CommandModule[] = [
 	restore
 ];
 
-/**
- * Flags that take a value. Everything else is a boolean, so `put ep3 --all tmp/ep3/` reads
- * `tmp/ep3/` as a positional instead of eating it. A new flag with an argument belongs here;
- * `--flag=value` always works without registering anything.
- */
-const VALUE_FLAGS = new Set([
-	'after',
-	'assets',
-	'data',
-	'delete',
-	'depth',
-	'format',
-	'from',
-	'kind',
-	'name',
-	'o',
-	'out',
-	'profile',
-	'rev',
-	'scene',
-	'server',
-	'sort',
-	'token'
-]);
-
-export interface ParsedArgs {
-	command?: string;
-	args: string[];
-	flags: Record<string, string | boolean>;
-}
-
-export function parseArgs(argv: string[]): ParsedArgs {
-	const args: string[] = [];
-	const flags: Record<string, string | boolean> = {};
-	let onlyPositionals = false;
-
-	for (let i = 0; i < argv.length; i++) {
-		const token = argv[i];
-
-		if (onlyPositionals || token === '-' || !token.startsWith('-')) {
-			args.push(token);
-			continue;
-		}
-
-		if (token === '--') {
-			onlyPositionals = true;
-			continue;
-		}
-
-		const raw = token.replace(/^--?/, '');
-		const eq = raw.indexOf('=');
-
-		if (eq !== -1) {
-			flags[raw.slice(0, eq)] = raw.slice(eq + 1);
-			continue;
-		}
-
-		const next = argv[i + 1];
-
-		if (VALUE_FLAGS.has(raw) && next !== undefined && (!next.startsWith('-') || next === '-')) {
-			flags[raw] = next;
-			i++;
-			continue;
-		}
-
-		flags[raw] = true;
-	}
-
-	const [command, ...rest] = args;
-
-	return {args: rest, command, flags};
-}
 
 function usage(): string {
 	const width = COMMANDS.reduce((max, cmd) => Math.max(max, cmd.name.length), 0);
@@ -159,7 +88,7 @@ function usage(): string {
 	return lines.join('\n');
 }
 
-function stringFlag(flags: Record<string, string | boolean>, key: string): string | undefined {
+function stringFlag(flags: Flags, key: string): string | undefined {
 	const value = flags[key];
 
 	return typeof value === 'string' ? value : undefined;
