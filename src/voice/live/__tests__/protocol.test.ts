@@ -280,7 +280,7 @@ describe('resample', () => {
 });
 
 describe('systemInstruction', () => {
-	const text = systemInstruction({sceneIds: ['tavern'], storyName: 'Trip'});
+	const text = systemInstruction({sceneNames: ['tavern'], storyName: 'Trip'});
 
 	it('names the story', () => {
 		expect(text).toContain('"Trip"');
@@ -308,7 +308,7 @@ describe('systemInstruction', () => {
 	});
 
 	it('omits the scene line entirely when the story has no scenes', () => {
-		expect(systemInstruction({sceneIds: [], storyName: 'Trip'})).not.toContain(
+		expect(systemInstruction({sceneNames: [], storyName: 'Trip'})).not.toContain(
 			'SCENES IN THIS STORY'
 		);
 	});

@@ -37,7 +37,6 @@ import * as ping from './cmd/ping';
 import * as put from './cmd/put';
 import * as restore from './cmd/restore';
 import * as revs from './cmd/revs';
-import * as rewritePoses from './cmd/rewrite-poses';
 import * as rm from './cmd/rm';
 
 export interface CommandModule {
@@ -59,7 +58,6 @@ const COMMANDS: CommandModule[] = [
 	assets,
 	graph,
 	copy,
-	rewritePoses,
 	newStory,
 	rm,
 	revs,
@@ -84,7 +82,6 @@ const VALUE_FLAGS = new Set([
 	'o',
 	'out',
 	'profile',
-	'reid',
 	'rev',
 	'scene',
 	'server',
@@ -156,7 +153,7 @@ function usage(): string {
 		'  --yes            do not ask',
 		'  -q               only print what was asked for',
 		'',
-		'Refs:  ep3 · ep3/Tavern Night · ep3#tavern-night · ep3:a_8f21 · ep3@37'
+		'Refs:  ep3 · ep3/Tavern Night · ep3:a_8f21 · ep3@37'
 	];
 
 	return lines.join('\n');

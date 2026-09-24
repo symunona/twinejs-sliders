@@ -99,7 +99,7 @@ describe('raggedBlockLines', () => {
 
 describe('parseScene, ragged block', () => {
 	const text = [
-		'id: x',
+		'bg: x',
 		'beats:',
 		'  - bob: |',
 		'          [[Pub->pub]] ',
@@ -136,7 +136,7 @@ describe('parseScene, ragged block', () => {
 
 	it('still reports problems on other lines', () => {
 		const {errors} = parseScene(
-			['id: x', 'bgg: hall', 'beats:', '  - bob: |', '        one', '      two', ''].join(
+			['bg: x', 'bgg: hall', 'beats:', '  - bob: |', '        one', '      two', ''].join(
 				'\n'
 			)
 		);

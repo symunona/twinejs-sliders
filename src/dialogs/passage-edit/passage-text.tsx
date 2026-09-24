@@ -44,15 +44,18 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		() => story.passages.map(passage => passage.name),
 		[story.passages]
 	);
+	// A scene cannot inherit from itself, and picking its own name from a dropdown is the
+	// easiest way to write that cycle.
 	const sceneTemplates = React.useMemo(
 		() =>
 			sceneTemplateNames(
-				story.passages.map(passage => ({
-					name: passage.name,
-					text: passage.text
-				}))
+				story.passages
+					// Store identity: this passage itself, not a name being resolved.
+					// eslint-disable-next-line no-restricted-syntax
+					.filter(other => other.name !== passage.name)
+					.map(other => ({name: other.name, text: other.text}))
 			),
-		[story.passages]
+		[passage.name, story.passages]
 	);
 	const autocompleteSceneNames = useSceneHints(passageNames, sceneTemplates);
 	const mode =

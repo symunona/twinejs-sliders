@@ -24,7 +24,6 @@ let work: string;
 const RIDGE = `The ridge falls away into dust. Below, something is burning.
 
 [scene]
-id: ridge-dusk
 bg: ridge-dusk
 camera: {at: [0, 0], zoom: 1}
 beats:
@@ -39,8 +38,7 @@ links:
 const DESCENT = `Scree, then a crack in the rock wide enough to enter.
 
 [scene]
-id: descent
-from: ridge-dusk
+from: Ridge
 beats:
   - box: "Cave, or the riverbed. Not both."
 links:
@@ -51,7 +49,6 @@ links:
 const SIGNAL = `Someone built this fire to be seen.
 
 [scene]
-id: signal-fire
 beats:
   - box: "The flame leans east."
 links:
@@ -215,7 +212,7 @@ it('uploaded the art and wired it into the manifest', async () => {
 	expect(manifest.missing).toEqual([]);
 
 	// And the scene's reference resolves to it.
-	const resolved = cli(['assets', storyId, '--scene', 'ridge-dusk', '--json'])
+	const resolved = cli(['assets', storyId, '--scene', 'Ridge', '--json'])
 		.trim()
 		.split('\n')
 		.map(line => JSON.parse(line) as {via: string; present: string; id: string});

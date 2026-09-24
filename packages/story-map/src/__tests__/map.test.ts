@@ -31,7 +31,6 @@ function manifest(assets: AssetMetaRow[], missing: string[] = []): Manifest {
 }
 
 const TAVERN = `[scene]
-id: tavern
 bg: tavern/night
 cast:
   mara: {at: [0.3, 0.8]}
@@ -64,11 +63,9 @@ describe('buildStoryMap', () => {
 
 		expect(map.scenes).toEqual([
 			{
-				anonymous: false,
 				beats: 2,
 				cast: ['mara'],
 				from: undefined,
-				id: 'tavern',
 				marks: ['sit'],
 				passage: 'Tavern Night'
 			}

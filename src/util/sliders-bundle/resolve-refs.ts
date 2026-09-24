@@ -106,16 +106,6 @@ export async function resolveBundleRefs(
 		}
 	}
 
-	// Implied backdrops (a scene `id:` with no `bg:`). Same lookup, no complaint on a
-	// miss — the scene simply has no backdrop then.
-	for (const ref of refs.optionalAssetRefs ?? []) {
-		const meta = await byKey(ref);
-
-		if (meta) {
-			take(meta);
-		}
-	}
-
 	// Sounds resolve by name and nothing else: there is no `entityKey` mangle to undo,
 	// because no fragment ever slugified one — `- sfx: door-slam` writes the name whole.
 	for (const ref of refs.soundRefs ?? []) {

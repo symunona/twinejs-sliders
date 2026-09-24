@@ -28,7 +28,7 @@ const passage = [
 	'mood: tense', // 0
 	'--', // 1
 	'[scene]', // 2
-	'id: tavern', // 3
+	'bg: tavern', // 3
 	'cast:', // 4
 	'  mira: {at: -0.4, pose: idle}', // 5
 	'props:', // 6
@@ -465,7 +465,7 @@ describe('deleting several entities at once', () => {
 
 	const twoPassage = [
 		'[scene]',
-		'id: tavern',
+		'bg: tavern',
 		'cast:',
 		'  mira: {at: -0.4}',
 		'  joren: {at: 0.35}',
@@ -482,7 +482,7 @@ describe('deleting several entities at once', () => {
 		]);
 
 		expect(after).not.toContain('cast:');
-		expect(after).toContain('id: tavern\nprops:');
+		expect(after).toContain('bg: tavern\nprops:');
 	});
 
 	it('keeps the map when the selection does not cover it', () => {
@@ -510,7 +510,7 @@ describe('deleting several entities at once', () => {
 		// Both maps sit next to each other, so the merged edit is one contiguous deletion.
 		expect(editor.replaceRange.mock.calls[0][0]).toBe('');
 		expect(applyAll(twoPassage, writes)).toBe(
-			'id: tavern\nbeats:\n  - mira: "Hello."'
+			'bg: tavern\nbeats:\n  - mira: "Hello."'
 		);
 	});
 

@@ -27,7 +27,6 @@ let work: string;
 const RIDGE = `Dust, and something burning below.
 
 [scene]
-id: ridge-dusk
 bg: ridge                       # asset id, never a path
 camera: {at: [0, 0], zoom: 0.9}
 cast:
@@ -43,8 +42,7 @@ links:
 const DESCENT = `Scree, then a crack in the rock.
 
 [scene]
-id: descent
-from: ridge-dusk@choosing
+from: Ridge@choosing
 beats:
   - scout: "Cave, or the riverbed."
 links:
@@ -165,7 +163,7 @@ describe('copy', () => {
 	let copyId: string;
 
 	beforeAll(() => {
-		const out = cli(['copy', 'ridge-fixture', '--name', 'Ridge Copy', '--reid', 'c-']);
+		const out = cli(['copy', 'ridge-fixture', '--name', 'Ridge Copy']);
 		const match = /([0-9a-f-]{36})/.exec(out);
 
 		expect(match).not.toBeNull();
@@ -203,23 +201,17 @@ describe('copy', () => {
 		}
 	});
 
-	it('rewrites scene ids and every reference to them together', async () => {
+	it('copies every passage text byte for byte, so from: still resolves by name', async () => {
+		const source = story();
 		const copy = (await api(`/stories/${copyId}`)) as ReturnType<typeof story>;
-		const ridge = copy.passages.find(p => p.name === 'Ridge')!;
-		const descent = copy.passages.find(p => p.name === 'Descent')!;
 
-		expect(ridge.text).toContain('id: c-ridge-dusk');
-		expect(descent.text).toContain('id: c-descent');
-		// The @mark must survive the rename, and point at the renamed scene.
-		expect(descent.text).toContain('from: c-ridge-dusk@choosing');
-		expect(descent.text).not.toContain('from: ridge-dusk@choosing');
-	});
+		for (const original of source.passages) {
+			expect(copy.passages.find(p => p.name === original.name)!.text).toBe(original.text);
+		}
 
-	it('changes nothing else in the text — comments and spacing included', async () => {
-		const copy = (await api(`/stories/${copyId}`)) as ReturnType<typeof story>;
-		const ridge = copy.passages.find(p => p.name === 'Ridge')!;
-
-		expect(ridge.text).toBe(RIDGE.replace('id: ridge-dusk', 'id: c-ridge-dusk'));
+		expect(copy.passages.find(p => p.name === 'Descent')!.text).toContain(
+			'from: Ridge@choosing'
+		);
 	});
 
 	it('leaves the source story alone', async () => {

@@ -13,7 +13,6 @@ const PASSAGE = `mood: tense
 seen_mira: true
 --
 [scene]
-id: tavern-night
 bg: tavern/night
 beats:
   - mira: "Will you [[stay]] or [[go]]?"

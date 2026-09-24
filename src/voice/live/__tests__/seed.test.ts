@@ -37,7 +37,7 @@ describe('seedText', () => {
 	it('keeps tool calls, which are what actually changed the story', () => {
 		const text = seedText([
 			row({
-				args: {beat: 2, sceneId: 'tavern'},
+				args: {beat: 2, scene: 'tavern'},
 				kind: 'tool',
 				text: 'cast, marks',
 				tool: 'set_beat',
@@ -46,7 +46,7 @@ describe('seedText', () => {
 		])!;
 
 		expect(text).toContain(
-			'you called set_beat({"beat":2,"sceneId":"tavern"}) → cast, marks'
+			'you called set_beat({"beat":2,"scene":"tavern"}) → cast, marks'
 		);
 	});
 

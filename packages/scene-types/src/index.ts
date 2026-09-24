@@ -364,12 +364,6 @@ export interface StageBgFx {
 /** A complete, renderable snapshot of the stage. No history, no beats. */
 export interface Stage {
 	bg?: AssetId;
-	/**
-	 * True when `bg` came from the scene's `id:` rather than a `bg:` line. A backdrop the
-	 * author never asked for is a soft reference: it draws if the art exists and stays
-	 * silent if it does not, so no lint, bundle report or `? bg` placeholder fires for it.
-	 */
-	bgImplicit?: boolean;
 	/** The backdrop's own motion, if it has one. State, like `bg` itself. */
 	bgFx?: StageBgFx;
 	camera: Camera;
@@ -831,7 +825,6 @@ export const SCENE_LOCKS = ['bg', 'entities'] as const;
 export type SceneLock = (typeof SCENE_LOCKS)[number];
 
 export interface Scene {
-	id?: SceneId;
 	/** `other-scene` | `other-scene@enter` | `other-scene@markName` */
 	from?: string;
 	bg?: AssetId | null;
@@ -885,7 +878,7 @@ export interface Scene {
 	 *
 	 * `true` is the whole stage; a list names what is pinned, so `[bg]` holds the camera and
 	 * the backdrop still while sprites stay draggable. An EDITOR hint and nothing more — the
-	 * player never reads it, the same way `Stage.bgImplicit` is invisible to it.
+	 * player never reads it.
 	 *
 	 * In the scene rather than in a preference because a shot that is framed is framed for
 	 * everyone who opens the passage, and because the pan that ruins it is the easiest
@@ -936,14 +929,12 @@ export type SceneErrorCode =
 	| 'unknown-asset'
 	| 'unknown-character'
 	| 'unknown-pose'
-	| 'retired-key'
 	| 'unknown-link'
 	| 'unknown-passage'
 	| 'passage-case'
 	| 'unknown-variable'
 	| 'unknown-parent'
 	| 'of-cycle'
-	| 'dupe-scene-id'
 	| 'unknown-from'
 	| 'from-cycle'
 	| 'vars-separator'

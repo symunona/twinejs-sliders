@@ -24,7 +24,6 @@ import {
 	type NodeRange,
 	beatsSeqOf,
 	entityMapOf,
-	findEntityKeyPair,
 	findPair,
 	indentAt,
 	keyName,
@@ -383,7 +382,7 @@ function writeKey(
 
 	if (isMap(body)) {
 		const map = body as YAMLMap;
-		const existing = findEntityKeyPair(map, key);
+		const existing = findPair(map, key);
 
 		if (!existing) {
 			return insertIntoMap(parsed, map, key, formatted);
@@ -482,7 +481,7 @@ export function removeEntityKey(
 	}
 
 	const map = located.pair.value as YAMLMap;
-	const pair = findEntityKeyPair(map, key);
+	const pair = findPair(map, key);
 
 	return pair ? removePairEdit(parsed, map, pair) : undefined;
 }
@@ -1061,7 +1060,7 @@ export function setBeatKey(
 
 	if (isMap(body)) {
 		const map = body as YAMLMap;
-		const existing = findEntityKeyPair(map, key);
+		const existing = findPair(map, key);
 
 		if (value === null) {
 			return existing ? removePairEdit(parsed, map, existing) : undefined;

@@ -8,7 +8,6 @@
  * ignored throughout — `parseScene` always returns a best-effort scene (spec 05).
  */
 
-import {sceneBg} from '@sliders/scene-core';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
 import type {SceneStep, Scene} from '@sliders/scene-types';
@@ -22,7 +21,6 @@ interface RefSets {
 	characterRefs: Set<string>;
 	fxRefs: Set<string>;
 	poseRefs: Map<string, Set<string>>;
-	optionalAssetRefs: Set<string>;
 	soundRefs: Set<string>;
 }
 
@@ -32,7 +30,6 @@ function emptyRefSets(): RefSets {
 		autoRefs: new Set(),
 		characterRefs: new Set(),
 		fxRefs: new Set(),
-		optionalAssetRefs: new Set(),
 		poseRefs: new Map(),
 		soundRefs: new Set()
 	};
@@ -91,13 +88,8 @@ function addPoses(
 }
 
 function addScene(sets: RefSets, scene: Scene): void {
-	// `bg: ~` means "removed" under `from:`, and removal names nothing. An `id:` with no
-	// `bg:` names the backdrop implicitly: bundle it if such art exists, but never report
-	// it missing, because the scene never asked for it.
-	add(
-		scene.bg === undefined ? sets.optionalAssetRefs : sets.assetRefs,
-		sceneBg(scene)
-	);
+	// `bg: ~` means "removed" under `from:`, and removal names nothing.
+	add(sets.assetRefs, scene.bg);
 
 	for (const [id, entity] of Object.entries(scene.entities)) {
 		if (!entity) {
@@ -175,7 +167,6 @@ function freeze(sets: RefSets): SceneAssetRefs {
 		autoRefs: [...sets.autoRefs].sort(),
 		characterRefs: [...sets.characterRefs].sort(),
 		fxRefs: [...sets.fxRefs].sort(),
-		optionalAssetRefs: [...sets.optionalAssetRefs].sort(),
 		poseRefs,
 		soundRefs: [...sets.soundRefs].sort()
 	};

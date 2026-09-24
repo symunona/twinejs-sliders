@@ -1,7 +1,7 @@
 import CodeMirror, {Editor, Position} from 'codemirror';
 import {AssetMeta, Character} from '@sliders/scene-types';
 import {AssetLibrary} from '../../sliders-assets/asset-store-context';
-import {sceneCompletion} from '../use-scene-hints';
+import {sceneCompletion, sceneTemplateNames} from '../use-scene-hints';
 import {
 	noteNameUsed,
 	resetRecentNamesCache
@@ -570,14 +570,19 @@ describe('from:', () => {
 		expect(names('[scene]\nfrom: off|\n')).toEqual(['official-landing-template']);
 	});
 
-	it('leaves out the scene’s own id — that would be a cycle', () => {
-		expect(names('[scene]\nid: tavern-night\nfrom: |\n')).toEqual([
-			'Cellar',
-			'official-landing-template'
-		]);
-	});
-
 	it('is a top-level key only, so a map offers nothing at all', () => {
 		expect(names('[scene]\nbg: {id: x, from: |}\n')).toBeUndefined();
+	});
+});
+
+describe('sceneTemplateNames()', () => {
+	it('names every passage that has a scene, by its passage name only', () => {
+		expect(
+			sceneTemplateNames([
+				{name: 'Ridge', text: '[scene]\nid: ridge-dusk\nbg: ridge\n'},
+				{name: 'Prose', text: 'No scene here.'},
+				{name: 'Cellar', text: '[scene]\nbg: cellar\n'}
+			])
+		).toEqual(['Ridge', 'Cellar']);
 	});
 });

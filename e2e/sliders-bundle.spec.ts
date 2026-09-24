@@ -45,7 +45,6 @@ const STORY_NAME = 'Bundle Round Trip';
  * is the whole reason clashes cannot be renamed away on import.
  */
 const SCENE_TEXT = `[scene]
-id: tavern
 bg: tavern-night
 `;
 

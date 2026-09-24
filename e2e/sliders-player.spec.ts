@@ -15,7 +15,6 @@ import {
  * because the click belongs to the choice.
  */
 const SCENE = `[scene]
-id: player-scene
 cast:
   mira:  {at: -0.4, pose: idle}
   joren: {at: 0.35}

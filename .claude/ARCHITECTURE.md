@@ -55,8 +55,12 @@ Chapbook's. 0.2.0 shipped exactly that way, in production, for a day.
 - Character pose images are named `<character id>-<pose>`. A character's first pose is
   always `idle`, whatever the file was called.
 - The word `frame` is retired: **pose** (named look: still, animated file or steps) and
-  **step**. Old `frame:`/`frameLoop:` YAML and `frames:` manifests are read forever and
-  never written. Only the stored `AssetKind 'frame'` keeps the word — it is on the wire.
+  **step**. Old `frame:`/`frameLoop:` scene YAML is NO LONGER read (unknown-key warning).
+  `frames:` manifests are still read, never written. Stored `AssetKind 'frame'` keeps the
+  word — it is on the wire.
+- A scene has no name of its own. Its passage name is its address (`from:`, index, voice
+  tools, CLI). `id:` was removed 2026-09-24, no back-compat.
+- Unknown keys warn, never error: parser drops them, scene plays.
 
 ## Z and layers
 
@@ -79,8 +83,7 @@ Three rules that cost real data when broken:
 3. **The library compare stops an asset ping-pong.** A pull that changes nothing must fire
    no library-change event, or two clients push art at each other forever.
 
-Editor-only keys (`locked:`) and soft marks (`Stage.bgImplicit`) are never read by the
-player. Local-only story fields (`Story.sync`) are stripped on the wire.
+Editor-only keys (`locked:`) are never read by the player. Local-only story fields (`Story.sync`) are stripped on the wire.
 
 ## Known gaps
 

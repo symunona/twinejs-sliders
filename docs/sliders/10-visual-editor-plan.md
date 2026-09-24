@@ -211,7 +211,7 @@ the drag.
 | Flip | `flip:` |
 | Send to back / front | `layer:` |
 | Bracket keys | `z:` nudge within a layer |
-| Frame dropdown on selection | `frame:` |
+| Pose dropdown on selection | `pose:` |
 | Pan / scroll-zoom the stage | `camera:` |
 
 All registered in `command-catalog.ts` and `default-keymap.ts`, in the `scene-preview` scope.

@@ -11,9 +11,9 @@ Live render of the scene under the passage text (D12). The highest-value fork fe
 │ │ [scene]                                       │ │
 │ │ bg: tavern/night                              │ │
 │ │ cast:                                         │ │
-│ │   mira: {at: -0.4, frame: arms-crossed}       │ │
+│ │   mira: {at: -0.4, pose: arms-crossed}        │ │
 │ └───────────────────────────────────────────────┘ │
-│ ● 1 error: unknown frame 'arms-crosed'            │  ← from 05
+│ ● 1 error: unknown pose 'arms-crosed'             │  ← from 05
 ├───────────────────────────────────────────────────┤
 │ ▼ Preview                              ⛶  ◀ ▶ ⏸  │  ← collapsible header
 │ ┌───────────────────────────────────────────────┐ │

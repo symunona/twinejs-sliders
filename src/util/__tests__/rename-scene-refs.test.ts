@@ -23,7 +23,6 @@ function refsOf(text: string): Set<string> {
 		...(refs.autoRefs ?? []),
 		...refs.characterRefs,
 		...refs.fxRefs,
-		...(refs.optionalAssetRefs ?? []),
 		...(refs.soundRefs ?? [])
 	]);
 }
@@ -31,7 +30,6 @@ function refsOf(text: string): Set<string> {
 describe('renameSceneRefs', () => {
 	it('follows the rename into every art key', () => {
 		const text = scene(
-			'id: tavern',
 			'bg: candle',
 			'music: candle@0.4',
 			'fx: [candle, rain@0.6]',
@@ -45,7 +43,6 @@ describe('renameSceneRefs', () => {
 
 		expect(renameSceneRefs(text, 'candle', 'lantern')).toBe(
 			scene(
-				'id: tavern',
 				'bg: lantern',
 				'music: lantern@0.4',
 				'fx: [lantern, rain@0.6]',
@@ -89,21 +86,8 @@ describe('renameSceneRefs', () => {
 	});
 
 	/** `id:` doubles as `bg:`, and the id cannot move--another passage's `from:` names it. */
-	it('spells out the backdrop an id was standing in for', () => {
-		const text = scene('id: candle   # the one on the table', 'cast:', '  mira: {at: 0}');
-
-		expect(renameSceneRefs(text, 'candle', 'lantern')).toBe(
-			scene(
-				'id: candle   # the one on the table',
-				'bg: lantern',
-				'cast:',
-				'  mira: {at: 0}'
-			)
-		);
-	});
-
 	it('leaves a patch scene alone, which inherits its backdrop', () => {
-		const text = scene('id: candle', 'from: Tavern');
+		const text = scene('from: Tavern');
 
 		expect(renameSceneRefs(text, 'candle', 'lantern')).toBe(text);
 	});
@@ -168,7 +152,6 @@ describe('renameSceneRefs', () => {
 	 */
 	describe('agrees with the reference collector', () => {
 		const blocks = [
-			scene('id: candle'),
 			scene('bg: candle'),
 			scene('bg: {id: candle, fx: parallax_left}'),
 			scene('music: candle@0.4'),

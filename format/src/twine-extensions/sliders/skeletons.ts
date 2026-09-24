@@ -17,8 +17,7 @@ const OPEN = '\n[scene]\n';
 const CLOSE = '\n\n[continued]\n';
 
 export const SCENE_SKELETON = `${OPEN}# Every key Sliders understands. Delete the ones you do not need.
-id: scene-id                    # globally unique; needed only if something points here
-from: ~                         # inherit: other-scene, other-scene@enter, other-scene@mark-name
+from: ~                         # inherit: Other Passage, Other Passage@enter, Other Passage@mark-name
 bg: backdrop-id                 # asset id, never a path
 camera: {at: [0, 0], zoom: 1}   # origin is screen centre, +y is UP
 autoAdvance: ~                  # seconds an untimed beat holds; 0 waits for a click
@@ -70,41 +69,28 @@ links:
   go:   {to: Other Passage, if: some_variable}
 `;
 
-/**
- * A scene id is global, so a copy cannot keep the original's. Dropping the line is better
- * than inventing a name: an anonymous scene is legal, a duplicate id is not.
- */
-function withoutId(text: string): string {
-	return text
-		.split('\n')
-		.filter(line => !/^id\s*:/.test(line))
-		.join('\n')
-		.replace(/^\n+|\n+$/g, '');
-}
-
 /** "Insert Last Scene": the scene the author last edited, pasted as a fresh snapshot. */
 export function lastSceneSnippet(record: LastSceneRecord): string {
-	const heading = record.id
-		? `# Copy of scene '${record.id}'. Give this one an id: if anything will point at it.`
+	const heading = record.passageName
+		? `# Copy of the scene in '${record.passageName}'.`
 		: '# Copy of the last scene you edited.';
 
-	return `${OPEN}${heading}\n${withoutId(record.text)}${CLOSE}`;
+	return `${OPEN}${heading}\n${record.text.replace(/^\n+|\n+$/g, '')}${CLOSE}`;
 }
 
 /**
- * "Overlay on …": a patch scene inheriting from the last named one. Lists the cast and
+ * "Overlay on …": a patch scene inheriting from the last one, by its passage name. Lists the cast and
  * props it inherits as comments, because the whole point of a patch is that what it does
  * not mention is still on stage.
  */
 export function overlaySnippet(record: LastSceneRecord): string {
-	const id = record.id ?? 'scene-id';
+	const from = record.passageName ?? 'Other Passage';
 	const cast = record.cast ?? [];
 	const props = record.props ?? [];
 	const first = cast[0] ?? 'mira';
 
 	const lines = [
-		`id: ${id}-next`,
-		`from: ${id}   # its EXIT state. Use ${id}@enter, or ${id}@mark-name.`,
+		`from: ${from}   # its EXIT state. Use ${from}@enter, or ${from}@mark-name.`,
 		'# A patch, not a snapshot: every key you leave out is INHERITED.',
 		`# \`${first}: ~\` removes an entity. \`cast: !only {...}\` replaces the whole cast.`,
 		...(cast.length > 0 ? [`# Inherited cast: ${cast.join(', ')}`] : []),

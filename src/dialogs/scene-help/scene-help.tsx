@@ -57,17 +57,15 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	beats: 'The timeline. A list, played in order.',
 	bubble:
 		'How every line in this scene is painted, unless it says otherwise. Takes the same keys a beat\u2019s bubble: takes. Four layers, widest first: the story\u2019s sliders.bubble.* variables, this, the speaking character\u2019s own bubble:, then the beat. Merged key by key, so a scene naming only a font: leaves a character\u2019s as: whisper alone.',
-	bg: `Backdrop, by asset name. Defaults to id:. Not a layer, never a file path. bg: ~ means none. The long form gives it motion: bg: {id: cellar, fx: parallax_left, speed: 20} — fx: is one of ${BG_MOTIONS.join(
+	bg: `Backdrop, by asset name. Not a layer, never a file path. bg: ~ means none. The long form gives it motion: bg: {id: cellar, fx: parallax_left, speed: 20} — fx: is one of ${BG_MOTIONS.join(
 		', '
 	)} or a token your stylesheet paints, speed: is the seconds one cycle takes (each motion has its own default). A beat may carry the same key to cut to another backdrop.`,
 	camera: `{at: [x, y], zoom: 1}. Origin is screen centre, +y is up.`,
 	cast: 'Characters on stage, as id: {…} entries.',
 	entities:
 		'Anything on stage, as id: {…} entries, without saying whether it is a character or an asset. cast: and props: are the same thing with the kind spelled out.',
-	from: 'Inherit another scene state, and become a patch over it.',
+	from: 'Inherit another scene state, by its passage name, and become a patch over it.',
 	fx: 'Screen effects, as a list.',
-	id:
-		'Names this scene so from: can point at it, and names its backdrop when there is no bg:. Must be unique in the story.',
 	links: 'Ways out of the scene. In a scene passage these are the ONLY ways out.',
 	linkList:
 		'Draws those ways out INSIDE the stage box instead of in a list under it. Writing the key at all is the switch — every key in it is optional. at: [x, y] is the list’s centre and w:/h: its size, all fractions of the stage box measured from its top left, the way a bubble’s at: is and not the way an entity’s is. as: is a token your stylesheet paints. show: auto | always | never overrules the story-wide sliders.showLinks, and auto is the standing rule: the list stays hidden while the beats already offer the reader something to click. icon: and transition: are defaults each entry may override.',
@@ -94,10 +92,10 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	of: `Hang this entity off another one: at: becomes an offset from it. of: ~ detaches.`,
 	opacity: '0 to 1. 1 is the default.',
 	pose:
-		'Which named pose of the character to draw — idle, angry, walk, whatever it has. A pose the character animates (steps, or an animated file) plays by itself. A LIST animates in the scene: pose: [walk_1, walk_2], or pose: [{name: walk_1, dur: 0.1, at: -0.2}] to time and move each step. dur is seconds, 0.1 by default. frame: is the old spelling and still works.',
+		'Which named pose of the character to draw — idle, angry, walk, whatever it has. A pose the character animates (steps, or an animated file) plays by itself. A LIST animates in the scene: pose: [walk_1, walk_2], or pose: [{name: walk_1, dur: 0.1, at: -0.2}] to time and move each step. dur is seconds, 0.1 by default.',
 	poseLoop: `How a pose: list ends. ${POSE_LOOPS.join(
 		', '
-	)} — all loops forever (the default), once plays through and holds the last step. frameLoop: is the old spelling.`,
+	)} — all loops forever (the default), once plays through and holds the last step.`,
 	ref: 'The asset or character this id draws, when the id is not the asset name itself.',
 	rot: 'Tilt, in degrees clockwise, about the same origin scale: grows about — so a leaning character keeps its feet where they were. Negative leans the other way. Pin that origin in the asset or character editor.',
 	scale: 'Uniform size multiplier, about the origin, so feet stay on the floor. > 0.',
@@ -228,7 +226,7 @@ const BUBBLE_SAMPLE = `beats:
   - box: {text: "Somewhere, a door.", as: whisper}`;
 
 const CONVERSATION_SAMPLE = `[scene]
-id: tavern-night              # also the backdrop, with no bg: line
+bg: tavern-night
 
 cast:
   mira:  {at: -0.4, pose: idle}
@@ -253,8 +251,7 @@ links:
 [continued]`;
 
 const PATCH_SAMPLE = `[scene]
-id: tavern-fight
-from: tavern-night@tense    # or tavern-night, or tavern-night@enter
+from: Tavern Night@tense    # or Tavern Night, or Tavern Night@enter
 cast:
   mira: {pose: angry}       # a delta, not a whole definition
   joren: ~                  # remove him from the stage
@@ -600,9 +597,10 @@ beats:
 					</TabPanel>
 
 					<TabPanel>
-						<h3>id, from, mark</h3>
+						<h3>from, mark</h3>
 						<p>
-							A scene with an <code>id:</code> can be started from. A scene with{' '}
+							Any scene can be started from, by the name of its passage —
+							matched the way a link is, case aside. A scene with{' '}
 							<code>from:</code> is a PATCH over that state instead of a
 							snapshot, which flips what an absent key means: without{' '}
 							<code>from:</code> it is removed from the stage, with it, it is
@@ -611,15 +609,15 @@ beats:
 						<table className="scene-help-keys">
 							<tbody>
 								<tr>
-									<th scope="row">tavern-night</th>
+									<th scope="row">Tavern Night</th>
 									<td>That scene&apos;s state after its last beat.</td>
 								</tr>
 								<tr>
-									<th scope="row">tavern-night@enter</th>
+									<th scope="row">Tavern Night@enter</th>
 									<td>Its state before any beat ran.</td>
 								</tr>
 								<tr>
-									<th scope="row">tavern-night@tense</th>
+									<th scope="row">Tavern Night@tense</th>
 									<td>
 										Its state at the beat marked <code>mark: tense</code>.
 									</td>
@@ -629,9 +627,8 @@ beats:
 						<Sample>{PATCH_SAMPLE}</Sample>
 						<p>
 							The toolbar writes these: <strong>Scene ▸ Overlay on …</strong>{' '}
-							inserts a patch pointing at the last scene you named, and{' '}
-							<strong>Scene ▸ Insert Last Scene</strong> inserts a copy of it
-							minus the <code>id:</code>, since ids are global.
+							inserts a patch pointing at the last scene you edited, and{' '}
+							<strong>Scene ▸ Insert Last Scene</strong> inserts a copy of it.
 						</p>
 					</TabPanel>
 				</Tabs>

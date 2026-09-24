@@ -136,7 +136,7 @@ describe('varsSeparatorErrors()', () => {
 		);
 	}
 
-	const scene = '[scene]\nid: tavern\n';
+	const scene = '[scene]\n';
 
 	it('warns about three dashes and offers to rewrite the line', () => {
 		const errors = separator(`sliders.autoAdvance: 0\n---\n${scene}`);
@@ -174,7 +174,7 @@ describe('varsSeparatorErrors()', () => {
 	it('stops counting variables the player would not set', () => {
 		// The knock-on, and the point: with `---` the player sets nothing, so an `if:` on
 		// one of those names is genuinely unknown. The separator warning sits beside it.
-		const text = `armed: true\n---\n[scene]\nid: a\nlinks:\n  go: {to: Street, if: armed}\n`;
+		const text = `armed: true\n---\n[scene]\nlinks:\n  go: {to: Street, if: armed}\n`;
 
 		expect(unknown(text)).toHaveLength(1);
 		expect(separator(text)).toHaveLength(1);

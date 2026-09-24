@@ -18,12 +18,9 @@ function applyBeat(stage: Stage, beat: Beat): void {
 	//
 	// Unlike `sfx` this is state, not an event: the backdrop stays changed for every later
 	// beat, and a scrubber stepping back shows the old one because the state before the
-	// beat still holds it. `null` is `bg: ~` and takes the backdrop away. `bgImplicit` is
-	// cleared either way — a beat naming a backdrop asked for it out loud, so a missing
-	// file must draw the `? bg` placeholder rather than staying silent.
+	// beat still holds it. `null` is `bg: ~` and takes the backdrop away.
 	if (beat.bg !== undefined) {
 		stage.bg = beat.bg ?? undefined;
-		stage.bgImplicit = undefined;
 		stage.bgFx = beat.bgFx ? {...beat.bgFx} : undefined;
 	}
 

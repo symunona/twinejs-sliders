@@ -114,7 +114,7 @@ function fakeStory(passages: Passage[]): Story {
 }
 
 function scenePassage(name: string, block: string): Passage {
-	return passage(name, `[scene]\nid: ${name.toLowerCase()}\n${block}`);
+	return passage(name, `[scene]\n${block}`);
 }
 
 const TAVERN = scenePassage(
@@ -258,7 +258,6 @@ describe('the fixture story references what this suite relies on', () => {
 			characterRefs: ['mira'],
 			poseRefs: {mira: ['smile']},
 			fxRefs: ['rain'],
-			optionalAssetRefs: [],
 			soundRefs: []
 		});
 	});

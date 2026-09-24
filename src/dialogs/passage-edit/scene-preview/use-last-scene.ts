@@ -19,23 +19,13 @@ import {parseScene} from '@sliders/scene-schema';
 /** The last scene edited, whatever it was. What "Insert Last Scene" pastes. */
 export const LAST_SCENE_KEY = 'sliders-last-scene';
 
-/**
- * The last scene edited that had an `id:`. Kept apart because only a named scene
- * can be the target of a `from:` overlay, and the scenes an author writes in
- * between — a pasted copy, a quick anonymous stage — would otherwise erase the
- * one thing an overlay needs.
- */
-export const LAST_NAMED_SCENE_KEY = 'sliders-last-named-scene';
-
 export interface LastSceneRecord {
 	/** The scene block body, with the `[scene]` line itself removed. */
 	text: string;
-	/** The scene's `id:`, when it had one. An overlay needs it for `from:`. */
-	id?: string;
 	/** Entity ids, so an overlay can name the cast and props it inherits. */
 	cast: string[];
 	props: string[];
-	/** Passage the scene was written in. Labels the menu item when there is no id. */
+	/** Passage the scene was written in. Its name is what a `from:` overlay points at. */
 	passageName: string;
 	/** Epoch ms, so a stale record is obvious in devtools. */
 	updated: number;
@@ -60,12 +50,8 @@ export function saveLastScene(
 
 	const cast: string[] = [];
 	const props: string[] = [];
-	let id: string | undefined;
-
 	try {
 		const {scene} = parseScene(block.text);
-
-		id = scene.id;
 
 		for (const entityId of Object.keys(scene.entities)) {
 			const patch = scene.entities[entityId];
@@ -82,7 +68,6 @@ export function saveLastScene(
 
 	const record: LastSceneRecord = {
 		cast,
-		id,
 		passageName,
 		props,
 		text: block.text,
@@ -93,10 +78,6 @@ export function saveLastScene(
 		const json = JSON.stringify(record);
 
 		window.localStorage.setItem(LAST_SCENE_KEY, json);
-
-		if (record.id) {
-			window.localStorage.setItem(LAST_NAMED_SCENE_KEY, json);
-		}
 	} catch (error) {
 		// Quota or a locked-down browser. Losing the handoff is not worth an
 		// error dialog over the editor.

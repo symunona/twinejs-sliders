@@ -7,12 +7,11 @@ import {readFileSync} from 'node:fs';
 
 const U = process.env.U ?? 'http://127.0.0.1:5183';
 const SCENE = `[scene]
-id: tavern-night
 bg: tavern-night
 
 cast:
-  mira:  {at: -0.4, frame: arms-crossed}
-  joren: {at: 0.35, frame: idle, flip: true, layer: back}
+  mira:  {at: -0.4, pose: arms-crossed}
+  joren: {at: 0.35, pose: idle, flip: true, layer: back}
 
 props:
   table: {at: 0}
@@ -21,7 +20,7 @@ beats:
   - mira: "You shouldn't have come back."
   - joren: "And yet."
   - mark: tense
-  - mira: {frame: angry, at: -0.25, say: "Get out."}
+  - mira: {pose: angry, at: -0.25, say: "Get out."}
   - box: "The candle gutters."
 `;
 

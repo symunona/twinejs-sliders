@@ -14,7 +14,6 @@
  * reaches it.
  */
 
-import {sceneBg} from '@sliders/scene-core';
 import {splitSceneRef} from '@sliders/scene-index';
 import type {AssetId, Character, EntityPatchBody, Scene} from '@sliders/scene-types';
 import {poseAssets, splitPoseImage, upgradeCharacter} from '@sliders/scene-types';
@@ -209,8 +208,8 @@ function rowFor(
 	};
 }
 
-/** Anything a `from:` walk needs: scene id -> the scene as authored. */
-export type SceneLookup = (id: string) => Scene | undefined;
+/** Anything a `from:` walk needs: passage name -> the scene as authored. */
+export type SceneLookup = (name: string) => Scene | undefined;
 
 export interface ResolveOptions {
 	/** Widen every cast entry to the character's whole pose set. */
@@ -247,33 +246,15 @@ export function resolveSceneAssets(
 	}
 
 	function walk(current: Scene, inherited: boolean): void {
-		// 1 — bg, defaulting to `id:`. `null` is a patch clearing an inherited backdrop,
-		// not a reference. An `id:`-derived backdrop is a soft reference — it is only art
-		// the scene reaches once art by that name exists, so a miss is silence rather than
-		// an "unknown asset" against every scene id in the story.
-		const bg = sceneBg(current);
+		// 1 — bg. `null` is a patch clearing an inherited backdrop, not a reference.
+		const bg = current.bg;
 
 		if (typeof bg === 'string' && bg !== '') {
-			const implicit = current.bg === undefined;
-			const known = catalog.byId.has(bg) || catalog.byName.has(bg);
-
-			if (!implicit || known) {
-				push(
-					rowFor(
-						catalog,
-						bg,
-						implicit ? 'id:' : 'bg:',
-						implicit ? 'id' : 'bg',
-						inherited,
-						'bg'
-					)
-				);
-			}
+			push(rowFor(catalog, bg, 'bg:', 'bg', inherited, 'bg'));
 		}
 
-		// 1b — backdrops a beat cuts to, and the one-shots a beat fires. Neither is ever
-		// implicit: a beat that names one asked for it out loud, so a miss is an unknown
-		// asset exactly like a `bg:` line's would be.
+		// 1b — backdrops a beat cuts to, and the one-shots a beat fires. A miss is an
+		// unknown asset exactly like a `bg:` line's would be.
 		for (const beat of current.beats ?? []) {
 			if (typeof beat.bg === 'string' && beat.bg !== '') {
 				push(
@@ -457,10 +438,6 @@ export function resolveSceneAssets(
 				}
 			}
 		}
-	}
-
-	if (scene.id !== undefined) {
-		visited.add(scene.id);
 	}
 
 	walk(scene, false);

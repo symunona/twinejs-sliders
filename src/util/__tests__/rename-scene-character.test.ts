@@ -88,7 +88,6 @@ describe('renameSceneCharacter', () => {
 
 	it('leaves passage names, backdrops, poses and marks alone', () => {
 		const text = scene(
-			'id: mira',
 			'from: mira',
 			'bg: mira',
 			'cast:',

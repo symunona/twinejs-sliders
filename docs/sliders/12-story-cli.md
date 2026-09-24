@@ -70,9 +70,9 @@ Global: `--data`, `--server`, `--token`, `--profile`, `--json`, `--yes`, `-q`.
 | 6 | `put <ref> <file> [--new] [--all dir] [--delete <name>]` | take it back, splice, `PUT` — §3 |
 | 7 | `check <file\|dir>` | is my copy still current? read-only — §3 |
 | 8 | `lint [<story>\|<file>] [--fix]` | scene YAML, cross-passage, links, assets — §5 |
-| 9 | `assets <story> [--scene <id>] [--unused] [--missing]` | what exists, what scene needs, with real paths — §4 |
+| 9 | `assets <story> [--scene <passage>] [--unused] [--missing]` | what exists, what scene needs, with real paths — §4 |
 | 10 | `graph <story> [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph |
-| 11 | `copy <story> --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone — §6 |
+| 11 | `copy <story> --name "<n>" [--assets copy\|link\|none]` | server-side clone — §6 |
 | 12 | `new --name "<n>"` | empty story, new ifid |
 | 13 | `rm <story> [--purge] --yes` | tombstone, or erase |
 | 14 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
@@ -87,11 +87,12 @@ No state directory, no sync record, no status subsystem.
 |---|---|
 | `ep3` | story: uuid, name, or unambiguous slug (`chapter-3` finds `Chapter 3`) |
 | `ep3/Tavern Night` | passage, by name or id prefix |
-| `ep3#tavern-night` | passage that hold that scene id — scene ids unique per story |
 | `ep3:a_8f21` · `ep3:tavern-dawn` | asset, by id or manifest name |
 | `ep3@37` | story at old rev. Read only |
 
-Ambiguous → candidate list, exit 2. Quote refs with spaces or `#`.
+Ambiguous → candidate list, exit 2. Quote refs with spaces.
+
+`ep3#…` gone — scenes have no id. Usage error, points to `ep3/<Passage>`.
 
 ---
 
@@ -109,8 +110,8 @@ PASSAGES
   ep3/Street                 31 lines  scene @8         links: Start
 
 SCENES
-  tavern-night   in Tavern Night   from —   cast mira,joren   7 beats   marks: tense
-  street-day     in Street         from tavern-night@tense   cast mira   3 beats
+  Tavern Night   from —   cast mira,joren   7 beats   marks: tense
+  Street   from Tavern Night@tense   cast mira   3 beats
 
 ASSETS  10, 2.3 MB — 4 bg, 5 frame, 1 object.  1 unused, 0 missing
 LINT    2 warnings, 0 errors
@@ -140,7 +141,6 @@ hash: 9f31c8a2     # sha256 of THIS passage text as handed out
 mood: tense
 --
 [scene]
-id: tavern-night
 bg: tavern/night
 cast:
   mira: {at: -0.4, pose: arms-crossed}
@@ -242,7 +242,7 @@ a_9002  object  candle             256x256   12 KB  …/assets/a_9002.webp   unu
 Local mode print the store path — blob already a file, read it, feed it to an image model.
 Remote store need `--fetch -o <dir>`.
 
-**What scene needs** — `twine-cli assets ep3 --scene tavern-night`. This resolution is the
+**What scene needs** — `twine-cli assets ep3 --scene "Tavern Night"` (passage name, case-insensitive). This resolution is the
 real work:
 
 1. `bg:` → asset id.
@@ -274,8 +274,8 @@ Verify step after edit. Four tiers, each already in a package:
 
 | Tier | From | Catches |
 |---|---|---|
-| YAML | `@sliders/scene-schema` | parse errors, unknown keys with `keyHint()` suggestions, bad coordinates |
-| Cross-passage | `@sliders/scene-index` | duplicate scene ids, unknown `from:`, unknown `@mark`, `from:` cycles |
+| YAML | `@sliders/scene-schema` | parse errors, unknown keys (warning) with `keyHint()` suggestions, bad coordinates |
+| Cross-passage | `@sliders/scene-index` | unknown `from:`, unknown `@mark`, `from:` cycles |
 | Story graph | `scanLinkTargets` + passage names | links to passages that do not exist, unreachable passages, scene passage whose only exit is `[[link]]` outside block — spec 02: that link never drawn |
 | Assets | manifest + blobs | scene refs to unknown assets, manifest entries with no blob, blobs nothing name |
 
@@ -299,7 +299,7 @@ reference, normalise `at:` through `scene-edit.formatAt`. Broken links wait for 
 | `ifid` | new uuid | IFID stable across import/export of *same* story; copy is different one |
 | passage ids | new uuids | ids per story, fresh set keep every sync record honest |
 | names, positions, tags, text | verbatim | |
-| scene ids | kept, or rewritten by `--reid <prefix>` | ids unique *within* story (spec 02), index per story, so two stories may share one. Rewrite opt-in because it also rewrite every `from:` and `@mark` |
+| scenes | kept | no scene ids — `from:` names passages, names copied verbatim, so every `from:` and `@mark` still resolve |
 | assets | `--assets copy` (default), `link`, `none` | `copy` re-`PUT` blobs under new story. `link` copy manifest entries and share source blobs, janitor reclaim once nothing name them — opt-in |
 | revisions | start fresh | copy begin at rev 1 |
 
@@ -378,7 +378,7 @@ its types and `ServerError`. Both compile against `server.types.ts`, so they sta
 |---|---|
 | **1** | `ping`, `ls`, `map`, `cat`, `put`, `check`, `lint` |
 | **2** | `assets`, `graph`, `copy`, `revs`, `restore`, `new`, `rm`, `login` |
-| **3** | `--fix`, `--reid`, `--all`, `assets --all-poses`, `graph --format dot`, `watch` |
+| **3** | `--fix`, `--all`, `assets --all-poses`, `graph --format dot`, `watch` |
 
 **Tests.** Round-trip is load-bearing: `cat` a fixture passage, `put` it back unchanged, assert
 body byte-identical and rev bumped by exactly one. Then the three-way table — same passage

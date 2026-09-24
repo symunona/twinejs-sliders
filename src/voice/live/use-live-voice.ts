@@ -30,7 +30,7 @@ export interface UseLiveVoiceOptions {
 	onSay: (kind: 'user' | 'model' | 'system', text: string) => void;
 	/** The model's turn ended. Re-arms the runner's per-turn caps. */
 	onTurnComplete: () => void;
-	sceneIds: string[];
+	sceneNames: string[];
 	/**
 	 * The rows the session should open already knowing — a restored thread. Read when the
 	 * socket opens, not when the panel renders, so restoring a thread and then talking
@@ -134,7 +134,7 @@ export function useLiveVoice(options: UseLiveVoiceOptions): LiveVoice {
 			onUsage: setUsage,
 			seed: optionsRef.current.seed?.(),
 			systemInstruction: systemInstruction({
-				sceneIds: current.sceneIds,
+				sceneNames: current.sceneNames,
 				storyName: current.storyName
 			}),
 			tools: voiceTools

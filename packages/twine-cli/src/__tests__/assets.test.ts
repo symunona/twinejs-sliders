@@ -118,7 +118,7 @@ describe('resolveSceneAssets', () => {
 
 	it('marks a reference the manifest has never heard of', async () => {
 		const rows = resolveSceneAssets(
-			scene('id: x\nbg: tavern/dawn\nprops:\n  lantern: {at: 0}\n'),
+			scene('bg: tavern/dawn\nprops:\n  lantern: {at: 0}\n'),
 			await catalog()
 		);
 
@@ -130,31 +130,9 @@ describe('resolveSceneAssets', () => {
 		);
 	});
 
-	it('reaches the backdrop a bare id: names, pointing at the id: line', async () => {
-		const rows = resolveSceneAssets(scene('id: tavern/night\n'), await catalog());
-
-		expect(rows).toEqual([
-			expect.objectContaining({
-				id: 'a_bg',
-				key: 'id',
-				kind: 'bg',
-				present: 'present',
-				via: 'id:'
-			})
-		]);
-	});
-
-	it('says nothing when a scene id happens to name no art', async () => {
-		// Ids exist to be linked to as much as to name backdrops, so an implied one that
-		// misses is silence — an "unknown asset" per scene id would drown the real ones.
-		const rows = resolveSceneAssets(scene('id: signal-fire\n'), await catalog());
-
-		expect(rows).toEqual([]);
-	});
-
 	it('names the pose when a character has no such pose', async () => {
 		const rows = resolveSceneAssets(
-			scene('id: x\ncast:\n  mira: {at: 0, pose: waving}\n'),
+			scene('cast:\n  mira: {at: 0, pose: waving}\n'),
 			await catalog()
 		);
 
@@ -199,7 +177,7 @@ describe('resolveSceneAssets', () => {
 		});
 		const rows = resolveSceneAssets(
 			scene(
-				'id: x\ncast:\n  kid: {at: 0, pose: idle}\nbeats:\n' +
+				'cast:\n  kid: {at: 0, pose: idle}\nbeats:\n' +
 					'  - kid: {pose: [{name: walk#2}, {name: idle#1}, {name: walk#9}], poseLoop: once}\n'
 			),
 			kids
@@ -239,7 +217,7 @@ beats:
 
 	it('calls an unknown sound missing, unlike an fx token', async () => {
 		const rows = resolveSceneAssets(
-			scene('id: x\nmusic: no-such-bed\nfx: [rain@0.6]\n'),
+			scene('music: no-such-bed\nfx: [rain@0.6]\n'),
 			await catalog()
 		);
 
@@ -250,7 +228,7 @@ beats:
 
 	it('walks the from: parent and marks what it brings in', async () => {
 		const parent = scene(TAVERN);
-		const child = scene('id: tavern-fight\nfrom: tavern-night@tense\ncast:\n  mira: {pose: angry}\n');
+		const child = scene('from: tavern-night@tense\ncast:\n  mira: {pose: angry}\n');
 		const rows = resolveSceneAssets(child, await catalog(), {
 			scenes: id => (id === 'tavern-night' ? parent : undefined)
 		});
@@ -264,8 +242,8 @@ beats:
 	});
 
 	it('survives a from: cycle instead of recursing forever', async () => {
-		const a = scene('id: a\nfrom: b\nbg: tavern/night\n');
-		const b = scene('id: b\nfrom: a\n');
+		const a = scene('from: b\nbg: tavern/night\n');
+		const b = scene('from: a\n');
 		const rows = resolveSceneAssets(a, await catalog(), {
 			scenes: id => (id === 'a' ? a : id === 'b' ? b : undefined)
 		});

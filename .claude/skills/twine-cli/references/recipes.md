@@ -20,11 +20,11 @@ twine-cli lint ep3
 ## 2 — Move character, change line
 
 ```sh
-twine-cli map ep3 | rg tavern-night              # which passage, which line
-twine-cli cat ep3#tavern-night -o tmp/p.md       # passage holding that scene
+twine-cli map ep3 | rg "Tavern Night"            # which passage, which line
+twine-cli cat "ep3/Tavern Night" -o tmp/p.md    # passage = its scene
 # Edit tmp/p.md: cast.mira.at -0.4 -> -0.25, beats[2] text
 twine-cli lint tmp/p.md
-twine-cli put ep3#tavern-night tmp/p.md
+twine-cli put "ep3/Tavern Night" tmp/p.md
 ```
 
 Scene block is plain YAML in the file — normal `Edit`. Keep author formatting and comments.
@@ -34,7 +34,7 @@ Leave `story`, `rev`, `hash` in front matter alone.
 
 ```sh
 twine-cli check tmp/p.md          # fresh / stale-elsewhere / conflict
-twine-cli cat ep3#tavern-night -o tmp/p.md --refresh   # re-take; refuse if you edited
+twine-cli cat "ep3/Tavern Night" -o tmp/p.md --refresh   # re-take; refuse if you edited
 ```
 
 `put` do the same test anyway. `check` just let you find out before you write more.
@@ -42,7 +42,7 @@ twine-cli cat ep3#tavern-night -o tmp/p.md --refresh   # re-take; refuse if you 
 ## 4 — Look at art a scene uses
 
 ```sh
-twine-cli assets ep3 --scene tavern-night
+twine-cli assets ep3 --scene "Tavern Night"
 ```
 
 Every row a real path. Read them. `--missing` = scene name it, store lack blob. `--unused` =
@@ -51,23 +51,23 @@ manifest entry nothing reference.
 ## 5 — Generate missing background
 
 ```sh
-twine-cli assets ep3 --scene tavern-night --missing    # the gap
+twine-cli assets ep3 --scene "Tavern Night" --missing    # the gap
 # read a sibling bg for style, generate, write tmp/tavern-dawn.webp
 twine-cli put ep3:tavern-dawn tmp/tavern-dawn.webp --kind bg
-twine-cli cat ep3#tavern-night -o tmp/p.md
+twine-cli cat "ep3/Tavern Night" -o tmp/p.md
 # set: bg: tavern-dawn
-twine-cli lint tmp/p.md && twine-cli put ep3#tavern-night tmp/p.md
+twine-cli lint tmp/p.md && twine-cli put "ep3/Tavern Night" tmp/p.md
 ```
 
 ## 6 — Copy episode
 
 ```sh
-twine-cli copy ep3 --name "Episode 4" --reid ep4-
+twine-cli copy ep3 --name "Episode 4"
 twine-cli map "Episode 4"
-twine-cli lint "Episode 4"        # catch anything --reid failed to rewrite
+twine-cli lint "Episode 4"
 ```
 
-New story id, new IFID, new passage ids. `--reid` also rewrite every `from:` and `@mark`.
+New story id, new IFID, new passage ids. Passage names kept, so `from:` still resolve.
 
 ## 7 — Rescue old revision
 
@@ -86,9 +86,9 @@ twine-cli restore ep3 --rev 37                       # new rev on top; history s
 `put` exit 3, store untouched.
 
 ```sh
-twine-cli cat ep3#tavern-night -o tmp/theirs.md      # what is there now
+twine-cli cat "ep3/Tavern Night" -o tmp/theirs.md      # what is there now
 diff tmp/theirs.md tmp/p.md                          # merge by hand into tmp/p.md
-twine-cli cat ep3#tavern-night -o tmp/p.md --refresh --force   # or drop yours, re-take
+twine-cli cat "ep3/Tavern Night" -o tmp/p.md --refresh --force   # or drop yours, re-take
 ```
 
 Merging is yours to do. CLI never merge, never force.

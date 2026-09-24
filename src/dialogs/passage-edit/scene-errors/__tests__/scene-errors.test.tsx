@@ -77,13 +77,13 @@ describe('<SceneErrors>', () => {
 	});
 
 	it('calls a scene with only info findings one with notes, not warnings', () => {
-		renderErrors([error({code: 'retired-key', severity: 'info'})]);
+		renderErrors([error({code: 'passage-case', severity: 'info'})]);
 		expect(screen.getByTestId('scene-errors-header')).toHaveTextContent(NOTES);
 	});
 
 	it('lets a warning outrank a note in the header', () => {
 		renderErrors([
-			error({code: 'retired-key', severity: 'info'}),
+			error({code: 'passage-case', severity: 'info'}),
 			error({severity: 'warning'})
 		]);
 		expect(screen.getByTestId('scene-errors-header')).toHaveTextContent(

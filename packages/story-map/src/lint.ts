@@ -171,7 +171,7 @@ export function lintPassageText(
 // ---------------------------------------------------------------------------
 
 /** The codes only the index can find. Everything else it reports is tier 1 seen twice. */
-const CROSS_PASSAGE_CODES = new Set(['dupe-scene-id', 'unknown-from', 'from-cycle']);
+const CROSS_PASSAGE_CODES = new Set(['unknown-from', 'from-cycle']);
 
 interface ScenePassage {
 	passage: PassageLike;
@@ -183,7 +183,7 @@ interface ScenePassage {
  * Which passage a cross-passage error belongs to.
  *
  * `SceneError` has no passage field — it was designed for a single-passage editor, where
- * there is only ever one answer — so the id the message names is the only handle there is.
+ * there is only ever one answer — so the passage the message names is the only handle there is.
  * Matching on it is confined to this one function rather than spread through the reporter,
  * and a message that does not match still gets reported, just against the story.
  */
@@ -200,26 +200,12 @@ function attribute(
 		return candidates[index];
 	}
 
-	if (error.code === 'dupe-scene-id') {
-		const id = /Duplicate scene id '(.+?)'/.exec(error.message)?.[1];
-
-		if (id === undefined) {
-			return undefined;
-		}
-
-		// The index keeps the first occurrence and complains about every one after it, in
-		// passage order — so the offenders are exactly the tail of this list.
-		const holders = scenes.filter(entry => entry.scene.id === id).slice(1);
-
-		return nth(`dupe:${id}`, holders);
-	}
-
 	if (error.code === 'from-cycle') {
-		const id = /^Scene '(.+?)' is part of a from: cycle/.exec(error.message)?.[1];
+		const name = /^Scene '(.+?)' is part of a from: cycle/.exec(error.message)?.[1];
 
-		return id === undefined
+		return name === undefined
 			? undefined
-			: scenes.find(entry => entry.scene.id === id);
+			: scenes.find(entry => entry.passage.name === name);
 	}
 
 	if (error.code === 'unknown-from') {
@@ -489,31 +475,17 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 
 	// --- 4. assets -----------------------------------------------------------
 	if (catalog) {
-		// The two names `from:` accepts, kept apart so an id always wins over a passage
-		// that happens to share its spelling — the same precedence `buildSceneIndex` uses.
-		const byId = new Map<string, Scene>();
 		const byPassage = new Map<string, Scene>();
 
 		for (const entry of scenes) {
-			if (entry.scene.id !== undefined) {
-				byId.set(entry.scene.id, entry.scene);
-			}
-
 			if (!byPassage.has(entry.passage.name)) {
 				byPassage.set(entry.passage.name, entry.scene);
 			}
 		}
 
-		const lookup = (id: string): Scene | undefined => {
-			const hit = byId.get(id);
-
-			if (hit) {
-				return hit;
-			}
-
-			// Same rule as `buildSceneIndex.nodeFor`: a passage name folds case, an id
-			// does not.
-			const matched = matchPassageName(byPassage.keys(), id);
+		const lookup = (name: string): Scene | undefined => {
+			// Same rule as `buildSceneIndex.nodeFor`: a passage name folds case.
+			const matched = matchPassageName(byPassage.keys(), name);
 
 			return matched === undefined ? undefined : byPassage.get(matched);
 		};

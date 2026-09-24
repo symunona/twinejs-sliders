@@ -61,14 +61,13 @@ Every error carries a position. No bare "parse failed".
 |---|---|
 | `yaml-syntax` | malformed YAML (from the parser) |
 | `subset-violation` | anchor, alias, tag, multi-doc, `>` |
-| `unknown-key` | typo at any level. Suggest via edit distance. |
+| `unknown-key` | unknown key at any level. Always `warning`, never error: key dropped, scene plays. Did-you-mean via edit distance. Covers retired `id:`, `frame:`, `frameLoop:` (no `retired-key` code). |
 | `bad-coordinate` | `at:` not a number or `[x, y]`; out of −1…1 |
 | `bad-layer` | not `back` / `mid` / `front` (D11) |
 | `unknown-asset` | id not in the asset store *(fork only — needs the store)* |
 | `unknown-character` | `cast` id not in `SlidersCast` *(fork only)* |
-| `unknown-frame` | `frame:` not in that character's frames *(fork only)* |
+| `unknown-pose` | `pose:` not in that character's poses *(fork only)* |
 | `unknown-link` | `[[name]]` with no `links:` entry and no inline target |
-| `dupe-scene-id` | *(index only — cross-passage)* |
 | `unknown-from` | `from:` target or `@mark` missing *(index only)* |
 | `from-cycle` | `from:` graph is not a DAG *(index only)* |
 
@@ -79,7 +78,7 @@ A story format only ever sees one passage. So:
 | Tier | Where | Catches | Runs in stock Twine? |
 |---|---|---|---|
 | 1 | CM5 mode + schema, live in the editor | syntax, subset, unknown keys, coordinates | ✅ |
-| 2 | **Scene Index panel — fork** | dupe ids, unknown `from:`, unknown `@mark`, cycles, orphans, unknown assets | ❌ |
+| 2 | **Scene Index panel — fork** | unknown `from:`, unknown `@mark`, cycles, orphans, unknown assets | ❌ |
 | 3 | Sliders runtime at boot (sees all passages) | same as tier 2 | ✅ |
 
 Tier 3 is the net that still fires in stock Twine. It is what keeps the
@@ -131,5 +130,5 @@ half-typed line is a preview nobody leaves open.
 Cheap regex is fine and correct here — it feeds the story map, not the runtime.
 
 Open: should `from:` also emit a reference (dotted line)? See D9 — leaning toward colouring
-passage nodes by scene-id hash instead, so navigation edges and scene edges don't get mixed
+passage nodes by scene hash instead, so navigation edges and scene edges don't get mixed
 up on the same map.

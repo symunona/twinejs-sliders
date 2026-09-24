@@ -117,7 +117,6 @@ export interface Ctx {
 export type Ref =
 	| {kind: 'story'; story: string; rev?: number}
 	| {kind: 'passage'; story: string; rev?: number; passage: string}
-	| {kind: 'scene'; story: string; rev?: number; scene: string}
 	| {kind: 'asset'; story: string; asset: string};
 
 /** The front matter `cat` stamps and `put` reads back. */

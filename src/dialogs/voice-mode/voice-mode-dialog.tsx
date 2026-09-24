@@ -18,7 +18,7 @@ import {storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {liveModels, pickLiveModel} from '../../voice/live/models';
 import {useLiveVoice} from '../../voice/live/use-live-voice';
-import {sceneIdsOf} from '../../voice/runner';
+import {sceneNamesOf} from '../../voice/runner';
 import {parseToolLine, useVoiceSession} from '../../voice/use-voice-session';
 import {useSceneScreenshot} from '../../voice/screenshot/use-scene-screenshot';
 import {useVoiceToolEnv} from '../../voice/use-voice-tool-env';
@@ -66,8 +66,8 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 	const [line, setLine] = React.useState('');
 	const [busy, setBusy] = React.useState(false);
 	const {t} = useTranslation();
-	const sceneIds = React.useMemo(
-		() => sceneIdsOf(story.passages),
+	const sceneNames = React.useMemo(
+		() => sceneNamesOf(story.passages),
 		[story.passages]
 	);
 	/*
@@ -85,7 +85,7 @@ export const VoiceModeDialog: React.FC<VoiceModeDialogProps> = props => {
 		onCall: session.call,
 		onSay: session.say,
 		onTurnComplete: session.endTurn,
-		sceneIds,
+		sceneNames,
 		seed: React.useCallback(() => rowsRef.current, []),
 		storyName: story.name
 	});

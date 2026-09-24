@@ -57,7 +57,6 @@ describe('renameSceneTargets', () => {
 
 	it('leaves link names, ids and speakers alone', () => {
 		const text = scene(
-			'id: Tavern',
 			'links:',
 			'  Tavern: {to: Street}',
 			'',

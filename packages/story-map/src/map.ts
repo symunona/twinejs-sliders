@@ -39,10 +39,6 @@ export interface MapScene {
 	beats: number;
 	cast: string[];
 	from?: string;
-	/** The scene's `id:`, or the passage name when it declared none. */
-	id: string;
-	/** True when the scene has no `id:` and is addressed by its passage name. */
-	anonymous: boolean;
 	/** Marks other than the implicit `enter`. */
 	marks: string[];
 	passage: string;
@@ -183,15 +179,13 @@ export function buildStoryMap(input: BuildStoryMapInput): StoryMap {
 
 	const scenes: MapScene[] = [];
 
-	for (const [id, entry] of index.scenes) {
+	for (const entry of index.scenes.values()) {
 		scenes.push({
-			anonymous: entry.id === undefined,
 			beats: entry.scene.beats.length,
 			cast: Object.entries(entry.scene.entities)
 				.filter(([, patch]) => patch?.kind === 'cast')
 				.map(([entityId]) => entityId),
 			from: entry.scene.from,
-			id,
 			marks: [...entry.marks.keys()].filter(mark => mark !== 'enter'),
 			passage: entry.passage
 		});
@@ -290,11 +284,7 @@ export function renderStoryMap(
 		for (const scene of map.scenes) {
 			out.push(
 				[
-					`  ${scene.id}`,
-					// An anonymous scene is ALREADY named by its passage, so repeating it
-					// would print the same string twice. The empty id is the signal that
-					// only the passage name can address it.
-					scene.anonymous ? 'no id' : `in ${scene.passage}`,
+					`  ${scene.passage}`,
 					`from ${scene.from ?? '—'}`,
 					`cast ${scene.cast.length === 0 ? '—' : scene.cast.join(',')}`,
 					`${scene.beats} beats`,

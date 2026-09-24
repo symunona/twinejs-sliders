@@ -72,7 +72,7 @@ function story(passages: Passage[]): Story {
 }
 
 function scenePassage(name: string, block: string): Passage {
-	return passage(name, `[scene]\nid: ${name.toLowerCase()}\n${block}`);
+	return passage(name, `[scene]\n${block}`);
 }
 
 const CLIFF = scenePassage(

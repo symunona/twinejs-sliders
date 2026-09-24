@@ -129,60 +129,13 @@ describe('poseLoop:', () => {
 	});
 });
 
-describe('old spellings: frame: and frameLoop:', () => {
-	/** The scene without its errors, for comparing two spellings of one scene. */
-	function sceneOf(text: string) {
-		return parseScene(text).scene;
-	}
+describe('frame: and frameLoop: are gone', () => {
+	it('reports them as unknown keys, at warning, and draws no pose', () => {
+		const {errors, scene} = parseScene(CAST('{frame: [a, b], frameLoop: once}'));
 
-	it('frame: is pose:, same scene', () => {
-		expect(sceneOf(CAST('{at: 0, frame: idle}'))).toEqual(
-			sceneOf(CAST('{at: 0, pose: idle}'))
-		);
-	});
-
-	it('a frame: list and frameLoop: are a pose: list and poseLoop:', () => {
-		expect(
-			sceneOf(CAST('{frame: [{name: a, dur: 0.2}, b], frameLoop: once}'))
-		).toEqual(sceneOf(CAST('{pose: [{name: a, dur: 0.2}, b], poseLoop: once}')));
-	});
-
-	it('works in a beat patch too', () => {
-		const old = `cast:\n  mira: {}\nbeats:\n  - mira: {frame: angry, say: "Out."}`;
-
-		expect(sceneOf(old)).toEqual(sceneOf(old.replace('frame:', 'pose:')));
-	});
-
-	it('says so at info, with the rename as a one-click fix', () => {
-		const {errors} = parseScene(CAST('{frame: [a, b], frameLoop: once}'));
-
-		expect(errors).toHaveLength(2);
-		expect(errors.map(error => error.severity)).toEqual(['info', 'info']);
-		expect(errors.map(error => error.code)).toEqual(['retired-key', 'retired-key']);
-		expect(errors[0].message).toBe('`frame:` is now `pose:`.');
-		expect(errors[0].fix).toMatchObject({replaces: 'frame', text: 'pose'});
-		expect(errors[1].fix).toMatchObject({replaces: 'frameLoop', text: 'poseLoop'});
-	});
-
-	it('points the fix at the key token itself', () => {
-		const {errors} = parseScene('cast:\n  mira: {frame: idle}');
-
-		// `  mira: {` is 9 columns; the key starts at 10.
-		expect(errors[0]).toMatchObject({col: 10, endCol: 15, line: 2});
-	});
-
-	it('reads frame in an ease map as pose', () => {
-		const old = parseScene('ease: {frame: linear}');
-
-		expect(old.scene.ease).toEqual({pose: 'linear'});
-		expect(old.errors).toHaveLength(1);
-		expect(old.errors[0]).toMatchObject({code: 'retired-key', severity: 'info'});
-	});
-
-	it('offers pose for a typo of the old spelling', () => {
-		const {errors} = parseScene(CAST('{fram: angry}'));
-
-		expect(errors[0].code).toBe('unknown-key');
-		expect(errors[0].fix?.text).toBe('pose');
+		expect(errors.map(error => error.code)).toEqual(['unknown-key', 'unknown-key']);
+		expect(errors.map(error => error.severity)).toEqual(['warning', 'warning']);
+		expect(errors[0].message).toBe("Unknown key 'frame'.");
+		expect(scene.entities.mira).not.toHaveProperty('pose');
 	});
 });

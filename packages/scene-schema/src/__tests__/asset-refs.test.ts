@@ -21,7 +21,7 @@ describe('sceneRefSpans', () => {
 	});
 
 	it('finds a scalar bg', () => {
-		const text = 'id: tavern\nbg: tavern/night\n';
+		const text = 'bg: tavern/night\n';
 
 		expect(summary(text)).toEqual(['bg:tavern/night']);
 	});

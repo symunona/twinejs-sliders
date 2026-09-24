@@ -4,7 +4,6 @@ const passage = [
 	'mood: tense',
 	'--',
 	'[scene]',
-	'id: tavern-night',
 	'bg: tavern/night',
 	'cast:',
 	'  mira: {at: -0.4, pose: arms-crossed}',

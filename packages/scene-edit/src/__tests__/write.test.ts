@@ -105,26 +105,6 @@ describe('setEntityKey', () => {
 		expect(after).toBe('cast:\n  mira: {pose: idle}\n');
 	});
 
-	it('renames an old frame: key rather than adding a second one', () => {
-		const flow = 'cast:\n  mira: {at: 0, frame: idle}\n';
-		const block = 'cast:\n  mira:\n    frame: idle   # was idle\n    at: 0\n';
-
-		expect(
-			write(flow, setEntityKey(flow, {id: 'mira', kind: 'cast'}, 'pose', 'angry'))
-		).toBe('cast:\n  mira: {at: 0, pose: angry}\n');
-		expect(
-			write(block, setEntityKey(block, {id: 'mira', kind: 'cast'}, 'pose', 'angry'))
-		).toBe('cast:\n  mira:\n    pose: angry   # was idle\n    at: 0\n');
-	});
-
-	it('removes pose: under its old spelling too', () => {
-		const before = 'cast:\n  mira: {at: 0, frame: idle}\n';
-
-		expect(
-			write(before, removeEntityKey(before, {id: 'mira', kind: 'cast'}, 'pose'))
-		).toBe('cast:\n  mira: {at: 0}\n');
-	});
-
 	it('turns an explicit removal back into an entry', () => {
 		const before = 'from: base\ncast:\n  mira: ~\n';
 		const after = write(
@@ -312,7 +292,7 @@ describe('addEntity', () => {
 	});
 
 	it('hangs the first entry off a map key that has no entries yet', () => {
-		const before = 'id: a\ncast:\nbeats:\n  - box: "x"\n';
+		const before = 'cast:\nbeats:\n  - box: "x"\n';
 		const after = applyEdit(
 			before,
 			addEntity(before, 'cast', 'mira', {
@@ -322,7 +302,7 @@ describe('addEntity', () => {
 			})
 		);
 
-		expect(after).toBe('id: a\ncast:\n  mira: {at: 0}\nbeats:\n  - box: "x"\n');
+		expect(after).toBe('cast:\n  mira: {at: 0}\nbeats:\n  - box: "x"\n');
 	});
 
 	it('writes a whole block into an empty passage', () => {
@@ -594,14 +574,6 @@ describe('setBeatKey()', () => {
 	it('changes a key that is already there, in place', () => {
 		expect(applied(beats, 2, 'dur', 0.5)).toContain(
 			'- mira: {say: "Again.", dur: 0.5}'
-		);
-	});
-
-	it('renames an old frame: on a beat when pose is set', () => {
-		const old = 'beats:\n  - mira: {frame: idle, say: "Hi."}\n';
-
-		expect(applied(old, 0, 'pose', 'angry')).toBe(
-			'beats:\n  - mira: {pose: angry, say: "Hi."}\n'
 		);
 	});
 

@@ -84,11 +84,12 @@ function messages(findings: LintFinding[]): string[] {
 
 describe('tier 1 — YAML', () => {
 	it('reports an unknown key with a did-you-mean', () => {
-		const text = `[scene]\nid: tavern-night\nchar:\n  mira: {at: 0}\n`;
+		const text = `[scene]\n# tavern-night\nchar:\n  mira: {at: 0}\n`;
 		const findings = lintPassageText(text, 'tmp/p.md');
 
 		expect(findings).toHaveLength(1);
-		expect(findings[0].level).toBe('error');
+		// Unknown keys warn: the scene still plays without them.
+		expect(findings[0].level).toBe('warn');
 		expect(findings[0].message).toMatch(/char/);
 		expect(findings[0].message).toMatch(/Did you mean 'cast'\?/);
 		expect(findings[0].line).toBe(3);
@@ -126,7 +127,7 @@ describe('tier 1 — YAML', () => {
 
 	it('leaves a legitimate vars section alone', () => {
 		const text =
-			"has_weapon: true\nmood: 'tense'\nsliders.autoAdvance: 0\nwhen: '12:30'\n--\n[scene]\nid: x\n";
+			"has_weapon: true\nmood: 'tense'\nsliders.autoAdvance: 0\nwhen: '12:30'\n--\n[scene]\n# x\n";
 
 		expect(lintPassageText(text, 'tmp/p.md')).toEqual([]);
 	});
@@ -143,7 +144,7 @@ describe('tier 1 — YAML', () => {
 
 	it('offsets lines past a cat receipt', () => {
 		const receipt = `---\nstory: ep3\npassage: Tavern Night\nrev: 42\nhash: 9f31c8a2\n---\n`;
-		const text = `[scene]\nid: tavern-night\nchar: {}\n`;
+		const text = `[scene]\n# tavern-night\nchar: {}\n`;
 		const findings = lintPassageText(text, 'tmp/p.md', {lineBase: 7});
 
 		// Line 3 of the passage is line 9 of a file whose passage text starts at line 7.
@@ -157,7 +158,7 @@ describe('tier 1 — YAML', () => {
 
 	it('catches a bad coordinate', () => {
 		const findings = lintPassageText(
-			`[scene]\nid: x\ncast:\n  mira: {at: "over there"}\n`,
+			`[scene]\n# x\ncast:\n  mira: {at: "over there"}\n`,
 			'tmp/p.md'
 		);
 
@@ -170,28 +171,12 @@ describe('tier 1 — YAML', () => {
 // ---------------------------------------------------------------------------
 
 describe('tier 2 — cross-passage', () => {
-	it('reports a duplicate scene id against the second passage', () => {
-		const body = story([
-			passage('Start', `[scene]\nid: tavern-night\nlinks:\n  go: {to: Street}\n`),
-			passage('Street', `[scene]\nid: tavern-night\nlinks:\n  back: {to: Start}\n`)
-		]);
-		const dupe = lintStory({body, ref: 'ep3'}).filter(finding =>
-			/Duplicate scene id/.test(finding.message)
-		);
-
-		expect(dupe).toHaveLength(1);
-		expect(dupe[0].file).toBe('ep3/Street');
-		expect(dupe[0].level).toBe('error');
-		expect(dupe[0].line).toBe(2);
-		expect(dupe[0].message).toMatch(/already used by passage 'Start'/);
-	});
-
 	it('reports an unknown from: on the passage that wrote it', () => {
 		const body = story([
-			passage('Start', `[scene]\nid: tavern-night\nlinks:\n  go: {to: Street}\n`),
+			passage('Start', `[scene]\n# tavern-night\nlinks:\n  go: {to: Street}\n`),
 			passage(
 				'Street',
-				`[scene]\nid: street-day\nfrom: tavern-dawn\nlinks:\n  back: {to: Start}\n`
+				`[scene]\n# street-day\nfrom: tavern-dawn\nlinks:\n  back: {to: Start}\n`
 			)
 		]);
 		const findings = lintStory({body, ref: 'ep3'}).filter(finding =>
@@ -206,11 +191,11 @@ describe('tier 2 — cross-passage', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nbeats:\n  - box: "hi"\nlinks:\n  go: {to: Street}\n`
+				`[scene]\n# tavern-night\nbeats:\n  - box: "hi"\nlinks:\n  go: {to: Street}\n`
 			),
 			passage(
 				'Street',
-				`[scene]\nid: street-day\nfrom: tavern-night@tense\nlinks:\n  back: {to: Start}\n`
+				`[scene]\n# street-day\nfrom: Start@tense\nlinks:\n  back: {to: Start}\n`
 			)
 		]);
 		const findings = lintStory({body, ref: 'ep3'}).filter(finding =>
@@ -223,8 +208,8 @@ describe('tier 2 — cross-passage', () => {
 
 	it('reports a from: cycle on both scenes in it', () => {
 		const body = story([
-			passage('A', `[scene]\nid: a\nfrom: b\nlinks:\n  go: {to: B}\n`),
-			passage('B', `[scene]\nid: b\nfrom: a\nlinks:\n  go: {to: A}\n`)
+			passage('A', `[scene]\n# a\nfrom: b\nlinks:\n  go: {to: B}\n`),
+			passage('B', `[scene]\n# b\nfrom: a\nlinks:\n  go: {to: A}\n`)
 		]);
 		const findings = lintStory({body, ref: 'ep3'}).filter(finding =>
 			/cycle/.test(finding.message)
@@ -257,7 +242,7 @@ describe('tier 3 — story graph', () => {
 	// working link — but a story spelling one room two ways is one rename from a dead one.
 	it('warns, not errors, about a link that matches a passage only by case', () => {
 		const body = story([
-			passage('Start', `[scene]\nid: here\nlinks:\n  go: {to: street}\n`),
+			passage('Start', `[scene]\n# here\nlinks:\n  go: {to: street}\n`),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
 		const findings = lintStory({body, ref: 'ep3'});
@@ -276,7 +261,7 @@ describe('tier 3 — story graph', () => {
 		const body = story([
 			passage(
 				'Start',
-				`mood: tense\n--\n[scene]\nid: tavern-night\nbg: tavern/night\nbeats:\n  - box: "The door shuts."\n\n[continued]\nYou could [[go->Street]].\n`
+				`mood: tense\n--\n[scene]\n# tavern-night\nbg: tavern/night\nbeats:\n  - box: "The door shuts."\n\n[continued]\nYou could [[go->Street]].\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
@@ -294,7 +279,7 @@ describe('tier 3 — story graph', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nlinks:\n  go: {to: Street}\n\n[continued]\nAlso [[back->Street]].\n`
+				`[scene]\n# tavern-night\nlinks:\n  go: {to: Street}\n\n[continued]\nAlso [[back->Street]].\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
@@ -310,7 +295,7 @@ describe('tier 3 — story graph', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nbeats:\n  - mira: "Will you [[stay]]?"\nlinks:\n  stay: {to: Street}\n`
+				`[scene]\n# tavern-night\nbeats:\n  - mira: "Will you [[stay]]?"\nlinks:\n  stay: {to: Street}\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
@@ -336,7 +321,7 @@ describe('tier 3 — story graph', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nlinks:\n  go: {to: Street}\n\n[continued]\n[[secret->Cellar]]\n`
+				`[scene]\n# tavern-night\nlinks:\n  go: {to: Street}\n\n[continued]\n[[secret->Cellar]]\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street'),
 			passage('Cellar', `[[back->Start]]`, 'cellar')
@@ -352,7 +337,7 @@ describe('tier 3 — story graph', () => {
 describe('passageExits / buildLinkGraph', () => {
 	it('reads both authored link forms', () => {
 		const exits = passageExits(
-			`[scene]\nid: x\nbeats:\n  - mira: "Will you [[stay]] or [[go->Street]]?"\nlinks:\n  stay: {to: Tavern Fight}\n  extra: {to: Attic}\n`
+			`[scene]\n# x\nbeats:\n  - mira: "Will you [[stay]] or [[go->Street]]?"\nlinks:\n  stay: {to: Tavern Fight}\n  extra: {to: Attic}\n`
 		);
 
 		expect(exits.map(exit => exit.target).sort()).toEqual([
@@ -387,7 +372,7 @@ describe('tier 4 — assets', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nbg: tavern/night\ncast:\n  mira: {at: 0, pose: angry}\nlinks:\n  go: {to: Street}\n`
+				`[scene]\n# tavern-night\nbg: tavern/night\ncast:\n  mira: {at: 0, pose: angry}\nlinks:\n  go: {to: Street}\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
@@ -406,7 +391,7 @@ describe('tier 4 — assets', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nbg: tavern/dawn\nlinks:\n  go: {to: Street}\n`
+				`[scene]\n# tavern-night\nbg: tavern/dawn\nlinks:\n  go: {to: Street}\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
@@ -422,7 +407,7 @@ describe('tier 4 — assets', () => {
 		const body = story([
 			passage(
 				'Start',
-				`[scene]\nid: tavern-night\nbg: tavern/night\ncast:\n  mira: {at: 0}\nlinks:\n  go: {to: Street}\n`
+				`[scene]\n# tavern-night\nbg: tavern/night\ncast:\n  mira: {at: 0}\nlinks:\n  go: {to: Street}\n`
 			),
 			passage('Street', `[[back->Start]]`, 'street')
 		]);
@@ -448,7 +433,7 @@ describe('tier 4 — assets', () => {
 	});
 
 	it('skips tier 4 entirely with no manifest in hand', () => {
-		const body = story([passage('Start', `[scene]\nid: x\nbg: nope\n`)]);
+		const body = story([passage('Start', `[scene]\n# x\nbg: nope\n`)]);
 
 		expect(
 			lintStory({body, ref: 'ep3'}).filter(finding => /asset/i.test(finding.message))

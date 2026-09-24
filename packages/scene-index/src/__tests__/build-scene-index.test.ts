@@ -13,8 +13,7 @@ function codes(errors: SceneError[]): string[] {
 	return errors.map(e => e.code);
 }
 
-const TAVERN = `id: tavern-night
-bg: tavern/night
+const TAVERN = `bg: tavern/night
 cast:
   mira:  {at: -0.4, pose: arms-crossed}
   joren: {at: 0.35, pose: idle}
@@ -25,16 +24,14 @@ beats:
   - joren: {at: 0.5}
 `;
 
-const FIGHT = `id: tavern-fight
-from: tavern-night@tense
+const FIGHT = `from: tavern-night@tense
 cast:
   mira: {pose: furious}
 beats:
   - mira: "Then draw."
 `;
 
-const STREET = `id: street
-from: tavern-night
+const STREET = `from: tavern-night
 cast:
   joren: ~
 `;
@@ -42,22 +39,22 @@ cast:
 describe('buildSceneIndex', () => {
 	describe('a healthy three-passage story', () => {
 		const index = buildSceneIndex([
-			passage('Tavern - Arrival', TAVERN),
-			passage('Tavern - Fight', FIGHT),
-			passage('Street', STREET)
+			passage('tavern-night', TAVERN),
+			passage('tavern-fight', FIGHT),
+			passage('street', STREET)
 		]);
 
 		it('reports no errors', () => {
 			expect(index.errors).toEqual([]);
 		});
 
-		it('indexes every scene by id, with its passage', () => {
+		it('indexes every scene by its passage name', () => {
 			expect([...index.scenes.keys()].sort()).toEqual([
 				'street',
 				'tavern-fight',
 				'tavern-night'
 			]);
-			expect(index.scenes.get('tavern-night')?.passage).toBe('Tavern - Arrival');
+			expect(index.scenes.get('tavern-night')?.passage).toBe('tavern-night');
 		});
 
 		it('compiles one state per beat, plus the entry state', () => {
@@ -119,9 +116,9 @@ describe('buildSceneIndex', () => {
 
 		it('resolves regardless of the order passages arrive in', () => {
 			const reversed = buildSceneIndex([
-				passage('Street', STREET),
-				passage('Tavern - Fight', FIGHT),
-				passage('Tavern - Arrival', TAVERN)
+				passage('street', STREET),
+				passage('tavern-fight', FIGHT),
+				passage('tavern-night', TAVERN)
 			]);
 
 			expect(reversed.errors).toEqual([]);
@@ -135,22 +132,19 @@ describe('buildSceneIndex', () => {
 		it('skips passages with no [scene] block', () => {
 			const index = buildSceneIndex([
 				{name: 'Prose', text: 'Just some Chapbook text.'},
-				passage('Tavern', TAVERN)
+				passage('tavern-night', TAVERN)
 			]);
 
 			expect(index.errors).toEqual([]);
 			expect(index.scenes.size).toBe(1);
 		});
 
-		it('indexes an anonymous scene under its passage name, errors and all', () => {
+		it('indexes a scene with errors under its passage name', () => {
 			const index = buildSceneIndex([
 				passage('Anon', 'char: 1\ncast:\n  mira: {at: 0}\n')
 			]);
 
-			// It has no `id:`, so the passage name is the only way to name it -- which is
-			// also the only way `from:` can reach it.
 			expect([...index.scenes.keys()]).toEqual(['Anon']);
-			expect(index.scenes.get('Anon')?.id).toBeUndefined();
 			expect(codes(index.errors)).toEqual(['unknown-key']);
 		});
 
@@ -167,25 +161,25 @@ describe('buildSceneIndex', () => {
 			const index = buildSceneIndex([
 				{
 					name: 'Tavern',
-					text: 'mood: tense\n--\n[scene]\nid: a\ncast:\n  mira: {layer: nope}\n'
+					text: 'mood: tense\n--\n[scene]\ncast:\n  mira: {layer: nope}\n'
 				}
 			]);
 
 			expect(index.errors).toHaveLength(1);
 			expect(index.errors[0].code).toBe('bad-layer');
-			// Block line 3 -> passage line 6.
-			expect(index.errors[0].line).toBe(6);
+			// Block line 2 -> passage line 5.
+			expect(index.errors[0].line).toBe(5);
 		});
 
 		it('names the passage in the message', () => {
-			const index = buildSceneIndex([passage('Tavern', 'id: a\nchar: 1\n')]);
+			const index = buildSceneIndex([passage('Tavern', 'char: 1\n')]);
 
 			expect(index.errors[0].message).toMatch(/^Tavern: /);
 		});
 
 		it('still indexes a scene that had errors', () => {
 			const index = buildSceneIndex([
-				passage('Tavern', 'id: a\ncast:\n  mira: {layer: nope}\n')
+				passage('a', 'cast:\n  mira: {layer: nope}\n')
 			]);
 
 			expect(index.scenes.has('a')).toBe(true);
@@ -194,45 +188,22 @@ describe('buildSceneIndex', () => {
 		});
 	});
 
-	describe('duplicate ids', () => {
-		const index = buildSceneIndex([
-			passage('One', 'id: tavern\nbg: a\n'),
-			passage('Two', 'id: tavern\nbg: b\n')
-		]);
-
-		it('reports the second one', () => {
-			expect(codes(index.errors)).toEqual(['dupe-scene-id']);
-			expect(index.errors[0].message).toContain("'One'");
-			expect(index.errors[0].severity).toBe('error');
-		});
-
-		it('points at the offending id: line', () => {
-			expect(index.errors[0].line).toBe(2);
-			expect(index.errors[0].col).toBe(1);
-		});
-
-		it('keeps the first definition', () => {
-			expect(index.scenes.get('tavern')?.passage).toBe('One');
-			expect(index.resolve('tavern')?.bg).toBe('a');
-		});
-	});
-
 	describe('unknown from:', () => {
-		it('reports an unknown scene id and falls back to an empty stage', () => {
+		it('reports an unknown scene and falls back to an empty stage', () => {
 			const index = buildSceneIndex([
-				passage('Fight', 'id: fight\nfrom: nowhere\ncast:\n  mira: {at: 0}\n')
+				passage('fight', 'from: nowhere\ncast:\n  mira: {at: 0}\n')
 			]);
 
 			expect(codes(index.errors)).toEqual(['unknown-from']);
-			expect(index.errors[0].line).toBe(3);
+			expect(index.errors[0].line).toBe(2);
 			expect(index.scenes.has('fight')).toBe(true);
 			expect(Object.keys(index.resolve('fight')?.entities ?? {})).toEqual(['mira']);
 		});
 
 		it('reports an unknown mark on a known scene', () => {
 			const index = buildSceneIndex([
-				passage('Tavern', TAVERN),
-				passage('Fight', 'id: fight\nfrom: tavern-night@calm\n')
+				passage('tavern-night', TAVERN),
+				passage('fight', 'from: tavern-night@calm\n')
 			]);
 
 			expect(codes(index.errors)).toEqual(['unknown-from']);
@@ -242,8 +213,8 @@ describe('buildSceneIndex', () => {
 
 		it('accepts @enter as a built-in mark', () => {
 			const index = buildSceneIndex([
-				passage('Tavern', TAVERN),
-				passage('Fight', 'id: fight\nfrom: tavern-night@enter\n')
+				passage('tavern-night', TAVERN),
+				passage('fight', 'from: tavern-night@enter\n')
 			]);
 
 			expect(index.errors).toEqual([]);
@@ -254,8 +225,8 @@ describe('buildSceneIndex', () => {
 	describe('cycles', () => {
 		it('reports a two-scene cycle instead of hanging', () => {
 			const index = buildSceneIndex([
-				passage('A', 'id: a\nfrom: b\n'),
-				passage('B', 'id: b\nfrom: a\n')
+				passage('a', 'from: b\n'),
+				passage('b', 'from: a\n')
 			]);
 
 			expect(codes(index.errors)).toEqual(['from-cycle', 'from-cycle']);
@@ -264,17 +235,17 @@ describe('buildSceneIndex', () => {
 		});
 
 		it('reports a self-cycle once', () => {
-			const index = buildSceneIndex([passage('A', 'id: a\nfrom: a\n')]);
+			const index = buildSceneIndex([passage('a', 'from: a\n')]);
 
 			expect(codes(index.errors)).toEqual(['from-cycle']);
-			expect(index.errors[0].line).toBe(3);
+			expect(index.errors[0].line).toBe(2);
 		});
 
 		it('reports a three-scene cycle once per scene', () => {
 			const index = buildSceneIndex([
-				passage('A', 'id: a\nfrom: b\n'),
-				passage('B', 'id: b\nfrom: c\n'),
-				passage('C', 'id: c\nfrom: a\n')
+				passage('a', 'from: b\n'),
+				passage('b', 'from: c\n'),
+				passage('c', 'from: a\n')
 			]);
 
 			expect(codes(index.errors)).toEqual([
@@ -286,8 +257,8 @@ describe('buildSceneIndex', () => {
 
 		it('still gives every scene in a cycle a best-effort state', () => {
 			const index = buildSceneIndex([
-				passage('A', 'id: a\nfrom: b\ncast:\n  mira: {at: 0}\n'),
-				passage('B', 'id: b\nfrom: a\n')
+				passage('a', 'from: b\ncast:\n  mira: {at: 0}\n'),
+				passage('b', 'from: a\n')
 			]);
 
 			expect(index.resolve('a')).toBeDefined();
@@ -296,10 +267,10 @@ describe('buildSceneIndex', () => {
 
 		it('does not mistake a diamond for a cycle', () => {
 			const index = buildSceneIndex([
-				passage('Root', 'id: root\nbg: hall\n'),
-				passage('Left', 'id: left\nfrom: root\n'),
-				passage('Right', 'id: right\nfrom: root\n'),
-				passage('Join', 'id: join\nfrom: left\n')
+				passage('root', 'bg: hall\n'),
+				passage('left', 'from: root\n'),
+				passage('right', 'from: root\n'),
+				passage('join', 'from: left\n')
 			]);
 
 			expect(index.errors).toEqual([]);
@@ -308,9 +279,9 @@ describe('buildSceneIndex', () => {
 
 		it('resolves a scene whose parent is in a cycle, without looping', () => {
 			const index = buildSceneIndex([
-				passage('A', 'id: a\nfrom: b\n'),
-				passage('B', 'id: b\nfrom: a\nbg: hall\n'),
-				passage('C', 'id: c\nfrom: b\n')
+				passage('a', 'from: b\n'),
+				passage('b', 'from: a\nbg: hall\n'),
+				passage('c', 'from: b\n')
 			]);
 
 			expect(codes(index.errors)).toEqual(['from-cycle', 'from-cycle']);

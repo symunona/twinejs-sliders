@@ -14,7 +14,6 @@ describe('parseSceneText', () => {
 				'mood: tense',
 				'--',
 				'[scene]',
-				'id: tavern-night',
 				'bg: tavern-night',
 				'cast:',
 				'  mira: {at: -0.4, pose: idle}',
@@ -37,7 +36,7 @@ describe('parseSceneText', () => {
 			'mood: tense', // 1
 			'--', // 2
 			'[scene]', // 3
-			'id: broken', // 4
+			'bg: broken', // 4
 			'chast:', // 5
 			'  mira: {at: 0}' // 6
 		].join('\n');
@@ -52,7 +51,7 @@ describe('parseSceneText', () => {
 
 	it('still returns a renderable stage when the scene has errors', () => {
 		const result = parseSceneText(
-			['[scene]', 'id: broken', 'cast:', '  mira: {at: 0, layer: middle}'].join('\n')
+			['[scene]', 'bg: broken', 'cast:', '  mira: {at: 0, layer: middle}'].join('\n')
 		);
 
 		expect(result.errors.length).toBeGreaterThan(0);

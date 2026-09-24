@@ -29,7 +29,6 @@ import {
  * for the candle would land on whichever won the tie-break.
  */
 const SCENE = `[scene]
-id: of-scene
 props:
   table:  {at: -0.3}       # keep this comment
   candle: {of: table, at: 0.4, layer: front}

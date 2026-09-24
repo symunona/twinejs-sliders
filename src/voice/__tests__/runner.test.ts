@@ -4,7 +4,6 @@ import {voiceTools} from '../tools';
 import type {ToolPassage, VoiceToolEnv} from '../voice.types';
 
 const TAVERN = `[scene]
-id: tavern
 bg: tavern/night
 cast:
   mara: {at: [0.3, 0.8]}
@@ -116,7 +115,7 @@ describe('read tools', () => {
 		expect(result.ok).toBe(true);
 		expect(JSON.stringify(result)).not.toContain('Sit down.');
 		expect((result as any).passages).toHaveLength(2);
-		expect((result as any).scenes[0].id).toBe('tavern');
+		expect((result as any).scenes[0].passage).toBe('Tavern Night');
 	});
 
 	it('reads a passage by name, case-insensitively', async () => {
@@ -140,9 +139,9 @@ describe('read tools', () => {
 		expect((result as any).scene).toBe(2);
 	});
 
-	it('reads a scene by its id', async () => {
+	it('reads a scene by its passage name, case-insensitively', async () => {
 		const result = await createToolRunner(fakeEnv().env).run('read_scene', {
-			sceneId: 'tavern'
+			scene: 'tavern night'
 		});
 
 		expect(result.ok).toBe(true);
@@ -153,7 +152,7 @@ describe('read tools', () => {
 
 	it('numbers the beats it hands back, so set_beat has an index to use', async () => {
 		const result = await createToolRunner(fakeEnv().env).run('read_scene', {
-			sceneId: 'tavern'
+			scene: 'tavern night'
 		});
 
 		expect((result as any).beats.map((beat: any) => beat.index)).toEqual([0, 1]);
@@ -282,7 +281,7 @@ describe('the blind-write gate', () => {
 		const {env} = fakeEnv();
 		const runner = createToolRunner(env);
 
-		await runner.run('read_scene', {sceneId: 'tavern'});
+		await runner.run('read_scene', {scene: 'tavern night'});
 
 		expect(await runner.run('write_passage', {ref: 'p1', text: 'x'})).toMatchObject({
 			ok: true
@@ -390,7 +389,7 @@ describe('write tools', () => {
 	it('patches a scene through the surgical writer', async () => {
 		const {calls, env} = fakeEnv();
 		const result = await createToolRunner(env).run('patch_scene', {
-			sceneId: 'tavern',
+			scene: 'tavern night',
 			yaml: 'bg: tavern/dawn'
 		});
 
@@ -401,7 +400,7 @@ describe('write tools', () => {
 
 	it('does not need a read first to patch a scene — the writer is surgical', async () => {
 		const result = await createToolRunner(fakeEnv().env).run('patch_scene', {
-			sceneId: 'tavern',
+			scene: 'tavern night',
 			yaml: 'bg: tavern/dawn'
 		});
 
@@ -413,7 +412,7 @@ describe('write tools', () => {
 		const result = await createToolRunner(env).run('set_beat', {
 			beat: 0,
 			patch: 'say: "Please sit."',
-			sceneId: 'tavern'
+			scene: 'tavern night'
 		});
 
 		expect(result).toMatchObject({beat: 0, ok: true});
@@ -424,16 +423,16 @@ describe('write tools', () => {
 		const result = await createToolRunner(fakeEnv().env).run('set_beat', {
 			beat: '0',
 			patch: 'say: "Please sit."',
-			sceneId: 'tavern'
+			scene: 'tavern night'
 		});
 
 		expect(result).toMatchObject({beat: 0, ok: true});
 	});
 
-	it('refuses a scene id that is not in the story', async () => {
+	it('refuses a scene that is not in the story', async () => {
 		expect(
 			await createToolRunner(fakeEnv().env).run('patch_scene', {
-				sceneId: 'cellar',
+				scene: 'cellar',
 				yaml: 'bg: x'
 			})
 		).toMatchObject({error: "no scene 'cellar'", ok: false});

@@ -9,7 +9,6 @@
 
 import {
 	lastSceneLabel,
-	readLastNamedScene,
 	readLastScene
 } from './last-scene';
 
@@ -25,7 +24,6 @@ export interface SceneMenuItem {
 
 export function sceneMenu(icon: string, disabled: boolean) {
 	const last = readLastScene();
-	const named = readLastNamedScene();
 
 	return {
 		type: 'menu',
@@ -44,9 +42,11 @@ export function sceneMenu(icon: string, disabled: boolean) {
 			},
 			{
 				type: 'button',
-				label: named ? `Overlay on '${named.id}'` : 'Overlay on Last Scene',
+				label: last?.passageName
+					? `Overlay on '${last.passageName}'`
+					: 'Overlay on Last Scene',
 				command: 'insertLastSceneOverlay',
-				disabled: !named
+				disabled: !last?.passageName
 			},
 			{type: 'separator'},
 			{type: 'button', label: 'Cast and Props', command: 'insertSceneCast'},

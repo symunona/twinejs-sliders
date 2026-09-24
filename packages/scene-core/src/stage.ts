@@ -62,7 +62,6 @@ export function cloneStage(stage: Stage): Stage {
 
 	return {
 		bg: stage.bg,
-		bgImplicit: stage.bgImplicit,
 		...(stage.bgFx ? {bgFx: {...stage.bgFx}} : {}),
 		camera: cloneCamera(stage.camera),
 		entities,

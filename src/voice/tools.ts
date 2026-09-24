@@ -19,6 +19,12 @@ const REF = {
 	type: 'string'
 } as const;
 
+const SCENE = {
+	description:
+		'The passage the scene lives in, by name (case-insensitive). A scene has no other name.',
+	type: 'string'
+} as const;
+
 export const voiceTools: VoiceToolDecl[] = [
 	// --- read --------------------------------------------------------------
 	{
@@ -42,9 +48,9 @@ export const voiceTools: VoiceToolDecl[] = [
 		name: 'read_scene',
 		parameters: {
 			properties: {
-				sceneId: {description: 'The scene’s `id:`.', type: 'string'}
+				scene: SCENE
 			},
-			required: ['sceneId'],
+			required: ['scene'],
 			type: 'object'
 		}
 	},
@@ -69,11 +75,11 @@ export const voiceTools: VoiceToolDecl[] = [
 	},
 	{
 		description:
-			'Assets in this story’s library, with which scenes reach each one. Pass sceneId to list only what that scene needs.',
+			'Assets in this story’s library, with which scenes reach each one. Pass scene to list only what that scene needs.',
 		kind: 'read',
 		name: 'list_assets',
 		parameters: {
-			properties: {sceneId: {type: 'string'}},
+			properties: {scene: SCENE},
 			type: 'object'
 		}
 	},
@@ -173,14 +179,14 @@ export const voiceTools: VoiceToolDecl[] = [
 		name: 'patch_scene',
 		parameters: {
 			properties: {
-				sceneId: {type: 'string'},
+				scene: SCENE,
 				yaml: {
 					description:
 						'A YAML map of the keys to change, e.g. "bg: tavern/dawn" or "cast:\\n  mara: {at: [0.4, 0.9]}". A key set to ~ is removed.',
 					type: 'string'
 				}
 			},
-			required: ['sceneId', 'yaml'],
+			required: ['scene', 'yaml'],
 			type: 'object'
 		}
 	},
@@ -193,9 +199,9 @@ export const voiceTools: VoiceToolDecl[] = [
 			properties: {
 				beat: {description: '0-based index into `beats:`.', type: 'integer'},
 				patch: {description: 'YAML map of keys to set. ~ removes.', type: 'string'},
-				sceneId: {type: 'string'}
+				scene: SCENE
 			},
-			required: ['sceneId', 'beat', 'patch'],
+			required: ['scene', 'beat', 'patch'],
 			type: 'object'
 		}
 	},

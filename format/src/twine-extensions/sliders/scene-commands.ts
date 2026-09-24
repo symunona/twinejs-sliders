@@ -5,7 +5,7 @@
  */
 
 import {Editor} from 'codemirror';
-import {readLastNamedScene, readLastScene} from './last-scene';
+import {readLastScene} from './last-scene';
 import {
 	BEATS_SNIPPET,
 	CAST_SNIPPET,
@@ -35,9 +35,11 @@ export const sceneCommands = {
 		editor.focus();
 	},
 	insertLastSceneOverlay(editor: Editor) {
-		const record = readLastNamedScene();
+		const record = readLastScene();
 
-		editor.replaceSelection(record ? overlaySnippet(record) : SCENE_SKELETON);
+		editor.replaceSelection(
+			record?.passageName ? overlaySnippet(record) : SCENE_SKELETON
+		);
 		editor.focus();
 	}
 };

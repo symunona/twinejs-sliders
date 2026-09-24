@@ -1,5 +1,5 @@
 /**
- * `assets <story> [--scene <id>] [--all-poses] [--unused] [--missing] [--fetch -o <dir>]`
+ * `assets <story> [--scene <passage>] [--all-poses] [--unused] [--missing] [--fetch -o <dir>]`
  * — spec 12 §4.
  *
  * Two questions. "What is here" is a manifest listing. "What does this scene reach" is the
@@ -16,6 +16,7 @@ import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
+import {matchPassageName} from '@sliders/scene-types';
 import type {Scene} from '@sliders/scene-types';
 import {catalogRows, loadCatalog, referencedAssetIds, resolveSceneAssets} from '../assets';
 import type {AssetRow} from '../assets';
@@ -68,7 +69,7 @@ export async function run(ctx: Ctx, args: string[]): Promise<number> {
 	const target = positional[0];
 
 	if (target === undefined) {
-		ctx.out('usage: twine-cli assets <story> [--scene <id>] [--all-poses] [--unused] [--missing]');
+		ctx.out('usage: twine-cli assets <story> [--scene <passage>] [--all-poses] [--unused] [--missing]');
 
 		return EXIT.usage;
 	}
@@ -101,15 +102,22 @@ export async function run(ctx: Ctx, args: string[]): Promise<number> {
 
 		all.push(scene);
 
-		if (scene.id !== undefined && !scenes.has(scene.id)) {
-			scenes.set(scene.id, scene);
+		if (!scenes.has(passage.name)) {
+			scenes.set(passage.name, scene);
 		}
 	}
+
+	// The rule `from:` resolves by: exact passage name, then case-insensitively.
+	const sceneFor = (name: string): Scene | undefined => {
+		const matched = matchPassageName(scenes.keys(), name);
+
+		return matched === undefined ? undefined : scenes.get(matched);
+	};
 
 	let rows: AssetRow[];
 
 	if (sceneId !== undefined) {
-		const scene = scenes.get(sceneId);
+		const scene = sceneFor(sceneId);
 
 		if (!scene) {
 			ctx.out(`no scene '${sceneId}' in ${target}`);
@@ -119,7 +127,7 @@ export async function run(ctx: Ctx, args: string[]): Promise<number> {
 
 		rows = resolveSceneAssets(scene, catalog, {
 			allPoses,
-			scenes: id => scenes.get(id)
+			scenes: sceneFor
 		});
 	} else {
 		rows = catalogRows(catalog);

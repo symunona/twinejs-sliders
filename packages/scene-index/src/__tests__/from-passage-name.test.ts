@@ -3,9 +3,7 @@
  *
  * Reported: a passage called `official-landing-template` set a `bg:`, a second passage
  * wrote `from: official-landing-template`, and nothing merged — with NO error anywhere.
- * Two separate faults met: the template had no `id:` so it could not be a target, and
- * the patch scene had no `id:` either, so the index skipped it and never checked its
- * `from:` at all.
+ * Scene ids are gone since: a passage name is the only address a scene has.
  */
 
 import {buildSceneIndex} from '../index';
@@ -24,7 +22,7 @@ const PATCH = [
 ].join('\n');
 
 describe('from: across passages', () => {
-	it('inherits the template bg when from: names a passage with no scene id', () => {
+	it('inherits the template bg when from: names a passage', () => {
 		const index = buildSceneIndex([
 			{name: 'official-landing-template', text: TEMPLATE},
 			{name: 'official landing', text: PATCH}
@@ -38,34 +36,11 @@ describe('from: across passages', () => {
 		expect(Object.keys(stage?.entities ?? {})).toEqual(['drone']);
 	});
 
-	it('reports an unresolvable from: even when the patch scene has no id of its own', () => {
+	it('reports an unresolvable from:', () => {
 		const index = buildSceneIndex([{name: 'official landing', text: PATCH}]);
 
 		expect(index.errors.map(error => error.code)).toEqual(['unknown-from']);
 		expect(index.errors[0].message).toContain('official-landing-template');
-	});
-
-	it('lets a scene id win over a passage of the same name', () => {
-		const index = buildSceneIndex([
-			// The passage is CALLED tavern; a different passage declares `id: tavern`.
-			{name: 'tavern', text: '[scene]\nbg: wrong-one\n'},
-			{name: 'Tavern Night', text: '[scene]\nid: tavern\nbg: right-one\n'},
-			{name: 'after', text: '[scene]\nfrom: tavern\n'}
-		]);
-
-		expect(index.errors).toEqual([]);
-		expect(index.resolve('after')?.bg).toBe('right-one');
-	});
-
-	it('still indexes a scene under its id, and an anonymous one under its passage', () => {
-		const index = buildSceneIndex([
-			{name: 'Tavern Night', text: '[scene]\nid: tavern\nbg: night\n'},
-			{name: 'Street', text: '[scene]\nbg: dawn\n'}
-		]);
-
-		expect([...index.scenes.keys()].sort()).toEqual(['Street', 'tavern']);
-		expect(index.scenes.get('tavern')?.id).toBe('tavern');
-		expect(index.scenes.get('Street')?.id).toBeUndefined();
 	});
 
 	it('matches a passage name case-insensitively, the way a link does', () => {
@@ -78,15 +53,6 @@ describe('from: across passages', () => {
 		expect(index.resolve('after')?.bg).toBe('oasis');
 	});
 
-	it('does NOT fold the case of a scene id', () => {
-		const index = buildSceneIndex([
-			{name: 'Tavern Night', text: '[scene]\nid: tavern-night\nbg: night\n'},
-			{name: 'after', text: '[scene]\nfrom: Tavern-Night\n'}
-		]);
-
-		expect(index.errors.map(error => error.code)).toEqual(['unknown-from']);
-	});
-
 	it('catches a cycle built out of passage names', () => {
 		const index = buildSceneIndex([
 			{name: 'a', text: '[scene]\nfrom: b\n'},
@@ -96,7 +62,7 @@ describe('from: across passages', () => {
 		expect(index.errors.map(error => error.code)).toContain('from-cycle');
 	});
 
-	it('names an anonymous scene by its passage in a cycle message', () => {
+	it('names a scene by its passage in a cycle message', () => {
 		const index = buildSceneIndex([
 			{name: 'a', text: '[scene]\nfrom: b\n'},
 			{name: 'b', text: '[scene]\nfrom: a\n'}

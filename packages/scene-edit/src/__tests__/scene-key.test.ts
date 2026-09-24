@@ -11,7 +11,7 @@ import {applyEdit, removeSceneKey, setSceneKey} from '../index';
 
 const block = [
 	'# The tavern, after dark.',
-	'id: tavern',
+	'from: ~',
 	'bg: tavern-day # swapped at dusk',
 	'cast:',
 	'  mira: {at: -0.4}',

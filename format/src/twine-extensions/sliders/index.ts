@@ -1,8 +1,6 @@
 export {
-	LAST_NAMED_SCENE_KEY,
 	LAST_SCENE_KEY,
 	lastSceneLabel,
-	readLastNamedScene,
 	readLastScene
 } from './last-scene';
 export type {LastSceneRecord} from './last-scene';

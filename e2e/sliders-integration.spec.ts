@@ -233,7 +233,7 @@ test.describe('Sliders end to end', () => {
 
 			await expect(preview).toBeVisible({timeout: 10000});
 
-			// `from: tavern-night@tense` never declares joren or the props, but they are
+			// `from: Tavern - Arrival@tense` never declares joren or the props, but they are
 			// inherited, so they must still be on stage.
 			await expect(preview.locator('[data-entity-id="joren"]')).toBeVisible({
 				timeout: 20000

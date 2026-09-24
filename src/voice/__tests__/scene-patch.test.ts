@@ -3,7 +3,6 @@ import {patchBeatText, patchSceneText} from '../scene-patch';
 const PASSAGE = `Some prose above the block.
 
 [scene]
-id: tavern
 bg: tavern/night        # the good one
 cast:
   mara: {at: [0.3, 0.8], pose: idle}
@@ -132,7 +131,6 @@ describe('patchBeatText', () => {
 
 describe('patchBeatText on a one-line dialogue beat', () => {
 	const SCALAR = `[scene]
-id: tavern
 cast:
   mara: {at: 0.3}
 beats:

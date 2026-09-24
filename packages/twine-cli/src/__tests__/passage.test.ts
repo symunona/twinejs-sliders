@@ -21,7 +21,7 @@ function passage(over: Partial<PassageObject> = {}): PassageObject {
 		name: 'Tavern Night',
 		selected: false,
 		tags: ['night'],
-		text: 'mood: tense\n--\n[scene]\nid: tavern-night\n',
+		text: 'mood: tense\n--\n[scene]\n',
 		top: 150,
 		width: 100,
 		...over
@@ -42,7 +42,7 @@ function story(passages: PassageObject[]): StoryBody {
 describe('stamp and parse', () => {
 	it('round-trips the text byte for byte', () => {
 		const texts = [
-			'mood: tense\n--\n[scene]\nid: tavern-night\n',
+			'mood: tense\n--\n[scene]\n',
 			'no trailing newline',
 			'three trailing newlines\n\n\n',
 			'',
@@ -196,7 +196,7 @@ describe('removePassage', () => {
 });
 
 describe('threeWay', () => {
-	const original = 'mood: tense\n[scene]\nid: tavern-night\n';
+	const original = 'mood: tense\n[scene]\n';
 	const receipt = {
 		hash: hashText(original),
 		passage: 'Tavern Night',

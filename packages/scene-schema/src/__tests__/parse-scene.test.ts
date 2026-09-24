@@ -13,8 +13,7 @@ function find(errors: SceneError[], code: string): SceneError | undefined {
 	return errors.find(e => e.code === code);
 }
 
-const SPEC_EXAMPLE = `id: tavern-night
-from: ~
+const SPEC_EXAMPLE = `from: ~
 bg: tavern/night
 camera: {at: [0, 0], zoom: 1}
 
@@ -51,7 +50,6 @@ describe('parseScene', () => {
 		});
 
 		it('reads the scalar top-level keys', () => {
-			expect(scene.id).toBe('tavern-night');
 			expect(scene.bg).toBe('tavern/night');
 			// `from: ~` is the documented "no parent" placeholder, not a patch.
 			expect(scene.from).toBeUndefined();
@@ -344,6 +342,57 @@ describe('parseScene', () => {
 
 			expect(codes(errors)).toEqual(['unknown-key']);
 		});
+
+		it('warns, never errors, and says it one way at every level', () => {
+			const {errors} = parseScene(
+				[
+					'nope: 1',
+					'camera: {nope: 1}',
+					'bg: {id: hall, nope: 1}',
+					'bubble: {nope: 1}',
+					'ease: {nope: linear}',
+					'linkList: {nope: 1}',
+					'cast:',
+					'  mira: {nope: 1, link: {to: X, nope: 1}}',
+					'beats:',
+					'  - box: {text: hi, nope: 1}',
+					'links:',
+					'  a: {to: X, nope: 1}',
+					''
+				].join('\n')
+			);
+
+			expect(errors.length).toBeGreaterThanOrEqual(9);
+			expect(errors.every(error => error.code === 'unknown-key')).toBe(true);
+			expect(errors.every(error => error.severity === 'warning')).toBe(true);
+			expect(errors.every(error => error.message === "Unknown key 'nope'.")).toBe(true);
+		});
+
+		it('treats the retired scene id: as any other unknown key', () => {
+			const {errors, scene} = parseScene('id: tavern\ncast:\n  mira: {at: 0}\n');
+
+			expect(errors).toEqual([
+				expect.objectContaining({
+					code: 'unknown-key',
+					message: "Unknown key 'id'.",
+					severity: 'warning'
+				})
+			]);
+			// No longer a default backdrop, or anything else.
+			expect(scene.bg).toBeUndefined();
+			expect(scene.entities.mira).toBeDefined();
+		});
+
+		it('treats frame:, frameLoop: and ease {frame:} as unknown keys, not renames', () => {
+			const {errors, scene} = parseScene(
+				'ease: {frame: linear}\ncast:\n  mira: {frame: angry, frameLoop: once}\n'
+			);
+
+			expect(codes(errors)).toEqual(['unknown-key', 'unknown-key', 'unknown-key']);
+			expect(errors.every(error => error.severity === 'warning')).toBe(true);
+			expect(scene.entities.mira).not.toHaveProperty('pose');
+			expect(scene.ease).toBeUndefined();
+		});
 	});
 
 	describe('removal', () => {
@@ -410,7 +459,7 @@ describe('parseScene', () => {
 		});
 
 		it('rejects tags other than !only', () => {
-			const {errors} = parseScene('id: !!str 12\n');
+			const {errors} = parseScene('bg: !!str 12\n');
 
 			expect(codes(errors)).toContain('subset-violation');
 		});
@@ -429,7 +478,7 @@ describe('parseScene', () => {
 		});
 
 		it('rejects multiple documents', () => {
-			const {errors} = parseScene('id: a\n---\nid: b\n');
+			const {errors} = parseScene('bg: a\n---\nbg: b\n');
 
 			expect(codes(errors)).toContain('subset-violation');
 		});
@@ -618,11 +667,10 @@ describe('parseScene', () => {
 
 		it('keeps the digits of the other name slots', () => {
 			const {scene, errors} = parseScene(
-				'id: 04\nfrom: 03\nbg: 007\ncast:\n  02: {pose: 01}\nprops:\n  05: {of: 02}\nbeats:\n  - mark: 06\n'
+				'from: 03\nbg: 007\ncast:\n  02: {pose: 01}\nprops:\n  05: {of: 02}\nbeats:\n  - mark: 06\n'
 			);
 
 			expect(errors).toEqual([]);
-			expect(scene.id).toBe('04');
 			expect(scene.from).toBe('03');
 			expect(scene.bg).toBe('007');
 			expect(scene.entities['02']).toMatchObject({pose: '01'});
@@ -648,12 +696,11 @@ describe('parseScene', () => {
 	describe('best-effort parsing', () => {
 		it('still returns a scene for malformed YAML', () => {
 			const {scene, errors} = parseScene(
-				'id: broken\nbg: tavern/night\ncast:\n  mira: {at: 0\nbeats:\n  - mira: "hi"\n'
+				'bg: tavern/night\ncast:\n  mira: {at: 0\nbeats:\n  - mira: "hi"\n'
 			);
 
 			expect(errors.length).toBeGreaterThan(0);
 			expect(scene).toBeDefined();
-			expect(scene.id).toBe('broken');
 			expect(scene.bg).toBe('tavern/night');
 		});
 
@@ -859,7 +906,7 @@ describe('autoAdvance:', () => {
 
 describe('mechanical fixes', () => {
 	it('carries the suggestion an unknown key hint names, ready to apply', () => {
-		const {errors} = parseScene('id: a\nchar:\n  mira: {}');
+		const {errors} = parseScene('char:\n  mira: {}');
 		const error = find(errors, 'unknown-key');
 
 		expect(error?.hint).toBe("Did you mean 'cast'?");
@@ -871,7 +918,7 @@ describe('mechanical fixes', () => {
 	});
 
 	it('points the fix at the key itself, not the whole entry', () => {
-		const {errors} = parseScene('id: a\nchar:\n  mira: {}');
+		const {errors} = parseScene('char:\n  mira: {}');
 		const error = find(errors, 'unknown-key');
 
 		// Same span as the error, which `addError` already aimed at the key node.
@@ -883,7 +930,7 @@ describe('mechanical fixes', () => {
 	});
 
 	it('offers nothing when no candidate is close enough to be a typo', () => {
-		const {errors} = parseScene('id: a\nqqqqqqqq: 1');
+		const {errors} = parseScene('qqqqqqqq: 1');
 		const error = find(errors, 'unknown-key');
 
 		expect(error).toBeDefined();
@@ -891,7 +938,7 @@ describe('mechanical fixes', () => {
 	});
 
 	it('fixes an unknown layer while still naming the whole set', () => {
-		const {errors} = parseScene('id: a\ncast:\n  mira: {layer: bak}');
+		const {errors} = parseScene('cast:\n  mira: {layer: bak}');
 		const error = find(errors, 'bad-layer');
 
 		expect(error?.hint).toContain('Must be one of');

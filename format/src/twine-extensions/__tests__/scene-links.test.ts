@@ -64,7 +64,6 @@ describe('parsePassageText', () => {
 			'Some prose.',
 			'',
 			'[scene]',
-			'id: alley',
 			'links:',
 			'  onward: {to: Next Passage}',
 			'  back:   Other Passage'

@@ -82,7 +82,7 @@ function fakeStory(passages: Passage[]): Story {
 }
 
 function scenePassage(name: string, block: string): Passage {
-	return passage(name, `[scene]\nid: ${name.toLowerCase()}\n${block}`);
+	return passage(name, `[scene]\n${block}`);
 }
 
 /** Reads a zip the way import will: entry name -> bytes. */
@@ -149,27 +149,6 @@ describe('resolveBundleRefs', () => {
 		});
 
 		expect(resolved.assets.map(meta => meta.id)).toEqual([id]);
-		expect(resolved.unresolved).toEqual([]);
-	});
-
-	it('takes an implied bg when it exists and shrugs when it does not', async () => {
-		const store = newStore();
-		const id = await store.put(file(webpBytes(), 'tavern.webp', 'image/webp'), {
-			kind: 'bg',
-			name: 'tavern-night'
-		});
-		const resolved = await resolveBundleRefs(store, {
-			assetRefs: [],
-			autoRefs: [],
-			characterRefs: [],
-			poseRefs: {},
-			fxRefs: [],
-			optionalAssetRefs: ['tavern-night', 'signal-fire']
-		});
-
-		expect(resolved.assets.map(meta => meta.id)).toEqual([id]);
-		// `signal-fire` is a scene id that names no art. The author never asked for a
-		// backdrop there, so the export must not report one missing.
 		expect(resolved.unresolved).toEqual([]);
 	});
 
@@ -779,7 +758,6 @@ describe('exportStoryBundle', () => {
 			characterRefs: ['mira'],
 			poseRefs: {mira: ['smile']},
 			fxRefs: ['rain'],
-			optionalAssetRefs: [],
 			soundRefs: []
 		});
 	});

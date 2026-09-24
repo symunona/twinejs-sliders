@@ -9,7 +9,7 @@ function storyOf(passages: Passage[]): Story {
 }
 
 const scene = (links: string[]) =>
-	['[scene]', 'id: here', 'links:', ...links.map(one => `  ${one}`)].join('\n');
+	['[scene]', 'links:', ...links.map(one => `  ${one}`)].join('\n');
 
 describe('brokenLinkGhosts()', () => {
 	it('returns nothing when every link target exists', () => {

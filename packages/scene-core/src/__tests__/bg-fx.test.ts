@@ -57,14 +57,6 @@ describe('applyScene bg motion', () => {
 		expect(out.bgFx).toBeUndefined();
 	});
 
-	it('leaves an inherited motion alone for an id:-derived backdrop', () => {
-		// The scene asked for nothing: `id:` is a guess at the art, not a statement about
-		// how it moves.
-		const base = stageWith({bg: 'hall', bgFx: {id: 'circling'}});
-		const out = applyScene(base, scene({from: 'hall', id: 'hall-later'}));
-
-		expect(out.bgFx).toEqual({id: 'circling'});
-	});
 });
 
 describe('runBeats bg', () => {
@@ -100,14 +92,6 @@ describe('runBeats bg', () => {
 
 		expect(states[1].bg).toBeUndefined();
 		expect(states[1].bgFx).toBeUndefined();
-	});
-
-	it('clears bgImplicit: a beat asks for its backdrop out loud', () => {
-		const states = runBeats(stageWith({bg: 'hall', bgImplicit: true}), [
-			{bg: 'cellar', index: 0, kind: 'bg'}
-		]);
-
-		expect(states[1].bgImplicit).toBeUndefined();
 	});
 
 	it('applies a bg riding on a line of dialogue', () => {

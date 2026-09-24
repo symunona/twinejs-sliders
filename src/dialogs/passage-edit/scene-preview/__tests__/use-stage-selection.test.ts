@@ -17,7 +17,7 @@ const passage = [
 	'mood: tense', // 0
 	'--', // 1
 	'[scene]', // 2   block line 0 — the modifier is NOT part of the block
-	'id: tavern', // 3   block line 1
+	'bg: tavern', // 3   block line 1
 	'cast:', // 4   block line 2
 	'  mira: {at: -0.4}', // 5   block line 3
 	'  bram: {at: 0.4}', // 6   block line 4

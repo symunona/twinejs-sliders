@@ -23,7 +23,6 @@ const STORY_NAME = 'Scene Toolbar E2E';
 
 const TAVERN_SCENE = [
 	'[scene]',
-	'id: e2e-tavern',
 	'bg: tavern-night',
 	'cast:',
 	'  mira: {at: -0.4}',
@@ -80,7 +79,6 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 	const skeleton = await editorValue(page);
 
 	for (const key of [
-		'id:',
 		'from:',
 		'bg:',
 		'camera:',
@@ -105,24 +103,26 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 	await setPassageText(page, TAVERN_SCENE);
 	await waitForPassageSave();
 	await newPassage(page, 'Untitled Passage 1');
-	await sceneMenuItem(page, /^Insert Last Scene \(e2e-tavern\)$/);
+	await sceneMenuItem(page, /^Insert Last Scene \(Untitled Passage\)$/);
 
 	const copied = await editorValue(page);
 
+	expect(copied).toContain("# Copy of the scene in 'Untitled Passage'.");
 	expect(copied).toContain('bg: tavern-night');
 	expect(copied).toContain('The last thing I edited.');
-	// A verbatim copy would be a duplicate id.
-	expect(copied).not.toMatch(/^id: e2e-tavern$/m);
+	// A scene has no id: the copy is verbatim, nothing to collide.
+	expect(copied).not.toMatch(/^id:/m);
 	await expect(page.getByTestId('scene-errors')).toHaveClass(/clean/);
 
 	// --- Overlay: a patch that names the scene it builds on -----------------
+	// Pasting the copy was an edit, so the LAST scene is now Untitled Passage 1's.
 	await newPassage(page, 'Untitled Passage 2');
-	await sceneMenuItem(page, /^Overlay on 'e2e-tavern'$/);
+	await sceneMenuItem(page, /^Overlay on 'Untitled Passage 1'$/);
 
 	const overlay = await editorValue(page);
 
-	expect(overlay).toContain('id: e2e-tavern-next');
-	expect(overlay).toContain('from: e2e-tavern');
+	expect(overlay).not.toMatch(/^id:/m);
+	expect(overlay).toContain('from: Untitled Passage 1');
 	// The stub patches a character the base scene actually has.
 	expect(overlay).toContain('Inherited cast: mira');
 	expect(overlay).toContain('mira: {at: -0.4}');

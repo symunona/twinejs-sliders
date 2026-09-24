@@ -734,8 +734,7 @@ export function sceneHintContext(
 					return owner() === undefined ? found({kind: 'from'}) : undefined;
 
 				case 'id':
-					// The scene's own `id:` is a name only the author knows; inside a map it
-					// is that map's asset.
+					// Only ever inside a map, where it is that map's asset.
 					return owner() === 'bg'
 						? found({kind: 'bg'})
 						: owner() === 'music' || owner() === 'sfx'
@@ -1251,27 +1250,7 @@ function insertEntity(name: string) {
 	};
 }
 
-/**
- * A scene block's own top-level `id:`, or undefined.
- *
- * A regex rather than `parseScene`, because this runs on every keystroke while the
- * dropdown is open and the only thing wanted is one line. Top level means column zero,
- * which is what keeps it off the `id:` inside a `bg:` or `music:` map.
- */
-function ownSceneId(blockText: string): string | undefined {
-	const match = /^id:[ \t]*(\S.*?)[ \t]*(?:#.*)?$/m.exec(blockText);
-
-	return match ? match[1] : undefined;
-}
-
-/**
- * What `from:` can name, one entry per passage that has a scene.
- *
- * A scene's `id:` when it has one, its PASSAGE NAME when it does not -- the two names
- * `buildSceneIndex` resolves, in its own precedence. Only one of them is offered per
- * passage: they address the same scene, so listing both would double the dropdown and
- * make the author choose between two spellings of one thing.
- */
+/** What `from:` can name: every passage that has a scene. */
 export function sceneTemplateNames(
 	passages: readonly {name: string; text: string}[]
 ): string[] {
@@ -1281,7 +1260,7 @@ export function sceneTemplateNames(
 		const block = extractSceneBlock(passage.text);
 
 		if (block) {
-			out.push(ownSceneId(block.text) ?? passage.name);
+			out.push(passage.name);
 		}
 	}
 
@@ -1336,9 +1315,7 @@ export function sceneCompletion(
 		refs,
 		passages,
 		[...refs.keys()],
-		// A scene cannot inherit from itself, and picking its own name from a dropdown is
-		// the easiest way to write that cycle.
-		block ? templates.filter(name => name !== ownSceneId(block.text)) : templates
+		templates
 	);
 	const matched = all.filter(name => name.toLowerCase().includes(candidate));
 	// The whole name under the cursor, not just the part before it.

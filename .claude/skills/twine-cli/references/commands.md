@@ -11,17 +11,16 @@ asset paths are the store blobs. `ping` say which mode. Writes always go over HT
 |---|---|
 | `ep3` | story: uuid, name, or unambiguous slug (`chapter-3` → `Chapter 3`) |
 | `ep3/Tavern Night` | passage, by name or id prefix |
-| `ep3#tavern-night` | passage holding that scene id |
 | `ep3:a_8f21` · `ep3:tavern-dawn` | asset, by id or manifest name |
 | `ep3@37` | story at old rev, read only |
 
-Ambiguous = exit 2 plus candidate list. Quote refs with spaces or `#`.
+Ambiguous = exit 2 plus candidate list. Quote refs with spaces. `ep3#…` gone (scenes have no id) — usage error.
 
 ## Text in, text out
 
 | Command | Does |
 |---|---|
-| `map <story> [--json]` | passages, scene ids with in-passage line, links, asset summary, lint tally, token estimate |
+| `map <story> [--json]` | passages, scenes by passage with in-passage line, links, asset summary, lint tally, token estimate |
 | `cat <ref> [-o file] [--refresh]` | passage text with receipt front matter, or asset bytes |
 | `cat <story> --all -o <dir>` | every passage, one file each, own receipt |
 | `put <ref> <file>` | splice into current body, `PUT` with `If-Match` |
@@ -40,11 +39,10 @@ Receipt front matter = `story`, `passage`, `rev`, `hash`, plus editable `name`, 
 |---|---|
 | `ping` | mode, server version, story count, connected clients |
 | `ls [--deleted] [--sort rev\|name\|bytes]` | one line per story: ref, name, rev, passages, assets, bytes, est tokens |
-| `assets <story> [--scene <id>] [--all-poses] [--unused] [--missing] [--fetch -o dir] [--json]` | what exists, or what a scene needs, with paths |
+| `assets <story> [--scene <passage>] [--all-poses] [--unused] [--missing] [--fetch -o dir] [--json]` | what exists, or what a scene needs, with paths |
 | `graph <story> [--format tree\|dot\|jsonl] [--from <passage>] [--depth n]` | link graph |
 | `revs <story>` | rev, when, who, bytes, passages, `restoredFrom` |
-| `lint [<story>\|<file>] [--after <file>] [--fix]` | `file:line: message`; exit 5 on errors. `info` = old spelling, never fails |
-| `rewrite-poses <story> [--dry-run]` | rename scene `frame:`/`frameLoop:` → `pose:`/`poseLoop:` in every passage. Opt-in; old keys parse forever |
+| `lint [<story>\|<file>] [--after <file>] [--fix]` | `file:line: message`; exit 5 on errors. `warn`/`info` never fail (unknown keys = `warn`) |
 
 `lint <file>` = YAML tier only, no server. `lint <story> --after <file>` = all four tiers as if
 that file were pushed. Pre-flight.
@@ -53,23 +51,22 @@ that file were pushed. Pre-flight.
 
 | Command | Does |
 |---|---|
-| `copy <story>[@rev] --name "<n>" [--reid <prefix>] [--assets copy\|link\|none]` | server-side clone: new id, new ifid, new passage ids |
+| `copy <story>[@rev] --name "<n>" [--assets copy\|link\|none]` | server-side clone: new id, new ifid, new passage ids |
 | `put <story>:<name> <file> --kind bg\|obj\|fx\|frame` (`frame` = pose image, stored name) | upload art; unknown name create it |
 | `new --name "<n>"` | empty story |
 | `rm <story> [--purge] --yes` | tombstone, or erase |
 | `restore <story> --rev N` | new revision from old one; print `missingAssets` |
 | `login [--server URL]` | store token in profile, 0600 |
 
-`--reid` rewrite scene ids **and** every `from:` and `@mark` that referenced them. Copy keep
-scene ids by default — fine, ids unique within story, not across.
+Copy keep passage names, so every `from:` and `@mark` still resolve. No scene ids.
 
 `--assets copy` (default) give new story own blobs. `--assets link` share source blobs, janitor
 reclaim once nothing name them — use when you mean it.
 
 ## Lint tiers
 
-1. **YAML** — parse errors, unknown keys with suggestions, bad coordinates.
-2. **Cross-passage** — duplicate scene ids, unknown `from:`, unknown `@mark`, `from:` cycles.
+1. **YAML** — parse errors, unknown keys (warning, dropped) with suggestions, bad coordinates.
+2. **Cross-passage** — unknown `from:`, unknown `@mark`, `from:` cycles.
 3. **Story graph** — links to passages that do not exist, unreachable passages, scene passage
    whose only exit is `[[link]]` *outside* the block (spec 02: never drawn).
 4. **Assets** — refs to unknown assets, manifest entries with no blob, orphan blobs.

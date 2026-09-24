@@ -10,7 +10,6 @@ mood: tense
 seen_mira: true
 --
 [scene]
-id: tavern-night
 bg: tavern/night
 cast:
   mira: {at: -0.4, pose: arms-crossed}
@@ -130,9 +129,8 @@ Paste a block anywhere → identical stage. React-vs-jQuery, applied to a stage.
 
 ```yaml
 [scene]
-id: tavern-night              # globally unique. Required if anything refers to it.
 from: ~                       # optional. See "Reuse" below.
-bg: tavern/night              # asset id, never a path. Omit it and `id` stands in.
+bg: tavern/night              # asset id, never a path. Omit it = no backdrop.
 camera: {at: [0, 0], zoom: 1} # optional. The 3D hook lives here.
 
 cast:
@@ -163,9 +161,8 @@ links:
 
 | Key | Type | Notes |
 |---|---|---|
-| `id` | string | globally unique. Dupe = error. Doubles as the default `bg`. |
-| `from` | ref | inherit a state, from a scene `id` or a passage name. Flips merge semantics — see Reuse. |
-| `bg` | asset id or map | backdrop. Not a layer. Defaults to `id`, `~` for none. Map form adds motion. |
+| `from` | ref | inherit a state, from a passage name. Flips merge semantics — see Reuse. |
+| `bg` | asset id or map | backdrop. Not a layer. Absent = none (snapshot) / inherited (patch). `~` = none. Map form adds motion. |
 | `camera` | map | optional. `{at, zoom}`. |
 | `cast` | map of id → entity | characters |
 | `props` | map of id → entity | objects |
@@ -174,19 +171,19 @@ links:
 | `links` | map of name → props | link targets + props |
 | `linkList` | map | where the link list draws, and what its entries inherit. Absent = Chapbook links under the stage. |
 
-#### `id` is the default backdrop
+#### No name of its own
 
-A scene called `tavern-night` almost always wants the `tavern-night` backdrop, so writing
-the name twice was pure ceremony — the same shorthand `props:` already has, where the entry
-key doubles as the asset name.
+A scene has no `id:`. **Its passage name is its address** — `from:`, the scene index, voice
+tools, `twine-cli`. `id:` removed 2026-09-24, no back-compat: now an unknown key (warning,
+dropped). It no longer stands in for `bg:` — write the backdrop.
 
-- `bg:` wins whenever it is written.
-- `bg: ~` says the scene genuinely has no backdrop.
-- The implied backdrop is a **soft** reference: art by that name draws, no art by that name
-  draws nothing. No lint error, no bundle "unresolved", no `? bg` placeholder — the author
-  never asked for it. An explicit `bg:` that misses is still an error, because they did.
-- A patch (`from:`) is left alone. Its `id` names the variant, not the art, so it inherits
-  the backdrop it came from rather than demanding a file per variant.
+#### Unknown keys
+
+| Rule | |
+|---|---|
+| Where | every level: top, entity, link, bubble, box, `bg`/sound/`fx`/`ease` maps, `linkList`, `camera`, step, beat. |
+| Finding | ONE: code `unknown-key`, severity **warning**, never error. `Unknown key '<k>'.` + did-you-mean hint/fix when close. |
+| Effect | key dropped. Scene still parses and plays. |
 
 #### A backdrop that moves
 
@@ -201,10 +198,10 @@ bg: {id: cellar, fx: parallax_left, speed: 20}
 | `speed` | seconds one cycle takes. Optional: each preset carries its own pace, since a drift is 24s and a shudder half of one. |
 
 - The motion is spelled `fx:`, NOT `sfx:` — `sfx:` is a sound everywhere else in a scene.
-  Writing it here is an error with a hint, not a typo fix.
+  Writing it here is an `unknown-key` warning with a hint, not a typo fix.
 - Motion is read off `bg`, never off its own absence: a scene naming a backdrop states its
-  motion in full, so `bg: cellar` under an inherited parallax STOPS it. A backdrop that came
-  from `id:` alone asked for nothing, so it leaves an inherited motion alone.
+  motion in full, so `bg: cellar` under an inherited parallax STOPS it. No `bg:` at all
+  asked for nothing, so it leaves an inherited motion alone.
 - Unknown tokens are legal. The renderer writes `data-bg-fx` on the backdrop and the stage
   root and stops there, the way `bubble: {as: …}` already works.
 
@@ -242,8 +239,8 @@ cannot carry one.
 | `of` | another entity's id. Makes `at` relative to it. See Relative placement. |
 | `scale` | uniform size multiplier. 1 = natural size. Scales about the origin, so a character keeps its feet on the floor. Must be > 0. |
 | `rot` | tilt, degrees CLOCKWISE, about the same origin `scale` grows about. Negative leans the other way. Absent = 0. |
-| `pose` | which named pose of the character (D5). A list animates: see Poses. Old spelling `frame:` still parses. |
-| `poseLoop` | `all` (default) / `once`. How a `pose:` list ends. Old spelling `frameLoop:`. |
+| `pose` | which named pose of the character (D5). A list animates: see Poses. |
+| `poseLoop` | `all` (default) / `once`. How a `pose:` list ends. |
 | `flip` | mirror horizontally |
 | `fit` | `cover` / `contain`. Draw it as a full-bleed PLANE, not a sprite. See Planes. |
 | `layer` | `back` / `mid` / `front`. Optional. |
@@ -273,7 +270,7 @@ beats:
 | `poseLoop` | `all` loops, `once` holds the last step. |
 | Pose with steps | the character's own animation. Plays on the renderer clock whatever the beat does. `loop: false` holds the last image. |
 | List step naming a stepped pose | shows that pose's FIRST image for its hold. One clock per sprite. |
-| Old keys | `frame:` = `pose:`, `frameLoop:` = `poseLoop:`, `ease: {frame: …}` = `{pose: …}`. Parse forever. Lint `info`, one-click fix. `twine-cli rewrite-poses` renames a whole story. |
+| Old keys | `frame:`, `frameLoop:`, `ease: {frame: …}` NOT read. Plain `unknown-key` warning, value ignored. Write `pose:`, `poseLoop:`, `ease: {pose: …}`. |
 
 ### Rotation — `rot:`
 
@@ -365,7 +362,7 @@ Under `from:` an absent key means *inherited*, so omitting `of:` keeps the paren
 needs to be said out loud:
 
 ```yaml
-from: tavern-night
+from: Tavern Night
 props:
   candle: {of: ~}      # back to world space, at whatever `at:` it inherited
 ```
@@ -882,7 +879,7 @@ sets nothing), `? :`. Does not parse → **false** at runtime, error in the edit
 | Beats renumbered after gating | `index` is a position; `@mark` reads it |
 | `if:` not on `EntityPatch` — `Scene.entityIfs`, `Beat.if` | a condition is not stage state; nothing past the gate sees it |
 
-## Reuse: id, from, marks
+## Reuse: from, marks
 
 Every scene compiles to a state sequence:
 
@@ -896,40 +893,37 @@ S₀ (enter) ─beat1→ S₁ ─beat2→ … ─beatN→ Sₙ (exit)
 
 | Ref | Means |
 |---|---|
-| `tavern-night` | that scene's **exit** state (default — what continuation wants) |
-| `tavern-night@enter` | state at beat 0 |
-| `tavern-night@tense` | state at the beat marked `tense` |
+| `Tavern Night` | that scene's **exit** state (default — what continuation wants) |
+| `Tavern Night@enter` | state at beat 0 |
+| `Tavern Night@tense` | state at the beat marked `tense` |
 
-A ref names a scene **`id`**, or the **name of a passage** that has a scene. The id wins
-when both spell the same. So a passage can be a template without being given an id:
+A ref names a **passage** that has a scene. Nothing else — scenes have no `id:`. Any
+passage can be a template:
 
 ```
-Official Landing Template   [scene] bg: oasis-landing-site     # no id:
+Official Landing Template   [scene] bg: oasis-landing-site
 Official Landing            [scene] from: Official Landing Template
 ```
 
-Give the template an `id:` once more than one thing points at it — renaming the passage
-then does not break the patches, and Ctrl-Space offers the id instead of the name.
-
-A passage name matches the way a `[[link]]` does: exact first, then case-insensitively.
-A scene `id` is matched exactly, and nothing else.
+- Matches like a `[[link]]`: exact first, then case-insensitive (trim + lowercase).
+- Rename the passage → fix the `from:` lines that name it.
+- Duplicate passage names: index keeps the first.
 
 ### Continuing / branching
 
 ```yaml
 [scene]
-id: tavern-fight
-from: tavern-night@tense
+from: Tavern Night@tense
 cast:
   mira: {pose: angry}      # delta only
 beats:
   - mira: "Then draw."
 ```
 
-The editor writes this for you: **Scene ▸ Overlay on '…'** inserts a patch pointing at the
-last scene you named, pre-filled with the cast it inherits. **Scene ▸ Insert Last Scene**
-inserts a copy of it instead, minus the `id:` — ids are global, so a verbatim copy would
-collide.
+The editor writes this for you: **Scene ▸ Overlay on '…'** inserts a patch
+`from: <Passage>` of the LAST scene you edited, pre-filled with the cast it inherits.
+**Scene ▸ Insert Last Scene** inserts a verbatim copy instead, headed
+`# Copy of the scene in '<Passage>'.`
 
 ### ⚠️ `from:` flips the merge semantics — the one rule to memorise
 
@@ -956,9 +950,9 @@ Determinism holds. The differ always has one well-defined previous stage.
 Links go to passages. Branch → passages exist. Idiom:
 
 ```
-Tavern - Arrival    id: tavern-night                              … [[stay]] [[go]]
-Tavern - Fight      id: tavern-fight   from: tavern-night@tense
-Street              id: street         from: tavern-night
+Tavern - Arrival    [scene] bg: tavern/night                  … [[stay]] [[go]]
+Tavern - Fight      [scene] from: Tavern - Arrival@tense
+Street              [scene] from: Tavern - Arrival
 ```
 
 `from:` edges must form a **DAG**. Cycle = error.
@@ -1026,8 +1020,8 @@ Lock this before `render-dom` ships.
 ## Runtime validation (tier 3)
 
 The engine sees all passages at boot. Build the scene index there and report:
-duplicate `id`, unknown `from:` target, unknown `@mark`, `from:` cycles. Every scene is
-checked, including one with no `id:` of its own.
+unknown `from:` target, unknown `@mark`, `from:` cycles. Every scene is checked. Keyed by
+passage name; duplicate passage names keep the first.
 
 Surface in Chapbook's existing `<warning-list>` / Backstage. **This is the net that still
 fires in stock Twine**, which is what keeps the fork-independence rule real.

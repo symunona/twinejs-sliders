@@ -4,9 +4,7 @@ import {
 	parseRef,
 	pickAsset,
 	pickPassage,
-	pickScene,
 	pickStory,
-	sceneIdOf,
 	slug
 } from '../ref';
 import {CliError, EXIT} from '../types';
@@ -59,13 +57,8 @@ describe('parseRef', () => {
 		});
 	});
 
-	it('reads a scene', () => {
-		expect(parseRef('ep3#tavern-night')).toEqual({
-			kind: 'scene',
-			rev: undefined,
-			scene: 'tavern-night',
-			story: 'ep3'
-		});
+	it('refuses the retired #scene form, pointing at the passage form', () => {
+		expect(() => parseRef('ep3#tavern-night')).toThrow(/ep3\/<Passage>/);
 	});
 
 	it('reads an asset', () => {
@@ -193,59 +186,6 @@ describe('pickPassage', () => {
 	it('is not found when nothing matches', () => {
 		try {
 			pickPassage(story, 'Nowhere');
-			throw new Error('expected a miss');
-		} catch (error) {
-			expect((error as CliError).code).toBe(EXIT.notFound);
-		}
-	});
-});
-
-describe('sceneIdOf', () => {
-	it('reads the id out of a scene block', () => {
-		expect(sceneIdOf('prose\n\n[scene]\nid: tavern-night\nbg: tavern/night\n')).toBe(
-			'tavern-night'
-		);
-	});
-
-	it('drops a trailing comment', () => {
-		expect(sceneIdOf('[scene]\nid: tavern-night   # unique per story\n')).toBe('tavern-night');
-	});
-
-	it('still works while the block below is half typed', () => {
-		expect(sceneIdOf('[scene]\nid: tavern-night\ncast:\n  mira: {at:\n')).toBe('tavern-night');
-	});
-
-	it('is undefined without a scene block', () => {
-		expect(sceneIdOf('just prose\n')).toBeUndefined();
-	});
-
-	it('ignores an id outside the block', () => {
-		expect(sceneIdOf('id: not-a-scene\n')).toBeUndefined();
-	});
-});
-
-describe('pickScene', () => {
-	const story = body([
-		{id: 'p1', name: 'Tavern Night', text: '[scene]\nid: tavern-night\n'},
-		{id: 'p2', name: 'Street', text: '[scene]\nid: street-day\n'}
-	]);
-
-	it('finds the passage that holds the scene', () => {
-		expect(pickScene(story, 'street-day').name).toBe('Street');
-	});
-
-	it('refuses to guess between duplicate ids', () => {
-		const twins = body([
-			{id: 'p1', name: 'A', text: '[scene]\nid: dupe\n'},
-			{id: 'p2', name: 'B', text: '[scene]\nid: dupe\n'}
-		]);
-
-		expect(() => pickScene(twins, 'dupe')).toThrow(/ambiguous/);
-	});
-
-	it('is not found for an unknown scene', () => {
-		try {
-			pickScene(story, 'nowhere');
 			throw new Error('expected a miss');
 		} catch (error) {
 			expect((error as CliError).code).toBe(EXIT.notFound);

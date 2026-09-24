@@ -37,7 +37,7 @@ describe('applyScene + music', () => {
 		// Nothing else would be previewable: the editor renders one passage and cannot know
 		// what played before it.
 		const base = stageWith({amount: 1, id: 'rain'});
-		const out = applyScene(base, scene({id: 'somewhere'}));
+		const out = applyScene(base, scene({}));
 
 		expect(out.music).toBeUndefined();
 	});

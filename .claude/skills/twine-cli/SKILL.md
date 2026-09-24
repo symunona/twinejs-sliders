@@ -15,7 +15,7 @@ into `data/` by hand — writes must go through the API so rev bump and open edi
 ## Loop
 
 ```sh
-twine-cli map ep3                              # passages, scene ids, links, assets, lint tally
+twine-cli map ep3                              # passages, scenes by passage, links, assets, lint tally
 twine-cli cat ep3/Tavern\ Night -o tmp/p.md    # one passage, unescaped, with receipt
 # ... Read / Edit tmp/p.md ...
 twine-cli lint tmp/p.md                        # fast, no server
@@ -25,8 +25,7 @@ twine-cli put ep3/Tavern\ Night tmp/p.md       # splice + PUT
 Edit with `Read`, `rg`, `sed`, `Edit` on the file `cat` gave you. No state dir, no checkout,
 no sync record — delete the tmp file whenever, lose nothing.
 
-Refs: `ep3` · `ep3/Tavern Night` · `ep3#tavern-night` (passage holding that scene) ·
-`ep3:a_8f21` (asset) · `ep3@37` (old rev, read only).
+Refs: `ep3` · `ep3/Tavern Night` (passage = its scene) · `ep3:a_8f21` (asset) · `ep3@37` (old rev, read only).
 
 ## The receipt
 
@@ -42,7 +41,7 @@ hash: 9f31c8a2
 mood: tense
 --
 [scene]
-id: tavern-night
+bg: tavern/night
 ```
 
 Leave `story`, `rev`, `hash` alone. Edit `name:`, `tags:`, `at:` to rename, retag, move the
@@ -72,7 +71,7 @@ Long edit session: `check` first, then `cat --refresh` if stale.
 ## Assets = real paths
 
 ```sh
-twine-cli assets ep3 --scene tavern-night   # what scene needs, resolved
+twine-cli assets ep3 --scene "Tavern Night"   # what scene needs, resolved (passage name)
 twine-cli assets ep3 --missing              # referenced, no blob
 twine-cli assets ep3 --unused               # in manifest, nothing use it
 ```

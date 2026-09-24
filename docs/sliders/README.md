@@ -71,7 +71,7 @@ Consumed by **both** repos. Publish as real packages day one or they drift.
 | D6 | Users upload files to make poses. Characters reference them by id. |
 | D7 | Asset manager: backgrounds + objects + characters-as-collections. Pose images hidden. Tag/group/filter. |
 | D8 | Separate character editor, opened by clicking a character. Tab per character. |
-| D9 | Story map: colour passage nodes by scene id hash; faded bg thumbnail if available. |
+| D9 | Story map: colour passage nodes by scene hash; faded bg thumbnail if available. |
 | D10 | Save granularity = **passage**. Simplest. No beat-level resume. |
 | D11 | **3 fixed layers**, fixed order. Numeric `z:` escape hatch. |
 | D12 | Preview below passage text. Collapsible, remembers state. Click → full screen. |

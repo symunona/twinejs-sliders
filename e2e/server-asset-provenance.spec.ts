@@ -78,7 +78,6 @@ const ASSET = 'street-dusk';
 
 /** A scene that names the art, so the push has something to resolve as well as to carry. */
 const SCENE_TEXT = `[scene]
-id: street
 bg: street-dusk
 `;
 

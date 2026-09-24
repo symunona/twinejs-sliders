@@ -4,14 +4,14 @@
  *
  * A story format only ever sees one passage at a time; this package is what sees all of
  * them at once. It resolves the `from:` DAG, compiles every scene to its state sequence,
- * and reports the four errors that only exist between passages: duplicate ids, unknown
- * `from:` targets, unknown `@mark`s and cycles.
+ * and reports the errors that only exist between passages: unknown `from:` targets,
+ * unknown `@mark`s and cycles.
  */
 
 import {applyScene, collectMarks, runBeats} from '@sliders/scene-core';
 import {parseScene} from '@sliders/scene-schema';
 import {emptyStage, matchPassageName} from '@sliders/scene-types';
-import type {Scene, SceneError, SceneId, Stage} from '@sliders/scene-types';
+import type {Scene, SceneError, Stage} from '@sliders/scene-types';
 import {extractSceneBlock} from './extract-scene-block';
 
 export {extractSceneBlock} from './extract-scene-block';
@@ -20,8 +20,6 @@ export type {SceneBlock} from './extract-scene-block';
 export interface SceneIndexEntry {
 	/** Name of the passage the scene was authored in. */
 	passage: string;
-	/** The scene's own `id:`. Undefined when it declared none. */
-	id?: SceneId;
 	scene: Scene;
 	/** S0 … Sn. `states[0]` is `@enter`, the last is the exit state. */
 	states: Stage[];
@@ -30,15 +28,12 @@ export interface SceneIndexEntry {
 }
 
 export interface SceneIndex {
-	/**
-	 * Keyed by scene id, and by PASSAGE NAME for a scene that declared no `id:` — the
-	 * same two names `resolve` accepts.
-	 */
+	/** Keyed by passage name. */
 	scenes: Map<string, SceneIndexEntry>;
 	errors: SceneError[];
 	/**
-	 * `id` (exit state) · `id@enter` · `id@markName`. A passage name works wherever an
-	 * id does, and loses to an id of the same spelling.
+	 * `Passage` (exit state) · `Passage@enter` · `Passage@markName`. The name matches the
+	 * way a link to the passage does: exact, then case-insensitively.
 	 */
 	resolve(ref: string): Stage | undefined;
 }
@@ -52,16 +47,12 @@ export interface IndexedPassage {
 interface Node {
 	passage: string;
 	scene: Scene;
-	/** The scene's own `id:`, if it declared one. */
-	id?: SceneId;
-	/** What an error message calls this node: its id, or the passage name. */
-	label: string;
 	/** The `[scene]` block text, kept only so index errors can find a line to point at. */
 	blockText: string;
 	lineOffset: number;
 }
 
-/** `tavern-night@tense` -> `{id: 'tavern-night', mark: 'tense'}`. */
+/** `Tavern Night@tense` -> `{id: 'Tavern Night', mark: 'tense'}`. */
 export function splitSceneRef(ref: string): {id: string; mark?: string} {
 	const at = ref.indexOf('@');
 
@@ -101,11 +92,7 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 	const errors: SceneError[] = [];
 	const scenes = new Map<string, SceneIndexEntry>();
 
-	// Nodes are addressed by POSITION, not by name, because two names reach them: a scene
-	// id and a passage name. Keying the graph by either string would make a passage called
-	// `tavern` and a scene `id: tavern` the same node.
 	const nodes: Node[] = [];
-	const byId = new Map<SceneId, number>();
 	const byPassage = new Map<string, number>();
 
 	// --- 1. Parse every passage that has a [scene] block ---------------------
@@ -128,45 +115,19 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 			});
 		}
 
-		const id = result.scene.id;
-
-		if (id !== undefined) {
-			const existing = byId.get(id);
-
-			if (existing !== undefined) {
-				errors.push({
-					code: 'dupe-scene-id',
-					message: `Duplicate scene id '${id}', already used by passage '${nodes[existing].passage}'.`,
-					severity: 'error',
-					...keyPosition(block.text, 'id', block.lineOffset),
-					hint: 'Scene ids are global. Rename one of them.'
-				});
-				continue;
-			}
+		// Passage names are unique in a story, but a duplicate would be the story's
+		// problem, not ours: keep the first.
+		if (byPassage.has(passage.name)) {
+			continue;
 		}
 
-		const at = nodes.length;
-
+		byPassage.set(passage.name, nodes.length);
 		nodes.push({
 			blockText: block.text,
-			id,
-			label: id ?? passage.name,
 			lineOffset: block.lineOffset,
 			passage: passage.name,
 			scene: result.scene
 		});
-
-		if (id !== undefined) {
-			byId.set(id, at);
-		}
-
-		// Every scene is also addressable by the passage it lives in, so any passage can be
-		// a `from:` template without being given an id first. Ids still win on collision —
-		// see `nodeFor`. Passage names are unique in a story, but a duplicate would be the
-		// story's problem, not ours: keep the first.
-		if (!byPassage.has(passage.name)) {
-			byPassage.set(passage.name, at);
-		}
 	}
 
 	// --- 2. Resolve the from: DAG, deepest first -----------------------------
@@ -176,19 +137,13 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 	const done = new Set<number>();
 	const cycleReported = new Set<number>();
 
-	/** Scene id first, passage name second. A scene id always wins. */
-	function nodeFor(id: string): number | undefined {
-		const byIdHit = byId.get(id);
-
-		if (byIdHit !== undefined) {
-			return byIdHit;
-		}
-
-		// A passage name resolves the way a LINK to it resolves -- exact, then
-		// case-insensitively. An id is matched exactly; a passage name must not be, or
-		// `from: official landing` would miss `Official Landing` while `[[official
-		// landing]]` reaches it, and the author would have two spelling rules to keep.
-		const matched = matchPassageName(byPassage.keys(), id);
+	/**
+	 * A passage name resolves the way a LINK to it resolves -- exact, then
+	 * case-insensitively -- or `from: official landing` would miss `Official Landing` while
+	 * `[[official landing]]` reaches it, and the author would have two spelling rules.
+	 */
+	function nodeFor(name: string): number | undefined {
+		const matched = matchPassageName(byPassage.keys(), name);
 
 		return matched === undefined ? undefined : byPassage.get(matched);
 	}
@@ -235,8 +190,8 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 				errors.push({
 					code: 'from-cycle',
 					hint: 'from: edges must form a DAG. Break the loop.',
-					message: `Scene '${rep.label}' is part of a from: cycle: ${cycle
-						.map(step => nodes[step].label)
+					message: `Scene '${rep.passage}' is part of a from: cycle: ${cycle
+						.map(step => nodes[step].passage)
 						.join(' -> ')}.`,
 					severity: 'error',
 					...keyPosition(rep.blockText, 'from', rep.lineOffset)
@@ -256,7 +211,7 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 			if (target === undefined) {
 				errors.push({
 					code: 'unknown-from',
-					hint: 'from: names a scene id, or the name of a passage that has a scene.',
+					hint: 'from: names a passage that has a scene.',
 					message: `Unknown scene '${ref.id}' in from: '${from}'.`,
 					severity: 'error',
 					...keyPosition(self.blockText, 'from', self.lineOffset)
@@ -289,7 +244,6 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 		const states = runBeats(enter, self.scene.beats);
 
 		built[at] = {
-			id: self.id,
 			marks: collectMarks(self.scene.beats),
 			passage: self.passage,
 			scene: self.scene,
@@ -303,21 +257,11 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 	}
 
 	// --- 3. Publish -----------------------------------------------------------
-	// Ids first, so a passage whose NAME collides with some other scene's id cannot take
-	// the key off the scene that actually declared it.
-	for (let at = 0; at < nodes.length; at++) {
+	for (const [name, at] of byPassage) {
 		const entry = built[at];
 
-		if (entry && nodes[at].id !== undefined) {
-			scenes.set(nodes[at].id as SceneId, entry);
-		}
-	}
-
-	for (let at = 0; at < nodes.length; at++) {
-		const entry = built[at];
-
-		if (entry && nodes[at].id === undefined && !scenes.has(nodes[at].passage)) {
-			scenes.set(nodes[at].passage, entry);
+		if (entry) {
+			scenes.set(name, entry);
 		}
 	}
 

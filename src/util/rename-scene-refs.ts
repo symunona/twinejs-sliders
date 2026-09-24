@@ -21,10 +21,7 @@
  *
  * NOT rewritten, on purpose:
  *
- * - `pose:` (and its old spelling `frame:`) — a pose belongs to a character, whose pose art
- *   is named `<id>-<pose>`.
- * - `id:` — it is the scene's name, and another passage's `from:` points at it. When it was
- *   standing in for the backdrop, the backdrop is spelled out instead; see `insertBg`.
+ * - `pose:` — a pose belongs to a character, whose pose art is named `<id>-<pose>`.
  * - dialogue prose, `mark:` and `if:` expressions.
  */
 
@@ -129,43 +126,6 @@ function renameSound(value: unknown, ctx: Ctx, flow: boolean): void {
 	}
 }
 
-/**
- * The backdrop a scene asked for by writing nothing.
- *
- * `id:` doubles as `bg:` (spec 02), so a scene called `candle` draws the `candle` art. The
- * id itself cannot move — it is what `from:` in another passage points at — so the rename
- * spells the backdrop out on the line below instead. A patch scene (`from:`) inherits its
- * backdrop rather than defaulting to its id, so it needs nothing.
- */
-function insertBg(root: YAMLMap, blockText: string, ctx: Ctx): void {
-	const idPair = pairsOf(root).find(pair => keyName(pair) === 'id');
-
-	if (
-		!idPair ||
-		pairsOf(root).some(pair => ['bg', 'from'].includes(keyName(pair) ?? '')) ||
-		!isScalar(idPair.key) ||
-		!Array.isArray(idPair.key.range) ||
-		!isScalar(idPair.value) ||
-		(idPair.value as Scalar).value !== ctx.oldName ||
-		!Array.isArray(idPair.value.range)
-	) {
-		return;
-	}
-
-	const keyStart = idPair.key.range[0];
-	// After the whole LINE, not after the value: a trailing comment on `id:` is the id's.
-	const lineEnd = blockText.indexOf('\n', idPair.value.range[1]);
-	const end = lineEnd === -1 ? blockText.length : lineEnd;
-
-	ctx.edits.push({
-		end,
-		start: end,
-		text: `\n${' '.repeat(
-			keyStart - (blockText.lastIndexOf('\n', keyStart) + 1)
-		)}bg: ${scalarText(ctx.newName, false)}`
-	});
-}
-
 /** Every art-key edit one block needs. */
 function artEdits(blockText: string, ctx: Ctx): Edit[] {
 	// Same YAML version the scene parser uses, so this module and the preview never
@@ -208,8 +168,6 @@ function artEdits(blockText: string, ctx: Ctx): Edit[] {
 				break;
 		}
 	}
-
-	insertBg(root, blockText, ctx);
 
 	return ctx.edits;
 }

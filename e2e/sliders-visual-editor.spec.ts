@@ -26,7 +26,6 @@ import {
  */
 
 const SCENE = `[scene]
-id: visual-editor-scene
 cast:
   mira:  {at: -0.4, pose: idle}   # keep this comment
   joren:
@@ -98,7 +97,7 @@ test.describe('visual scene editor', () => {
 		expect(after).toContain('# keep this comment');
 		expect(after).toContain('  joren:\n    at: 0.35\n    layer: back');
 		expect(after).toContain('- mira: "Hello."');
-		expect(after).toContain('id: visual-editor-scene');
+		expect(after).toContain('[scene]\ncast:\n');
 	});
 
 	test('a corner handle writes scale:, and one undo takes it back', async ({

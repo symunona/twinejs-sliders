@@ -67,7 +67,7 @@ describe('the Chapbook half of the mode', () => {
 describe('the scene half of the mode', () => {
 	const scene = [
 		'[scene]',
-		'id: alley',
+		'bg: alley',
 		'camera: {at: [0, 0], zoom: 1}',
 		'notakey: 1',
 		'cast:',
@@ -78,25 +78,20 @@ describe('the scene half of the mode', () => {
 	].join('\n');
 
 	it('styles a known top-level key as a keyword', () => {
-		expect(stylesOf(scene, 'id')).toEqual(['keyword']);
+		expect(stylesOf(scene, 'bg')).toEqual(['keyword']);
 		expect(stylesOf(scene, 'camera')).toEqual(['keyword']);
 		expect(stylesOf(scene, 'cast')).toEqual(['keyword']);
 	});
 
 	it('styles an unknown top-level key as an error', () => {
 		expect(stylesOf(scene, 'notakey')).toEqual(['error']);
+		expect(stylesOf('[scene]\nid: alley', 'id')).toEqual(['error']);
 	});
 
 	it('styles an entity id as a definition and its keys as keywords', () => {
 		expect(stylesOf(scene, 'mira')).toEqual(['def']);
 		expect(stylesOf(scene, 'at')).toEqual(['keyword', 'keyword']);
 		expect(stylesOf(scene, 'pose')).toEqual(['keyword']);
-	});
-
-	it('still styles the old frame: spelling as a key', () => {
-		const old = '[scene]\ncast:\n  mira: {at: -0.4, frame: idle}';
-
-		expect(stylesOf(old, 'frame')).toEqual(['keyword']);
 	});
 
 	it('styles comments and numbers', () => {
@@ -242,10 +237,10 @@ describe('values inside a scene', () => {
 	});
 
 	it('starts each line with no value in progress', () => {
-		// `id:` opens a value, but the next line is its own key again.
-		const tokens = tokenize(['[scene]', 'id: alley', 'z: 3'].join('\n'));
+		// `bg:` opens a value, but the next line is its own key again.
+		const tokens = tokenize(['[scene]', 'bg: alley', 'z: 3'].join('\n'));
 
-		expect(tokens).toContainEqual(['id', 'keyword']);
+		expect(tokens).toContainEqual(['bg', 'keyword']);
 		expect(tokens).toContainEqual(['alley', 'string']);
 		expect(tokens).toContainEqual(['3', 'number']);
 	});

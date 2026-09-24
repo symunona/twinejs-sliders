@@ -29,7 +29,6 @@ function said(text: string, beat = 0) {
 }
 
 const BLOCK = [
-	'id: x',
 	'cast:',
 	'  bob: {at: -0.4}',
 	'beats:',
@@ -42,7 +41,6 @@ describe('a block scalar beat', () => {
 	it('promotes to block form, keeping the dialogue verbatim', () => {
 		expect(moved(BLOCK)).toBe(
 			[
-				'id: x',
 				'cast:',
 				'  bob: {at: -0.4}',
 				'beats:',

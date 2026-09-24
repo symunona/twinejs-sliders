@@ -8,7 +8,7 @@ describe('passageLinks()', () => {
 
 	it('returns the targets of a scene links: block', () =>
 		expect(
-			passageLinks(scene('id: street\nlinks:\n  back: Street\n  on: Tavern'))
+			passageLinks(scene('links:\n  back: Street\n  on: Tavern'))
 		).toEqual(['Street', 'Tavern']));
 
 	it('reads a flow entry with an if: alongside its target', () =>

@@ -7,7 +7,6 @@
  * picking one for the user is how the wrong passage gets overwritten.
  */
 
-import {extractSceneBlock} from '@sliders/scene-index';
 import {CliError, EXIT} from './types';
 import type {AssetMetaRow, Manifest, PassageObject, Ref, Source, StoryBody, StoryMeta} from './types';
 
@@ -52,11 +51,11 @@ export function parseRef(raw: string): Ref {
 
 			return {kind: 'passage', passage: tail.trim(), rev, story};
 		case '#':
-			if (tail.trim() === '') {
-				throw new CliError(`ref "${raw}" names no scene`, EXIT.usage);
-			}
-
-			return {kind: 'scene', rev, scene: tail.trim(), story};
+			// Scenes have no ids of their own any more: a scene is its passage.
+			throw new CliError(
+				`ref "${raw}": scene ids are gone, name the passage instead — ${story}/<Passage>`,
+				EXIT.usage
+			);
 		case ':':
 			if (tail.trim() === '') {
 				throw new CliError(`ref "${raw}" names no asset`, EXIT.usage);
@@ -171,50 +170,6 @@ export function pickPassage(body: StoryBody, spec: string): PassageObject {
 	throw new CliError(`no passage matches "${spec}" in "${body.name}"`, EXIT.notFound);
 }
 
-/**
- * The `id:` of a `[scene]` block, read with a regex rather than the YAML parser.
- *
- * `#tavern-night` has to keep working while the block below it is half typed — that is when
- * an agent needs to find the passage most — so a parse failure must not hide the id.
- */
-export function sceneIdOf(passageText: string): string | undefined {
-	const block = extractSceneBlock(passageText);
-
-	if (!block) {
-		return undefined;
-	}
-
-	const match = /^[ \t]*id[ \t]*:[ \t]*(.*)$/m.exec(block.text);
-
-	if (!match) {
-		return undefined;
-	}
-
-	const value = match[1]
-		.replace(/\s+#.*$/, '')
-		.trim()
-		.replace(/^["']|["']$/g, '');
-
-	return value === '' ? undefined : value;
-}
-
-/** Scene ids are unique per story (spec 02), so this is a lookup, not a search. */
-export function pickScene(body: StoryBody, sceneId: string): PassageObject {
-	const passages = body.passages ?? [];
-	const matches = passages.filter(passage => sceneIdOf(passage.text) === sceneId);
-
-	if (matches.length === 1) {
-		return matches[0];
-	}
-
-	if (matches.length > 1) {
-		// Duplicate scene ids are a lint error, not something to pick a winner for.
-		throw ambiguous('scene', sceneId, matches.map(passage => passage.name));
-	}
-
-	throw new CliError(`no scene "${sceneId}" in "${body.name}"`, EXIT.notFound);
-}
-
 /** Asset by id, then by manifest name. */
 export function pickAsset(manifest: Manifest, spec: string): AssetMetaRow {
 	const byId = manifest.assets.find(asset => asset.id === spec);
@@ -266,8 +221,6 @@ export async function resolveRef(source: Source, raw: Ref | string): Promise<Res
 	switch (ref.kind) {
 		case 'passage':
 			return {body, meta, passage: pickPassage(body, ref.passage), ref, rev};
-		case 'scene':
-			return {body, meta, passage: pickScene(body, ref.scene), ref, rev};
 		default:
 			return {body, meta, ref, rev};
 	}

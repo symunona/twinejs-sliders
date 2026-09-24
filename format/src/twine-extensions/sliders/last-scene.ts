@@ -11,22 +11,13 @@
 /** The last scene edited, whatever it was. What "Insert Last Scene" pastes. */
 export const LAST_SCENE_KEY = 'sliders-last-scene';
 
-/**
- * The last scene edited that had an `id:`. Kept apart because only a named scene can be
- * the target of a `from:` overlay, and the scenes an author writes in between — a pasted
- * copy, a quick anonymous stage — would otherwise erase the one thing an overlay needs.
- */
-export const LAST_NAMED_SCENE_KEY = 'sliders-last-named-scene';
-
 export interface LastSceneRecord {
 	/** The scene block body, with the `[scene]` line itself removed. */
 	text: string;
-	/** The scene's `id:`, when it had one. An overlay needs it for `from:`. */
-	id?: string;
 	/** Entity ids, so an overlay can name the cast and props it inherits. */
 	cast?: string[];
 	props?: string[];
-	/** Passage the scene was written in. Labels the menu item when there is no id. */
+	/** Passage the scene was written in. Its name is what a `from:` overlay points at. */
 	passageName?: string;
 	/** Epoch ms, so a stale record is obvious in devtools. */
 	updated?: number;
@@ -66,14 +57,7 @@ export function readLastScene(
 	}
 }
 
-/** The last scene that can be a `from:` target, i.e. the last one with an id. */
-export function readLastNamedScene(): LastSceneRecord | undefined {
-	const record = readLastScene(LAST_NAMED_SCENE_KEY);
-
-	return record?.id ? record : undefined;
-}
-
 /** What to call a stored scene in a menu item. */
 export function lastSceneLabel(record: LastSceneRecord): string {
-	return record.id ?? record.passageName ?? 'unnamed';
+	return record.passageName ?? 'unnamed';
 }

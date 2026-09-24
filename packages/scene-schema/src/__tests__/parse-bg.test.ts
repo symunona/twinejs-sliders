@@ -14,7 +14,7 @@ function scene(text: string) {
 describe('bg: long form', () => {
 	it('reads id, fx and speed', () => {
 		const {errors, scene: parsed} = scene(
-			'id: cellar\nbg: {id: cellar-art, fx: parallax_left, speed: 20}\nbeats: []\n'
+			'bg: {id: cellar-art, fx: parallax_left, speed: 20}\nbeats: []\n'
 		);
 
 		expect(errors).toEqual([]);

@@ -13,6 +13,7 @@ import {buildLinkGraph, formatFinding} from '@sliders/story-map';
 import type {LintFinding} from '@sliders/story-map';
 import {buildSceneIndex, extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
+import {matchPassageName} from '@sliders/scene-types';
 import {patchBeatText, patchSceneText} from './scene-patch';
 import {voiceToolsByName} from './tools';
 import {toolError} from './voice.types';
@@ -146,25 +147,24 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 		);
 	}
 
-	/** The passage a scene id lives in. */
+	/** A scene, by the name of the passage it lives in — the rule `from:` resolves by. */
 	function findScene(
-		sceneId: string
+		name: string
 	): {passage: ToolPassage; scene: ReturnType<typeof parseScene>['scene']} | undefined {
+		const withScene = new Map<string, {passage: ToolPassage; text: string}>();
+
 		for (const passage of env.story().passages) {
 			const block = extractSceneBlock(passage.text);
 
-			if (!block) {
-				continue;
-			}
-
-			const scene = parseScene(block.text).scene;
-
-			if (scene.id === sceneId) {
-				return {passage, scene};
+			if (block && !withScene.has(passage.name)) {
+				withScene.set(passage.name, {passage, text: block.text});
 			}
 		}
 
-		return undefined;
+		const matched = matchPassageName(withScene.keys(), name);
+		const hit = matched === undefined ? undefined : withScene.get(matched);
+
+		return hit && {passage: hit.passage, scene: parseScene(hit.text).scene};
 	}
 
 	const handlers: Record<
@@ -215,16 +215,16 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 		},
 
 		read_scene(args) {
-			const sceneId = str(args, 'sceneId');
+			const sceneName = str(args, 'scene');
 
-			if (!sceneId) {
-				return toolError('read_scene wants a sceneId');
+			if (!sceneName) {
+				return toolError('read_scene wants a scene');
 			}
 
-			const found = findScene(sceneId);
+			const found = findScene(sceneName);
 
 			if (!found) {
-				return toolError(`no scene '${sceneId}'`);
+				return toolError(`no scene '${sceneName}'`);
 			}
 
 			const {passage, scene} = found;
@@ -235,12 +235,11 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 
 			return {
 				beats: scene.beats.map((beat, index) => ({...beat, index})),
-				bg: scene.bg ?? scene.id,
+				bg: scene.bg,
 				cast: Object.entries(scene.entities)
 					.filter(([, patch]) => patch?.kind === 'cast')
 					.map(([id]) => id),
 				from: scene.from,
-				id: scene.id,
 				ok: true,
 				passage: passage.name,
 				props: Object.entries(scene.entities)
@@ -330,7 +329,7 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 		},
 
 		async list_assets(args) {
-			const sceneId = str(args, 'sceneId');
+			const sceneName = str(args, 'scene');
 			const assets = await env.assets();
 			const usage = await env.assetUsage();
 			let rows = assets.map(asset => ({
@@ -341,12 +340,14 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 				usedBy: usage[asset.id] ?? []
 			}));
 
-			if (sceneId !== undefined) {
-				rows = rows.filter(row => row.usedBy.includes(sceneId));
+			if (sceneName !== undefined) {
+				const found = findScene(sceneName);
 
-				if (rows.length === 0 && !findScene(sceneId)) {
-					return toolError(`no scene '${sceneId}'`);
+				if (!found) {
+					return toolError(`no scene '${sceneName}'`);
 				}
+
+				rows = rows.filter(row => row.usedBy.includes(found.passage.name));
 			}
 
 			return {
@@ -530,17 +531,17 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 		},
 
 		patch_scene(args) {
-			const sceneId = str(args, 'sceneId');
+			const sceneName = str(args, 'scene');
 			const yaml = args.yaml;
 
-			if (!sceneId || typeof yaml !== 'string') {
-				return toolError('patch_scene wants a sceneId and yaml');
+			if (!sceneName || typeof yaml !== 'string') {
+				return toolError('patch_scene wants a scene and yaml');
 			}
 
-			const found = findScene(sceneId);
+			const found = findScene(sceneName);
 
 			if (!found) {
-				return toolError(`no scene '${sceneId}'`);
+				return toolError(`no scene '${sceneName}'`);
 			}
 
 			const result = patchSceneText(found.passage.text, yaml);
@@ -559,18 +560,18 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 		},
 
 		set_beat(args) {
-			const sceneId = str(args, 'sceneId');
+			const sceneName = str(args, 'scene');
 			const beat = int(args, 'beat');
 			const patch = args.patch;
 
-			if (!sceneId || beat === undefined || typeof patch !== 'string') {
-				return toolError('set_beat wants a sceneId, a beat index and a patch');
+			if (!sceneName || beat === undefined || typeof patch !== 'string') {
+				return toolError('set_beat wants a scene, a beat index and a patch');
 			}
 
-			const found = findScene(sceneId);
+			const found = findScene(sceneName);
 
 			if (!found) {
-				return toolError(`no scene '${sceneId}'`);
+				return toolError(`no scene '${sceneName}'`);
 			}
 
 			const result = patchBeatText(found.passage.text, beat, patch);
@@ -761,10 +762,10 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 }
 
 /**
- * The index of scene ids, for a caller that wants to tell the model what exists without
+ * The passages that hold a scene, for a caller that wants to tell the model what exists without
  * running `map`. Kept beside the runner because it is the same walk.
  */
-export function sceneIdsOf(passages: ToolPassage[]): string[] {
+export function sceneNamesOf(passages: ToolPassage[]): string[] {
 	return [
 		...buildSceneIndex(
 			passages.map(passage => ({name: passage.name, text: passage.text}))

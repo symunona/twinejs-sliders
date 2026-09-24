@@ -15,8 +15,6 @@
 export interface SamplePassage {
 	name: string;
 	text: string;
-	/** Scene id declared in this passage, if any. */
-	sceneId?: string;
 	/** Passage names this one should link to (used to assert the story map). */
 	links: string[];
 }
@@ -26,12 +24,10 @@ export const SAMPLE_STORY_NAME = 'Sliders Demo';
 export const SAMPLE_PASSAGES: SamplePassage[] = [
 	{
 		name: 'Tavern - Arrival',
-		sceneId: 'tavern-night',
 		links: ['Tavern - Fight', 'Street'],
 		text: `mood: tense
 --
 [scene]
-id: tavern-night
 bg: tavern-night
 camera: {at: [0, 0], zoom: 1}
 
@@ -69,11 +65,9 @@ Director: she should feel cornered here. Not rendered.
 	},
 	{
 		name: 'Tavern - Fight',
-		sceneId: 'tavern-fight',
 		links: ['Street'],
 		text: `[scene]
-id: tavern-fight
-from: tavern-night@tense
+from: Tavern - Arrival@tense
 
 cast:
   mira: {pose: angry, at: -0.15}
@@ -87,11 +81,9 @@ beats:
 	},
 	{
 		name: 'Street',
-		sceneId: 'street',
 		links: [],
 		text: `[scene]
-id: street
-from: tavern-night
+from: Tavern - Arrival
 bg: street-dusk
 
 cast:
@@ -116,7 +108,6 @@ export const BROKEN_PASSAGE: SamplePassage = {
 	name: 'Broken Scene',
 	links: [],
 	text: `[scene]
-id: broken
 chast:
   mira: {at: -0.4, pose: idle}
 cast:

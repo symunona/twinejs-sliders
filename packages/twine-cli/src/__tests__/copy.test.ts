@@ -1,9 +1,9 @@
 /** @jest-environment node */
 
 /**
- * `copy` is server-side, but everything it can get wrong is not: the ids it mints and the
- * `--reid` rewrite. Both live in `cloneBody`, which is pure, so these run against a fixture
- * body with no store, no server and no fetch anywhere.
+ * `copy` is server-side, but everything it can get wrong is not: the ids it mints. That
+ * lives in `cloneBody`, which is pure, so these run against a fixture body with no store,
+ * no server and no fetch anywhere.
  */
 
 import {buildSceneIndex} from '@sliders/scene-index';
@@ -13,7 +13,6 @@ import type {StoryBody} from '../types';
 const TAVERN = `mood: tense
 --
 [scene]
-id: tavern-night        # the scene the others hang off
 bg: tavern/night
 cast:
   mira: {at: -0.4, pose: arms-crossed}
@@ -26,8 +25,7 @@ The room goes quiet. [[stay]] [[go->Street]]
 `;
 
 const FIGHT = `[scene]
-id: tavern-fight
-from: tavern-night@tense   # pick it up at the mark
+from: Tavern Night@tense   # pick it up at the mark
 cast:
   mira: {pose: angry}
 beats:
@@ -35,18 +33,16 @@ beats:
 `;
 
 const STREET = `[scene]
-id: street
-from: 'tavern-night'
+from: 'Tavern Night'
 beats:
   - mira: "Rain, then."
 `;
 
 const ALLEY = `[scene]
-id: alley
 from: somewhere-else
 `;
 
-/** A story whose scenes reference each other across passages — the case `--reid` breaks. */
+/** A story whose scenes reference each other across passages. */
 function fixture(): StoryBody {
 	return {
 		id: 'story-ep3',
@@ -159,79 +155,17 @@ describe('cloneBody', () => {
 		expect(body.passages[0].text).toBe(TAVERN);
 	});
 
-	it('copies passage text byte for byte when there is no --reid', () => {
+	it('copies passage text byte for byte', () => {
 		const clone = cloneBody(fixture(), {name: 'Episode 4', uuid: counter()});
 
 		expect(clone.body.passages[0].text).toBe(TAVERN);
 		expect(clone.body.passages[1].text).toBe(FIGHT);
 		expect(clone.body.passages[2].text).toBe(STREET);
 		expect(clone.body.passages[3].text).toBe(ALLEY);
-		expect(clone.sceneIds.size).toBe(0);
-		expect(clone.unrewritten).toEqual([]);
 	});
 
-	it('--reid rewrites id:, from: and the @mark together, keeping the rest of the line', () => {
-		const clone = cloneBody(fixture(), {
-			name: 'Episode 4',
-			reid: 'ep4-',
-			uuid: counter()
-		});
-
-		expect(clone.body.passages[0].text).toBe(
-			TAVERN.replace(
-				'id: tavern-night        # the scene the others hang off',
-				'id: ep4-tavern-night        # the scene the others hang off'
-			)
-		);
-		expect(clone.body.passages[1].text).toBe(
-			FIGHT.replace('id: tavern-fight', 'id: ep4-tavern-fight').replace(
-				'from: tavern-night@tense   # pick it up at the mark',
-				'from: ep4-tavern-night@tense   # pick it up at the mark'
-			)
-		);
-		// The quoting the author chose survives too.
-		expect(clone.body.passages[2].text).toBe(
-			STREET.replace('id: street', 'id: ep4-street').replace(
-				"from: 'tavern-night'",
-				"from: 'ep4-tavern-night'"
-			)
-		);
-		expect(Object.fromEntries(clone.sceneIds)).toEqual({
-			'tavern-night': 'ep4-tavern-night',
-			'tavern-fight': 'ep4-tavern-fight',
-			street: 'ep4-street',
-			alley: 'ep4-alley'
-		});
-	});
-
-	it('--reid leaves everything outside the scene block untouched', () => {
-		const clone = cloneBody(fixture(), {
-			name: 'Episode 4',
-			reid: 'ep4-',
-			uuid: counter()
-		});
-
-		expect(clone.body.passages[0].text).toContain('mood: tense\n--\n[scene]');
-		expect(clone.body.passages[0].text).toContain(
-			'[continued]\nThe room goes quiet. [[stay]] [[go->Street]]\n'
-		);
-	});
-
-	it('a from: pointing at a scene in another passage still resolves after --reid', () => {
-		const before = buildSceneIndex(
-			fixture().passages.map(passage => ({name: passage.name, text: passage.text}))
-		);
-
-		// The fixture is a story that resolves to begin with, or the assertion below would
-		// prove nothing.
-		expect(before.scenes.has('tavern-fight')).toBe(true);
-		expect(before.resolve('tavern-night@tense')).toBeDefined();
-
-		const clone = cloneBody(fixture(), {
-			name: 'Episode 4',
-			reid: 'ep4-',
-			uuid: counter()
-		});
+	it('keeps every from: resolving, because it names a passage and names survive', () => {
+		const clone = cloneBody(fixture(), {name: 'Episode 4', uuid: counter()});
 		const after = buildSceneIndex(
 			clone.body.passages.map(passage => ({
 				name: passage.name,
@@ -239,37 +173,8 @@ describe('cloneBody', () => {
 			}))
 		);
 
-		expect(after.scenes.has('ep4-tavern-fight')).toBe(true);
-		expect(after.scenes.get('ep4-tavern-fight')?.scene.from).toBe(
-			'ep4-tavern-night@tense'
-		);
-		expect(after.scenes.get('ep4-street')?.scene.from).toBe('ep4-tavern-night');
-		expect(after.resolve('ep4-tavern-night@tense')).toBeDefined();
-		expect(after.resolve('ep4-tavern-fight')).toBeDefined();
-
-		// Nothing still points at an id that no longer exists.
-		expect(
-			after.errors.filter(error => /(^|\W)tavern-night(\W|$)/.test(error.message))
-		).toEqual([]);
-	});
-
-	it('reports a reference it could not rewrite, and leaves that one as it was', () => {
-		const clone = cloneBody(fixture(), {
-			name: 'Episode 4',
-			reid: 'ep4-',
-			uuid: counter()
-		});
-
-		expect(clone.unrewritten).toEqual([
-			{
-				passage: 'Alley',
-				line: 3,
-				ref: 'somewhere-else',
-				reason: 'no scene in this story has id "somewhere-else" — left as it was'
-			}
-		]);
-		expect(clone.body.passages[3].text).toBe(
-			ALLEY.replace('id: alley', 'id: ep4-alley')
-		);
+		expect(after.resolve('Tavern Fight@enter')?.entities.mira.pose).toBe('angry');
+		expect(after.resolve('Street')).toBeDefined();
+		expect(after.errors.map(error => error.code)).toEqual(['unknown-from']);
 	});
 });

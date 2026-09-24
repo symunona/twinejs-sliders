@@ -2,7 +2,6 @@ import {Editor} from 'codemirror';
 import {commands} from '../codemirror-commands';
 import {toolbar} from '../codemirror-toolbar';
 import {
-	LAST_NAMED_SCENE_KEY,
 	LAST_SCENE_KEY,
 	LastSceneRecord
 } from '../sliders/last-scene';
@@ -37,7 +36,7 @@ function menus(selection = false): Menu[] {
 function store(record: Partial<LastSceneRecord>, key = LAST_SCENE_KEY) {
 	window.localStorage.setItem(
 		key,
-		JSON.stringify({passageName: 'Alley', text: 'id: alley\n', ...record})
+		JSON.stringify({passageName: 'Alley', text: 'bg: dusk\n', ...record})
 	);
 }
 
@@ -85,26 +84,20 @@ describe('the toolbar', () => {
 	});
 
 	it('names the stored scene once the editor has stored one', () => {
-		store({id: 'alley'});
-		store({id: 'alley'}, LAST_NAMED_SCENE_KEY);
+		store({passageName: 'Alley'});
 
 		const items = menus()[0].items;
 
 		expect(items[1]).toMatchObject({
-			label: 'Insert Last Scene (alley)',
+			label: 'Insert Last Scene (Alley)',
 			disabled: false
 		});
 		expect(items[2]).toMatchObject({
-			label: "Overlay on 'alley'",
+			label: "Overlay on 'Alley'",
 			disabled: false
 		});
 	});
 
-	it('falls back to the passage name for an unnamed scene', () => {
-		store({passageName: 'Alley'});
-
-		expect(menus()[0].items[1].label).toBe('Insert Last Scene (Alley)');
-	});
 });
 
 describe('the scene commands', () => {
@@ -133,7 +126,7 @@ describe('the scene commands', () => {
 		expect(text).toMatch(/^\n\[scene\]\n/);
 		expect(text).toMatch(/\n\[continued\]\n$/);
 
-		for (const key of ['id:', 'from:', 'bg:', 'camera:', 'cast:', 'props:', 'fx:', 'beats:', 'links:']) {
+		for (const key of ['from:', 'bg:', 'camera:', 'cast:', 'props:', 'fx:', 'beats:', 'links:']) {
 			expect(text).toContain(key);
 		}
 	});
@@ -152,8 +145,8 @@ describe('the scene commands', () => {
 		expect(lines[start + 1]).toMatch(/^\s+\w[\w .-]*:/);
 	});
 
-	it('pastes the stored scene without its id', () => {
-		store({id: 'alley', text: 'id: alley\nbg: dusk\n'});
+	it('pastes the stored scene, naming where it came from', () => {
+		store({passageName: 'Alley', text: 'bg: dusk\n'});
 
 		const {editor, replaceSelection} = fakeEditor();
 
@@ -161,16 +154,12 @@ describe('the scene commands', () => {
 
 		const text = replaceSelection.mock.calls[0][0] as string;
 
-		expect(text).toContain("# Copy of scene 'alley'");
+		expect(text).toContain("# Copy of the scene in 'Alley'.");
 		expect(text).toContain('bg: dusk');
-		expect(text).not.toContain('id: alley');
 	});
 
 	it('writes an overlay that inherits from the stored scene', () => {
-		store(
-			{cast: ['mira'], id: 'alley', props: ['candle'], text: 'id: alley\n'},
-			LAST_NAMED_SCENE_KEY
-		);
+		store({cast: ['mira'], passageName: 'Alley', props: ['candle'], text: 'bg: dusk\n'});
 
 		const {editor, replaceSelection} = fakeEditor();
 
@@ -178,8 +167,8 @@ describe('the scene commands', () => {
 
 		const text = replaceSelection.mock.calls[0][0] as string;
 
-		expect(text).toContain('id: alley-next');
-		expect(text).toContain('from: alley');
+		expect(text).not.toMatch(/^id:/m);
+		expect(text).toContain('from: Alley');
 		expect(text).toContain('# Inherited cast: mira');
 		expect(text).toContain('# Inherited props: candle');
 	});

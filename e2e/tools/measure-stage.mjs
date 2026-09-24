@@ -15,7 +15,7 @@ await p.getByRole('tab',{name:'Passage'}).click();
 await p.getByRole('button',{name:'Edit',exact:true}).click();
 const cm=p.locator('.CodeMirror textarea').first();
 await cm.click({force:true});
-await p.keyboard.insertText('[scene]\nid: m\ncast:\n  mira: {at: -0.4}\n  joren: {at: 0.35}\n');
+await p.keyboard.insertText('[scene]\ncast:\n  mira: {at: -0.4}\n  joren: {at: 0.35}\n');
 await p.waitForTimeout(2500);
 const m = await p.evaluate(()=>{
   const pv=document.querySelector('[data-testid="scene-preview"]');

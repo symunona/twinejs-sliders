@@ -21,28 +21,6 @@ import {
 } from './stage';
 
 /**
- * The backdrop a scene names, with `id:` as the default (spec 02).
- *
- * A snapshot named `tavern-night` almost always wants the `tavern-night` backdrop, so
- * spelling it twice was the confusing part — the same shorthand `props:` already gets,
- * where the entity key doubles as the asset name. `bg:` still wins when present, and
- * `bg: ~` is how a scene says it genuinely has no backdrop.
- *
- * A patch (`from:`) is left alone: its id names the variant, not the art, so defaulting
- * there would demand a backdrop file per variant instead of inheriting the one it came
- * from.
- */
-export function sceneBg(scene: Scene): string | null | undefined {
-	if (scene.bg !== undefined || scene.from !== undefined) {
-		return scene.bg;
-	}
-
-	const id = scene.id?.trim();
-
-	return id === '' ? undefined : id;
-}
-
-/**
  * Merge a scene onto a base stage.
  *
  * `base` is the stage named by `from:`. When the scene has no `from:` it is a complete
@@ -54,27 +32,18 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 	const out: Stage = isPatch ? cloneStage(base) : emptyStage();
 
 	// --- bg -----------------------------------------------------------------
-	const bg = sceneBg(scene);
+	const bg = scene.bg;
 
 	if (bg === null) {
 		out.bg = undefined;
-		out.bgImplicit = undefined;
 		out.bgFx = undefined;
 	} else if (bg !== undefined) {
 		out.bg = bg;
-		out.bgImplicit = scene.bg === undefined ? true : undefined;
-		// The motion is read off `bg`, not off its own absence — the same rule `mergePatch`
-		// uses for a step list. A scene that names a backdrop states its motion in full,
-		// so `bg: cellar` after an inherited parallax STOPS it; an `id:`-derived backdrop
-		// (no `bg:` line at all) leaves an inherited motion alone, because it asked for
-		// nothing.
-		if (scene.bgFx !== undefined) {
-			out.bgFx = {...scene.bgFx};
-		} else if (scene.bg !== undefined) {
-			out.bgFx = undefined;
-		}
+		// A scene that names a backdrop states its motion in full, the same rule
+		// `mergePatch` uses for a step list: `bg: cellar` after an inherited parallax STOPS it.
+		out.bgFx = scene.bgFx !== undefined ? {...scene.bgFx} : undefined;
 	}
-	// absent + patch -> inherited (already cloned); absent + snapshot -> `id:` or undefined.
+	// absent + patch -> inherited (already cloned); absent + snapshot -> undefined.
 
 	// --- camera -------------------------------------------------------------
 	if (scene.camera) {

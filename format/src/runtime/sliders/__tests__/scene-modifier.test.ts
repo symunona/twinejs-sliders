@@ -60,7 +60,7 @@ const FORKING_BEATS = ['beats:', '  - box: "[[stay]] or [[leave]]?"'].join(
 );
 
 function scene(...blocks: string[]) {
-	return ['id: alley', ...blocks].join('\n');
+	return [...blocks].join('\n');
 }
 
 beforeEach(() => storyVars());

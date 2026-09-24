@@ -5,7 +5,7 @@
  * into transitions. No DOM, no assets, no renderer.
  */
 
-export {applyScene, sceneBg} from './apply-scene';
+export {applyScene} from './apply-scene';
 export {
 	DEFAULT_DURATIONS,
 	diffStages,

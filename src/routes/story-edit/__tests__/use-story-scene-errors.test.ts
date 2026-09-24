@@ -5,8 +5,8 @@ import {
 	useStorySceneErrors
 } from '../use-story-scene-errors';
 
-const goodScene = ['[scene]', 'id: tavern-night', 'bg: tavern-night'].join('\n');
-const badScene = ['[scene]', 'id: broken', 'chast:', '  mira: {at: 0}'].join(
+const goodScene = ['[scene]', 'bg: tavern-night'].join('\n');
+const badScene = ['[scene]', 'cast:', '  mira: {at: 0, layer: middle}'].join(
 	'\n'
 );
 
@@ -18,6 +18,12 @@ describe('storySceneErrors()', () => {
 		];
 
 		expect(storySceneErrors(passages)).toEqual({});
+	});
+
+	it('does not count an unknown key: it is a warning, the scene still plays', () => {
+		expect(
+			storySceneErrors([fakePassage({text: '[scene]\nchast:\n  mira: {at: 0}'})])
+		).toEqual({});
 	});
 
 	it('ignores a scene that parses cleanly', () => {
@@ -44,7 +50,7 @@ describe('storySceneErrors()', () => {
 		// click creates it. A card badge would call an unwritten passage a mistake.
 		const start = fakePassage({
 			name: 'Start',
-			text: ['[scene]', 'id: start', 'links:', '  on: Nowhere At All'].join('\n')
+			text: ['[scene]', 'links:', '  on: Nowhere At All'].join('\n')
 		});
 
 		expect(storySceneErrors([start])).toEqual({});
@@ -55,7 +61,7 @@ describe('storySceneErrors()', () => {
 		// nothing set `torch`.
 		const start = fakePassage({
 			name: 'Start',
-			text: ['[scene]', 'id: start', 'links:', '  on: {to: Start, if: torch}'].join(
+			text: ['[scene]', 'links:', '  on: {to: Start, if: torch}'].join(
 				'\n'
 			)
 		});

@@ -65,7 +65,6 @@ import {keyFix} from './levenshtein';
 import {scanWikiLinks} from './links';
 
 export const TOP_LEVEL_KEYS = [
-	'id',
 	'from',
 	'bg',
 	'camera',
@@ -101,23 +100,6 @@ export const ENTITY_KEYS = [
 	'highlight',
 	'if'
 ] as const;
-
-/**
- * Entity keys that were renamed, old spelling -> new. They still parse, forever, to exactly
- * what the new key gives; the author gets an `info` with a one-click fix.
- *
- * NOT in `ENTITY_KEYS`: those are what completion offers and what Scene Help documents,
- * and neither should teach the old word.
- */
-export const RETIRED_ENTITY_KEYS = {
-	frame: 'pose',
-	frameLoop: 'poseLoop'
-} as const;
-
-export type RetiredEntityKey = keyof typeof RETIRED_ENTITY_KEYS;
-
-/** Ease-map keys that were renamed, same deal as `RETIRED_ENTITY_KEYS`. */
-export const RETIRED_EASE_KINDS = {frame: 'pose'} as const;
 
 /**
  * Keys inside the long form of an entity's `link:` — `link: {to: Cellar, if: has_key}`.
@@ -350,12 +332,14 @@ function addError(
 ): void {
 	const span = spanOf(ctx, node);
 
+	// An unrecognized key never fails a scene: it is dropped and the rest still plays.
 	ctx.errors.push({
 		code,
 		fix: options.fix && {...options.fix, ...span},
 		hint: options.hint,
 		message,
-		severity: options.severity ?? 'error',
+		severity:
+			code === 'unknown-key' ? 'warning' : options.severity ?? 'error',
 		...span
 	});
 }
@@ -605,7 +589,7 @@ function parseEntityLink(ctx: Ctx, node: unknown): EntityLink | undefined {
 					addError(
 						ctx,
 						'unknown-key',
-						`Unknown key '${key}' in link.`,
+						`Unknown key '${key}'.`,
 						pair.key,
 						{...keyFix(key, LINK_ENTITY_KEYS)}
 					);
@@ -986,7 +970,7 @@ function parseBubbleStyle(
 			}
 
 			default:
-				addError(ctx, 'unknown-key', `Unknown bubble key '${key}'.`, pair.key, {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, BUBBLE_KEYS)
 				});
 		}
@@ -1226,9 +1210,7 @@ function parseEase(
 			continue;
 		}
 
-		const kind = retiredKey(ctx, pair, key, RETIRED_EASE_KINDS);
-
-		if (!EASE_KINDS.includes(kind as (typeof EASE_KINDS)[number])) {
+		if (!EASE_KINDS.includes(key as (typeof EASE_KINDS)[number])) {
 			addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 				...keyFix(key, EASE_KINDS),
 				hint: `An ease map is keyed by what is moving: ${EASE_KINDS.join(', ')}.`
@@ -1236,63 +1218,14 @@ function parseEase(
 			continue;
 		}
 
-		const token = parseEaseToken(ctx, pair.value, `${label} ${kind}`);
+		const token = parseEaseToken(ctx, pair.value, `${label} ${key}`);
 
 		if (token !== undefined) {
-			out[kind] = token;
+			out[key] = token;
 		}
 	}
 
 	return Object.keys(out).length > 0 ? (out as BeatEase) : undefined;
-}
-
-/**
- * An old key spelling, read as its new one. Says so at `info`, with the rename as a
- * one-click fix. Anything not in `retired` comes back untouched.
- */
-function retiredKey(
-	ctx: Ctx,
-	pair: Pair<unknown, unknown>,
-	key: string,
-	retired: Readonly<Record<string, string>>
-): string {
-	if (!Object.prototype.hasOwnProperty.call(retired, key)) {
-		return key;
-	}
-
-	const next = retired[key];
-
-	addError(ctx, 'retired-key', `\`${key}:\` is now \`${next}:\`.`, pair.key, {
-		fix: {label: `Change '${key}' to '${next}'`, replaces: key, text: next},
-		hint: `The old spelling still works. twine-cli rewrite-poses renames every one in a story.`,
-		severity: 'info'
-	});
-	return next;
-}
-
-/**
- * `keyFix` for an entity key, where a near miss of an old spelling (`fram`) is offered as
- * today's key. Without it `fram` would find nothing close: `frame` is no longer a key, and
- * `pose` is too far off to guess.
- */
-function entityKeyFix(
-	key: string,
-	valid: readonly string[]
-): ReturnType<typeof keyFix> {
-	const retired: Readonly<Record<string, string>> = RETIRED_ENTITY_KEYS;
-	const near = keyFix(key, [...valid, ...Object.keys(retired)]);
-	const text = near.fix?.text;
-
-	if (text === undefined || !Object.prototype.hasOwnProperty.call(retired, text)) {
-		return near;
-	}
-
-	const next = retired[text];
-
-	return {
-		fix: {label: `Change '${key}' to '${next}'`, replaces: key, text: next},
-		hint: `Did you mean '${next}'?`
-	};
 }
 
 /**
@@ -1504,14 +1437,12 @@ function parseEntityBody(
 	const baseline = relative ? 0 : LAYER_BASELINE;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
-		const written = keyName(pair);
+		const key = keyName(pair);
 
-		if (written === undefined) {
+		if (key === undefined) {
 			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
 			continue;
 		}
-
-		const key = retiredKey(ctx, pair, written, RETIRED_ENTITY_KEYS);
 
 		// Held, not judged: whether one of these is a no-op depends on a `fit:` that may be
 		// in another block entirely. `checkFitPlanes` decides once the document is read.
@@ -1904,7 +1835,7 @@ function parseEntityBody(
 
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
-					...entityKeyFix(key, valid)
+					...keyFix(key, valid)
 				});
 		}
 	}
@@ -2272,7 +2203,6 @@ function isExplodedBeat(key: string, extras: Pair<unknown, unknown>[]): boolean 
 
 	const bodyKeys: readonly string[] = [
 		...ENTITY_KEYS,
-		...Object.keys(RETIRED_ENTITY_KEYS),
 		...SAY_KEYS,
 		...BEAT_BODY_KEYS
 	];
@@ -2438,7 +2368,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 			}
 
 			default:
-				addError(ctx, 'unknown-key', `Unknown box key '${key}'.`, pair.key, {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, BOX_KEYS)
 				});
 		}
@@ -2834,7 +2764,7 @@ function parseLinkList(ctx: Ctx, node: unknown): LinkListStyle | undefined {
 			}
 
 			default:
-				addError(ctx, 'unknown-key', `Unknown linkList key '${key}'.`, pair.key, {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, LINK_LIST_KEYS)
 				});
 		}
@@ -3125,16 +3055,6 @@ function parseSceneDoc(text: string): ParseResult {
 		}
 
 		switch (key) {
-			case 'id': {
-				const id = asSourceString(ctx, pair.value, 'id');
-
-				if (id !== undefined) {
-					scene.id = id;
-				}
-
-				break;
-			}
-
 			case 'from': {
 				if (isNullNode(pair.value)) {
 					break; // `from: ~` is the documented "no parent" placeholder.

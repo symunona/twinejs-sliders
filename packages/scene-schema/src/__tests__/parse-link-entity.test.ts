@@ -134,7 +134,7 @@ props:
   door: {link: {to: Cellar, icon: sword}}
 `);
 
-		expect(scene.errors[0]?.message).toMatch(/Unknown key 'icon' in link/);
+		expect(scene.errors[0]?.message).toMatch(/Unknown key 'icon'\./);
 	});
 });
 

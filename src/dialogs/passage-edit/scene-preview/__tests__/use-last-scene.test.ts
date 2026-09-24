@@ -1,6 +1,5 @@
 import {act, renderHook} from '@testing-library/react-hooks';
 import {
-	LAST_NAMED_SCENE_KEY,
 	LAST_SCENE_KEY,
 	readLastScene,
 	saveLastScene,
@@ -11,7 +10,6 @@ const passage = [
 	'mood: tense',
 	'--',
 	'[scene]',
-	'id: tavern-night',
 	'bg: tavern-night',
 	'cast:',
 	'  mira: {at: -0.4, pose: idle}',
@@ -27,11 +25,10 @@ const passage = [
 beforeEach(() => window.localStorage.clear());
 
 describe('saveLastScene', () => {
-	it('stores the scene block, its id, and its entity ids', () => {
+	it('stores the scene block, its passage and its entity ids', () => {
 		const record = saveLastScene(passage, 'Tavern - Arrival');
 
 		expect(record).toBeDefined();
-		expect(record!.id).toBe('tavern-night');
 		expect(record!.cast).toEqual(['mira']);
 		expect(record!.props).toEqual(['candle']);
 		expect(record!.passageName).toBe('Tavern - Arrival');
@@ -42,20 +39,9 @@ describe('saveLastScene', () => {
 		expect(readLastScene()).toEqual(record);
 	});
 
-	it('keeps the last NAMED scene, so an overlay always has a target', () => {
-		saveLastScene(passage, 'Tavern - Arrival');
-		// A scene with no id — a pasted copy, say — replaces the last scene but
-		// must not replace the last named one.
-		saveLastScene('[scene]\nbg: street-dusk', 'Street');
-
-		expect(readLastScene()!.id).toBeUndefined();
-		expect(readLastScene(LAST_NAMED_SCENE_KEY)!.id).toBe('tavern-night');
-	});
-
 	it('stores a scene that does not parse cleanly', () => {
-		const record = saveLastScene('[scene]\nid: half\nbg:', 'Half Written');
+		const record = saveLastScene('[scene]\ncast: [\nbg:', 'Half Written');
 
-		expect(record!.id).toBe('half');
 		expect(record!.text).toContain('bg:');
 	});
 

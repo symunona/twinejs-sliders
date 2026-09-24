@@ -34,7 +34,6 @@ const STORY = 'Lighthouse';
 
 /** The scene the checkout test carries art for. `bg:` resolves by name, not by id. */
 const SCENE_TEXT = `[scene]
-id: tavern
 bg: tavern-night
 `;
 

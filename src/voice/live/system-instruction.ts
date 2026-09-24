@@ -14,8 +14,8 @@
  */
 
 export interface SystemInstructionOptions {
-	/** Scene ids that exist right now, so the model does not have to `map` to name one. */
-	sceneIds: string[];
+	/** Passages that hold a scene right now, so the model does not have to `map` to name one. */
+	sceneNames: string[];
 	storyName: string;
 }
 
@@ -54,8 +54,8 @@ export function systemInstruction(options: SystemInstructionOptions): string {
 		'- Be brief. One or two sentences. The author is working, not listening to a report.',
 		'- Say what you are about to do before a write, not after.',
 		'- If a tool returns an error, say what went wrong in plain words and suggest the next move. Do not retry the same call.',
-		options.sceneIds.length > 0
-			? `\nSCENES IN THIS STORY RIGHT NOW: ${options.sceneIds.join(', ')}.`
+		options.sceneNames.length > 0
+			? `\nSCENES IN THIS STORY RIGHT NOW: ${options.sceneNames.join(', ')}.`
 			: ''
 	]
 		.filter(line => line !== '')

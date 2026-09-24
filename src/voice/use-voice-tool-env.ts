@@ -16,6 +16,7 @@ import {buildStoryMap, catalogFromManifest, lintStory} from '@sliders/story-map'
 import type {LintFinding, Manifest, StoryMap} from '@sliders/story-map';
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
+import {matchPassageName} from '@sliders/scene-types';
 import type {Scene} from '@sliders/scene-types';
 import {v4 as uuid} from '@lukeed/uuid';
 import * as React from 'react';
@@ -167,8 +168,8 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 
 			const scene = parseScene(block.text).scene;
 
-			if (scene.id !== undefined && !scenes.has(scene.id)) {
-				scenes.set(scene.id, scene);
+			if (!scenes.has(passage.name)) {
+				scenes.set(passage.name, scene);
 			}
 		}
 
@@ -199,7 +200,11 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 					// question and would call a pose unused while a beat flips to it.
 					for (const row of resolveSceneAssets(scene, resolved, {
 						allPoses: true,
-						scenes: sceneId => scenes.get(sceneId)
+						scenes: name => {
+							const matched = matchPassageName(scenes.keys(), name);
+
+							return matched === undefined ? undefined : scenes.get(matched);
+						}
 					})) {
 						if (row.id === '') {
 							continue;
