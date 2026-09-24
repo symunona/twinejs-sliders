@@ -74,6 +74,31 @@ beats:
 		]);
 	});
 
+	it('gates a box beat from inside its map', () => {
+		const {errors, scene, conditionSpans} = parseScene(`
+beats:
+  - box: {text: "Hush.", if: tense}
+`);
+
+		expect(errors).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({if: 'tense', kind: 'box', text: 'Hush.'});
+		expect(conditionSpans).toEqual([
+			expect.objectContaining({if: 'tense', line: 3, what: 'Beat 1'})
+		]);
+	});
+
+	it('refuses a box with an if: inside and one beside', () => {
+		const {errors} = parseScene(`
+beats:
+  - box: {text: "Hush.", if: a}
+    if: b
+`);
+
+		expect(errors.map(error => error.message)).toEqual([
+			'This beat has two if: conditions.'
+		]);
+	});
+
 	it('refuses two conditions on one beat', () => {
 		const {errors} = parseScene(`
 beats:

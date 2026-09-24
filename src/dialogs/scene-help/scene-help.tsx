@@ -148,6 +148,7 @@ const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 	bubble: 'Style and placement, as a map.',
 	dur: DUR_HELP,
 	ease: EASE_HELP,
+	if: 'Only play this box when the condition holds — box: {text: "…", if: has_key}. Same as if: beside box:.',
 	sfx: SFX_HELP,
 	text: 'The narration itself. box: "…" is the short way of writing this.'
 };
