@@ -15,6 +15,8 @@ import {bubbleFontStack} from '@sliders/scene-types';
 import type {BubblePadding, BubbleSide} from './bubble-shapes';
 import {bubbleShape, hashSeed, isBubbleShape} from './bubble-shapes';
 import type {StageBox} from './coords';
+import type {MarkupNode} from './markup';
+import {parseMarkup} from './markup';
 import {injectStyles} from './styles';
 
 export type {BubbleSide};
@@ -778,13 +780,27 @@ export class DialogueLayer {
 		rec.body.appendChild(text);
 	}
 
-	/** Text with `[[links]]` turned into real anchors. Everything else goes in as text. */
+	/**
+	 * Text with `[[links]]` turned into real anchors and inline marks (`*bold*`, `_italic_`,
+	 * `==highlight==`, `~strike~`) into their elements. Built node by node, never as HTML.
+	 */
 	private renderRichText(target: HTMLElement, text: string): void {
 		target.replaceChildren();
+		this.appendMarkup(target, parseMarkup(parseLinkText(text)));
+	}
 
-		for (const token of parseLinkText(text)) {
-			if (token.kind === 'text') {
-				target.appendChild(this.doc!.createTextNode(token.value));
+	private appendMarkup(target: HTMLElement, nodes: MarkupNode[]): void {
+		for (const node of nodes) {
+			if (node.kind === 'text') {
+				target.appendChild(this.doc!.createTextNode(node.value));
+				continue;
+			}
+
+			if (node.kind !== 'link') {
+				const el = this.doc!.createElement(node.kind);
+
+				this.appendMarkup(el, node.children);
+				target.appendChild(el);
 				continue;
 			}
 
@@ -792,13 +808,13 @@ export class DialogueLayer {
 
 			a.className = 'sliders-link';
 			a.href = '#';
-			a.dataset.slidersLink = token.name;
+			a.dataset.slidersLink = node.name;
 
-			if (token.target) {
-				a.dataset.slidersTarget = token.target;
+			if (node.target) {
+				a.dataset.slidersTarget = node.target;
 			}
 
-			a.textContent = token.name;
+			a.textContent = node.name;
 			target.appendChild(a);
 		}
 	}

@@ -26,6 +26,8 @@ export {
 	preferredSide,
 	tailToward
 } from './dialogue';
+export {parseMarkup} from './markup';
+export type {MarkKind, MarkupNode} from './markup';
 export type {
 	BubblePlacement,
 	BubbleSide,

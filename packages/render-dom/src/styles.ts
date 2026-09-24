@@ -688,6 +688,18 @@ export const DIALOGUE_CSS = `
 	right: auto;
 }
 
+/*
+ * ==highlight== in beat text. Translucent so it reads on a light bubble and on the dark
+ * narration box alike, and the text keeps its own colour. \`--sliders-mark-bg\` to restyle.
+ */
+.sliders-bubble mark,
+.sliders-box mark {
+	background: var(--sliders-mark-bg, rgba(255, 210, 0, 0.45));
+	color: inherit;
+	border-radius: 2px;
+	padding: 0 0.1em;
+}
+
 .sliders-link {
 	color: #4a3bd6;
 	text-decoration: underline;

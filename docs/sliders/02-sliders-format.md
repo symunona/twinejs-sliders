@@ -450,6 +450,30 @@ No parallax. A plane does not counter-translate with the camera (yet).
 | `- fx: thunder` | fire an effect |
 | `- mark: tense` | name this state so `from:` can target it. Renders nothing. |
 
+### Inline marks
+
+Say and box text take chat-style marks. Bubble and box alike.
+
+| Write | Get |
+|---|---|
+| `*bold*` · `**bold**` | **bold** — single `*` is BOLD, not CommonMark italic |
+| `_italic_` | *italic* |
+| `==highlight==` | `<mark>`, translucent yellow. `--sliders-mark-bg` restyles it. |
+| `~strike~` · `~~strike~~` | ~~strike~~ |
+| `\*` `\_` `\=` `\~` `\\` | the character itself |
+
+| Rule | |
+|---|---|
+| Opens | after start, space or punctuation, before a non-space |
+| Closes | after a non-space, before end, space or punctuation |
+| So | `snake_case`, `2*3*4`, `a==b`, `x == y` stay as written |
+| Unclosed | stays literal text |
+| Nest | `*very _much_*` works. `*[[go]]*` — a link inside a mark stays a link. |
+| Not supported | headings, lists, code, markdown links, LaTeX, HTML (shown as text) |
+| YAML | a line STARTING with `*` is a YAML alias — parse error. Quote it: `- mira: "*No.*"`. `\*` is a bad escape inside `"…"`; use `'…'` or plain. |
+
+Renderer: `packages/render-dom/src/markup.ts`. DOM nodes, never HTML strings.
+
 ### Timing — `dur:`
 
 A beat with no `dur:` waits for the reader if it says something, and plays straight on if

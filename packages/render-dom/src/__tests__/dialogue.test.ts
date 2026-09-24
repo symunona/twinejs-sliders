@@ -144,6 +144,31 @@ describe('DialogueLayer', () => {
 		expect(bubble.textContent).toContain('come back');
 	});
 
+	it('renders inline marks as elements, never as HTML', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.say('mira', 'I *said* _no_, ==twice==, ~maybe~. <b>raw</b>');
+
+		const body = mount.querySelector('.sliders-bubble-body') as HTMLElement;
+
+		expect(body.querySelector('strong')?.textContent).toBe('said');
+		expect(body.querySelector('em')?.textContent).toBe('no');
+		expect(body.querySelector('mark')?.textContent).toBe('twice');
+		expect(body.querySelector('s')?.textContent).toBe('maybe');
+		expect(body.querySelector('b')).toBeNull();
+		expect(body.textContent).toContain('<b>raw</b>');
+	});
+
+	it('keeps a link clickable inside a mark', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.setBox('Run *[[now]]*!');
+
+		const a = mount.querySelector('.sliders-box strong > a.sliders-link') as HTMLElement;
+
+		expect(a.dataset.slidersLink).toBe('now');
+	});
+
 	it('reuses the bubble element for the same speaker', () => {
 		const {mount, dialogue} = setup();
 
