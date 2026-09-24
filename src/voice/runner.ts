@@ -10,6 +10,7 @@
  */
 
 import {buildLinkGraph, formatFinding} from '@sliders/story-map';
+import type {LintFinding} from '@sliders/story-map';
 import {buildSceneIndex, extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
 import {patchBeatText, patchSceneText} from './scene-patch';
@@ -21,6 +22,63 @@ import type {ToolPassage, ToolResult, VoiceToolEnv} from './voice.types';
 const MAX_LINT_ROWS = 40;
 const MAX_ASSET_ROWS = 60;
 const MAX_REV_ROWS = 15;
+const MAX_VERIFY_ROWS = 10;
+
+/**
+ * A finding without its line. A write above a pre-existing error moves that error down a
+ * line; keyed with the line, it would come back as "new" and the model would chase a
+ * problem it did not cause.
+ */
+function findingKey(finding: LintFinding): string {
+	return `${finding.level}\u0000${finding.file}\u0000${finding.message}`;
+}
+
+/**
+ * What a write did to the lint, as the write's own result carries it.
+ *
+ * Diffed against a lint taken just before, so the model hears about what it broke and
+ * what it fixed — not about every warning the story already had, which it would then try
+ * to fix unasked. `info` is advice and never reported.
+ */
+function lintDelta(
+	before: LintFinding[],
+	after: LintFinding[]
+): {errors: number; fixed: number; new: string[]; truncated?: true; warnings: number} {
+	const remaining = new Map<string, number>();
+
+	for (const finding of before) {
+		if (finding.level !== 'info') {
+			const key = findingKey(finding);
+
+			remaining.set(key, (remaining.get(key) ?? 0) + 1);
+		}
+	}
+
+	const added: LintFinding[] = [];
+
+	for (const finding of after) {
+		if (finding.level === 'info') {
+			continue;
+		}
+
+		const key = findingKey(finding);
+		const left = remaining.get(key) ?? 0;
+
+		if (left > 0) {
+			remaining.set(key, left - 1);
+		} else {
+			added.push(finding);
+		}
+	}
+
+	return {
+		errors: after.filter(finding => finding.level === 'error').length,
+		fixed: [...remaining.values()].reduce((sum, count) => sum + count, 0),
+		new: added.slice(0, MAX_VERIFY_ROWS).map(formatFinding),
+		...(added.length > MAX_VERIFY_ROWS ? {truncated: true as const} : {}),
+		warnings: after.filter(finding => finding.level === 'warn').length
+	};
+}
 
 function str(args: Record<string, unknown>, key: string): string | undefined {
 	const value = args[key];
@@ -674,7 +732,23 @@ export function createToolRunner(env: VoiceToolEnv): ToolRunner {
 			}
 
 			try {
-				return await handler(args ?? {});
+				if (voiceToolsByName.get(name)!.kind !== 'write') {
+					return await handler(args ?? {});
+				}
+
+				// Every write is verified, unasked. A model that has to remember to lint
+				// does not, and then tells the author "done" over a scene that no longer
+				// parses. A lint that fails is not the write's failure — skip the check.
+				const before = await env.lint().catch(() => undefined);
+				const result = await handler(args ?? {});
+
+				if (result.ok === false || result.unchanged === true || !before) {
+					return result;
+				}
+
+				const after = await env.lint().catch(() => undefined);
+
+				return after ? {...result, lint: lintDelta(before, after)} : result;
 			} catch (error) {
 				// A thrown action creator — a duplicate name, a passage that moved out from
 				// under the call — is a normal outcome here, not a crash. The model gets the

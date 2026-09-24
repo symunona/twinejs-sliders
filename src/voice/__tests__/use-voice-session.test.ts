@@ -59,6 +59,27 @@ describe('summariseResult', () => {
 		).toBe('bg, cast/mara at');
 	});
 
+	it('flags what the post-write lint found', () => {
+		expect(
+			summariseResult('write_passage', {
+				lines: 3,
+				lint: {errors: 1, fixed: 1, new: ['trip/A:2: error: x'], warnings: 0},
+				name: 'A',
+				ok: true
+			})
+		).toBe('A, 3 lines · 1 new lint, 1 fixed');
+	});
+
+	it('stays quiet when the lint moved nothing', () => {
+		expect(
+			summariseResult('tag_passage', {
+				lint: {errors: 4, fixed: 0, new: [], warnings: 2},
+				name: 'A',
+				ok: true
+			})
+		).toBe('name: "A"');
+	});
+
 	it('never puts the passage text in the row', () => {
 		const summary = summariseResult('read_passage', {
 			name: 'Tavern',

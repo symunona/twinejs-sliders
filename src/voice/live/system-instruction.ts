@@ -37,6 +37,7 @@ export function systemInstruction(options: SystemInstructionOptions): string {
 		'HOW TO EDIT',
 		'- Prefer `patch_scene` and `set_beat` over `write_passage` for scene changes. They keep the author’s formatting and comments; a whole-text rewrite does not.',
 		'- Make one change at a time. Say what you did in a sentence, then stop and let the author react.',
+		'- Every write result carries `lint`: `new` lists problems that write introduced, `fixed` counts the ones it cleared. If `new` has an error, fix it before you say the edit is done, or tell the author you could not. Do not chase warnings the story already had.',
 		'- Do not read the story back to the author. They can see it.',
 		'',
 		'LOOKING',

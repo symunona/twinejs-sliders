@@ -27,6 +27,24 @@ function nextId(): string {
 
 /** What a tool result reads like in the transcript. Short: the row is a receipt, not a log. */
 export function summariseResult(name: string, result: ToolResult): string {
+	const base = summariseBase(name, result);
+	const lint = (result as {lint?: {fixed: number; new: string[]}}).lint;
+
+	if (!lint || (lint.new.length === 0 && lint.fixed === 0)) {
+		return base;
+	}
+
+	// The author should see what the model was told: a write that broke something reads
+	// as broken on its own row, not only after the model decides to mention it.
+	const parts = [
+		lint.new.length > 0 ? `${lint.new.length} new lint` : '',
+		lint.fixed > 0 ? `${lint.fixed} fixed` : ''
+	].filter(Boolean);
+
+	return `${base} · ${parts.join(', ')}`;
+}
+
+function summariseBase(name: string, result: ToolResult): string {
 	if (result.ok === false) {
 		return result.error;
 	}
@@ -61,7 +79,7 @@ export function summariseResult(name: string, result: ToolResult): string {
 			return `${record.width}×${record.height} at beat ${record.beat}`;
 		default:
 			return Object.entries(record)
-				.filter(([key]) => key !== 'ok')
+				.filter(([key]) => key !== 'ok' && key !== 'lint')
 				.map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
 				.join(', ')
 				.slice(0, 160);

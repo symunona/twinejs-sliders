@@ -482,6 +482,87 @@ describe('write tools', () => {
 	});
 });
 
+describe('verify after write', () => {
+	it('tells the model when its write broke the scene', async () => {
+		const {env} = fakeEnv();
+		const runner = createToolRunner(env);
+
+		await runner.run('read_passage', {ref: 'p1'});
+
+		const result = await runner.run('write_passage', {
+			ref: 'p1',
+			text: TAVERN.replace('Street Dawn', 'Nowhere')
+		});
+
+		expect(result).toMatchObject({lint: {fixed: 0}, ok: true});
+		expect((result as unknown as {lint: {new: string[]}}).lint.new).toContainEqual(
+			expect.stringMatching(/^trip\/Tavern Night:\d+: error: .*Nowhere/)
+		);
+	});
+
+	it('does not repeat problems the story already had', async () => {
+		const {env, passages} = fakeEnv();
+
+		passages[0].text = TAVERN.replace('Street Dawn', 'Nowhere');
+
+		const runner = createToolRunner(env);
+
+		await runner.run('read_passage', {ref: 'p2'});
+
+		const result = await runner.run('write_passage', {
+			ref: 'p2',
+			text: 'The empty street. [[Tavern Night]]'
+		});
+
+		expect(result).toMatchObject({lint: {fixed: 0, new: []}, ok: true});
+		expect((result as unknown as {lint: {errors: number}}).lint.errors).toBeGreaterThan(0);
+	});
+
+	it('counts what a write fixed', async () => {
+		const {env, passages} = fakeEnv();
+
+		passages[0].text = TAVERN.replace('Street Dawn', 'Nowhere');
+
+		const runner = createToolRunner(env);
+
+		await runner.run('read_passage', {ref: 'p1'});
+
+		const result = await runner.run('write_passage', {ref: 'p1', text: TAVERN});
+
+		expect(result).toMatchObject({lint: {errors: 0, new: []}, ok: true});
+		expect((result as unknown as {lint: {fixed: number}}).lint.fixed).toBeGreaterThan(0);
+	});
+
+	it('does not lint around a read, a refused write or an unchanged one', async () => {
+		const {env} = fakeEnv();
+		const runner = createToolRunner(env);
+
+		expect(await runner.run('map', {})).not.toHaveProperty('lint');
+		expect(await runner.run('write_passage', {ref: 'p1', text: 'x'})).not.toHaveProperty(
+			'lint'
+		);
+
+		await runner.run('read_passage', {ref: 'p1'});
+
+		expect(
+			await runner.run('write_passage', {ref: 'p1', text: TAVERN})
+		).not.toHaveProperty('lint');
+	});
+
+	it('still lands the write when the lint itself fails', async () => {
+		const {env} = fakeEnv();
+
+		env.lint = async () => {
+			throw new Error('no catalog');
+		};
+
+		const result = await createToolRunner(env).run('create_passage', {name: 'Cellar'});
+
+		expect(result).toMatchObject({name: 'Cellar', ok: true});
+		expect(result).not.toHaveProperty('lint');
+	});
+});
+
 describe('ui tools', () => {
 	it('selects and scrolls to a passage', async () => {
 		const {calls, env} = fakeEnv();
