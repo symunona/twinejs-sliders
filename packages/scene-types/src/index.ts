@@ -411,6 +411,12 @@ export interface BeatBase {
 	/** Index in the scene's beat list. */
 	index: number;
 	/**
+	 * `if:` — the beat plays only when this condition holds. Evaluated by the player alone,
+	 * which drops a failing beat before the scene runs; the editor holds no story state and
+	 * plays every beat.
+	 */
+	if?: string;
+	/**
 	 * How long this beat holds the screen, in seconds — and, because a beat IS the
 	 * animation, how long its stage changes take to play.
 	 *
@@ -888,6 +894,11 @@ export interface Scene {
 	locked?: true | SceneLock[];
 	/** Entity patches keyed by id. `null` means "remove this entity" (only valid with from). */
 	entities: Record<EntityId, EntityPatch | null>;
+	/**
+	 * `if:` on a `cast:`/`props:`/`entities:` entry, by id. Apart from `entities` because a
+	 * condition is not stage state: nothing downstream of the player's pruning may see it.
+	 */
+	entityIfs?: Record<EntityId, string>;
 	fx?: StageFx[];
 	/**
 	 * The scene's bed. `null` is `music: ~` — silence, stated — which a patch scene needs to
@@ -1004,6 +1015,11 @@ export interface ParseResult {
 	 */
 	linkIfSpans?: Record<string, SceneSpan>;
 	/**
+	 * Every entity and beat `if:`, with where it was written — links have `linkIfSpans`.
+	 * `what` names the owner for a message: `'drone'`, `Beat 3`.
+	 */
+	conditionSpans?: ConditionSpan[];
+	/**
 	 * Where each beat was written, index-aligned with `scene.beats`.
 	 *
 	 * The editor highlights the line the preview is standing on, the way a debugger
@@ -1019,6 +1035,12 @@ export interface ParseResult {
 	 * when that passage does not exist.
 	 */
 	entityLinkSpans?: EntityLinkSpan[];
+}
+
+/** One entity or beat `if:` and where the author wrote it. */
+export interface ConditionSpan extends SceneSpan {
+	if: string;
+	what: string;
 }
 
 /** One entity `link:` and where the author wrote it. */

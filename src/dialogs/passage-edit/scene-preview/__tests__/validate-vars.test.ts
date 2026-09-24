@@ -180,3 +180,22 @@ describe('varsSeparatorErrors()', () => {
 		expect(separator(text)).toHaveLength(1);
 	});
 });
+
+describe('unknownVariableErrors() on entity and beat if:', () => {
+	it('reports what an entity and a beat test, by owner', () => {
+		const errors = unknown(
+			'[scene]\nprops:\n  drone: {at: 0, if: no_drone}\nbeats:\n  - wait: 1\n    if: no_wait\n'
+		);
+
+		expect(errors.map(error => error.message)).toEqual([
+			"'drone' tests a variable nothing sets: 'no_drone'.",
+			"Beat 1 tests a variable nothing sets: 'no_wait'."
+		]);
+	});
+
+	it('takes passage.visits as built in', () => {
+		expect(
+			unknown('[scene]\nprops:\n  drone: {at: 0, if: passage.visits == 1}\n')
+		).toEqual([]);
+	});
+});

@@ -248,6 +248,7 @@ cannot carry one.
 | `fit` | `cover` / `contain`. Draw it as a full-bleed PLANE, not a sprite. See Planes. |
 | `layer` | `back` / `mid` / `front`. Optional. |
 | `z` | numeric escape hatch within a layer |
+| `if` | on stage only when the condition holds. Its beats go with it. See Conditions. |
 
 ### Poses — `pose:`
 
@@ -449,6 +450,7 @@ No parallax. A plane does not counter-translate with the camera (yet).
 | `- wait: 0.5` | pause, seconds |
 | `- fx: thunder` | fire an effect |
 | `- mark: tense` | name this state so `from:` can target it. Renders nothing. |
+| `- bob: {say: "…", if: x}` / `- wait: 1` + `if: x` on the next line | beat plays only when `x` holds. See Conditions. |
 
 ### Inline marks
 
@@ -819,6 +821,66 @@ the target passage.
 A clickable entity is a real exit: the story map draws an arrow for it, a passage rename
 follows it, a missing target gets a ghost card, and `twine-cli lint` counts it when
 deciding what is reachable.
+
+## Conditions — `if:`
+
+One grammar, three places. Parsed by `@sliders/scene-schema` `condition.ts` — editor,
+`twine-cli`, player all use it. NOT JavaScript, no `eval`.
+
+| Where | Gates | Written |
+|---|---|---|
+| link | the choice | `links: {buy: {to: Shop, if: coins >= 3}}`, `link: {to: …, if: …}` |
+| entity | the entity is on stage at all | `props: {drone: {at: 0.2, if: passage.visits == 1}}` |
+| beat | the beat plays | `- bob: {say: "…", if: x}` or `if:` beside any beat's key |
+
+```yaml
+props:
+  drone: {at: [0.02, -0.94], if: passage.visits == 1}
+beats:
+  - drone: {say: ":-["}                          # gone with the drone
+  - bob: {say: "Back again.", if: passage.visits > 1}
+  - wait: 1
+    if: tense
+  - {box: "Hush.", if: not tense}
+```
+
+### Grammar
+
+| Form | Means |
+|---|---|
+| `has_key` | truthy. Old bare-name `if:` means exactly this. |
+| `not x` / `"!x"` | negation. Bare `!x` is a YAML TAG — quote it or use `not`. |
+| `a and b` / `a && b` | both |
+| `a or b` / `a \|\| b` | either. `and` binds tighter. `( )` group. |
+| `coins >= 3` | `== != < <= > >=`. Strict: `coins == "3"` is false for the number 3. |
+| `door == "open"` | strings, either quote. `true false null`. |
+| `passage.visits` | dotted names reach Chapbook lookups |
+
+Refused, with a hint: `$name` (bare names, like the vars section), single `=` (a condition
+sets nothing), `? :`. Does not parse → **false** at runtime, error in the editor.
+
+### Where state comes from
+
+- **Story-wide.** Chapbook variables. One store for the whole story, saved with it.
+- Set in a vars section: `name: value` above `--` at the top of any passage. Runs on entry,
+  BEFORE the scene draws — a flag set in this passage already reads true in its own `if:`.
+- `passage.visits` — visits to this passage, this one included. `== 1` = first visit. No flag
+  needed for "first time here".
+- `passage.from`, `passage.name` and the rest of Chapbook's lookups.
+- Editor lint flags a name nothing sets (`unknown-variable`). Built-in roots `passage`,
+  `config`, `story`, … always pass.
+
+### Rules
+
+| Rule | Why |
+|---|---|
+| Evaluated in the player only, on render (`scene-modifier.ts` → `gateScene`) | only place holding story state |
+| Editor preview ignores conditions, shows everything | editor has no story state |
+| Entity gated out → its beats (`who:` it) dropped too | a line from a prop not on stage has nothing to hang off |
+| Under `from:` a failed entity `if:` REMOVES (`~`), even inherited | "not here" means not here |
+| `from:` inherits the target's stage with every `if:` ignored | the scene index is static text |
+| Beats renumbered after gating | `index` is a position; `@mark` reads it |
+| `if:` not on `EntityPatch` — `Scene.entityIfs`, `Beat.if` | a condition is not stage state; nothing past the gate sees it |
 
 ## Reuse: id, from, marks
 

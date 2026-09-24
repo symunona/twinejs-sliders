@@ -13,7 +13,12 @@
  * list drawn in both places is every choice shown twice.
  */
 
-import {beatsOfferLinks, parseScene} from '@sliders/scene-schema';
+import {
+	beatsOfferLinks,
+	evalCondition,
+	gateScene,
+	parseScene
+} from '@sliders/scene-schema';
 import type {EntityPatchBody, Scene, SceneError} from '@sliders/scene-types';
 import {createLoggers} from '../logger';
 import {get} from '../state';
@@ -50,12 +55,17 @@ function* entityPatches(scene: Scene): Generator<EntityPatchBody> {
 	}
 }
 
+/** Does an `if:` hold against the story's state right now? Chapbook's `get` reads it. */
+function holds(condition: string): boolean {
+	return evalCondition(condition, get);
+}
+
 /** Drop any entity link whose `if:` is false right now. */
 function pruneEntityLinks(scene: Scene): void {
 	for (const patch of entityPatches(scene)) {
 		const cond = patch.link?.if;
 
-		if (cond && !get(cond)) {
+		if (cond && !holds(cond)) {
 			// `undefined`, not `null`: null is the author's own "stop being a way out",
 			// which under `from:` CLEARS an inherited link. A condition that failed should
 			// leave whatever an earlier scene set alone.
@@ -67,7 +77,12 @@ function pruneEntityLinks(scene: Scene): void {
 export const sceneModifier: Modifier = {
 	match: SCENE_MODIFIER,
 	processRaw(output, {state}) {
-		const {errors, scene} = parseScene(output.text);
+		const parsed = parseScene(output.text);
+		const {errors} = parsed;
+		// Entity and beat `if:` are settled here, against the story's state, for the reason
+		// entity links are below: this is the only place that can read it. The stage element
+		// is handed a scene with nothing left to decide.
+		const scene = gateScene(parsed.scene, holds);
 		const messages = errors.map(describe);
 
 		for (const message of messages) {
@@ -80,7 +95,7 @@ export const sceneModifier: Modifier = {
 		state.count = count + 1;
 
 		const links = Object.values(scene.links ?? {}).filter(
-			link => !link.if || Boolean(get(link.if))
+			link => !link.if || holds(link.if)
 		);
 
 		// An entity `link:` carrying a condition is pruned HERE rather than in the player,

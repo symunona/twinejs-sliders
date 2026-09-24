@@ -58,6 +58,17 @@ UI: `goto` `open_preview` `open_passage_editor` `highlight` `checkpoint`
 
 Schemas are `tools.ts`. It is the spec.
 
+## Scene syntax in the prompt
+
+Model knows no scene grammar beyond what `system-instruction.ts` says. Left alone it
+invents: `drone: !$visited ? {…} : ~`, `- execute: $x = true` (2026-09-24, "service
+landing"). Lint catches it, story is still broken.
+
+- `SCENE STATE` block: `if:` on link / entity / beat, the condition grammar, vars section,
+  `passage.visits == 1`, preview shows all.
+- New scene feature an author will ASK for by voice → add one line there. Spec 02 stays the
+  reference; the prompt carries the traps only.
+
 ## Threads
 
 One conversation open at a time, out of a per-story list. New / list / restore / delete in

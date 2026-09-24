@@ -63,7 +63,9 @@ export const ENTITY_KEY_ORDER = [
 	// Last, and together: these two say what the entity DOES rather than how it looks, and
 	// an author scanning an entry for its geometry should not have to read past them.
 	'link',
-	'highlight'
+	'highlight',
+	// Last of all: whether the entity is there at all, read once its look is known.
+	'if'
 ] as const;
 
 export type NodeRange = [number, number, number];

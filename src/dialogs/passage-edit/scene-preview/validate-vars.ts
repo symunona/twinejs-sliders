@@ -11,9 +11,10 @@
  * condition can name is a Chapbook built-in namespace, listed below.
  */
 
-import {ParseResult, SceneError, SceneFix} from '@sliders/scene-types';
+import {ParseResult, SceneError, SceneFix, SceneSpan} from '@sliders/scene-types';
 import {
 	VARS_LINE_RE,
+	conditionNames,
 	VARS_SEPARATOR,
 	VARS_SEPARATOR_RE,
 	nearMissSeparator,
@@ -56,28 +57,6 @@ const BUILTIN_ROOTS = new Set([
 	'sliders',
 	'story'
 ]);
-
-/** Words in an expression that are syntax, not state. */
-const KEYWORDS = new Set([
-	'and',
-	'false',
-	'in',
-	'Infinity',
-	'NaN',
-	'not',
-	'null',
-	'or',
-	'true',
-	'typeof',
-	'undefined'
-]);
-
-/**
- * Strings and numbers first so their innards never look like names, then a dotted name.
- * `'no' in list` must yield `list` alone, and `1.5` must yield nothing at all.
- */
-const EXPR_RE =
-	/(['"])(?:\\.|(?!\1)[^\\])*\1?|\b\d[\d.eE+-]*|([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/g;
 
 /**
  * The variable names one passage's vars section declares. A passage with no `--` line has
@@ -126,37 +105,12 @@ export function definedVariables(texts: string[]): Set<string> {
 	return defined;
 }
 
-/** A name an expression tests, and where in the expression it was written. */
-export interface ExprName {
-	name: string;
-	index: number;
-}
-
-/** The variables an `if:` expression reads, in the order they appear. */
-export function conditionNames(expression: string): ExprName[] {
-	const names: ExprName[] = [];
-
-	EXPR_RE.lastIndex = 0;
-
-	let match: RegExpExecArray | null;
-
-	while ((match = EXPR_RE.exec(expression)) !== null) {
-		const name = match[2];
-
-		if (name === undefined || KEYWORDS.has(name)) {
-			continue;
-		}
-
-		// `foo(…)` is a call, and a call is not state the story sets.
-		if (/^\s*\(/.test(expression.slice(match.index + name.length))) {
-			continue;
-		}
-
-		names.push({index: match.index, name});
-	}
-
-	return names;
-}
+/**
+ * The variables an `if:` expression reads, in the order they appear. The grammar is the
+ * player's own (`@sliders/scene-schema`'s `condition.ts`), so this cannot flag a name the
+ * player would not read, or miss one it would.
+ */
+export {conditionNames};
 
 /** Is this name something the story sets, or something Chapbook provides? */
 function isKnown(name: string, defined: Set<string>): boolean {
@@ -207,8 +161,21 @@ function nameSpan(
  */
 export function unknownVariableErrors(input: VarValidationInput): SceneError[] {
 	const {blockOffset, passages, result, text} = input;
-	const links = result?.scene.links ?? {};
-	const conditions = Object.values(links).filter(link => link.if);
+	const linkSpans = result?.linkIfSpans ?? {};
+	const conditions: {if: string; span?: SceneSpan; what: string}[] = [
+		...Object.values(result?.scene.links ?? {})
+			.filter(link => link.if)
+			.map(link => ({
+				if: link.if!,
+				span: linkSpans[link.name],
+				what: `Link '${link.name}'`
+			})),
+		...(result?.conditionSpans ?? []).map(({if: cond, what, ...span}) => ({
+			if: cond,
+			span,
+			what
+		}))
+	];
 
 	if (conditions.length === 0) {
 		return [];
@@ -219,17 +186,16 @@ export function unknownVariableErrors(input: VarValidationInput): SceneError[] {
 	const defined = definedVariables([text, ...passages.map(one => one.text)]);
 	const known = [...defined].filter(name => !name.includes('.'));
 	const lines = text.split('\n');
-	const spans = result?.linkIfSpans ?? {};
 	const errors: SceneError[] = [];
 
-	for (const link of conditions) {
-		for (const {name} of conditionNames(link.if!)) {
+	for (const condition of conditions) {
+		for (const {name} of conditionNames(condition.if)) {
 			if (isKnown(name, defined)) {
 				continue;
 			}
 
 			const nearest = nearestKey(name, known);
-			const at = nameSpan(lines, spans[link.name], blockOffset, name);
+			const at = nameSpan(lines, condition.span, blockOffset, name);
 
 			errors.push({
 				code: 'unknown-variable',
@@ -255,7 +221,7 @@ export function unknownVariableErrors(input: VarValidationInput): SceneError[] {
 						? `Set it in a vars section: '${name}: false' above a '${VARS_SEPARATOR}' line at the top of a passage.`
 						: `Did you mean '${nearest}'?`,
 				line: at.line,
-				message: `Link '${link.name}' tests a variable nothing sets: '${name}'.`,
+				message: `${condition.what} tests a variable nothing sets: '${name}'.`,
 				severity: 'error'
 			});
 		}

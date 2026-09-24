@@ -308,3 +308,45 @@ describe('linkEntries', () => {
 		).toEqual(['stay']);
 	});
 });
+
+describe('entity and beat if:', () => {
+	const LANDING = [
+		'props:',
+		'  drone: {at: 0.2, if: passage.visits == 1}',
+		'beats:',
+		'  - drone: {say: ":-["}',
+		'  - box: "Quiet here."',
+		'  - {box: "Again?", if: not passage.visits == 1}'
+	].join('\n');
+
+	it('stages the gated entity and its beats on the first visit', () => {
+		storyVars({'passage.visits': 1});
+
+		const {scene} = payloadOf(render(LANDING));
+
+		expect(Object.keys(scene.entities)).toEqual(['drone']);
+		expect(scene.beats.map(beat => beat.kind)).toEqual(['say', 'box']);
+	});
+
+	it('leaves the entity, its beats and the first-visit beat out after that', () => {
+		storyVars({'passage.visits': 2});
+
+		const {scene} = payloadOf(render(LANDING));
+
+		expect(scene.entities).toEqual({});
+		expect(scene.beats.map(beat => [beat.index, beat.kind])).toEqual([
+			[0, 'box'],
+			[1, 'box']
+		]);
+	});
+
+	it('reads a link condition with the same grammar', () => {
+		storyVars({coins: 2});
+
+		const {links} = payloadOf(
+			render('links:\n  buy: {to: Shop, if: coins >= 3}\n  go: {to: Street, if: coins < 3}')
+		);
+
+		expect(links).toEqual({go: 'Street'});
+	});
+});

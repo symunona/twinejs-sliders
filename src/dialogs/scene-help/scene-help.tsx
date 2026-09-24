@@ -85,6 +85,7 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 		' or '
 	)} — cover fills and crops, contain fits the whole picture in. A plane sits in the same z space as the cast, so a transparent PNG at z: 1 is a wall to stand behind. at:, of:, scale: and rot: do nothing on one; z:, opacity: and flip: still do. Without a z: it sits at ${FIT_Z}, behind everyone.`,
 	flip: 'true mirrors the sprite horizontally.',
+	if: 'Only put this entity on stage when the condition holds — drone: {at: 0.2, if: passage.visits == 1}. Its beats go with it. In the player only: the editor preview shows everything. See the Links tab for what a condition can say.',
 	highlight:
 		'How a clickable entity lights up under the pointer. A CSS colour (gold, #ffcc00) tints the default glow; gold, danger, cold and warm are built in. Any other word reaches the DOM as data-highlight for your stylesheet to paint.',
 	layer: `Legacy sugar for z:. ${LAYERS.join(', ')} — back is z: -1, front is z: 2, mid writes nothing. An explicit z: wins.`,
@@ -575,6 +576,27 @@ links:
   stay: {to: Tavern Fight, if: has_weapon}
 
 [continued]`}</Sample>
+						<h3>What a condition can say</h3>
+						<p>
+							The same <code>if:</code> gates a link, an entity in{' '}
+							<code>cast:</code>/<code>props:</code>, and a beat. Names are bare —
+							no <code>$</code>. <code>passage.visits</code> counts visits to this
+							passage, this one included, so <code>passage.visits == 1</code> is
+							the first time. Variables set in this passage&apos;s own vars
+							section are already set when the scene draws. The editor preview
+							ignores every condition and shows it all.
+						</p>
+						<Sample>{`if: has_key
+if: not has_key          # or "!has_key" — quoted, a bare ! is YAML
+if: coins >= 3 and not guard_awake
+if: door == "open" or (a || b)
+
+props:
+  drone: {at: 0.2, if: passage.visits == 1}   # its beats go with it
+beats:
+  - bob: {say: "Back again.", if: passage.visits > 1}
+  - wait: 1
+    if: tense`}</Sample>
 					</TabPanel>
 
 					<TabPanel>

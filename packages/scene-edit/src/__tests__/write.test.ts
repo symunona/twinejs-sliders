@@ -522,8 +522,9 @@ describe('half-typed and malformed input', () => {
 	it('writes every key the schema accepts, so none can be dropped silently', () => {
 		// A SUPERSET, not equality. `layer:` is still a key the parser accepts, but it is
 		// legacy sugar that desugars to `z` — there is no `layer` on an EntityPatch to write
-		// from, so it can only ever be read.
-		const writable = [...ENTITY_KEYS].filter(key => key !== 'layer');
+		// from, so it can only ever be read. `if:` neither: a condition is not stage state,
+		// so it lives in `Scene.entityIfs` and a gesture never writes one.
+		const writable = [...ENTITY_KEYS].filter(key => key !== 'layer' && key !== 'if');
 
 		expect([...ENTITY_KEY_ORDER].sort()).toEqual(
 			expect.arrayContaining([...ENTITY_KEYS].sort())

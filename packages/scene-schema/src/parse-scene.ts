@@ -11,6 +11,7 @@
 
 import {LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument} from 'yaml';
 import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
+import {parseCondition} from './condition';
 import {
 	BUBBLE_ANCHORS,
 	BUBBLE_KEYS,
@@ -97,7 +98,8 @@ export const ENTITY_KEYS = [
 	'opacity',
 	'ref',
 	'link',
-	'highlight'
+	'highlight',
+	'if'
 ] as const;
 
 /**
@@ -274,6 +276,11 @@ interface Ctx {
 	 * the target spans are: a condition names story variables, and the parser has no story.
 	 */
 	linkIfNodes: Map<string, unknown>;
+	/**
+	 * Every entity and beat `if:`, with a label for the message and where it was written.
+	 * Reported as `conditionSpans`, for the reason `linkIfNodes` is.
+	 */
+	conditionNodes: {if: string; what: string; node: unknown}[];
 	/** Where each beat was written, in `scene.beats` order. Reported as `beatSpans`. */
 	beatNodes: unknown[];
 	/**
@@ -388,7 +395,11 @@ function checkSubset(ctx: Ctx, node: unknown, depth = 0): void {
 	const tag = (node as {tag?: string}).tag;
 
 	if (tag !== undefined && tag !== ONLY_TAG) {
-		addError(ctx, 'subset-violation', `Tags ('${tag}') are not allowed in a scene block.`, node);
+		// `if: !has_key` is the one a reader writes without meaning a tag at all: YAML takes
+		// the leading `!` and the condition is gone. Say how to get it back.
+		addError(ctx, 'subset-violation', `Tags ('${tag}') are not allowed in a scene block.`, node, {
+			hint: `A leading ! starts a YAML tag. For a condition, write "${tag}" in quotes, or not ${tag.replace(/^!+/, '')}.`
+		});
 	}
 
 	if (isScalar(node) && (node as Scalar).type === 'BLOCK_FOLDED') {
@@ -493,6 +504,32 @@ function asNumber(ctx: Ctx, node: unknown, what: string): number | undefined {
 }
 
 /**
+ * An `if:` value: text, and a condition that parses (`condition.ts`).
+ *
+ * A condition that does not parse is still returned. The player reads a broken condition
+ * as false, so the thing it gates stays hidden — which is what the red squiggle says too.
+ * Dropping it here would show the thing instead, and the author would see the opposite of
+ * what they will get once the typo is fixed.
+ */
+function parseIf(ctx: Ctx, node: unknown, what: string): string | undefined {
+	const text = asString(ctx, node, what);
+
+	if (text === undefined) {
+		return undefined;
+	}
+
+	const {error} = parseCondition(text);
+
+	if (error) {
+		addError(ctx, 'bad-value', `${what}: ${error.message}`, node, {
+			hint: error.hint
+		});
+	}
+
+	return text;
+}
+
+/**
  * `rot:` — degrees, clockwise, about the entity's own origin.
  *
  * Shared by the entity body and by one step of a pose list so the two can never disagree
@@ -555,7 +592,7 @@ function parseEntityLink(ctx: Ctx, node: unknown): EntityLink | undefined {
 				}
 
 				case 'if': {
-					const cond = asString(ctx, pair.value, 'link if');
+					const cond = parseIf(ctx, pair.value, 'link if');
 
 					if (cond !== undefined) {
 						link.if = cond;
@@ -1004,6 +1041,11 @@ interface EntityBody {
 	bg?: ParsedBg;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
 	ofNode?: unknown;
+	/**
+	 * From `if:`. Gates the entity (in `cast:`/`props:`) or the beat — never a stage key,
+	 * so never in `patch`, for the reason `dur` is not.
+	 */
+	if?: string;
 }
 
 /**
@@ -1759,6 +1801,21 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'if': {
+				const cond = parseIf(ctx, pair.value, 'if');
+
+				if (cond !== undefined) {
+					body.if = cond;
+					ctx.conditionNodes.push({
+						if: cond,
+						node: pair.value,
+						what: allowSay ? `Beat for '${selfId}'` : `'${selfId}'`
+					});
+				}
+
+				break;
+			}
+
 			case 'say': {
 				if (!allowSay) {
 					addError(
@@ -1909,6 +1966,10 @@ function parseEntityMap(
 		}
 
 		scene.entities[id] = patch;
+
+		if (body.if !== undefined) {
+			scene.entityIfs = {...scene.entityIfs, [id]: body.if};
+		}
 	}
 }
 
@@ -2235,10 +2296,21 @@ function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 			continue;
 		}
 
-		const pairs = (item as YAMLMap).items as Pair<unknown, unknown>[];
+		const all = (item as YAMLMap).items as Pair<unknown, unknown>[];
+		// `if:` beside the beat's own key gates the whole beat, whatever kind it is —
+		// `- wait: 1` has no body map to put one in. Taken out first, so the one-key rule
+		// below never sees it.
+		const gate = all.find(one => keyName(one) === 'if');
+		const pairs = gate ? all.filter(one => one !== gate) : all;
 
 		if (pairs.length === 0) {
-			addError(ctx, 'bad-value', 'Empty beat.', item);
+			addError(
+				ctx,
+				'bad-value',
+				gate ? 'This if: gates nothing.' : 'Empty beat.',
+				item,
+				gate ? {hint: 'Put it beside a beat: `- {box: "…", if: has_key}`.'} : {}
+			);
 			continue;
 		}
 
@@ -2287,6 +2359,19 @@ function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 
 		const index = scene.beats.length;
 		const beat = parseBeat(ctx, key, pair, index);
+
+		if (beat && gate) {
+			const cond = parseIf(ctx, gate.value, 'if');
+
+			if (beat.if !== undefined) {
+				addError(ctx, 'bad-value', 'This beat has two if: conditions.', gate.key, {
+					hint: 'Keep one. Join two tests with and.'
+				});
+			} else if (cond !== undefined) {
+				beat.if = cond;
+				ctx.conditionNodes.push({if: cond, node: gate.value, what: `Beat ${index + 1}`});
+			}
+		}
 
 		if (beat) {
 			scene.beats.push(beat);
@@ -2494,7 +2579,8 @@ function parseBeat(
 						...(body.dur !== undefined ? {dur: body.dur} : {}),
 						...(body.ease !== undefined ? {ease: body.ease} : {}),
 						...(body.sfx ? {sfx: body.sfx} : {}),
-						...bgFields(body.bg)
+						...bgFields(body.bg),
+						...(body.if !== undefined ? {if: body.if} : {})
 					};
 				}
 
@@ -2542,7 +2628,8 @@ function parseBeat(
 					...(body.dur !== undefined ? {dur: body.dur} : {}),
 					...(body.ease !== undefined ? {ease: body.ease} : {}),
 					...(body.sfx ? {sfx: body.sfx} : {}),
-					...bgFields(body.bg)
+					...bgFields(body.bg),
+					...(body.if !== undefined ? {if: body.if} : {})
 				};
 			}
 
@@ -2608,6 +2695,8 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 				const value =
 					key === 'to'
 						? asSourceString(ctx, prop.value, 'link to')
+						: key === 'if'
+						? parseIf(ctx, prop.value, 'link if')
 						: asString(ctx, prop.value, `link ${key}`);
 
 				if (value !== undefined) {
@@ -2968,6 +3057,7 @@ function parseSceneDoc(text: string): ParseResult {
 		fitIds: new Set(),
 		fitIgnored: [],
 		inlineLinks: new Map(),
+		conditionNodes: [],
 		linkIfNodes: new Map(),
 		linkNodes: new Map(),
 		linkTargetNodes: new Map(),
@@ -3363,6 +3453,11 @@ function parseSceneDoc(text: string): ParseResult {
 
 	return {
 		beatSpans: ctx.beatNodes.map(node => spanOf(ctx, node)),
+		conditionSpans: ctx.conditionNodes.map(({if: cond, node, what}) => ({
+			...spanOf(ctx, node),
+			if: cond,
+			what
+		})),
 		entityLinkSpans,
 		errors: ctx.errors,
 		linkIfSpans,

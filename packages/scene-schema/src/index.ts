@@ -42,6 +42,9 @@ export {
 } from './story-bubble';
 export type {StoryBubbleKey} from './story-bubble';
 export {beatsOfferLinks} from './beat-links';
+export {conditionNames, evalCondition, parseCondition} from './condition';
+export type {Condition, ConditionError, ConditionParse} from './condition';
+export {gateScene} from './gate-scene';
 export {scanWikiLinks} from './links';
 export type {WikiLink} from './links';
 export {keyFix, keyHint, levenshtein, nearestKey} from './levenshtein';
