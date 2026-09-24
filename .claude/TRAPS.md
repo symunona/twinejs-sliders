@@ -57,6 +57,7 @@
 | 1 | The git INDEX is shared too — a peer may have things staged. | Private index: `GIT_INDEX_FILE=… git read-tree HEAD`, add own paths, `write-tree` + `commit-tree` + `update-ref`. |
 | 2 | Deploy and `build:format` build the WORKING TREE, so they ship a peer's half-finished code — or just fail on it (rollup: "X is not exported by Y" when X plainly is). | Build from a clean `git worktree` at the pushed head. A bare re-run often passes, which is the tell. |
 | 1 | `npx prettier --write` on a file you did not create reflows ~53 never-formatted src files and buries your diff. | Re-apply edits by hand. |
+| 1 | Worktree `node_modules` SYMLINK is untracked, not ignored — `.gitignore`'s `node_modules/` matches a directory only. A symlinked `packages/*/node_modules` lands in the deploy fingerprint: `sha1sum: …: Is a directory`, deploy stops. | Symlink the root `node_modules` only. Nothing under `packages/` needs its own. |
 | 1 | `git commit -- <paths>` commits the WORKING TREE at those paths and ignores the index — so the `git apply --cached` hunk split above is silently thrown away and the peer lines you unpicked go in anyway. | `git commit` with no pathspec once the index is right. Pathspec only when the index is untouched. |
 
 ## Misc
