@@ -57,8 +57,10 @@ describe('sizing: absolute', () => {
 
 		dialogue.say('mira', 'Three lines of narration.', {style});
 
-		// 0.2 * 900 = 180px tall, less the 10px padding top and bottom.
-		const inner = 180 - 20;
+		// 0.2 * 900 = 180px tall, less the 10px padding top and bottom. Plus the one pixel
+		// the fitter forgives, which is there to cover `scrollHeight` rounding — see
+		// `FIT_SLACK`.
+		const inner = 180 - 20 + 1;
 
 		expect(parseFloat(body.style.fontSize) * LINES).toBeLessThanOrEqual(inner);
 	});

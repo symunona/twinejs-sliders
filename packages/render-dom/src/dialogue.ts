@@ -97,6 +97,25 @@ const FIT_MIN = 0.25;
 const FIT_MAX = 2.4;
 
 /**
+ * Slack the fitter allows itself when asking whether the words overflow, in px.
+ *
+ * `scrollHeight` is an INTEGER rounded off the element's real, fractional height, and the
+ * inner height it is compared against is arithmetic — the box less its padding, both of
+ * which carry fractions from a stage box divided by an aspect ratio. A body 82.5px tall
+ * reports `scrollHeight` 83 while the sum says 82.49, so a bubble that overflows by
+ * nothing at all reads as overflowing by half a pixel.
+ *
+ * That is not a near miss: it is the answer at EVERY size, so the binary search never
+ * finds one that fits and the type collapses to `FIT_MIN`. Whether a bubble is struck by
+ * it comes down to which side of .5 its height lands on — one line of a scene reads fine
+ * and the next is set at a quarter size.
+ *
+ * A whole pixel covers the rounding with room to spare, and a line that does overflow its
+ * box by one pixel is clipped by `overflow: hidden` and invisible either way.
+ */
+const FIT_SLACK = 1;
+
+/**
  * A fixed bubble's inset, as a fraction of the STAGE height, for the same reason the type
  * is. The numbers are the stylesheet's 10px and 14px at a 900px stage, so nothing composed
  * at that size moves.
@@ -551,7 +570,9 @@ export class DialogueLayer {
 		const fits = (size: number) => {
 			body.style.fontSize = `${size}px`;
 
-			return body.scrollHeight <= innerH + 0.5 && body.scrollWidth <= innerW + 0.5;
+			return (
+				body.scrollHeight <= innerH + FIT_SLACK && body.scrollWidth <= innerW + FIT_SLACK
+			);
 		};
 
 		let lo = base * FIT_MIN;

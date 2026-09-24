@@ -70,7 +70,9 @@ describe('box sizing: absolute', () => {
 
 		dialogue.setBox('Three lines of narration.', {...style});
 
-		expect(parseFloat(body.style.fontSize) * LINES).toBeLessThanOrEqual(inner);
+		// Plus the one pixel the fitter forgives to cover `scrollHeight` rounding, see
+		// `FIT_SLACK`.
+		expect(parseFloat(body.style.fontSize) * LINES).toBeLessThanOrEqual(inner + 1);
 	});
 
 	it('still uses as much of that inner box as it can', () => {
