@@ -10,6 +10,7 @@ import {IconButton} from '../../../../components/control/icon-button';
 import {useCommand} from '../../../../hotkeys';
 import type {SyncRecord} from '../../../../store/persistence/server/server.types';
 import {deleteStory, Story, useStoriesContext} from '../../../../store/stories';
+import {unbindStory} from '../../../../store/asset-library/engine-registry';
 import {isElectronRenderer} from '../../../../util/is-electron';
 import {TestId} from './test-id';
 
@@ -67,6 +68,9 @@ export const DeleteStoryButton: React.FC<DeleteStoryButtonProps> = ({
 
 		if (alsoRemoveFromServer) {
 			void onRemoveFromServer?.(story);
+			// Gone for everyone: its library binding goes too. Kept otherwise — the
+			// story still lives on the server, and its binding resolves names there.
+			void unbindStory(story.id);
 		}
 
 		setAlsoRemoveFromServer(false);
@@ -95,7 +99,16 @@ export const DeleteStoryButton: React.FC<DeleteStoryButtonProps> = ({
 				disabled={!story}
 				icon={<IconTrash />}
 				label={t('common.delete')}
-				onConfirm={story ? () => dispatch(deleteStory(story)) : () => {}}
+				onConfirm={
+					story
+						? () => {
+								dispatch(deleteStory(story));
+								// Never synced: this was its only copy. Tombstone the binding;
+								// the own collection stays.
+								void unbindStory(story.id);
+						  }
+						: () => {}
+				}
 				prompt={prompt}
 			/>
 		);

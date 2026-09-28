@@ -136,3 +136,15 @@ export function resetLibraryEngineForTests(): void {
 	ready = undefined;
 	online = false;
 }
+
+/**
+ * Story deleted for good (never synced, or removed from the server): its binding is tombstoned (usage badges drop it).
+ * Its own collection is kept — other stories may attach it, and art is cheap to keep.
+ */
+export async function unbindStory(storyId: string): Promise<void> {
+	const engine = await libraryEngine();
+
+	if (engine.binding(storyId)) {
+		engine.delete(storyId, 'binding');
+	}
+}

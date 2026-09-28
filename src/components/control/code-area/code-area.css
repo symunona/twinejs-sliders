@@ -97,6 +97,22 @@ li.CodeMirror-hint.sliders-hint-snippet {
 }
 
 /*
+Library names outside the story's plain view. Shadowed / ambiguous ones are only
+reachable as `collection/name`: grey. Team collections the story does not attach sit
+at the bottom, and a pick attaches the collection: italic, with a dashed marker.
+*/
+
+li.CodeMirror-hint.sliders-hint-shadowed {
+	color: var(--gray);
+}
+
+li.CodeMirror-hint.sliders-hint-team {
+	box-shadow: inset 2px 0 var(--light-gray);
+	color: var(--dark-gray);
+	font-style: italic;
+}
+
+/*
 What a pick is about to overwrite. Ctrl-Space on a name already written replaces the
 whole of it, spaces included, and this is what says so before the author commits --
 a real selection cannot do the job, because show-hint closes as soon as one exists.

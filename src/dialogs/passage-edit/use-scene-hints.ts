@@ -47,6 +47,8 @@ import {
 } from '@sliders/scene-types';
 import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-context';
 import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
+import {hintsForSlot, LibraryHintExtras, libraryHints} from './library-hints';
+import {useLibraryEngine} from '../../store/asset-library/library-provider';
 
 /**
  * Every effect the DOM renderer knows how to draw, from
@@ -1280,7 +1282,9 @@ export function sceneCompletion(
 	library: Pick<AssetLibrary, 'all' | 'characters'>,
 	passages: string[] = [],
 	/** What `from:` can name across the story — see `sceneTemplateNames`. */
-	templates: string[] = []
+	templates: string[] = [],
+	/** Shadowed `coll/name` forms and unattached team names — see `library-hints.ts`. */
+	extras?: LibraryHintExtras
 ) {
 	const text = editor.getValue();
 	const lines = text.split('\n');
@@ -1325,6 +1329,13 @@ export function sceneCompletion(
 	// middle of being typed wants it narrowed.
 	const exact = all.some(name => name.toLowerCase() === written.toLowerCase());
 	const names = exact || matched.length === 0 ? all : matched;
+	// Library extras sit under the story's own names, narrowed by the same substring.
+	const slotExtras = extras ? hintsForSlot(slot.kind, extras.hints) : [];
+	const matchedExtras = slotExtras.filter(hint =>
+		hint.label.toLowerCase().includes(candidate)
+	);
+	const extraHints =
+		exact || matchedExtras.length === 0 ? slotExtras : matchedExtras;
 	// Pinned above the asset names under `props:`, and filtered by the same substring rule
 	// they are -- `plane`, `fit` and `cover` are all in its label, so any of the three
 	// narrows to it. Only where a whole entity line can be written: on a name in the middle
@@ -1338,7 +1349,7 @@ export function sceneCompletion(
 
 	// The snippet is an offer of its own: an empty library still has a plane to write, and
 	// that is the case where an author is most likely to be asking what goes here.
-	if (names.length === 0 && !offerPlane) {
+	if (names.length === 0 && extraHints.length === 0 && !offerPlane) {
 		return undefined;
 	}
 
@@ -1363,7 +1374,10 @@ export function sceneCompletion(
 		// picked so the author goes straight on to its value.
 		slotKind: slot.kind,
 		to: {ch: end, line: cursor.line},
-		list: orderByRecent(names, bucket).map(({name, recent}) => ({
+		list: orderByRecent(names, bucket).map(({name, recent}) => itemFor(name, recent))
+	};
+	function itemFor(name: string, recent: boolean) {
+		return {
 			className: recent ? 'sliders-hint-recent' : undefined,
 			// The name is what shows and what gets remembered; `text` is only
 			// what lands in the document, scaffold and spaces and all.
@@ -1394,8 +1408,17 @@ export function sceneCompletion(
 								? linkEntry(name)
 								: `${name}${ENTITY_PREFIX}${ENTITY_AT}${ENTITY_SUFFIX}`
 						: `${needsSpace ? ' ' : ''}${name}${suffix ?? ''}`
-		}))
-	};
+		};
+	}
+
+	for (const hint of extraHints) {
+		completion.list.push({
+			...itemFor(hint.insert, false),
+			className:
+				hint.source === 'team' ? 'sliders-hint-team' : 'sliders-hint-shadowed',
+			displayText: hint.label
+		});
+	}
 
 	if (offerPlane) {
 		completion.list.unshift({
@@ -1407,6 +1430,18 @@ export function sceneCompletion(
 	}
 
 	CodeMirror.on(completion, 'pick', (picked: {displayText: string}) => {
+		const hint = extraHints.find(extra => extra.label === picked.displayText);
+
+		if (hint) {
+			// A team name only resolves once its collection is attached.
+			if (hint.collection) {
+				extras?.attach(hint.collection);
+			}
+
+			noteNameUsed(bucket, hint.insert);
+			return;
+		}
+
 		// The snippet is not a name, so it does not belong in the bucket of names the
 		// author has recently used -- it is pinned first already, and remembering it would
 		// only push a real asset out of the list.
@@ -1428,21 +1463,43 @@ export function useSceneHints(
 	templates: string[] = []
 ): (editor: Editor) => void {
 	const library = useAssetLibrary();
+	const engine = useLibraryEngine();
+	const engineRef = React.useRef(engine);
 	const libraryRef = React.useRef(library);
 	const passagesRef = React.useRef(passageNames);
 	const templatesRef = React.useRef(templates);
 
 	libraryRef.current = library;
+	engineRef.current = engine;
 	passagesRef.current = passageNames;
 	templatesRef.current = templates;
 
 	return React.useCallback(function open(editor: Editor) {
 		const complete = () => {
+			const lib = engineRef.current;
+			const storyId = libraryRef.current.store?.storyId;
+			const extras: LibraryHintExtras | undefined =
+				lib && storyId
+					? {
+							attach: collection => {
+								const binding = lib.binding(storyId);
+
+								void libraryRef.current.store.ownCollection().then(() =>
+									lib.bind(storyId, [
+										...(binding?.collections ?? []),
+										collection
+									])
+								);
+							},
+							hints: libraryHints(lib, storyId)
+					  }
+					: undefined;
 			const result = sceneCompletion(
 				editor,
 				libraryRef.current,
 				passagesRef.current,
-				templatesRef.current
+				templatesRef.current,
+				extras
 			);
 
 			// Picking a key writes `key: ` and stops. The value is what the author
