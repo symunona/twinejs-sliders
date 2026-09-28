@@ -86,6 +86,8 @@ import {
 	MINE,
 	RailSelection,
 	recordSync,
+	savedSelection,
+	saveSelection,
 	selectedCollection
 } from './library/library-model';
 import type {MergeRewrite} from './library/merge-plan';
@@ -169,7 +171,21 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const [search, setSearch] = React.useState('');
 	const [tabIndex, setTabIndex] = React.useState(0);
 	const [tagFilter, setTagFilter] = React.useState<string[]>([]);
-	const [selection, setSelection] = React.useState<RailSelection>(MINE);
+	const [selection, setSelection] = React.useState<RailSelection>(() =>
+		savedSelection(storyId)
+	);
+	const selectionStory = React.useRef(storyId);
+
+	// Another story → its own last selection; otherwise remember this one.
+	React.useEffect(() => {
+		if (selectionStory.current !== storyId) {
+			selectionStory.current = storyId;
+			setSelection(savedSelection(storyId));
+			return;
+		}
+
+		saveSelection(storyId, selection);
+	}, [storyId, selection]);
 	const [panel, setPanel] = React.useState<Panel>();
 	const [ask, setAsk] = React.useState<Ask>();
 	const [dupeAsk, setDupeAsk] = React.useState<DupeAsk>();

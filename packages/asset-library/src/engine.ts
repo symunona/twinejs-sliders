@@ -290,6 +290,9 @@ export interface LibraryEngineOptions {
 }
 
 const MAX_ATTEMPTS_PER_DRAIN = 4;
+/** Outbox retry after a transient failure: 2 s, doubling, capped. Reset by a success. */
+const RETRY_FIRST_MS = 2000;
+const RETRY_MAX_MS = 60_000;
 const MAX_NAME_CLASHES = 20;
 
 type Listener<T> = (event: T) => void;
@@ -365,6 +368,10 @@ export class LibraryEngine {
 	private syncChain: Promise<void> = Promise.resolve();
 	private tasks = new Set<Promise<unknown>>();
 	private timer?: unknown;
+	private retryTimer?: unknown;
+	private retryMs = RETRY_FIRST_MS;
+	/** Blob fetches that failed transiently: re-announced once the network answers. */
+	private missedBlobs = new Set<string>();
 	private openStories = new Set<string>();
 	private blobFetches = new Map<string, Promise<CachedBlob>>();
 	private objectUrls = new Map<string, string>();
@@ -412,6 +419,7 @@ export class LibraryEngine {
 	/** Stops timers, waits for in-flight work and the last write to the LocalDb. */
 	async dispose(): Promise<void> {
 		this.cancelTimer();
+		this.cancelRetry();
 		await this.idle();
 		this.disposed = true;
 
@@ -536,6 +544,27 @@ export class LibraryEngine {
 			this.offline = offline;
 			this.emitStatus();
 		}
+
+		if (!offline && this.missedBlobs.size) {
+			this.announceMissedBlobs();
+		}
+	}
+
+	/** The network answers again: whoever showed a hole for these bytes asks again. */
+	private announceMissedBlobs() {
+		const missed = this.missedBlobs;
+
+		this.missedBlobs = new Set();
+		this.emitChange(
+			this.assets().filter(
+				asset =>
+					missed.has(asset.blob) ||
+					Object.values(asset.sidecars ?? {}).some(
+						sha => !!sha && missed.has(sha)
+					)
+			),
+			'remote'
+		);
 	}
 
 	// =========================================================================
@@ -870,6 +899,39 @@ export class LibraryEngine {
 				console.error('asset library: push failed', error)
 			);
 		}, this.debounceMs);
+	}
+
+	/**
+	 * A push failed on the network. Nothing else may come to kick the outbox (a live
+	 * socket stays quiet, the poll is minutes away), so retry on the clock, backing off.
+	 * An already scheduled retry stands.
+	 */
+	private scheduleRetry() {
+		if (this.disposed || this.retryTimer !== undefined || !this.outbox.length) {
+			return;
+		}
+
+		const ms = this.retryMs;
+
+		this.retryMs = Math.min(ms * 2, RETRY_MAX_MS);
+		this.retryTimer = this.clock.setTimeout(() => {
+			this.retryTimer = undefined;
+			this.track(this.flush()).catch(error =>
+				console.error('asset library: retry failed', error)
+			);
+		}, ms);
+	}
+
+	private cancelRetry() {
+		if (this.retryTimer !== undefined) {
+			this.clock.clearTimeout(this.retryTimer);
+			this.retryTimer = undefined;
+		}
+	}
+
+	/** True while a push is waiting to retry after a network failure. */
+	private get retrying(): boolean {
+		return this.retryTimer !== undefined;
 	}
 
 	private cancelTimer() {
@@ -1622,6 +1684,7 @@ export class LibraryEngine {
 			} catch (error) {
 				if (isTransient(error)) {
 					this.setOffline(true);
+					this.scheduleRetry();
 					return;
 				}
 
@@ -1657,6 +1720,7 @@ export class LibraryEngine {
 	poll(): Promise<void> {
 		return this.exclusive(async () => {
 			await this.doPull();
+			await this.drainIfRetrying();
 			await this.prefetchOpen();
 		});
 	}
@@ -1676,6 +1740,7 @@ export class LibraryEngine {
 		return this.exclusive(async () => {
 			if (this.knownHead > this.cursor) {
 				await this.doPull();
+				await this.drainIfRetrying();
 				await this.prefetchOpen();
 			}
 		});
@@ -1687,6 +1752,14 @@ export class LibraryEngine {
 		this.setOffline(false);
 
 		return this.sync();
+	}
+
+	/** The network answered: a push waiting on its backoff goes now. */
+	private async drainIfRetrying(): Promise<void> {
+		if (this.retrying) {
+			this.cancelRetry();
+			await this.doDrain();
+		}
 	}
 
 	private async doPull(): Promise<void> {
@@ -1865,11 +1938,18 @@ export class LibraryEngine {
 					result.status === 'rejected'
 			);
 
+			if (results.some(result => result.status === 'fulfilled')) {
+				this.setOffline(false);
+			}
+
 			if (failed) {
 				throw failed.reason;
 			}
 		}
 
+		// Got through: the next outage starts its backoff from the bottom.
+		this.cancelRetry();
+		this.retryMs = RETRY_FIRST_MS;
 		this.emitStatus();
 	}
 
@@ -2319,7 +2399,24 @@ export class LibraryEngine {
 
 		if (!fetching) {
 			fetching = (async () => {
-				const {bytes, mime} = await this.transport.getBlob(sha);
+				let answer: {bytes: Uint8Array; mime: string};
+
+				try {
+					answer = await this.transport.getBlob(sha);
+				} catch (error) {
+					// Not cached as a failure: the next ask fetches again.
+					if (isTransient(error)) {
+						this.missedBlobs.add(sha);
+						this.setOffline(true);
+					}
+
+					throw error;
+				}
+
+				const {bytes, mime} = answer;
+
+				this.missedBlobs.delete(sha);
+				this.onNetworkAnswer();
 				const got = await sha256Hex(bytes);
 
 				if (got !== sha) {
@@ -2390,6 +2487,18 @@ export class LibraryEngine {
 			) {
 				await this.blobBytes(asset.blob);
 			}
+		}
+	}
+
+	/** A request outside the sync chain got through: back online, kick a waiting retry. */
+	private onNetworkAnswer() {
+		this.setOffline(false);
+
+		if (this.retrying) {
+			this.cancelRetry();
+			this.track(this.flush()).catch(error =>
+				console.error('asset library: retry failed', error)
+			);
 		}
 	}
 

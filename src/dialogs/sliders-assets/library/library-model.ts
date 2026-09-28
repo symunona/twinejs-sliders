@@ -21,6 +21,37 @@ export type RailSelection = string;
 export const MINE = 'mine';
 export const ALL = 'all';
 
+const SELECTION_KEY = 'sliders-library-selection:';
+
+/**
+ * The rail selection last shown for a story, this tab. Survives the dialog remounting
+ * (maximize, reopen). Storage can throw (private mode, blocked): then Mine.
+ */
+export function savedSelection(storyId: string | undefined): RailSelection {
+	try {
+		return (
+			(storyId && window.sessionStorage.getItem(SELECTION_KEY + storyId)) || MINE
+		);
+	} catch {
+		return MINE;
+	}
+}
+
+export function saveSelection(
+	storyId: string | undefined,
+	selection: RailSelection
+): void {
+	if (!storyId) {
+		return;
+	}
+
+	try {
+		window.sessionStorage.setItem(SELECTION_KEY + storyId, selection);
+	} catch {
+		// Not remembered: the next mount opens on Mine.
+	}
+}
+
 /** Data type a tile drag carries so a rail item can take it (move, Alt = copy). */
 export const LIBRARY_ASSET_MIME = 'application/x-sliders-library-asset';
 

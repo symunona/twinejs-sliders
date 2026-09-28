@@ -79,7 +79,10 @@ beforeAll(() => {
 	}
 });
 
-afterEach(() => resetAssetStoresForTests());
+afterEach(() => {
+	resetAssetStoresForTests();
+	window.sessionStorage.clear();
+});
 
 interface Setup {
 	world: World;
@@ -160,6 +163,28 @@ describe('Library rail', () => {
 		await waitFor(() =>
 			expect(ana.engine.binding(story.id)!.collections).toEqual([])
 		);
+	});
+
+	it('the selected collection survives a remount (maximize); per story', async () => {
+		const {ana, story, tavernId} = await setup();
+
+		ana.engine.bind(story.id, [tavernId]);
+
+		const first = renderLibrary(story);
+		const tavernButton = () =>
+			within(railItem('tavern-set')).getByRole('button', {name: 'tavern-set'});
+
+		fireEvent.click(await waitFor(tavernButton));
+		await waitFor(() =>
+			expect(railItem('tavern-set')).toHaveClass('selected')
+		);
+		first.unmount();
+
+		renderLibrary(story);
+		await waitFor(() =>
+			expect(railItem('tavern-set')).toHaveClass('selected')
+		);
+		expect(railItem('dialogs.library.mine')).not.toHaveClass('selected');
 	});
 
 	it('detach warns when the scenes use names only found there', async () => {

@@ -172,6 +172,25 @@ export const LibraryProvider: React.FC<{children?: React.ReactNode}> = ({
 		wasConnected.current = socketConnected;
 	}, [socketConnected]);
 
+	// The OS says the network is back, or the tab comes to the front: don't wait for the
+	// socket or the poll. A live socket can stay quiet through a short outage.
+	React.useEffect(() => {
+		const onOnline = () => reconnectLibrary();
+		const onVisible = () => {
+			if (document.visibilityState === 'visible') {
+				reconnectLibrary();
+			}
+		};
+
+		window.addEventListener('online', onOnline);
+		document.addEventListener('visibilitychange', onVisible);
+
+		return () => {
+			window.removeEventListener('online', onOnline);
+			document.removeEventListener('visibilitychange', onVisible);
+		};
+	}, []);
+
 	React.useEffect(() => {
 		const timer = setInterval(
 			() => {
