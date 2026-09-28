@@ -390,9 +390,11 @@ describe('useServerSync asset push', () => {
 			changed: false,
 			downloaded: [],
 			missing: [],
+			renamed: [],
 			missingSidecars: [],
 			rev: 7,
 			skipped: true,
+			syncedNames: new Map(),
 			syncedHashes: new Map(),
 			warnings: [],
 			...overrides

@@ -472,6 +472,10 @@ export function useServerSync(): ServerSyncContextProps {
 	const assetSyncedHashes = React.useRef(
 		new Map<string, Map<string, string>>()
 	);
+	/** Story id -> local asset id -> name, the same base for renames. `followRenames`. */
+	const assetSyncedNames = React.useRef(
+		new Map<string, Map<string, string>>()
+	);
 	/** Story id -> the pull warnings last shown, so a poll does not repeat them. */
 	const assetPullWarnings = React.useRef(new Map<string, string>());
 	const pullAssetsRef = React.useRef<
@@ -720,6 +724,10 @@ export function useServerSync(): ServerSyncContextProps {
 					assetSyncedHashes.current.set(story.id, result.syncedHashes);
 				}
 
+				if (result.syncedNames) {
+					assetSyncedNames.current.set(story.id, result.syncedNames);
+				}
+
 				// Our own manifest write moves the rev, and the index row with it. Claim it
 				// here or the next poll reads it as somebody else's art and pulls it back.
 				if (!result.unchanged && result.rev > 0) {
@@ -853,11 +861,13 @@ export function useServerSync(): ServerSyncContextProps {
 						onProgress: next => setStoryProgress(storyId, next),
 						store: slidersAssetStore(storyId),
 						storyId,
-						syncedHashes: assetSyncedHashes.current.get(storyId)
+						syncedHashes: assetSyncedHashes.current.get(storyId),
+						syncedNames: assetSyncedNames.current.get(storyId)
 					});
 
 					assetPullRevs.current.set(storyId, result.rev);
 					assetSyncedHashes.current.set(storyId, result.syncedHashes);
+					assetSyncedNames.current.set(storyId, result.syncedNames);
 
 					if (!result.skipped) {
 						reportPullWarnings(storyId, result.warnings);

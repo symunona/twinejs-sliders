@@ -88,6 +88,13 @@ export interface PullStoryAssetsResult extends AssetPullResult {
 	 * moved -- nothing was learned, so the old base stands.
 	 */
 	syncedHashes: Map<string, string>;
+	/**
+	 * LOCAL asset id → name this client now agrees with the server on. Keep it and pass
+	 * it back as `syncedNames`. See `followRenames`.
+	 */
+	syncedNames: Map<string, string>;
+	/** LOCAL ids this run renamed to the server's name. */
+	renamed: string[];
 }
 
 export interface PullStoryAssetsOptions {
@@ -102,6 +109,115 @@ export interface PullStoryAssetsOptions {
 	 * Tells "the server replaced these bytes" from "I did". See `fastForwardOf`.
 	 */
 	syncedHashes?: ReadonlyMap<string, string>;
+	/**
+	 * LOCAL asset id → name as of this client's last pull or push, in memory only. Tells
+	 * "the server renamed this" from "I did". See `followRenames`.
+	 */
+	syncedNames?: ReadonlyMap<string, string>;
+}
+
+/**
+ * Brings the server's asset NAMES down onto the local twins that hold the same bytes.
+ *
+ * A name is not a cosmetic label: scene YAML addresses art by it, and the story text that
+ * syncs verbatim is written against the server's names. Left out of the compare -- as it
+ * was, `AssetProvenance` excludes it -- a rename on one machine reached the server and
+ * stopped there. The other machine kept drawing `? prop drone-side` against text that said
+ * `drone-side`, and its next push wrote its stale name back over the rename.
+ *
+ * Three-way, like `fastForwardOf` for bytes. `syncedNames` is the name both sides last
+ * agreed on. The local name still equal to it (or no base at all -- a fresh tab) means
+ * the server moved and this side follows. A local name that moved off it is a rename this
+ * side made and has not pushed yet: kept, and the push carries it. So two machines settle
+ * on the last rename written, and one that changed nothing never pushes a name back.
+ *
+ * No ping-pong: a rename here reports `changed`, the push that follows writes the same
+ * names, and the other side finds nothing to follow.
+ *
+ * Pose images are skipped: their names are derived from the character and the pose, and
+ * the cast compare owns them. A twin is matched by id first, then by bytes only when the
+ * pairing is unambiguous -- two manifest rows or two local assets with the same bytes
+ * could otherwise trade names on every pull.
+ */
+async function followRenames(
+	manifest: AssetManifest,
+	store: AssetStore,
+	syncedNames?: ReadonlyMap<string, string>
+): Promise<{
+	renamed: string[];
+	syncedNames: Map<string, string>;
+	warnings: string[];
+}> {
+	const agreed = new Map(syncedNames ?? []);
+	const renamed: string[] = [];
+	const warnings: string[] = [];
+	const serverMissing = new Set(manifest.missing ?? []);
+	const rows = (manifest.assets ?? []).filter(
+		meta => !serverMissing.has(meta.id) && !meta.ownerCharacter
+	);
+	const local = (await store.list({includePoseImages: true})).filter(
+		meta => !meta.ownerCharacter
+	);
+	const localByKey = new Map<string, AssetMeta[]>();
+	const rowsPerKey = new Map<string, number>();
+
+	for (const meta of local) {
+		localByKey.set(dedupeKey(meta), [
+			...(localByKey.get(dedupeKey(meta)) ?? []),
+			meta
+		]);
+	}
+
+	for (const row of rows) {
+		rowsPerKey.set(dedupeKey(row), (rowsPerKey.get(dedupeKey(row)) ?? 0) + 1);
+	}
+
+	const used = new Set<string>();
+
+	for (const row of rows) {
+		const candidates = localByKey.get(dedupeKey(row)) ?? [];
+		const same = candidates.find(meta => meta.name === row.name);
+
+		if (same) {
+			agreed.set(same.id, same.name);
+			used.add(same.id);
+			continue;
+		}
+
+		const twin =
+			candidates.find(meta => meta.id === row.id) ??
+			(candidates.length === 1 && rowsPerKey.get(dedupeKey(row)) === 1
+				? candidates[0]
+				: undefined);
+
+		if (!twin || used.has(twin.id)) {
+			continue;
+		}
+
+		used.add(twin.id);
+
+		const base = agreed.get(twin.id);
+
+		if (base !== undefined && base !== twin.name) {
+			// Renamed here since the last sync. The push will carry it.
+			continue;
+		}
+
+		try {
+			await store.update(twin.id, {name: row.name});
+			renamed.push(twin.id);
+			agreed.set(twin.id, row.name);
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+
+			warnings.push(
+				`"${twin.name}" was renamed to "${row.name}" on the server, but that ` +
+					`name is taken here, so it kept its old name. (${reason})`
+			);
+		}
+	}
+
+	return {renamed, syncedNames: agreed, warnings};
 }
 
 /**
@@ -189,9 +305,11 @@ export async function pullStoryAssets(
 		downloaded: [],
 		missing: [],
 		missingSidecars: [],
+		renamed: [],
 		rev,
 		skipped: true,
 		syncedHashes: new Map(agreed),
+		syncedNames: new Map(options.syncedNames ?? []),
 		warnings: []
 	});
 
@@ -217,7 +335,28 @@ export async function pullStoryAssets(
 
 	if (wanted.length === 0 && !castMoved) {
 		// Every row agrees or is local-ahead; either way the server's hash is the base.
-		return nothing(manifest.rev, serverHashes(manifest));
+		// Bytes agreeing says nothing about names, though -- a rename moves no bytes.
+		const names = await followRenames(manifest, store, options.syncedNames);
+
+		if (names.renamed.length === 0 && names.warnings.length === 0) {
+			return {
+				...nothing(manifest.rev, serverHashes(manifest)),
+				syncedNames: names.syncedNames
+			};
+		}
+
+		return {
+			changed: names.renamed.length > 0,
+			downloaded: [],
+			missing: [],
+			missingSidecars: [],
+			renamed: names.renamed,
+			rev: manifest.rev,
+			skipped: false,
+			syncedHashes: serverHashes(manifest),
+			syncedNames: names.syncedNames,
+			warnings: names.warnings
+		};
 	}
 
 	const {
@@ -243,6 +382,9 @@ export async function pullStoryAssets(
 		storyId,
 		syncedHashes
 	});
+	// After the checkout: an asset that just arrived already carries the server's name,
+	// and a fast-forward may have been what made a twin findable at all.
+	const names = await followRenames(manifest, store, options.syncedNames);
 
 	return {
 		// `stored` and `provenanceApplied`, never "we fetched something" or "something
@@ -260,13 +402,16 @@ export async function pullStoryAssets(
 			stored.length > 0 ||
 			fastForwarded.length > 0 ||
 			provenanceApplied.length > 0 ||
+			names.renamed.length > 0 ||
 			castMoved,
 		downloaded,
 		missing: missingAssets,
 		missingSidecars,
+		renamed: names.renamed,
 		rev: manifest.rev,
 		skipped: false,
 		syncedHashes: agreed,
-		warnings
+		syncedNames: names.syncedNames,
+		warnings: [...warnings, ...names.warnings]
 	};
 }

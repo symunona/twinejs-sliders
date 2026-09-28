@@ -70,6 +70,11 @@ export interface AssetSyncResult {
 	 * push checks `stale` rows against. Absent when `unchanged`: nothing was written.
 	 */
 	syncedHashes?: Map<string, string>;
+	/**
+	 * Asset id -> name of every row in the manifest this run wrote. The base a pull asks
+	 * "did I rename this since" against. Absent when `unchanged`, like `syncedHashes`.
+	 */
+	syncedNames?: Map<string, string>;
 }
 
 export interface SyncStoryAssetsOptions {
@@ -331,6 +336,7 @@ export async function syncStoryAssets(
 		unchanged: false,
 		unresolved: resolved.unresolved,
 		syncedHashes: new Map(assets.map(meta => [meta.id, meta.hash])),
+		syncedNames: new Map(assets.map(meta => [meta.id, meta.name])),
 		uploaded,
 		uploadedSidecars
 	};

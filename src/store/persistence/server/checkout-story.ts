@@ -119,9 +119,11 @@ export function dedupeKey(
  *   matched by `dedupeKey` — same bytes, same owner — and the manifest's id is never
  *   written onto a local asset. One exception, bytes only: `fastForwardOf`.
  * - `sourceAsset`: an id too, remapped or dropped per library. Guaranteed to differ.
- * - `name`, `kind`, `tags`, `w`, `h`, `bytes`, `mime`, `animated`, `duration`:
- *   legitimately different names and measurements for the same bytes.
- *   `pull-assets.test.ts` pins exactly such a pair as "nothing to do".
+ * - `name`: not provenance, but NOT ignored either — scene YAML addresses art by it.
+ *   `followRenames` in `pull-assets.ts` carries it, three-way against `syncedNames`.
+ * - `kind`, `tags`, `w`, `h`, `bytes`, `mime`, `animated`, `duration`: legitimately
+ *   different measurements for the same bytes. `pull-assets.test.ts` pins exactly such
+ *   a pair as "nothing to do".
  * - sidecars of a kind that does not sync: `src` is the unedited original, routinely
  *   16 MB, and `sidecarSyncs('src')` is false — so A's manifest names it and B's never
  *   can. Asymmetric by construction, permanently.

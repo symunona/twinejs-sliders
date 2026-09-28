@@ -185,7 +185,13 @@ describe('pullStoryAssets', () => {
 		);
 		const {client, getAssetBlob} = fakeClient({
 			manifest: {
-				assets: [await meta(bytes, {hash: saved.meta.hash, id: 'a_other'})],
+				assets: [
+					await meta(bytes, {
+						hash: saved.meta.hash,
+						id: 'a_other',
+						name: saved.meta.name
+					})
+				],
 				rev: 9
 			}
 		});
@@ -312,7 +318,7 @@ describe('pullStoryAssets', () => {
 	 * between two libraries holding one picture, permanently — a compare that reads any of
 	 * them reports a change on every poll, and two clients push art at each other forever.
 	 */
-	it('reports nothing when only id, name and size differ', async () => {
+	it('reports nothing when only id and size differ', async () => {
 		const bytes = webpBytes();
 		const cutout = new Uint8Array([1, 2, 3, 4]);
 		const store = newStore();
@@ -335,7 +341,7 @@ describe('pullStoryAssets', () => {
 						h: 512,
 						hash: saved.meta.hash,
 						id: 'a_other',
-						name: 'tavern/night-2',
+						name: saved.meta.name,
 						sidecars: {cutout: await sidecarEntry(cutout)},
 						tuning: TUNING,
 						w: 1024
@@ -371,6 +377,7 @@ describe('pullStoryAssets', () => {
 					await meta(bytes, {
 						hash: saved.meta.hash,
 						id: 'a_other',
+						name: saved.meta.name,
 						sidecars: {src: await sidecarEntry(original, {sync: false})}
 					})
 				],
@@ -479,6 +486,7 @@ describe('pullStoryAssets', () => {
 					await meta(bytes, {
 						hash: saved.meta.hash,
 						id: 'a_other',
+						name: saved.meta.name,
 						sidecars: {cutout: await sidecarEntry(cutout)}
 					})
 				],
@@ -892,5 +900,189 @@ describe('pullStoryAssets fast-forward', () => {
 		});
 		expect(await bytesOf(store, local.id)).toEqual(next);
 		expect(await store.getCharacter('mira')).toEqual(before);
+	});
+});
+
+describe('pullStoryAssets: names', () => {
+	async function stored(name: string, bytes = webpBytes()) {
+		const store = newStore();
+		const saved = await store.putAsset(
+			new File([bytes], `${name}.webp`, {type: 'image/webp'}),
+			{kind: 'object'}
+		);
+
+		await store.update(saved.id, {name});
+
+		return {bytes, saved, store};
+	}
+
+	async function nameOf(store: ReturnType<typeof newStore>, id: string) {
+		return (await store.list()).find(item => item.id === id)?.name;
+	}
+
+	it('follows a rename made on the other machine', async () => {
+		// The Trip to my Desert case: goose renamed it, pandora held the same bytes under
+		// the old name and drew `? prop drone-side-3` against text that said drone-side-3.
+		const {bytes, saved, store} = await stored('remove-bg-from-this');
+		const {client, getAssetBlob} = fakeClient({
+			manifest: {
+				assets: [await meta(bytes, {id: saved.id, name: 'drone-side-3'})],
+				rev: 9
+			}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1'
+		});
+
+		expect(await nameOf(store, saved.id)).toBe('drone-side-3');
+		expect(result.renamed).toEqual([saved.id]);
+		expect(result.changed).toBe(true);
+		expect(result.syncedNames.get(saved.id)).toBe('drone-side-3');
+		expect(getAssetBlob).not.toHaveBeenCalled();
+	});
+
+	it('follows a rename onto a twin with a different id', async () => {
+		const {bytes, saved, store} = await stored('remove-bg-from-this');
+		const {client} = fakeClient({
+			manifest: {
+				assets: [await meta(bytes, {id: 'a_elsewhere', name: 'drone-side'})],
+				rev: 9
+			}
+		});
+
+		await pullStoryAssets({client, lastRev: 8, store, storyId: 'story-1'});
+
+		expect(await nameOf(store, saved.id)).toBe('drone-side');
+	});
+
+	it('is a fixpoint: the second pull renames nothing', async () => {
+		const {bytes, saved, store} = await stored('remove-bg-from-this');
+		const manifest = {
+			assets: [await meta(bytes, {id: saved.id, name: 'drone-side'})],
+			rev: 9
+		};
+		const first = await pullStoryAssets({
+			client: fakeClient({manifest}).client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1'
+		});
+		const second = await pullStoryAssets({
+			client: fakeClient({manifest: {...manifest, rev: 10}}).client,
+			lastRev: 9,
+			store,
+			storyId: 'story-1',
+			syncedNames: first.syncedNames
+		});
+
+		expect(second.changed).toBe(false);
+		expect(second.renamed).toEqual([]);
+	});
+
+	it('keeps a local rename the push has not carried yet', async () => {
+		// Base says both sides agreed on drone-side; this side has since renamed it. The
+		// server still saying drone-side is old news, not a rename to follow.
+		const {bytes, saved, store} = await stored('my-drone');
+		const {client} = fakeClient({
+			manifest: {
+				assets: [await meta(bytes, {id: saved.id, name: 'drone-side'})],
+				rev: 9
+			}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1',
+			syncedNames: new Map([[saved.id, 'drone-side']])
+		});
+
+		expect(await nameOf(store, saved.id)).toBe('my-drone');
+		expect(result.changed).toBe(false);
+		expect(result.syncedNames.get(saved.id)).toBe('drone-side');
+	});
+
+	it('follows the server when the local name is still the agreed one', async () => {
+		const {bytes, saved, store} = await stored('drone-side');
+		const {client} = fakeClient({
+			manifest: {
+				assets: [await meta(bytes, {id: saved.id, name: 'drone-side-3'})],
+				rev: 9
+			}
+		});
+
+		await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1',
+			syncedNames: new Map([[saved.id, 'drone-side']])
+		});
+
+		expect(await nameOf(store, saved.id)).toBe('drone-side-3');
+	});
+
+	it('warns and keeps the old name when the new one is taken here', async () => {
+		const {bytes, saved, store} = await stored('remove-bg-from-this');
+		const other = await store.putAsset(
+			new File([jpegBytes()], 'drone-side.jpg', {type: 'image/jpeg'}),
+			{kind: 'object'}
+		);
+
+		await store.update(other.id, {name: 'drone-side'});
+
+		const {client} = fakeClient({
+			manifest: {
+				assets: [await meta(bytes, {id: saved.id, name: 'drone-side'})],
+				rev: 9
+			}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1'
+		});
+
+		expect(await nameOf(store, saved.id)).toBe('remove-bg-from-this');
+		expect(result.changed).toBe(false);
+		expect(result.warnings.join(' ')).toMatch(/drone-side.*taken/);
+	});
+
+	it('renames a twin in the same pull that downloads new art', async () => {
+		const {bytes, saved, store} = await stored('remove-bg-from-this');
+		const incoming = jpegBytes();
+		const {client, getAssetBlob} = fakeClient({
+			blobs: {a_new: new Blob([incoming], {type: 'image/jpeg'})},
+			manifest: {
+				assets: [
+					await meta(bytes, {id: saved.id, name: 'drone-side'}),
+					await meta(incoming, {
+						id: 'a_new',
+						mime: 'image/jpeg',
+						name: 'city-main-street'
+					})
+				],
+				rev: 9
+			}
+		});
+
+		const result = await pullStoryAssets({
+			client,
+			lastRev: 8,
+			store,
+			storyId: 'story-1'
+		});
+		const names = (await store.list()).map(item => item.name).sort();
+
+		expect(names).toEqual(['city-main-street', 'drone-side']);
+		expect(result.renamed).toEqual([saved.id]);
+		expect(getAssetBlob).toHaveBeenCalledTimes(1);
 	});
 });
