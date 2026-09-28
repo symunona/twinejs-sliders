@@ -20,6 +20,7 @@ import {useStoriesContext, type Story} from '../stories';
 import {
 	libraryEngine,
 	libraryOnline,
+	onLibraryEngineChange,
 	onLibraryEngineSwap,
 	reconnectLibrary,
 	setLibraryEngine
@@ -191,7 +192,7 @@ export const LibraryProvider: React.FC<{children?: React.ReactNode}> = ({
 	const seen = React.useRef(new Map<string, Story>());
 	const timer = React.useRef<ReturnType<typeof setTimeout>>();
 
-	React.useEffect(() => {
+	const schedule = React.useCallback(() => {
 		if (timer.current) {
 			clearTimeout(timer.current);
 		}
@@ -200,7 +201,22 @@ export const LibraryProvider: React.FC<{children?: React.ReactNode}> = ({
 			timer.current = undefined;
 			void syncStories(storiesRef.current, seen.current);
 		}, LIBRARY_REFS_DEBOUNCE_MS);
-	}, [stories]);
+	}, []);
+
+	React.useEffect(schedule, [schedule, stories]);
+
+	// Art added or renamed changes which ids a story's names reach, with no story edit.
+	// `setRefs` is a no-op when nothing moved, so this settles after one pass.
+	React.useEffect(
+		() =>
+			onLibraryEngineChange(event => {
+				if (event.source === 'local') {
+					seen.current.clear();
+					schedule();
+				}
+			}),
+		[schedule]
+	);
 
 	React.useEffect(
 		() => () => {
