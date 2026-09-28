@@ -12,8 +12,8 @@
 	min-height: 0;
 }
 
-.scene-preview-dialog .scene-preview:not(.full-screen) .scene-stage {
-	flex-grow: 1;
+.scene-preview-dialog .scene-preview:not(.full-screen) .scene-stage-view {
+	flex: 1 1 auto;
 	height: auto;
 	/* Below this the stage is not worth looking at, and the card scrolls instead. */
 	min-height: 180px;

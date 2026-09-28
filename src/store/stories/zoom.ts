@@ -17,12 +17,18 @@ export function clampZoom(zoom: number) {
  * The next zoom step above (direction 1) or below (direction -1) a zoom. Stays
  * put at either end.
  */
-export function steppedZoom(zoom: number, direction: 1 | -1) {
+export function steppedZoom(
+	zoom: number,
+	direction: 1 | -1,
+	steps: number[] = zoomSteps
+) {
 	// The epsilon keeps a zoom of 0.6000001 from stepping "up" to 0.6.
 	const next =
 		direction > 0
-			? zoomSteps.find(step => step > zoom + 0.001)
-			: [...zoomSteps].reverse().find(step => step < zoom - 0.001);
+			? steps.find(step => step > zoom + 0.001)
+			: [...steps].reverse().find(step => step < zoom - 0.001);
 
-	return next ?? clampZoom(zoom);
+	return (
+		next ?? Math.min(Math.max(zoom, steps[0]), steps[steps.length - 1])
+	);
 }

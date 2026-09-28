@@ -11,7 +11,9 @@ import {
 	IconPlayerPlay,
 	IconTimeline,
 	IconVolume,
-	IconVolumeOff
+	IconVolumeOff,
+	IconZoomIn,
+	IconZoomOut
 } from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
@@ -38,6 +40,7 @@ import type {AssetDragPayload} from './asset-drag';
 import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatProps} from './beat-props';
 import {effectiveLocks, lockReason} from './scene-lock';
+import {useStageViewZoom} from './use-stage-view-zoom';
 import {BeatTimeline} from './beat-timeline';
 import {BubbleEditor} from './bubble-editor';
 import {SceneDropMenu, type DropChoice} from './drop-menu';
@@ -346,6 +349,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
 	const root = React.useRef<HTMLDivElement>(null);
+	const [viewport, setViewport] = React.useState<HTMLDivElement | null>(null);
+	// Full screen is the player, and a player shows the whole shot.
+	const viewZoom = useStageViewZoom(viewport, !fullScreen);
 	const mounted = React.useRef(true);
 	const [seal, setSeal] = React.useState(0);
 	const {clearPatch, holdPatch, mergePatch, patch, setPatch} = useScenePatch();
@@ -1681,6 +1687,34 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={locked}
 			/>
+			{/* How big the stage is drawn here, not what the camera frames: nothing
+			    about it is written to the scene. */}
+			{!fullScreen && (
+				<span className="scene-preview-zoom">
+					<IconButton
+						disabled={viewZoom.zoom <= viewZoom.minZoom}
+						icon={<IconZoomOut />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.zoomOut')}
+						onClick={() => viewZoom.stepZoom(-1)}
+					/>
+					<button
+						className="scene-preview-zoom-percent"
+						onClick={viewZoom.resetZoom}
+						title={t('dialogs.passageEdit.scenePreview.zoomReset')}
+						type="button"
+					>
+						{Math.round(viewZoom.zoom * 100)}%
+					</button>
+					<IconButton
+						disabled={viewZoom.zoom >= viewZoom.maxZoom}
+						icon={<IconZoomIn />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.zoomIn')}
+						onClick={() => viewZoom.stepZoom(1)}
+					/>
+				</span>
+			)}
 			{barExtra}
 			{/* Entering full screen is a header control on the dialog card, next to
 			    maximize. LEAVING it cannot be: full screen portals out of the card and
@@ -1700,7 +1734,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 
 	// The stage itself--everything below the bar.
-	const stageBody = (
+	const stageOverlay = (
 		<StageEditorOverlay
 			cameraLocked={cameraLocked}
 			beatNote={beatNote}
@@ -1755,18 +1789,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDraft={setBubbleDraft}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
-			<StageSelectionControls
-				assets={assets}
-				editable={editable}
-				entities={selectedEntities}
-				note={beatNote}
-				onDelete={remove}
-				onFlip={flip}
-				onPose={setPose}
-				onOpenLink={onOpenPassage}
-				onPreviewPose={setPosePreview}
-				onStepZ={stepZ}
-			/>
 			{/* A dropped file is not a background, an object, a cast member or a pose until
 			    the author says which, so the drop stops here and asks. */}
 			{dropRequest && (
@@ -1813,6 +1835,31 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				</div>
 			)}
 		</StageEditorOverlay>
+	);
+
+	// The overlay scrolls inside the viewport when the view is zoomed in. The selection
+	// row sits outside that scroll, over the viewport, so it stays where the author can
+	// reach it however far the stage has been scrolled.
+	const stageBody = (
+		<div className="scene-stage-view">
+			<div className="scene-stage-viewport" ref={setViewport}>
+				<div className="scene-stage-canvas" style={viewZoom.canvasStyle}>
+					{stageOverlay}
+				</div>
+			</div>
+			<StageSelectionControls
+				assets={assets}
+				editable={editable}
+				entities={selectedEntities}
+				note={beatNote}
+				onDelete={remove}
+				onFlip={flip}
+				onPose={setPose}
+				onOpenLink={onOpenPassage}
+				onPreviewPose={setPosePreview}
+				onStepZ={stepZ}
+			/>
+		</div>
 	);
 
 	const body = (

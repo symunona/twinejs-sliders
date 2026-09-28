@@ -104,13 +104,58 @@
 
 /* The renderer computes its own letterboxed 16:9 box inside this host, so the host must
    NOT also declare an aspect ratio — `aspect-ratio` plus `max-height` makes the box
-   overflow and crops the sprites. Give it a height and let the renderer fit itself. */
+   overflow and crops the sprites. The view gets the height; the stage fills it and the
+   renderer fits itself. */
+.scene-preview .scene-stage-view {
+	display: flex;
+	flex-shrink: 0;
+	height: clamp(180px, 34vh, 420px);
+	position: relative;
+}
+
+/* Scrolls when the view is zoomed in. A flex row so that at 100% the canvas simply
+   fills it, and zoomed out an auto margin centres it without ever cutting off the
+   top-left the way centring overflowing content does. */
+.scene-preview .scene-stage-viewport {
+	background: #101014;
+	display: flex;
+	inset: 0;
+	overflow: auto;
+	position: absolute;
+}
+
+.scene-preview .scene-stage-canvas {
+	display: flex;
+	flex-grow: 1;
+}
+
 .scene-preview .scene-stage {
 	background: #101014;
-	height: clamp(180px, 34vh, 420px);
 	overflow: hidden;
 	position: relative;
 	width: 100%;
+}
+
+.scene-preview-zoom {
+	align-items: center;
+	display: inline-flex;
+}
+
+.scene-preview-zoom-percent {
+	background: none;
+	border: none;
+	border-radius: var(--corner-round);
+	color: inherit;
+	cursor: pointer;
+	font: inherit;
+	font-variant-numeric: tabular-nums;
+	min-width: 3.5em;
+	padding: 0 2px;
+	text-align: center;
+}
+
+.scene-preview-zoom-percent:hover {
+	background-color: var(--light-gray);
 }
 
 /* Lines the selected entity occupies, marked in the passage text. Selecting a sprite and
@@ -124,8 +169,8 @@
 	background: rgba(74, 212, 255, 0.12);
 }
 
-.scene-preview.full-screen .scene-stage {
-	flex-grow: 1;
+.scene-preview.full-screen .scene-stage-view {
+	flex: 1 1 auto;
 	height: auto;
 	max-height: none;
 }
