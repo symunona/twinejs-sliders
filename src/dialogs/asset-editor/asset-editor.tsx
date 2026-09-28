@@ -12,6 +12,7 @@ import classNames from 'classnames';
 import {
 	IconAdjustments,
 	IconContrast,
+	IconCopy,
 	IconCrop,
 	IconDeviceFloppy,
 	IconEraser,
@@ -43,10 +44,10 @@ import {
 	PromptValidationResponse
 } from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
-import {
-	ServerSyncContextProps,
-	useServerSyncContext
-} from '../../store/persistence/server/use-server-sync';
+import type {
+	EditScope,
+	SharedInfo
+} from '../../store/asset-library/story-asset-store';
 // Imported from the module rather than the barrel: the generator opens this dialog to
 // edit a generation, so the two files are a cycle either way, and going through
 // `../asset-generator` would drag the whole generator barrel into that cycle. Only
@@ -56,8 +57,8 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {
 	refreshAssetLibrary,
-	useAssetScope,
-	useAssetStore
+	useAssetStore,
+	useLibraryChange
 } from '../sliders-assets/asset-store-context';
 import {useAssetUsage} from '../sliders-assets/use-asset-usage';
 import {useSceneRefRename} from '../sliders-assets/use-scene-ref-rename';
@@ -320,9 +321,6 @@ function elapsedLabel(seconds: number): string {
 export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const {assetId, source: sourceImage} = props;
 	const store = useAssetStore();
-	/** Whose library this is. Assets are per story, and so is the pull below. */
-	const scope = useAssetScope();
-	const {pullAssets} = useServerSyncContext();
 	const {dispatch} = useDialogsContext();
 	// Which passages write this asset's name, so the rename prompt can offer to carry them
 	// along -- the same list the asset browser's tiles show.
@@ -378,6 +376,15 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * the cutout whose map may not fit -- to drift out of step.
 	 */
 	const [reloads, setReloads] = React.useState(0);
+	/**
+	 * An edit about to change art other stories use (or that lives in a shared
+	 * collection). The author picks: update everyone, fork a copy for this story, or
+	 * cancel. `run` carries the write out with the chosen scope.
+	 */
+	const [sharedAsk, setSharedAsk] = React.useState<{
+		info: SharedInfo;
+		run: (scope: EditScope) => Promise<void>;
+	}>();
 	const [renameOpen, setRenameOpen] = React.useState(false);
 	/** The name in the rename prompt, which is the asset's own--not `name`, which is the
 	    name a "save as new" would use. */
@@ -1206,6 +1213,24 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		}
 	}
 
+	/**
+	 * Runs `write` directly, or — when the asset is shared — asks first and runs it with
+	 * the scope the author picked. Resolves false when the author cancelled.
+	 */
+	async function withSharedScope(
+		write: (scope?: EditScope) => Promise<void>
+	): Promise<void> {
+		// Optional call: test doubles of the store predate the library.
+		const info = meta ? await store.sharedInfo?.(meta.id) : undefined;
+
+		if (!info?.shared) {
+			await write();
+			return;
+		}
+
+		setSharedAsk({info, run: write});
+	}
+
 	/** Writes the edit back over the asset it came from, keeping its id. */
 	async function handleReplace() {
 		if (!source || !edits || !meta) {
@@ -1216,16 +1241,35 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setSaving(true);
 
 		try {
+			await withSharedScope(scope => writeReplace(scope));
+		} catch (saveError) {
+			console.error('Could not overwrite the asset', saveError);
+			setError(t('dialogs.assetEditor.saveError'));
+			setSaving(false);
+		}
+	}
+
+	async function writeReplace(scope?: EditScope) {
+		if (!source || !edits || !meta) {
+			return;
+		}
+
+		let target = meta.id;
+
+		try {
 			// Only the anchor, the effect or the walk area moved: meta, not pixels. Re-baking
 			// anyway re-encodes the same picture to new bytes, and a pull on another device
 			// then meets a name it holds under different bytes and keeps its own -- so a
 			// floor drawn here never reached it. Keep the bytes; the meta rides alone.
 			if (pixelsChanged()) {
-				await store.replace(
-					meta.id,
-					await editedFile(meta.name),
-					await editOptions()
-				);
+				// A fork lands under a new id (the story's own copy); the metadata below
+				// goes to that copy too.
+				target = (
+					await store.replace(meta.id, await editedFile(meta.name), {
+						...(await editOptions()),
+						scope
+					})
+				).id;
 			}
 
 			// Metadata, so it rides a second call rather than the bytes -- and one call for
@@ -1254,14 +1298,38 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			}
 
 			if (Object.keys(metaChanges).length > 0) {
-				await store.update(meta.id, metaChanges);
+				target = (await store.update(target, metaChanges, {scope})).id;
 			}
 
 			refreshAssetLibrary();
-			props.onSaved?.(meta.id);
+			props.onSaved?.(target);
 			props.onClose();
 		} catch (saveError) {
 			console.error('Could not overwrite the asset', saveError);
+			setError(t('dialogs.assetEditor.saveError'));
+			setSaving(false);
+		}
+	}
+
+	/** The author answered the shared-art prompt. */
+	async function answerShared(scope: EditScope | undefined) {
+		const ask = sharedAsk;
+
+		setSharedAsk(undefined);
+
+		if (!ask) {
+			return;
+		}
+
+		if (!scope) {
+			setSaving(false);
+			return;
+		}
+
+		try {
+			await ask.run(scope);
+		} catch (sharedError) {
+			console.error('Could not write the shared asset', sharedError);
 			setError(t('dialogs.assetEditor.saveError'));
 			setSaving(false);
 		}
@@ -1284,7 +1352,27 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setError(undefined);
 
 		try {
-			const updated = await store.update(meta.id, {name: renamed});
+			await withSharedScope(scope =>
+				writeRename(renamed, oldName, updateScenes, scope)
+			);
+		} catch (renameError) {
+			console.error('Could not rename the asset', renameError);
+			setError(t('dialogs.assetEditor.renameError', {name: renamed}));
+		}
+	}
+
+	async function writeRename(
+		renamed: string,
+		oldName: string,
+		updateScenes: boolean,
+		scope?: EditScope
+	) {
+		if (!meta) {
+			return;
+		}
+
+		try {
+			const updated = await store.update(meta.id, {name: renamed}, {scope});
 
 			setMeta(updated);
 			setName(`${updated.name}-edit`);
@@ -1484,64 +1572,43 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const saveDisabled = busy || !source || !edits || !dirty;
 
 	/**
-	 * What the pull's continuation has to read when it settles, kept in a ref instead of
-	 * in the effect's dependencies. `dirty` flips on every slider drag and `meta` changes
-	 * on a rename; an effect listing either would pull again per gesture--a loop against
-	 * the server, wearing a dependency array.
+	 * What the change listener has to read when it fires, kept in a ref instead of in the
+	 * effect's dependencies: `dirty` flips on every slider drag.
 	 */
-	const latest = React.useRef<{
-		dirty: boolean;
-		meta?: AssetMeta;
-		pullAssets?: ServerSyncContextProps['pullAssets'];
-	}>({dirty: false});
-
-	React.useEffect(() => {
-		latest.current = {dirty, meta, pullAssets};
+	const latest = React.useRef<{dirty: boolean; meta?: AssetMeta}>({
+		dirty: false
 	});
 
-	// Another editor can crop this asset, cut its background out or move its anchor, and
-	// nothing on this machine hears about it. The stale picture is the smaller half of
-	// that: the expensive half is opening this dialog on it and saving, which writes
-	// settings from before their work straight back over it.
-	//
-	// So ask the server once, as the dialog opens, and never wait for the answer. What is
-	// already on disk is what the author came here to edit, and an author editing with no
-	// server at all--no client, no sync, a request that fails--has to see none of this.
+	React.useEffect(() => {
+		latest.current = {dirty, meta};
+	});
+
+	// Another editor (another tab, another machine, another dialog) can crop this asset,
+	// cut its background out or move its anchor. The library engine says so, per record:
+	// clean → reload quietly, dirty → the "changed elsewhere" prompt.
+	const assetChanges = useLibraryChange(
+		undefined,
+		assetId ? [assetId] : []
+	);
 
 	React.useEffect(() => {
-		// Detached editing owns nothing in the library, so there is nothing under it that
-		// could have gone stale.
-		if (!assetId) {
+		if (!assetId || assetChanges === 0) {
 			return;
 		}
 
 		const id = assetId;
 		let current = true;
 
-		async function wake() {
-			const result = await latest.current.pullAssets?.(scope);
-
-			// `changed` is read off what the library HOLDS once the pull is done, never off
-			// what it set out to fetch. A pull that landed nothing must not send the dialog
-			// looking--see the sync model's third rule.
-			if (!current || !result?.changed) {
-				return;
-			}
-
+		async function check() {
 			const shown = latest.current.meta;
 
-			// No metadata yet means the first load is still running, and it is reading a
-			// store this pull has already finished writing to. It opens on the new version
-			// by itself.
+			// No metadata yet: the first load is still running and reads the new version.
 			if (!shown) {
 				return;
 			}
 
 			const held = await store.meta(id);
 
-			// A pull is per story, and it routinely lands art this dialog is not showing.
-			// Reloading over somebody else's new background would throw away a crop for a
-			// change that never touched this picture.
 			if (!current || !held || sameShownAsset(shown, held)) {
 				return;
 			}
@@ -1554,18 +1621,14 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			}
 		}
 
-		wake().catch(pullError => {
-			// Logged, never shown. Working offline is ordinary, and the dialog an error
-			// would interrupt is perfectly usable without a server.
-			console.warn('Could not refresh this asset from the server', pullError);
-		});
+		check().catch(checkError =>
+			console.warn('Could not re-read this asset', checkError)
+		);
 
 		return () => {
 			current = false;
 		};
-		// Once per open. `pullAssets` is read through the ref for that reason: the context
-		// rebuilds it, and listing it here would pull on every one of those renders.
-	}, [assetId, scope, store]);
+	}, [assetChanges, assetId, store]);
 
 	/** Take the other editor's version, and with it the loss of whatever is in front. */
 	function reloadChanged() {
@@ -1732,6 +1795,55 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 					})}
 					variant="danger"
 				/>
+			)}
+			{sharedAsk && (
+				<div
+					aria-label={t('dialogs.assetEditor.sharedTitle')}
+					className="asset-editor-shared-prompt"
+					data-testid="asset-editor-shared-prompt"
+					role="alertdialog"
+				>
+					<p>
+						{t('dialogs.assetEditor.sharedPrompt', {
+							collection: sharedAsk.info.collection.name,
+							count: sharedAsk.info.stories.length,
+							name: sharedAsk.info.name,
+							stories: sharedAsk.info.stories
+								.map(
+									story =>
+										`${story.storyName ?? story.storyId}${
+											story.by ? ` (${story.by})` : ''
+										}`
+								)
+								.join(', ')
+						})}
+						{sharedAsk.info.collection.locked &&
+							` ${t('dialogs.assetEditor.sharedLocked')}`}
+					</p>
+					<ButtonBar>
+						{sharedAsk.info.canUpdateAll && (
+							<IconButton
+								icon={<IconDeviceFloppy />}
+								label={t('dialogs.assetEditor.sharedUpdateAll')}
+								onClick={() => void answerShared('all')}
+								variant="danger"
+							/>
+						)}
+						{sharedAsk.info.canFork && (
+							<IconButton
+								icon={<IconCopy />}
+								label={t('dialogs.assetEditor.sharedFork')}
+								onClick={() => void answerShared('fork')}
+								variant="create"
+							/>
+						)}
+						<IconButton
+							icon={<IconX />}
+							label={t('common.cancel')}
+							onClick={() => void answerShared(undefined)}
+						/>
+					</ButtonBar>
+				</div>
 			)}
 		</>
 	);

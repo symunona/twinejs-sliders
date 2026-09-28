@@ -11,8 +11,12 @@ import {AssetEditorDialog} from '../asset-editor';
 // reached from a button.
 
 let mockStore: AssetStore;
-/** The sync context's per-story art pull. Re-armed by every test that cares. */
-let mockPullAssets: jest.Mock;
+/** Library change listeners (`useLibraryChange`). A test fires them to say "moved". */
+const mockChangeListeners = new Set<() => void>();
+
+function fireLibraryChange() {
+	mockChangeListeners.forEach(listener => listener());
+}
 
 // Not the shared i18n mock, which hands back a fresh `t` on every call. Three controls
 // here memoise a validator on `t`, and `<PromptButton>` re-validates -- and sets state --
@@ -24,16 +28,30 @@ jest.mock('react-i18next', () => {
 
 	return {useTranslation: () => ({t})};
 });
-jest.mock('../../sliders-assets/asset-store-context', () => ({
-	refreshAssetLibrary: jest.fn(),
-	useAssetScope: () => MOCK_SCOPE,
-	useAssetStore: () => mockStore
-}));
-// The whole sync layer, for one call. Importing the real hook would drag the client, the
-// socket and the bundle importer into a suite about a canvas.
-jest.mock('../../../store/persistence/server/use-server-sync', () => ({
-	useServerSyncContext: () => ({pullAssets: mockPullAssets})
-}));
+jest.mock('../../sliders-assets/asset-store-context', () => {
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const React = require('react');
+
+	return {
+		refreshAssetLibrary: jest.fn(),
+		useAssetStore: () => mockStore,
+		// The engine's per-record change signal, as a counter a test can bump.
+		useLibraryChange: () => {
+			const [version, setVersion] = React.useState(0);
+
+			React.useEffect(() => {
+				const listener = () => setVersion((count: number) => count + 1);
+
+				mockChangeListeners.add(listener);
+				return () => {
+					mockChangeListeners.delete(listener);
+				};
+			}, []);
+
+			return version;
+		}
+	};
+});
 jest.mock('../../sliders-assets/use-asset-usage', () => ({
 	useAssetUsage: () => new Map()
 }));
@@ -45,11 +63,6 @@ jest.mock('../../asset-generator/asset-generator', () => ({
 }));
 
 const ASSET_ID: AssetId = 'a_1234';
-/**
- * The story whose library this is. `MOCK_` because a `jest.mock` factory may only reach
- * out to names that start with it.
- */
-const MOCK_SCOPE = 'story-1';
 /** The picture is four by four, so a matching alpha map is sixteen values. */
 const BASE = {height: 4, width: 4};
 const TUNING: CutoutTuning = {softness: 0.1, threshold: 0.42};
@@ -99,10 +112,6 @@ describe('<AssetEditorDialog>', () => {
 
 			return new (window as any).ImageBitmap(size.width, size.height);
 		};
-
-		// A pull that finds nothing, which is what the tests below this one are about --
-		// the dialog opening on what is already here. The wake-up suite re-arms it.
-		mockPullAssets = jest.fn(async () => undefined);
 	});
 
 	afterEach(() => bitmapSizes.clear());
@@ -197,34 +206,21 @@ describe('<AssetEditorDialog>', () => {
 		expect(sliders[1].value).toBe('0.1');
 	});
 
-	// Another editor can crop this asset, cut its background out or move its anchor on
-	// their machine. Opening the editor on the stale copy and saving is what costs their
-	// work, so the dialog pulls as it opens -- without ever making the author wait for it.
+	// Another editor can crop this asset, cut its background out or move its anchor. The
+	// library engine announces a change to this record; the dialog re-reads it.
 
-	describe('waking the asset up when the dialog opens', () => {
+	describe('when the asset changes elsewhere', () => {
 		/** What the store hands back for this asset. Swapped to stand for someone else's save. */
 		let held: AssetMeta;
 		let meta: jest.Mock;
-		let settlePull!: (result: unknown) => void;
 
-		/** A pull whose landing the test decides, so "before it settles" can be asserted. */
-		function pendingPull(): Promise<unknown> {
-			return new Promise(resolve => {
-				settlePull = resolve;
-			});
-		}
-
-		/**
-		 * An asset with a `src` sidecar -- edited before, so the dialog restores from a
-		 * base -- and a pull whose behaviour the test hands in.
-		 */
-		function renderWaking(pull: () => Promise<unknown>) {
+		/** An asset with a `src` sidecar -- edited before, so the dialog restores from a base. */
+		function renderWaking() {
 			held = fakeMeta({sidecars: {src: {hash: 'src-1'}}});
 			meta = jest.fn(async () => held);
 			sidecar = jest.fn(async (_id: AssetId, kind: string) =>
 				kind === 'src' ? fakeImage(BASE) : undefined
 			);
-			mockPullAssets = jest.fn(pull);
 			mockStore = {
 				get: async () => fakeImage(BASE),
 				list: async () => [held],
@@ -277,19 +273,8 @@ describe('<AssetEditorDialog>', () => {
 			});
 		}
 
-		it('opens on what is already here, without waiting for the pull', async () => {
-			renderWaking(pendingPull);
-			await waitForOpen();
-
-			// Still in flight, and the dialog is fully usable anyway: the image, the
-			// toolbar and the save buttons are all up, and nothing is spinning over them.
-			expect(mockPullAssets).toHaveBeenCalledWith(MOCK_SCOPE);
-			expect(screen.queryByText('dialogs.assetEditor.loading')).toBeNull();
-			expectClean();
-		});
-
-		it('reloads silently when the pull moves this asset and nothing is unsaved', async () => {
-			renderWaking(pendingPull);
+		it('reloads silently when this asset moves and nothing is unsaved', async () => {
+			renderWaking();
 			await waitForOpen();
 			expect(screen.getByTestId('anchor-marker')).toHaveAttribute(
 				'data-y',
@@ -297,7 +282,7 @@ describe('<AssetEditorDialog>', () => {
 			);
 
 			held = movedElsewhere();
-			await act(async () => settlePull({changed: true}));
+			await act(async () => fireLibraryChange());
 
 			// Reloaded, and not a word about it: there was nothing to lose.
 			await waitFor(() =>
@@ -311,7 +296,7 @@ describe('<AssetEditorDialog>', () => {
 		});
 
 		it('asks before reloading over unsaved work, and declining keeps it', async () => {
-			renderWaking(pendingPull);
+			renderWaking();
 			await waitForOpen();
 
 			fireEvent.change(adjustSliders()[0], {target: {value: '20'}});
@@ -322,7 +307,7 @@ describe('<AssetEditorDialog>', () => {
 			const loads = sidecar.mock.calls.length;
 
 			held = movedElsewhere();
-			await act(async () => settlePull({changed: true}));
+			await act(async () => fireLibraryChange());
 
 			// Asked, not yanked. The prompt names what reloading costs.
 			const keep = await screen.findByRole('button', {
@@ -351,13 +336,13 @@ describe('<AssetEditorDialog>', () => {
 		});
 
 		it('takes the other version when the author asks for it', async () => {
-			renderWaking(pendingPull);
+			renderWaking();
 			await waitForOpen();
 
 			fireEvent.change(adjustSliders()[0], {target: {value: '20'}});
 
 			held = movedElsewhere();
-			await act(async () => settlePull({changed: true}));
+			await act(async () => fireLibraryChange());
 
 			fireEvent.click(
 				await screen.findByRole('button', {
@@ -376,16 +361,15 @@ describe('<AssetEditorDialog>', () => {
 			expect(changedButton()).toBeNull();
 		});
 
-		it('ignores a pull that landed art this dialog is not showing', async () => {
-			renderWaking(pendingPull);
+		it('ignores a change that leaves what is shown as it was', async () => {
+			renderWaking();
 			await waitForOpen();
 
 			const loads = sidecar.mock.calls.length;
 
-			// `changed` is true -- somebody else's background arrived -- but this asset
-			// stands exactly as it was. Reloading here would throw away a crop for art the
-			// author is not even looking at.
-			await act(async () => settlePull({changed: true}));
+			// A change to a field nothing here shows (a rename, tags). Reloading would
+			// throw away a crop for nothing.
+			await act(async () => fireLibraryChange());
 			await waitFor(() => expect(meta).toHaveBeenCalledTimes(2));
 
 			expect(sidecar).toHaveBeenCalledTimes(loads);
@@ -393,51 +377,8 @@ describe('<AssetEditorDialog>', () => {
 			expectClean();
 		});
 
-		it('ignores a pull that landed nothing', async () => {
-			renderWaking(pendingPull);
-			await waitForOpen();
-
-			const loads = sidecar.mock.calls.length;
-
-			// Moved on the server and already here: `changed` false is the honest answer,
-			// and re-reading this asset over it would be work for nothing.
-			held = movedElsewhere();
-			await act(async () => settlePull({changed: false}));
-
-			expect(meta).toHaveBeenCalledTimes(1);
-			expect(sidecar).toHaveBeenCalledTimes(loads);
-			expect(changedButton()).toBeNull();
-		});
-
-		// Editing offline is completely ordinary. Both of these have to leave the dialog
-		// exactly as it is today, with nothing said to the author.
-
-		it('says nothing when there is no sync client', async () => {
-			renderWaking(async () => undefined);
-			await waitForOpen();
-
-			expect(screen.queryByRole('alert')).toBeNull();
-			expect(changedButton()).toBeNull();
-			expectClean();
-		});
-
-		it('says nothing when the pull throws', async () => {
-			const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-			renderWaking(async () => {
-				throw new Error('offline');
-			});
-			await waitForOpen();
-			await act(() => Promise.resolve());
-
-			expect(screen.queryByRole('alert')).toBeNull();
-			expect(changedButton()).toBeNull();
-			expectClean();
-			warn.mockRestore();
-		});
-
-		it('pulls once per open, not once per render', async () => {
-			renderWaking(pendingPull);
+		it('re-reads once per change, not once per render', async () => {
+			renderWaking();
 			await waitForOpen();
 
 			// Every one of these re-renders the dialog. An effect that listed `dirty`, the
@@ -450,12 +391,12 @@ describe('<AssetEditorDialog>', () => {
 			);
 
 			held = movedElsewhere();
-			await act(async () => settlePull({changed: true}));
+			await act(async () => fireLibraryChange());
 			await screen.findByRole('button', {
 				name: 'dialogs.assetEditor.changedElsewhereKeep'
 			});
 
-			expect(mockPullAssets).toHaveBeenCalledTimes(1);
+			expect(meta).toHaveBeenCalledTimes(2);
 		});
 	});
 
@@ -569,6 +510,93 @@ describe('<AssetEditorDialog>', () => {
 			await waitFor(() => expect(update).toHaveBeenCalled());
 			expect(update.mock.calls[0][1].walk.depth).toBeDefined();
 			expect(replace).not.toHaveBeenCalled();
+		});
+
+		describe('on shared art', () => {
+			function shared(overrides: {locked?: boolean; canFork?: boolean} = {}) {
+				return jest.fn(async () => ({
+					canFork: overrides.canFork ?? true,
+					canUpdateAll: !overrides.locked,
+					collection: {
+						id: 'c1',
+						kind: 'shared',
+						locked: !!overrides.locked,
+						name: 'tavern-set'
+					},
+					foreign: true,
+					id: ASSET_ID,
+					kind: 'asset',
+					name: 'lamp',
+					shared: true,
+					stories: [{by: 'ana', storyId: 's2', storyName: 'Old Mill'}]
+				}));
+			}
+
+			async function saveWalkChange(
+				sharedInfo: jest.Mock
+			): Promise<void> {
+				renderAsset({kind: 'bg', walk: WALK});
+				(mockStore as unknown as {sharedInfo: jest.Mock}).sharedInfo =
+					sharedInfo;
+				await screen.findByTestId('asset-editor-dirty');
+				await waitFor(() => expect(sidecar).toHaveBeenCalled());
+				fireEvent.click(walkRadio()!);
+				fireEvent.click(
+					await screen.findByRole('checkbox', {
+						name: 'dialogs.assetEditor.walk.depth'
+					})
+				);
+				fireEvent.click(
+					screen.getByRole('button', {name: 'dialogs.assetEditor.replace'})
+				);
+				fireEvent.click(await screen.findByRole('button', {name: 'common.ok'}));
+				await screen.findByTestId('asset-editor-shared-prompt');
+			}
+
+			it('asks before writing, and fork writes with scope fork', async () => {
+				await saveWalkChange(shared());
+
+				expect(update).not.toHaveBeenCalled();
+				fireEvent.click(
+					screen.getByRole('button', {
+						name: 'dialogs.assetEditor.sharedFork'
+					})
+				);
+				await waitFor(() => expect(update).toHaveBeenCalled());
+				expect(update.mock.calls[0][2]).toEqual({scope: 'fork'});
+			});
+
+			it('update all writes with scope all', async () => {
+				await saveWalkChange(shared());
+				fireEvent.click(
+					screen.getByRole('button', {
+						name: 'dialogs.assetEditor.sharedUpdateAll'
+					})
+				);
+				await waitFor(() => expect(update).toHaveBeenCalled());
+				expect(update.mock.calls[0][2]).toEqual({scope: 'all'});
+			});
+
+			it('offers no update-all on a locked collection', async () => {
+				await saveWalkChange(shared({locked: true}));
+
+				expect(
+					screen.queryByRole('button', {
+						name: 'dialogs.assetEditor.sharedUpdateAll'
+					})
+				).toBeNull();
+			});
+
+			it('cancel writes nothing', async () => {
+				await saveWalkChange(shared());
+				fireEvent.click(screen.getByRole('button', {name: 'common.cancel'}));
+				await act(() => Promise.resolve());
+
+				expect(update).not.toHaveBeenCalled();
+				expect(
+					screen.queryByTestId('asset-editor-shared-prompt')
+				).toBeNull();
+			});
 		});
 	});
 });

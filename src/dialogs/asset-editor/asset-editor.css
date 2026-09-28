@@ -732,3 +732,15 @@ wrapper and not the host itself.
 	flex-direction: column;
 	gap: 4px;
 }
+
+/* Shared art: update everyone, fork for this story, or cancel. */
+.asset-editor-shared-prompt {
+	border: 1px solid var(--dark-yellow);
+	border-radius: var(--corner-round);
+	margin: var(--grid-size) 0;
+	padding: var(--grid-size);
+}
+
+.asset-editor-shared-prompt p {
+	margin: 0 0 var(--grid-size);
+}
