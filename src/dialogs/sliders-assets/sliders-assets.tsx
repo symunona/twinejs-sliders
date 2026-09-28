@@ -18,6 +18,8 @@ import {AssetKind, Character} from '@sliders/scene-types';
 import {
 	IconAlertTriangle,
 	IconArrowLeft,
+	IconLayoutSidebarLeftCollapse,
+	IconLayoutSidebarLeftExpand,
 	IconTrash,
 	IconUserPlus,
 	IconX
@@ -76,7 +78,7 @@ import {
 	UsagesPanel,
 	VersionsPanel
 } from './library/library-panels';
-import {LibraryRail} from './library/library-rail';
+import {LibraryRail, useRailCollapsed} from './library/library-rail';
 import {
 	ALL,
 	collectionLabel,
@@ -175,6 +177,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		savedSelection(storyId)
 	);
 	const selectionStory = React.useRef(storyId);
+	const [railCollapsed, toggleRail] = useRailCollapsed();
 
 	// Another story → its own last selection; otherwise remember this one.
 	React.useEffect(() => {
@@ -1124,12 +1127,36 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			{...props}
 			className="sliders-assets-dialog library-dialog"
 			focusOnOpen
+			headerDisplayLabel={
+				<>
+					{engine && (
+						<IconButton
+							icon={
+								railCollapsed ? (
+									<IconLayoutSidebarLeftExpand />
+								) : (
+									<IconLayoutSidebarLeftCollapse />
+								)
+							}
+							iconOnly
+							label={t(
+								railCollapsed
+									? 'dialogs.library.expandRail'
+									: 'dialogs.library.collapseRail'
+							)}
+							onClick={toggleRail}
+							tooltipPosition="bottom"
+						/>
+					)}
+					{t('dialogs.library.title')}
+				</>
+			}
 			headerLabel={t('dialogs.library.title')}
 			hotkeyScope="sliders-assets"
 			maximizable
 		>
 			<div className="library-layout">
-				{engine && (
+				{engine && !railCollapsed && (
 					<LibraryRail
 						engine={engine}
 						ensureOwn={() => store.ownCollection()}

@@ -22,18 +22,6 @@
 	padding: var(--grid-size);
 }
 
-.library-rail.collapsed {
-	align-items: center;
-	flex-basis: auto;
-	padding: var(--grid-size) 2px;
-}
-
-.library-rail-head {
-	align-items: center;
-	display: flex;
-	justify-content: space-between;
-}
-
 .library-rail h3,
 .library-rail h4 {
 	color: var(--gray);
