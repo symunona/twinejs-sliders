@@ -1,4 +1,4 @@
-import {passageLinks} from '../passage-links';
+import {passageDerivedFrom, passageLinks} from '../passage-links';
 
 const scene = (body: string) => `Prose above.\n\n[scene]\n${body}`;
 
@@ -64,5 +64,30 @@ describe('passageLinks()', () => {
 		expect(passageLinks('Prose that mentions link: Cellar in passing.')).toEqual(
 			[]
 		);
+	});
+});
+describe('passageDerivedFrom()', () => {
+	it('returns the passage a scene inherits from', () => {
+		expect(passageDerivedFrom(scene('from: Tavern\nbg: night'))).toEqual([
+			'Tavern'
+		]);
+	});
+
+	it('drops the mark, quotes and a trailing comment', () => {
+		expect(passageDerivedFrom(scene('from: "Tavern Night@tense" # later'))).toEqual(
+			['Tavern Night']
+		);
+	});
+
+	it('ignores a nested from: key', () => {
+		expect(passageDerivedFrom(scene('props:\n  from: Tavern'))).toEqual([]);
+	});
+
+	it('ignores from: outside a scene block', () => {
+		expect(passageDerivedFrom('from: Tavern')).toEqual([]);
+	});
+
+	it('ignores a half-typed from:', () => {
+		expect(passageDerivedFrom(scene('from:'))).toEqual([]);
 	});
 });

@@ -7,7 +7,7 @@ import './self-connection.css';
 export interface SelfConnectionProps {
 	offset: Point;
 	passage: Passage;
-	variant: 'link' | 'reference';
+	variant: 'link' | 'reference' | 'derived';
 }
 
 export const SelfConnection: React.FC<SelfConnectionProps> = props => {

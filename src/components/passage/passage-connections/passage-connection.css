@@ -10,3 +10,12 @@ path.passage-connection {
 path.passage-connection.variant-reference {
 	stroke-dasharray: 4px;
 }
+
+/*
+A scene's `from:` — the stage is inherited, not travelled to. Longer dashes than a
+reference so the two read apart.
+*/
+path.passage-connection.variant-derived {
+	stroke-dasharray: 10px 6px;
+	opacity: 0.7;
+}

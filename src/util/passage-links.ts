@@ -9,7 +9,7 @@ second-class dashed reference rather than a real arrow.
 */
 
 import uniq from 'lodash/uniq';
-import {extractSceneBlock} from '@sliders/scene-index';
+import {extractSceneBlock, splitSceneRef} from '@sliders/scene-index';
 import {
 	sceneEntityLinkTargets,
 	sceneLinkTargets
@@ -43,4 +43,32 @@ export function passageLinks(text: string, internalOnly?: boolean): string[] {
 	].filter(target => target !== '' && (!internalOnly || isInternalLink(target)));
 
 	return uniq([...parseLinks(text, internalOnly), ...sceneLinks]);
+}
+
+/** A top-level `from:` in a scene block, capturing its value. */
+const FROM_LINE_RE = /^from[ \t]*:[ \t]*(.*)$/m;
+
+/**
+ * The passage a scene's `from:` inherits its stage from, as a one-item list so it fits
+ * `passageConnections`' parser slot. Empty when the passage has no scene or no `from:`.
+ *
+ * A line scan, not `parseScene`, for the same reason as the `links:` pass: it runs on every
+ * passage on every keystroke and must survive a half-typed block. The `@mark` half of
+ * `Tavern@tense` is dropped — the map draws passages, not marks.
+ */
+export function passageDerivedFrom(text: string): string[] {
+	const block = extractSceneBlock(text);
+	const match = block && FROM_LINE_RE.exec(block.text);
+
+	if (!match) {
+		return [];
+	}
+
+	const value = match[1]
+		.replace(/\s+#.*$/, '')
+		.trim()
+		.replace(/^(['"])(.*)\1$/, '$2');
+	const {id} = splitSceneRef(value);
+
+	return id === '' || id === '~' || id === 'null' ? [] : [id];
 }

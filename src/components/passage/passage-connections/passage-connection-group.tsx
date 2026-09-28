@@ -10,7 +10,7 @@ export interface PassageConnectionGroupProps {
 	connections: Map<Passage, Set<Passage>>;
 	offset: Point;
 	self: Set<Passage>;
-	variant?: 'link' | 'reference';
+	variant?: 'link' | 'reference' | 'derived';
 }
 
 export const PassageConnectionGroup: React.FC<PassageConnectionGroupProps> = React.memo(

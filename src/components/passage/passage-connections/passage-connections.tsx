@@ -6,7 +6,7 @@ import {LinkMarkers} from './link-markers';
 import {StartConnection} from './start-connection';
 import {subtractConnections} from './subtract-connections';
 import {useFormatReferenceParser} from '../../../store/use-format-reference-parser';
-import {passageLinks} from '../../../util/passage-links';
+import {passageDerivedFrom, passageLinks} from '../../../util/passage-links';
 
 /**
  * The link pass. A scene's `links:` entries are links, not references — an author who
@@ -27,6 +27,30 @@ export interface PassageConnectionsProps {
 	 */
 	passages: Passage[];
 	startPassageId: string;
+}
+
+/**
+ * Flips every edge. A scene's `from:` is written in the derived passage and names its base,
+ * but the map draws it base -> derived: the arrow follows what the stage inherits from.
+ */
+function reverseConnections(
+	connections: Map<Passage, Set<Passage>>
+): Map<Passage, Set<Passage>> {
+	const result = new Map<Passage, Set<Passage>>();
+
+	for (const [start, ends] of connections) {
+		for (const end of ends) {
+			const reversed = result.get(end);
+
+			if (reversed) {
+				reversed.add(start);
+			} else {
+				result.set(end, new Set([start]));
+			}
+		}
+	}
+
+	return result;
 }
 
 const emptySet = new Set<Passage>();
@@ -62,6 +86,22 @@ export const PassageConnections: React.FC<PassageConnectionsProps> = props => {
 		[drawnLinks, fixedReferences]
 	);
 
+	// `from:` edges. A missing base is the scene lint's to report (`unknown-from`), not a
+	// broken-link stub's, and a self-`from:` is a cycle the lint also reports — so only the
+	// connections are drawn.
+	const {draggable: draggableDerived, fixed: fixedDerived} = React.useMemo(
+		() => passageConnections(passages, passageDerivedFrom),
+		[passages]
+	);
+	const draggableDerivedConnections = React.useMemo(
+		() => reverseConnections(draggableDerived.connections),
+		[draggableDerived]
+	);
+	const fixedDerivedConnections = React.useMemo(
+		() => reverseConnections(fixedDerived.connections),
+		[fixedDerived]
+	);
+
 	const startPassage = React.useMemo(
 		() => passages.find(passage => passage.id === startPassageId),
 		[passages, startPassageId]
@@ -90,6 +130,20 @@ export const PassageConnections: React.FC<PassageConnectionsProps> = props => {
 				offset={noOffset}
 				self={emptySet}
 				variant="reference"
+			/>
+			<PassageConnectionGroup
+				broken={emptySet}
+				connections={draggableDerivedConnections}
+				offset={offset}
+				self={emptySet}
+				variant="derived"
+			/>
+			<PassageConnectionGroup
+				broken={emptySet}
+				connections={fixedDerivedConnections}
+				offset={noOffset}
+				self={emptySet}
+				variant="derived"
 			/>
 		</svg>
 	);

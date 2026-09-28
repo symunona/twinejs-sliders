@@ -14,7 +14,7 @@ export interface PassageConnectionProps {
 	end: Passage;
 	offset: Point;
 	start: Passage;
-	variant: 'link' | 'reference';
+	variant: 'link' | 'reference' | 'derived';
 }
 
 export const PassageConnection: React.FC<PassageConnectionProps> = props => {
