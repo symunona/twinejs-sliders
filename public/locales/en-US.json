@@ -1197,6 +1197,7 @@
 			"assetName": "Name",
 			"assetTitle": "{{name}} — click to attach and preview, double-click to edit",
 			"attach": "Attach Assets",
+			"characterName": "Name (an existing character gets a new pose; name it with mira/wave)",
 			"attachmentsIgnored": "{{model}} can’t take reference images, so what you attached won’t be sent.",
 			"copyName": "Name for the copy",
 			"customModel": "Use “{{id}}” as a {{provider}} model",

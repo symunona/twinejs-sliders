@@ -5,6 +5,7 @@ import {
 	slugify
 } from '@sliders/asset-store';
 import {Character} from '@sliders/scene-types';
+import {uniquePoseName} from '../sliders-assets/character-poses';
 import {Generation} from './generation-store';
 
 /** What a generated image can become when it leaves the history. */
@@ -41,6 +42,42 @@ async function freeCharacterId(
 	}
 }
 
+/**
+ * The character a typed name means, if one exists: by id (what a scene writes) or by
+ * display name, ignoring case.
+ */
+async function existingCharacter(
+	store: AssetStore,
+	name: string
+): Promise<Character | undefined> {
+	const id = slugify(name);
+	const lower = name.toLowerCase();
+
+	return (await store.listCharacters()).find(
+		one => one.id === id || one.name.toLowerCase() === lower
+	);
+}
+
+/**
+ * Splits `mira/wave` into a character and a pose. With no slash, the pose is named from
+ * the prompt: that is what describes what this image shows.
+ */
+function characterAndPose(
+	name: string,
+	prompt: string
+): {character: string; pose: string} {
+	const slash = name.indexOf('/');
+
+	if (slash !== -1) {
+		return {
+			character: name.slice(0, slash).trim(),
+			pose: slugify(name.slice(slash + 1).trim())
+		};
+	}
+
+	return {character: name, pose: slugify(prompt.split(/[.,\n]/)[0].slice(0, 32))};
+}
+
 export interface SaveResult {
 	/**
 	 * True when the library already held these exact bytes AS THIS KIND, and pointed at
@@ -72,6 +109,8 @@ export interface SaveOptions {
  * the image, or the character editor opens on something it can't draw. Doing that here
  * means the generator can offer it as one click rather than sending the author off to
  * create a character and then upload into it.
+ *
+ * A name that matches an existing character adds a pose to it instead (see `addPose`).
  */
 export async function saveGeneration(
 	store: AssetStore,
@@ -94,7 +133,17 @@ export async function saveGeneration(
 		};
 	}
 
-	const id = await freeCharacterId(store, slugify(name));
+	const {character: characterName, pose: poseName} = characterAndPose(
+		name,
+		generation.prompt
+	);
+	const existing = await existingCharacter(store, characterName);
+
+	if (existing) {
+		return addPose(store, generation, existing, poseName);
+	}
+
+	const id = await freeCharacterId(store, slugify(characterName));
 	const image = await store.putAsset(generationFile(generation, name), {
 		// A character is minted under a free id every time, so its pose image is always a
 		// new one -- there is no existing pose of THIS character to dedupe against.
@@ -115,4 +164,46 @@ export async function saveGeneration(
 
 	await store.putCharacter(character);
 	return {duplicate: false, label: `character: ${id}`, ref: id};
+}
+
+/**
+ * Adds a generated image to an existing character as one more pose. Typing a character's
+ * name into "Save as character" means "this is another frame of them", not "make a twin
+ * called mira-2".
+ */
+async function addPose(
+	store: AssetStore,
+	generation: Generation,
+	character: Character,
+	wanted: string
+): Promise<SaveResult> {
+	// "Mira waving" names the pose `waving`: the character's own name in it says nothing.
+	const bare = wanted.startsWith(`${character.id}-`)
+		? wanted.slice(character.id.length + 1)
+		: wanted;
+	const pose = uniquePoseName(bare || 'pose', character.poses);
+	const image = await store.putAsset(
+		generationFile(generation, `${character.id}-${pose}`),
+		{
+			// The pose is new, so its image is too -- even if another character (or another
+			// pose of this one) already uses these bytes, each pose owns its own image.
+			allowDuplicate: true,
+			kind: 'frame',
+			name: `${character.id}-${pose}`,
+			ownerCharacter: character.id
+		}
+	);
+
+	await store.putCharacter({
+		...character,
+		poses: {
+			...character.poses,
+			[pose]: {anchors: newPoseAnchors(character), asset: image.id}
+		}
+	});
+	return {
+		duplicate: false,
+		label: `character: ${character.id} / ${pose}`,
+		ref: character.id
+	};
 }

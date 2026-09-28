@@ -80,7 +80,11 @@ export const GenerationActions: React.FC<GenerationActionsProps> = props => {
 					// typed for the background is not a suggestion for the character.
 					onChangeOpen={open => open && setName(defaultName)}
 					onSubmit={value => onSave(entry.target, value.trim())}
-					prompt={t('dialogs.assetGenerator.assetName')}
+					prompt={
+						entry.target === 'character'
+							? t('dialogs.assetGenerator.characterName')
+							: t('dialogs.assetGenerator.assetName')
+					}
 					submitLabel={entry.label}
 					submitVariant="create"
 					validate={value =>

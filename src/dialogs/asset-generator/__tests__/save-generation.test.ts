@@ -85,16 +85,48 @@ describe('saveGeneration', () => {
 		);
 	});
 
-	// Two characters from one image is the normal case -- the same portrait as twins --
-	// and the pose image of a new character can never be a duplicate of that character's
-	// own, because the character is new.
-	it('makes a second character from the same image', async () => {
+	// Typing an existing character's name means another frame of them, not a twin.
+	it('adds a pose to a character that already exists', async () => {
 		const store = newStore();
-		const first = await saveGeneration(store, generation(), 'character', 'mira');
-		const second = await saveGeneration(store, generation(), 'character', 'mira');
 
-		expect(first.ref).toBe('mira');
-		expect(second.ref).toBe('mira-2');
+		await saveGeneration(store, generation(), 'character', 'mira');
+
+		const second = await saveGeneration(
+			store,
+			generation({prompt: 'Mira waving, full body'}),
+			'character',
+			'Mira'
+		);
+		const characters = await store.listCharacters();
+
+		expect(second.ref).toBe('mira');
+		expect(characters).toHaveLength(1);
+		expect(Object.keys(characters[0].poses)).toEqual(['idle', 'waving']);
+		expect(characters[0].poses.waving.asset).not.toBe(
+			characters[0].poses.idle.asset
+		);
+	});
+
+	it('names the pose after a slash, and never overwrites one', async () => {
+		const store = newStore();
+
+		await saveGeneration(store, generation(), 'character', 'mira');
+		await saveGeneration(store, generation(), 'character', 'mira/wave');
+		await saveGeneration(store, generation(), 'character', 'mira/wave');
+
+		const [mira] = await store.listCharacters();
+
+		expect(Object.keys(mira.poses)).toEqual(['idle', 'wave', 'wave-2']);
+	});
+
+	it('still makes a new character from a name nobody has', async () => {
+		const store = newStore();
+
+		await saveGeneration(store, generation(), 'character', 'mira');
+
+		const other = await saveGeneration(store, generation(), 'character', 'tom');
+
+		expect(other.ref).toBe('tom');
 		expect(await store.listCharacters()).toHaveLength(2);
 	});
 });
