@@ -244,6 +244,12 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		// back `mira-2`, and an author who typed `mira` would go on writing `mira` in their
 		// scenes. Caught here so it reads as a message instead of an unhandled rejection.
 		try {
+			// One record, renamed: its uuid, poses and pose images stay. The old
+			// put-new + remove-old pair deleted the pose images both shared.
+			if (store.renameCharacter) {
+				await store.renameCharacter(oldId, id);
+			}
+
 			await store.putCharacter(renamed);
 		} catch (error) {
 			latest.current = draft;
@@ -256,7 +262,9 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			return;
 		}
 
-		await store.removeCharacter(oldId);
+		if (!store.renameCharacter) {
+			await store.removeCharacter(oldId);
+		}
 
 		if (updateScenes && story) {
 			const rewrites = sceneRewrites(oldId, id);

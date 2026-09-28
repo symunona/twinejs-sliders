@@ -1,36 +1,51 @@
-import {
-	AssetStore,
-	createAssetStore,
-	PutAssetOptions
-} from '@sliders/asset-store';
+import {PutAssetOptions} from '@sliders/asset-store';
 import {AssetId, AssetMeta, Character} from '@sliders/scene-types';
 import * as React from 'react';
-
-const stores = new Map<string, AssetStore>();
+import {
+	currentLibraryEngine,
+	libraryEngine,
+	onLibraryEngineChange,
+	resetLibraryEngineForTests
+} from '../../store/asset-library/engine-registry';
+import {
+	LibraryAssetStore,
+	resetStoryAssetStoresForTests,
+	storyAssetStore
+} from '../../store/asset-library/story-asset-store';
 
 /**
  * Both Sliders dialogs can be open at once, and an upload in one has to show up in the
  * other. A module-level version counter keeps every `useAssetLibrary()` in step.
+ *
+ * Driven by the library engine's change events (local writes AND pulled remote ones), so
+ * nothing has to remember to call `refreshAssetLibrary()` any more. Callers that still do
+ * cost one extra re-read.
  */
 let libraryVersion = 0;
 const libraryListeners = new Set<() => void>();
 
-/** Tells every open dialog to re-read the library. */
-export function refreshAssetLibrary() {
+function bump() {
 	libraryVersion++;
 	libraryListeners.forEach(listener => listener());
 }
 
+/** Tells every open dialog to re-read the library. */
+export function refreshAssetLibrary() {
+	bump();
+}
+
+let engineWatch: (() => void) | undefined;
+
+function watchEngine() {
+	engineWatch ??= onLibraryEngineChange(() => bump());
+}
+
 /**
- * The same signal outside React. Server sync listens here: art added to a library is a
- * change the store has to hear about, and unlike text it never passes through the stories
- * reducer, so there is nothing else to watch.
- *
- * Deliberately scope-less, like `refreshAssetLibrary` itself. A listener that cares which
- * library moved has to ask; the alternative is threading a scope through seven call sites
- * for a signal whose consumers all re-read everything anyway.
+ * The same signal outside React. Unscoped: fires for any collection. New code wants
+ * `useLibraryChange(collectionIds)` instead.
  */
 export function onAssetLibraryChange(listener: () => void): () => void {
+	watchEngine();
 	libraryListeners.add(listener);
 	return () => {
 		libraryListeners.delete(listener);
@@ -38,8 +53,8 @@ export function onAssetLibraryChange(listener: () => void): () => void {
 }
 
 /**
- * Bumped by every `refreshAssetLibrary()`. Exported so anything derived from the library —
- * the unreferenced-art scan, say — recomputes on the same signal the grids redraw on.
+ * Bumped by every library change. Exported so anything derived from the library — the
+ * unreferenced-art scan, say — recomputes on the same signal the grids redraw on.
  */
 export function useLibraryVersion(): number {
 	const [version, setVersion] = React.useState(libraryVersion);
@@ -47,6 +62,7 @@ export function useLibraryVersion(): number {
 	React.useEffect(() => {
 		const listener = () => setVersion(libraryVersion);
 
+		watchEngine();
 		libraryListeners.add(listener);
 		return () => {
 			libraryListeners.delete(listener);
@@ -57,30 +73,48 @@ export function useLibraryVersion(): number {
 }
 
 /**
- * A story's asset library. Deliberately not part of the stories context: asset bytes must
- * not ride along with story text through undo, archive, and import/export (spec 03).
- *
- * One store per story id. Art uploaded while editing one story is invisible from another,
- * so a `bg: forest` in two stories means two different pictures unless the author imports
- * one into the other.
+ * Scoped change counter: bumps only when a change touches one of these collections (or
+ * one of these record ids). `undefined` = everything. For new code (Library dialog).
  */
-export function slidersAssetStore(scope: string): AssetStore {
-	let store = stores.get(scope);
+export function useLibraryChange(
+	collectionIds?: readonly string[],
+	recordIds?: readonly string[]
+): number {
+	const [version, setVersion] = React.useState(0);
+	const key = `${collectionIds?.join(',') ?? '*'}|${recordIds?.join(',') ?? ''}`;
 
-	if (!store) {
-		store = createAssetStore(scope);
-		stores.set(scope, store);
-	}
+	React.useEffect(() => {
+		const collections = collectionIds ? new Set(collectionIds) : undefined;
+		const ids = recordIds ? new Set(recordIds) : undefined;
 
-	return store;
+		return onLibraryEngineChange(event => {
+			const hit =
+				(!collections && !ids) ||
+				(collections && event.collections.some(id => collections.has(id))) ||
+				(ids && event.ids.some(id => ids.has(id)));
+
+			if (hit) {
+				setVersion(current => current + 1);
+			}
+		});
+		// `key` stands in for both arrays.
+	}, [key]);
+
+	return version;
 }
 
 /**
- * Drops every cached store. Tests only — the stores hold open object URLs and an
- * in-memory manifest, so a suite that reuses them starts with the last one's assets.
+ * A story's asset library: the story's resolved view of the shared library (its own
+ * collection, then attached ones). See `store/asset-library/story-asset-store.ts`.
  */
+export function slidersAssetStore(scope: string): LibraryAssetStore {
+	return storyAssetStore(scope);
+}
+
+/** Tests: fresh memory engine, no cached facades or object URLs. */
 export function resetAssetStoresForTests(): void {
-	stores.clear();
+	resetStoryAssetStoresForTests();
+	resetLibraryEngineForTests();
 }
 
 /**
@@ -97,11 +131,29 @@ export interface AssetScopeProviderProps {
 export const AssetScopeProvider: React.FC<AssetScopeProviderProps> = ({
 	children,
 	storyId
-}) => (
-	<AssetScopeContext.Provider value={storyId}>
-		{children}
-	</AssetScopeContext.Provider>
-);
+}) => {
+	// An open story keeps its collections' blobs local (prefetch).
+	React.useEffect(() => {
+		let open = true;
+
+		void libraryEngine().then(engine => {
+			if (open) {
+				void engine.openStory(storyId).catch(() => undefined);
+			}
+		});
+
+		return () => {
+			open = false;
+			currentLibraryEngine()?.closeStory(storyId);
+		};
+	}, [storyId]);
+
+	return (
+		<AssetScopeContext.Provider value={storyId}>
+			{children}
+		</AssetScopeContext.Provider>
+	);
+};
 
 /**
  * Which story's library we are in. Throws rather than falling back to the legacy shared
@@ -121,7 +173,7 @@ export function useAssetScope(): string {
 }
 
 /** The current story's asset library. */
-export function useAssetStore(scope?: string): AssetStore {
+export function useAssetStore(scope?: string): LibraryAssetStore {
 	const current = React.useContext(AssetScopeContext);
 	const resolved = scope ?? current;
 
@@ -151,7 +203,7 @@ export interface AssetLibrary {
 	characters: Character[];
 	lastUpload?: UploadReport;
 	refresh: () => void;
-	store: AssetStore;
+	store: LibraryAssetStore;
 	/** Assets not owned by a character — what the flat list shows (spec 03). */
 	visible: AssetMeta[];
 	/** Every tag in use, sorted. */

@@ -1,17 +1,9 @@
 /**
- * Which of this story's art the server would actually receive.
+ * Which of the art this story can see its scenes actually use — the "Unused" badge.
  *
- * A push uploads what the story *references*, not what the library holds: `syncStoryAssets`
- * runs `collectAssetRefs` + `resolveBundleRefs` and writes a manifest of exactly that. So an
- * asset nobody has named in a `[scene]` block yet lives on this machine and nowhere else.
- * That is deliberate — art the story does not use is not worth the bytes — but it is
- * invisible, and the way it becomes visible today is that someone opens the story on
- * another machine and finds a character missing.
- *
- * This hook exists to put a badge on those tiles before that happens. It calls the same two
- * functions the push does rather than re-deriving "referenced" from the scene YAML: a second
- * answer to that question would drift, and it would drift by telling the author their art is
- * safe when it is not.
+ * The same answer the library's usage refs are built from (`storyAssetRefs` in
+ * `store/asset-library/library-provider.tsx`): `collectAssetRefs` + `resolveBundleRefs`
+ * over the story's resolved view. One derivation, so the badge and `usage()` cannot drift.
  */
 
 import type {AssetStore} from '@sliders/asset-store';

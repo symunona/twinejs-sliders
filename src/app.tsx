@@ -8,6 +8,7 @@ import {Routes} from './routes';
 import {StoriesContextProvider} from './store/stories';
 import {StoryFormatsContextProvider} from './store/story-formats';
 import {ServerSyncProvider} from './store/persistence/server';
+import {LibraryProvider} from './store/asset-library/library-provider';
 import {StateLoader} from './store/state-loader';
 import {ThemeSetter} from './store/theme-setter';
 import './styles/typography.css';
@@ -23,11 +24,14 @@ export const App: React.FC = () => (
 						{/* Alongside the local persistence layer, never inside it: a
 						    failing network must not be able to break local saving. */}
 						<ServerSyncProvider>
-							<HotkeysProvider>
-								<React.Suspense fallback={<LoadingCurtain />}>
-									<Routes />
-								</React.Suspense>
-							</HotkeysProvider>
+							{/* The shared asset library's engine: one per session. */}
+							<LibraryProvider>
+								<HotkeysProvider>
+									<React.Suspense fallback={<LoadingCurtain />}>
+										<Routes />
+									</React.Suspense>
+								</HotkeysProvider>
+							</LibraryProvider>
 						</ServerSyncProvider>
 					</StateLoader>
 				</StoriesContextProvider>
