@@ -102,12 +102,15 @@ export interface Config {
 	clientName: string;
 }
 
+/** Parsed flags: a bare boolean, a value, or the values of a repeatable flag. */
+export type Flags = Record<string, string | boolean | string[]>;
+
 /** What `bin.ts` hands every command. */
 export interface Ctx {
 	config: Config;
 	source: Source;
 	write: WriteClient;
-	flags: Record<string, string | boolean>;
+	flags: Flags;
 	json: boolean;
 	quiet: boolean;
 	out(line: string): void;

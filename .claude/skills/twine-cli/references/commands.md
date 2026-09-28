@@ -24,7 +24,7 @@ Ambiguous = exit 2 plus candidate list. Quote refs with spaces. `ep3#…` gone (
 | `cat <ref> [-o file] [--refresh]` | passage text with receipt front matter, or asset bytes |
 | `cat <story> --all -o <dir>` | every passage, one file each, own receipt |
 | `put <ref> <file>` | splice into current body, `PUT` with `If-Match` |
-| `put <story> --all <dir> [--delete "<name>"]` | per passage, per hash check. Absence never delete |
+| `put <story> --all <dir> [--delete "<name>" ...]` | per passage, per hash check. Absence never delete. `--delete` repeatable, all in one write, before `--all` |
 | `put <ref> <file> --new` | passage that does not exist yet. Plain text file, no receipt needed. Front matter optional |
 | `check <file\|dir>` | fresh / stale-elsewhere / conflict. Read only |
 
@@ -52,7 +52,7 @@ that file were pushed. Pre-flight.
 | Command | Does |
 |---|---|
 | `copy <story>[@rev] --name "<n>" [--assets copy\|link\|none]` | server-side clone: new id, new ifid, new passage ids |
-| `put <story>:<name> <file> --kind bg\|obj\|fx\|frame` (`frame` = pose image, stored name) | upload art; unknown name create it |
+| `put <story>:<name> <file> --kind bg\|obj\|fx\|frame\|sound` (`obj` = `object`; `frame` = pose image, stored name; unknown kind = usage error) | upload art; unknown name create it |
 | `new --name "<n>"` | empty story |
 | `rm <story> [--purge] --yes` | tombstone, or erase |
 | `restore <story> --rev N` | new revision from old one; print `missingAssets` |

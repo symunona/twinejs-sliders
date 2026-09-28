@@ -175,6 +175,37 @@ describe('A. edited art reaches the other browser', () => {
 		expect(resolver.asset('night')).toBeUndefined();
 	});
 
+	it('A7b: bo never saw the rename, edits tags → rename kept, stale name not pushed back', async () => {
+		// The old per-story sync lost this one (77f72fde on sliders): a device that
+		// missed a rename wrote its whole manifest back, stale name included.
+		const {world, ana, bo, tavern} = await team({socket: 'dead'});
+		const night = await upload(ana, tavern.id, 'night', 'night');
+
+		await world.settle();
+		await bo.engine.poll();
+		expect(bo.get<AssetRecord>(night.id)!.name).toBe('night');
+
+		ana.engine.rename(night.id, 'tavern-night');
+		await world.settle();
+		// bo is stale: still 'night', and writes an unrelated field on it.
+		expect(bo.get<AssetRecord>(night.id)!.name).toBe('night');
+		bo.engine.updateAsset(night.id, {tags: ['wet']});
+		await world.settle();
+		await bo.engine.poll();
+		await world.settle();
+
+		expect(world.server.record('asset', night.id)).toMatchObject({
+			name: 'tavern-night',
+			tags: ['wet']
+		});
+		expect(bo.get<AssetRecord>(night.id)).toMatchObject({
+			name: 'tavern-night',
+			tags: ['wet']
+		});
+		await ana.engine.poll();
+		expect(ana.get<AssetRecord>(night.id)!.name).toBe('tavern-night');
+	});
+
 	it('A8: metadata-only change, socket dead: bo gets it by polling', async () => {
 		const {world, ana, bo, tavern} = await team({socket: 'dead'});
 		const night = await upload(ana, tavern.id, 'night', 'night');

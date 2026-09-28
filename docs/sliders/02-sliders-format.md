@@ -828,7 +828,7 @@ One grammar, three places. Parsed by `@sliders/scene-schema` `condition.ts` — 
 |---|---|---|
 | link | the choice | `links: {buy: {to: Shop, if: coins >= 3}}`, `link: {to: …, if: …}` |
 | entity | the entity is on stage at all | `props: {drone: {at: 0.2, if: passage.visits == 1}}` |
-| beat | the beat plays | `- bob: {say: "…", if: x}` or `if:` beside any beat's key |
+| beat | the beat plays | `- bob: {say: "…", if: x}`, `- box: {text: "…", if: x}` or `if:` beside any beat's key |
 
 ```yaml
 props:

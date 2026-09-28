@@ -157,7 +157,8 @@ export const BOX_KEYS = [
 	'dur',
 	'ease',
 	'sfx',
-	'bg'
+	'bg',
+	'if'
 ] as const;
 
 /** Keys a beat may add to its speaker's entry beyond the entity keys. */
@@ -2325,6 +2326,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	let ease: BeatEase | undefined;
 	let sfx: StageSound | undefined;
 	let bg: ParsedBg | undefined;
+	let cond: string | undefined;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
 		const key = keyName(pair);
@@ -2335,6 +2337,17 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 		}
 
 		switch (key) {
+			// Same as `if:` beside `box:` — a speaker's map takes it inside, so a box's does.
+			case 'if': {
+				cond = parseIf(ctx, pair.value, 'if');
+
+				if (cond !== undefined) {
+					ctx.conditionNodes.push({if: cond, node: pair.value, what: `Beat ${index + 1}`});
+				}
+
+				break;
+			}
+
 			case 'text': {
 				text = asString(ctx, pair.value, 'text');
 				textNode = pair.value;
@@ -2390,6 +2403,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 		...(dur !== undefined ? {dur} : {}),
 		...(ease !== undefined ? {ease} : {}),
 		...(sfx ? {sfx} : {}),
+		...(cond !== undefined ? {if: cond} : {}),
 		...bgFields(bg)
 	};
 }

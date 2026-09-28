@@ -13,7 +13,7 @@
 
 import {resolveStory} from '../ref';
 import {CliError, EXIT} from '../types';
-import type {Ctx} from '../types';
+import type {Ctx, Flags} from '../types';
 
 export const name = 'rm';
 export const summary = 'Delete a story: tombstone by default, --purge to erase it';
@@ -72,6 +72,6 @@ export async function run(ctx: Ctx, args: string[]): Promise<number> {
 	return EXIT.ok;
 }
 
-function truthy(value: string | boolean | undefined): boolean {
+function truthy(value: Flags[string] | undefined): boolean {
 	return value === true || value === 'true' || value === '';
 }

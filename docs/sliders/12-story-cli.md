@@ -195,7 +195,8 @@ twine-cli put ep3 --all tmp/ep3/             # per-passage splice, per-passage h
 ```
 
 `put --all` skip files it did not hand out, and report per file. Deleting a passage need
-`--delete "<name>"` — absence never delete.
+`--delete "<name>"` — absence never delete. Repeatable; all names go in one write, before
+`--all` runs. One unknown name = nothing deleted.
 
 `cat <ref> --refresh` re-take a passage, refusing when the local file has edits, so a stale
 copy is one command from current.
@@ -219,7 +220,7 @@ such passage", not a second passage with a typo for a name.
 
 ```sh
 twine-cli cat ep3:a_8f21 -o tmp/bg.webp      # local mode: print the store path instead
-twine-cli put ep3:tavern-dawn tmp/new.webp --kind bg
+twine-cli put ep3:tavern-dawn tmp/new.webp --kind bg     # bg|obj|object|frame|fx|sound
 ```
 
 `put` on unknown asset name create it: assign id, `PUT` bytes with `X-Asset-Hash`, add
