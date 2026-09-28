@@ -15,11 +15,23 @@
 .library-rail {
 	border-right: 1px solid var(--light-gray);
 	display: flex;
-	flex: 0 0 calc(var(--grid-size) * 16);
+	flex: 0 0 calc(var(--grid-size) * 26);
 	flex-direction: column;
 	gap: var(--control-inner-padding);
 	overflow-y: auto;
 	padding: var(--grid-size);
+}
+
+.library-rail.collapsed {
+	align-items: center;
+	flex-basis: auto;
+	padding: var(--grid-size) 2px;
+}
+
+.library-rail-head {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
 }
 
 .library-rail h3,

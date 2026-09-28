@@ -6,6 +6,8 @@ import {
 import {
 	IconFolderPlus,
 	IconGripVertical,
+	IconLayoutSidebarLeftCollapse,
+	IconLayoutSidebarLeftExpand,
 	IconLock,
 	IconSearch,
 	IconUnlink,
@@ -29,6 +31,25 @@ import {
 } from './library-model';
 
 const COLLECTION_MIME = 'application/x-sliders-library-collection';
+
+/** Rail open/collapsed. Editor chrome only, so localStorage, not the prefs store. */
+const COLLAPSED_KEY = 'sliders.library.railCollapsed';
+
+function readCollapsed(): boolean {
+	try {
+		return window.localStorage.getItem(COLLAPSED_KEY) === 'true';
+	} catch {
+		return false;
+	}
+}
+
+function writeCollapsed(value: boolean) {
+	try {
+		window.localStorage.setItem(COLLAPSED_KEY, String(value));
+	} catch {
+		// Storage blocked: the toggle still works for this session.
+	}
+}
 
 export interface LibraryRailProps {
 	engine: LibraryEngine;
@@ -72,6 +93,7 @@ export const LibraryRail: React.FC<LibraryRailProps> = props => {
 	const [newName, setNewName] = React.useState('');
 	const [newOpen, setNewOpen] = React.useState(false);
 	const [error, setError] = React.useState<string>();
+	const [collapsed, setCollapsed] = React.useState(readCollapsed);
 	const attachedIds = snapshot.attached.map(collection => collection.id);
 	const label = (collection: CollectionRecord | undefined) =>
 		collectionLabel(collection, name =>
@@ -245,9 +267,38 @@ export const LibraryRail: React.FC<LibraryRailProps> = props => {
 		);
 	}
 
+	function toggleCollapsed() {
+		writeCollapsed(!collapsed);
+		setCollapsed(!collapsed);
+	}
+
+	if (collapsed) {
+		return (
+			<nav
+				aria-label={t('dialogs.library.collections')}
+				className="library-rail collapsed"
+			>
+				<IconButton
+					icon={<IconLayoutSidebarLeftExpand />}
+					iconOnly
+					label={t('dialogs.library.expandRail')}
+					onClick={toggleCollapsed}
+				/>
+			</nav>
+		);
+	}
+
 	return (
 		<nav aria-label={t('dialogs.library.collections')} className="library-rail">
-			<h3>{t('dialogs.library.collections')}</h3>
+			<div className="library-rail-head">
+				<h3>{t('dialogs.library.collections')}</h3>
+				<IconButton
+					icon={<IconLayoutSidebarLeftCollapse />}
+					iconOnly
+					label={t('dialogs.library.collapseRail')}
+					onClick={toggleCollapsed}
+				/>
+			</div>
 			<ul>
 				<li
 					className={classNames('library-rail-item', 'mine', {
