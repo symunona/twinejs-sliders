@@ -215,46 +215,6 @@ describe('error mapping', () => {
 	});
 });
 
-describe('assets', () => {
-	it('uploads with the hash the library already computed', async () => {
-		const fetchImpl = jest.fn(async () => response(200, {}));
-		const blob = new Blob(['bytes']);
-
-		await clientWith(fetchImpl).putAssetBlob(
-			'story-1',
-			'a_8f21',
-			blob,
-			'hash-1',
-			'image/webp'
-		);
-
-		const [url, init] = fetchImpl.mock.calls[0] as unknown as [
-			string,
-			FakeInit
-		];
-
-		expect(url).toBe(
-			'https://example.test/api/v1/stories/story-1/assets/a_8f21'
-		);
-		expect(init.method).toBe('PUT');
-		expect(init.headers).toMatchObject({
-			'Content-Type': 'image/webp',
-			'X-Asset-Hash': 'hash-1'
-		});
-		expect(init.body).toBe(blob);
-	});
-
-	it('fills in the three diff buckets even when the server omits them', async () => {
-		const fetchImpl = jest.fn(async () => response(200, {missing: ['a_1']}));
-
-		expect(
-			await clientWith(fetchImpl).diffAssets('story-1', [
-				{bytes: 1, hash: 'h', id: 'a_1'}
-			])
-		).toEqual({missing: ['a_1'], present: [], stale: []});
-	});
-});
-
 describe('revision meta', () => {
 	const ok = {
 		id: 'story-1',

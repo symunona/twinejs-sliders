@@ -48,10 +48,20 @@ Chapbook's. 0.2.0 shipped exactly that way, in production, for a day.
 
 ## Naming and scope
 
-- Asset **names** and character **ids** are ONE namespace. Scene YAML addresses both by
-  that string. Uniqueness is enforced in `asset-store`; a rename throws, an upload numbers.
-- Assets are **per story**, not a shared library. `<AssetScopeProvider>` gates the store so
-  nothing can write to the wrong scope by accident.
+- Asset **names** and character **ids** are ONE namespace, per collection. Scene YAML
+  addresses both by that string. A rename throws, an upload numbers (against the story's
+  whole view).
+- Assets live in the **shared library** (`packages/asset-library`, plans
+  `docs/sliders/plans/asset-library-*.md`). Each story = own collection (`kind: story`,
+  created on first write) + binding (attached collections, usage refs).
+- Name resolution: own collection, then attached in order. **First wins**, later =
+  shadowed. `coll/name` = qualified. Same rule in facade, preview, story-map catalog + lint
+  (`ambiguous` warning).
+- Old callers see `slidersAssetStore(storyId)` = `LibraryAssetStore` facade
+  (`src/store/asset-library/story-asset-store.ts`), the old `AssetStore` interface over
+  that view. Packager untouched, runs through it.
+- Editing art that lives elsewhere or another story uses throws `SharedAssetError` unless
+  `{scope: 'all' | 'fork'}`. Never silently changes another story.
 - Character pose images are named `<character id>-<pose>`. A character's first pose is
   always `idle`, whatever the file was called.
 - The word `frame` is retired: **pose** (named look: still, animated file or steps) and
@@ -69,10 +79,22 @@ Draw order is z, then insertion order — never alphabetical id.
 
 ## Sync model
 
-`rev` is the If-Match token and bumps on every write. Websocket `/api/v1/events` carries
-the change bus, presence and advisory locks — it **never writes**.
+Two syncs, one socket.
 
-Three rules that cost real data when broken:
+| | Stories | Asset library |
+|---|---|---|
+| code | `store/persistence/server` | `packages/asset-library` engine, `store/asset-library` provider |
+| unit | whole story, `rev` If-Match | per record (collection/asset/character/binding), `rev` If-Match |
+| bytes | — | blobs by sha256, write-once, fetched lazily into OPFS |
+| wake | socket `story`/`deleted`/`revived`, poll | socket `{t:'lib', seq}` → `engine.notify`, reconnect, 30 s poll |
+| checkout | text only | nothing: every client holds every record |
+
+Websocket `/api/v1/events` carries the change bus, presence and advisory locks — it
+**never writes**. Library invariants live in the engine (contract doc, "Client
+invariants"): blob before record, pulled record never re-enters the outbox, base
+persisted, 412 → 3-way merge.
+
+Story rules that cost real data when broken:
 
 1. **A pull must LAND before it is recorded.** Proof is a dry run of the real reducer over
    the array about to be dispatched — never a mirror of the reducer's conditions, which
@@ -80,13 +102,12 @@ Three rules that cost real data when broken:
 2. **No retry loop on a refused pull.** A landed pull clears the story's undo stack;
    retrying every 30s wipes the author's history twice a minute. A refusal writes
    `pullBlockedRev` and lifts only when `server.rev` moves past it.
-3. **The library compare stops an asset ping-pong.** A pull that changes nothing must fire
-   no library-change event, or two clients push art at each other forever.
 
 Editor-only keys (`locked:`) are never read by the player. Local-only story fields (`Story.sync`) are stripped on the wire.
 
 ## Known gaps
 
 - No conflict UI in the story editor — only on the story list.
-- Nothing tells the author when a pulled asset is `missing` server-side.
+- Library UI (collections rail, attach, conflicts, sync chips) not built yet: facade +
+  engine hooks only. `twine-cli` still reads the old per-story manifest.
 - A story living only in a browser library is linted by nothing but the editor.

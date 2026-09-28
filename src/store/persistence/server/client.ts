@@ -9,8 +9,6 @@
 import type {Story} from '../../stories';
 import {storyDefaults} from '../../stories/defaults';
 import type {
-	AssetDiffResponse,
-	AssetManifest,
 	HealthResponse,
 	PatchStoryResponse,
 	PingResponse,
@@ -25,16 +23,6 @@ import type {
 	StoryIndexResponse,
 	StoryPatch
 } from './server.types';
-
-/** What `PUT /stories/{id}/assets` takes. The server owns `rev` and `missing`. */
-export type AssetManifestBody = Pick<
-	AssetManifest,
-	'version' | 'assets' | 'characters'
->;
-
-export interface PutManifestResponse {
-	rev: number;
-}
 
 /** A story fetched from the server, with the rev its ETag carried. */
 export interface FetchedStory {
@@ -224,28 +212,6 @@ export interface ServerClient {
 	): Promise<PatchStoryResponse>;
 	deleteStory(id: string, purge?: boolean): Promise<void>;
 	reviveStory(story: Story): Promise<PutStoryResponse>;
-	getManifest(id: string): Promise<AssetManifest>;
-	putManifest(
-		id: string,
-		manifest: AssetManifestBody,
-		ifMatch?: number
-	): Promise<PutManifestResponse>;
-	diffAssets(
-		id: string,
-		assets: {id: string; hash: string; bytes: number}[]
-	): Promise<AssetDiffResponse>;
-	headAsset(
-		id: string,
-		assetId: string
-	): Promise<{bytes: number; hash: string} | undefined>;
-	getAssetBlob(id: string, assetId: string): Promise<Blob>;
-	putAssetBlob(
-		id: string,
-		assetId: string,
-		blob: Blob,
-		hash: string,
-		mime: string
-	): Promise<void>;
 	listRevisions(id: string): Promise<RevisionsResponse>;
 	getRevision(id: string, rev: number): Promise<Story>;
 	restoreRevision(id: string, rev: number): Promise<RestoreResponse>;
@@ -444,105 +410,6 @@ class FetchServerClient implements ServerClient {
 
 	async reviveStory(story: Story): Promise<PutStoryResponse> {
 		return this.putStory(story, undefined, {revive: true});
-	}
-
-	async getManifest(id: string): Promise<AssetManifest> {
-		return this.json<AssetManifest>(
-			`/stories/${encodeURIComponent(id)}/assets`
-		);
-	}
-
-	async putManifest(
-		id: string,
-		manifest: AssetManifestBody,
-		ifMatch?: number
-	): Promise<PutManifestResponse> {
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json'
-		};
-
-		// `!== undefined`, not truthy: rev 0 is a story with no manifest yet, and two
-		// devices racing to write its first one is still a race.
-		if (ifMatch !== undefined) {
-			headers['If-Match'] = quoted(ifMatch);
-		}
-
-		const response = await this.send(
-			`/stories/${encodeURIComponent(id)}/assets`,
-			{body: JSON.stringify(manifest), headers, method: 'PUT'}
-		);
-
-		return (await response.json()) as PutManifestResponse;
-	}
-
-	async diffAssets(
-		id: string,
-		assets: {id: string; hash: string; bytes: number}[]
-	): Promise<AssetDiffResponse> {
-		const response = await this.send(
-			`/stories/${encodeURIComponent(id)}/assets/diff`,
-			{
-				body: JSON.stringify({assets}),
-				headers: {'Content-Type': 'application/json'},
-				method: 'POST'
-			}
-		);
-		const body = (await response.json()) as Partial<AssetDiffResponse>;
-
-		return {
-			missing: body.missing ?? [],
-			present: body.present ?? [],
-			stale: body.stale ?? []
-		};
-	}
-
-	async headAsset(
-		id: string,
-		assetId: string
-	): Promise<{bytes: number; hash: string} | undefined> {
-		const response = await this.send(
-			`/stories/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}`,
-			{method: 'HEAD'},
-			[404]
-		);
-
-		if (response.status === 404) {
-			return undefined;
-		}
-
-		return {
-			bytes: Number.parseInt(response.headers.get('Content-Length') ?? '0', 10),
-			hash: (response.headers.get('ETag') ?? '').replace(/"/g, '')
-		};
-	}
-
-	async getAssetBlob(id: string, assetId: string): Promise<Blob> {
-		const response = await this.send(
-			`/stories/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}`,
-			{}
-		);
-
-		return response.blob();
-	}
-
-	async putAssetBlob(
-		id: string,
-		assetId: string,
-		blob: Blob,
-		hash: string,
-		mime: string
-	): Promise<void> {
-		await this.send(
-			`/stories/${encodeURIComponent(id)}/assets/${encodeURIComponent(assetId)}`,
-			{
-				body: blob,
-				headers: {
-					'Content-Type': mime || 'application/octet-stream',
-					'X-Asset-Hash': hash
-				},
-				method: 'PUT'
-			}
-		);
 	}
 
 	async listRevisions(id: string): Promise<RevisionsResponse> {

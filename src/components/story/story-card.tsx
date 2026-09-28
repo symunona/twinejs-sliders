@@ -89,14 +89,7 @@ export const StoryCard: React.FC<StoryCardProps> = props => {
 							data-testid="story-card-loading"
 						>
 							<span>
-								{/* A file count, not a bar alone: one 16 MB background holds the bar
-								    still for long enough to read as stuck. */}
-								{loading.phase === 'assets' && loading.total > 0
-									? t('components.storyCard.loadingAssetsCount', {
-											done: loading.done,
-											total: loading.total
-										})
-									: t('components.storyCard.loadingAssets')}
+								{t('components.storyCard.loadingAssets')}
 							</span>
 							<progress
 								className="story-card-loading-progress"

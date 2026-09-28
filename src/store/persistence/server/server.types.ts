@@ -5,7 +5,6 @@
  * `server/`, agree on. Change it and change both sides.
  */
 
-import type {AssetMeta, Character} from '@sliders/scene-types';
 import type {Passage, Story} from '../../stories';
 
 export const API_VERSION = 1;
@@ -188,26 +187,6 @@ export interface PatchStoryRequest {
 /** Same shape a PUT answers with: PATCH goes through the same write path. */
 export type PatchStoryResponse = PutStoryResponse;
 
-export interface AssetManifest {
-	version: number;
-	assets: AssetMeta[];
-	characters: Character[];
-	rev: number;
-	/** Manifest entries whose bytes the server does not have. */
-	missing: string[];
-}
-
-export interface AssetDiffRequest {
-	assets: {id: string; hash: string; bytes: number}[];
-}
-
-export interface AssetDiffResponse {
-	missing: string[];
-	present: string[];
-	/** Present, but stored under a different hash. Re-upload. */
-	stale: string[];
-}
-
 export interface RevisionEntry {
 	rev: number;
 	at: string;
@@ -306,6 +285,18 @@ export type ServerMessage =
 	 * cares is an open History dialog, which re-lists.
 	 */
 	| {t: 'revmeta'; id: string; rev: number}
+	/**
+	 * The shared asset library's change feed moved (asset-library-contract.md, Socket).
+	 * Advisory: the engine reads `/changes` from its own cursor, never this body.
+	 */
+	| {
+			t: 'lib';
+			seq: number;
+			type: 'collection' | 'asset' | 'character' | 'binding';
+			id: string;
+			rev: number;
+			by: string;
+	  }
 	| {t: 'pong'};
 
 // ---------------------------------------------------------------------------

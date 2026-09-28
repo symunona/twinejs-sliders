@@ -450,22 +450,6 @@ describe('tombstones', () => {
 	});
 });
 
-describe('the asset manifest', () => {
-	it('keeps a rev of its own, untouched by story writes', async () => {
-		const a = browser('a');
-
-		await push(a, testStory({id: 's1'}));
-		await a.client.putManifest('s1', {assets: [], characters: [], version: 1});
-
-		expect(server.assetRevOf('s1')).toBe(1);
-
-		await push(a, storyWithText('s1', 'edited'));
-
-		expect(server.revOf('s1')).toBe(2);
-		expect(server.assetRevOf('s1')).toBe(1);
-	});
-});
-
 describe('verifying a suspected conflict', () => {
 	it('is resolved when the server is holding our own bytes', async () => {
 		const a = browser('a');

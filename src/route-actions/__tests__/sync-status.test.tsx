@@ -49,7 +49,6 @@ describe('<SyncStatus>', () => {
 						lock: () => undefined,
 						presence: emptyPresence(),
 						progress,
-						pullAssets: async () => undefined,
 						records,
 						socketConnected: connected,
 						stealPassage: () => undefined
@@ -232,139 +231,8 @@ describe('<SyncStatus>', () => {
 		});
 	});
 
-	describe('while artwork is downloading', () => {
-		function syncedStory() {
-			const story = fakeStory();
-
-			story.sync = true;
-			return story;
-		}
-
-		function idleRecord(story: Story): SyncRecords {
-			return {
-				[story.id]: {
-					lastPushedAt: Date.parse('2026-08-21T10:12:00Z'),
-					pushedHash: 'mock-hash',
-					rev: 1,
-					state: 'idle',
-					storyId: story.id
-				}
-			};
-		}
-
-		it('replaces the last-sync badge with a count of a top-up pull', () => {
-			const story = syncedStory();
-
-			renderComponent([story], idleRecord(story), true, undefined, {
-				[story.id]: {done: 3, phase: 'download', total: 9}
-			});
-			expect(
-				screen.getByTestId('sync-status-downloading')
-			).toBeInTheDocument();
-			expect(
-				screen.getByText('routeActions.app.syncDownloadingCount')
-			).toBeInTheDocument();
-			expect(screen.queryByTestId('sync-status-badge')).not.toBeInTheDocument();
-		});
-
-		it('counts a checkout too', () => {
-			const story = syncedStory();
-
-			renderComponent([story], {}, true, undefined, {
-				[story.id]: {done: 1, phase: 'assets', total: 4}
-			});
-			expect(
-				screen.getByTestId('sync-status-downloading')
-			).toBeInTheDocument();
-		});
-
-		it('says nothing while a checkout is still fetching story text', () => {
-			const story = syncedStory();
-
-			renderComponent([story], idleRecord(story), true, undefined, {
-				[story.id]: {done: 0, phase: 'story', total: 1}
-			});
-			expect(
-				screen.queryByTestId('sync-status-downloading')
-			).not.toBeInTheDocument();
-			expect(screen.getByTestId('sync-status-badge')).toBeInTheDocument();
-		});
-
-		it('ignores a push, which sends art rather than receiving it', () => {
-			const story = syncedStory();
-
-			renderComponent([story], idleRecord(story), true, undefined, {
-				[story.id]: {done: 2, phase: 'upload', total: 5}
-			});
-			expect(
-				screen.queryByTestId('sync-status-downloading')
-			).not.toBeInTheDocument();
-			expect(screen.getByTestId('sync-status-badge')).toBeInTheDocument();
-		});
-
-		it('adds up every story in the map, not just the one it was given', () => {
-			const story = syncedStory();
-			const other = syncedStory();
-
-			renderComponent([story, other], idleRecord(story), true, story, {
-				[story.id]: {done: 1, phase: 'download', total: 2},
-				[other.id]: {done: 2, phase: 'assets', total: 7}
-			});
-			expect(
-				screen.getByTestId('sync-status-downloading')
-			).toBeInTheDocument();
-		});
-
-		it('says a download is happening before it knows how big it is', () => {
-			const story = syncedStory();
-
-			renderComponent([story], idleRecord(story), true, undefined, {
-				[story.id]: {done: 0, phase: 'download', total: 0}
-			});
-			expect(
-				screen.getByText('routeActions.app.syncDownloading')
-			).toBeInTheDocument();
-		});
-
-		it('still reports trouble first--a stuck story outranks a busy one', () => {
-			const story = syncedStory();
-
-			renderComponent(
-				[story],
-				{
-					[story.id]: {
-						conflictRev: 2,
-						pushedHash: 'mock-hash',
-						rev: 1,
-						state: 'conflict',
-						storyId: story.id
-					}
-				},
-				true,
-				story,
-				{[story.id]: {done: 1, phase: 'download', total: 2}}
-			);
-			expect(screen.getByTestId('sync-status-trouble')).toBeInTheDocument();
-			expect(
-				screen.queryByTestId('sync-status-downloading')
-			).not.toBeInTheDocument();
-		});
-	});
-
 	it('is accessible', async () => {
 		const {container} = renderComponent([], {});
-
-		expect(await axe(container)).toHaveNoViolations();
-	});
-
-	it('is accessible while downloading', async () => {
-		const story = fakeStory();
-
-		story.sync = true;
-
-		const {container} = renderComponent([story], {}, true, undefined, {
-			[story.id]: {done: 3, phase: 'download', total: 9}
-		});
 
 		expect(await axe(container)).toHaveNoViolations();
 	});

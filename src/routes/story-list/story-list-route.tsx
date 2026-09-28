@@ -10,7 +10,6 @@ import {
 } from '../../dialogs';
 import {StoryCardPresence} from '../../components/story/story-card-sync-badge';
 import {
-	isAssetPullProgress,
 	isCheckoutProgress,
 	useServerSyncContext,
 	type CheckoutProgress
@@ -109,9 +108,9 @@ export const InnerStoryListRoute: React.FC = () => {
 		return result;
 	}, [progress]);
 
-	// A checkout writes the story before it writes the art (`checkoutStory`), so between
-	// those two the card is a real card with half its pictures missing. Mark it loading
-	// until the art lands: the card says so, and refuses to be selected or opened.
+	// A story being checked out is not there yet. Mark it loading until the text lands:
+	// the card says so, and refuses to be selected or opened. (Art no longer blocks it:
+	// the asset library fetches blobs lazily.)
 
 	const checkingOut = React.useMemo(() => {
 		const result: Record<string, CheckoutProgress | undefined> = {};
@@ -119,22 +118,6 @@ export const InnerStoryListRoute: React.FC = () => {
 		for (const [storyId, value] of Object.entries(progress ?? {})) {
 			if (isCheckoutProgress(value)) {
 				result[storyId] = value;
-			}
-		}
-
-		return result;
-	}, [progress]);
-
-	// A pull of new art into a story already on screen. Unlike a checkout it does not
-	// block the card — the story is perfectly usable while its newest picture lands.
-
-	const downloadingAssets = React.useMemo(() => {
-		const result: Record<string, {done: number; total: number} | undefined> =
-			{};
-
-		for (const [storyId, value] of Object.entries(progress ?? {})) {
-			if (isAssetPullProgress(value)) {
-				result[storyId] = {done: value.done, total: value.total};
 			}
 		}
 
@@ -191,7 +174,6 @@ export const InnerStoryListRoute: React.FC = () => {
 						) : (
 							<StoryCards
 								checkingOut={checkingOut}
-								downloadingAssets={downloadingAssets}
 								checkoutProgress={checkoutProgress}
 								ghosts={visibleGhosts}
 								onCheckOutGhost={entry => actions.checkout(entry.id)}

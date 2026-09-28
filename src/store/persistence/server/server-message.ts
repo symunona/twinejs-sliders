@@ -37,6 +37,7 @@
  * is why `reconcile` is an effect here rather than something this file carries out.
  */
 
+import {notifyLibrary} from '../../asset-library/engine-registry';
 import {logSync} from './sync-log';
 import type {SyncRecordStore} from './sync-record';
 import type {ServerMessage, StoryIndexEntry} from './server.types';
@@ -73,10 +74,10 @@ export type ServerMessageEffect =
 	| {type: 'refresh'}
 	/** Put one story through the same decision table the poll uses. */
 	| {type: 'reconcile'; story: Story; server: ServerStoryState}
-	/** Fetch whatever art this story is now missing. */
-	| {type: 'pullAssets'; storyId: string}
 	/** Tell whoever is showing this story's revision list that a row's meta moved. */
-	| {type: 'revisionMeta'; id: string; rev: number};
+	| {type: 'revisionMeta'; id: string; rev: number}
+	/** The asset library's feed moved: the engine pulls from its cursor. */
+	| {type: 'lib'; seq: number};
 
 // ---------------------------------------------------------------------------
 // Revision meta listeners
@@ -202,15 +203,13 @@ export function planServerMessage(
 			// a dialog can be open on a ghost.
 			return [{id: message.id, rev: message.rev, type: 'revisionMeta'}];
 
-		case 'assets':
-			// Asset bytes are not part of the story document, so there is nothing to
-			// reconcile — what changed is the index row's counts. Ask for the whole index
-			// rather than patching a row, since the counts are what moved, and fetch
-			// whatever art we are now missing.
-			return [{type: 'refresh'}, {storyId: message.story, type: 'pullAssets'}];
+		case 'lib':
+			// The shared asset library. Nothing about stories: the engine owns it.
+			return [{seq: message.seq, type: 'lib'}];
 
 		default:
-			// `welcome`, `presence`, `stolen`, `pong`, and anything a newer server sends
+			// `welcome`, `presence`, `stolen`, `pong`, the old per-story `assets` (the
+			// shared library has its own feed, `lib`), and anything a newer server sends
 			// that this build has never heard of. None of them says anything about a
 			// story; the first three are presence's, and presence sees every message.
 			return [];
@@ -228,8 +227,6 @@ export interface ServerMessageEnv extends ServerMessageView {
 	refresh(): void;
 	/** The hook's `reconcileStory`. */
 	reconcile(story: Story, server: ServerStoryState): Promise<void>;
-	/** The hook's `pullAssetsRef.current`. */
-	pullAssets(storyId: string): void;
 	/**
 	 * A reconcile has finished and may have rewritten records.
 	 *
@@ -289,14 +286,15 @@ export function handleServerMessage(
 					.then(() => env.onReconciled());
 				break;
 
-			case 'pullAssets':
-				env.pullAssets(effect.storyId);
-				break;
-
 			case 'revisionMeta':
 				// Straight to the module table rather than through `env`: the hook has
 				// no part in this and would only be a place for the message to get lost.
 				notifyRevisionMeta(effect.id, effect.rev);
+				break;
+
+			case 'lib':
+				// Module-level engine, same reasoning as `revisionMeta`.
+				notifyLibrary(effect.seq);
 				break;
 		}
 	}
@@ -326,12 +324,12 @@ function noteFor(
 		return `${message.t}: reconcile`;
 	}
 
-	if (effects.some(effect => effect.type === 'pullAssets')) {
-		return `${message.t}: refresh and pull assets`;
-	}
-
 	if (effects.some(effect => effect.type === 'revisionMeta')) {
 		return `${message.t}: revision list changed`;
+	}
+
+	if (effects.some(effect => effect.type === 'lib')) {
+		return `${message.t}: library feed moved`;
 	}
 
 	return `${message.t}: not held, refresh`;

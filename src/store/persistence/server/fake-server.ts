@@ -6,7 +6,7 @@
  * The sync modules each have unit tests, and the whole thing has Playwright specs against
  * a real server. Between those two sits the layer where every sync bug in `CLAUDE.md`
  * actually lived: rev advancing across a sequence of writes, `If-Match` being honoured,
- * two clients interleaving, a socket event racing a poll, a manifest moving. The only
+ * two clients interleaving, a socket event racing a poll. The only
  * harness that reached it was a `Record<url, cannedResponse>` map, which cannot express a
  * rev at all — it answers the same thing however many times you ask.
  *
@@ -30,7 +30,6 @@
  *     the one rule most likely to be "simplified" away by a mock.
  *   - PATCH requires `If-Match` where PUT does not, and goes through the same write
  *     path — same rev bump, same notification — as `Store.PatchStory` does in Go.
- *   - The asset manifest has its own rev, independent of the story's.
  *   - Writes are announced to a notifier the way the HTTP handlers call `api.Notifier`,
  *     with the writer's own id, so a test can reproduce echo suppression.
  *
@@ -42,12 +41,10 @@
  */
 
 import {ServerError, NOT_MODIFIED, type ServerClient} from './client';
-import type {AssetManifestBody, FetchedStory} from './client';
+import type {FetchedStory} from './client';
 import type {Story} from '../../stories';
 import {applyPassageDiff} from './story-diff';
 import type {
-	AssetDiffResponse,
-	AssetManifest,
 	HealthResponse,
 	PatchStoryResponse,
 	PingResponse,
@@ -74,10 +71,6 @@ interface StoredStory {
 	deleted: boolean;
 	updatedAt: string;
 	lastClient: string;
-	/** The manifest's own rev. Separate from the story's, as on the real server. */
-	assetRev: number;
-	assets: AssetManifestBody;
-	blobs: Map<string, {bytes: number; hash: string; blob: Blob}>;
 	/**
 	 * Rows for versions that have been replaced, newest first. No bodies — the real
 	 * server keeps `revs/<rev>.json.gz` beside each of these and nothing here reads one.
@@ -155,7 +148,6 @@ export interface FakeServer {
 	/** The story as the server holds it, or undefined. */
 	stored(id: string): Story | undefined;
 	revOf(id: string): number;
-	assetRevOf(id: string): number;
 	deleted(id: string): boolean;
 	/** Every request any client has made, in order. For asserting what was NOT sent. */
 	readonly calls: {method: string; id?: string; by: string}[];
@@ -213,17 +205,12 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 	}
 
 	function indexEntry(entry: StoredStory): StoryIndexEntry {
-		const assets = entry.assets.assets ?? [];
-
+		// The old per-story asset manifest is gone from the client; the real server
+		// still reports these columns, so the row keeps its shape.
 		return {
-			assetBytes: assets.reduce((sum, asset) => sum + (asset.bytes ?? 0), 0),
-			assetCount: assets.length,
-			// Always reported, like the Go row, and moved by `putManifest` alone. Leave it
-			// off and every test that drives sync through this fake would be exercising the
-			// old-server fallback in `use-server-sync.ts` while looking like it tested the
-			// real path — and a manifest-only write, which moves neither total above, would
-			// be indistinguishable from a text write.
-			assetRev: entry.assetRev,
+			assetBytes: 0,
+			assetCount: 0,
+			assetRev: 0,
 			bytes: JSON.stringify(entry.body).length,
 			deleted: entry.deleted,
 			id: entry.body.id,
@@ -238,9 +225,6 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 
 	function blank(story: Story): StoredStory {
 		return {
-			assetRev: 0,
-			assets: {assets: [], characters: [], version: 1},
-			blobs: new Map(),
 			body: onTheWire(story),
 			currentMeta: {label: '', pinned: false, summary: ''},
 			deleted: false,
@@ -519,115 +503,6 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 				notify({by: by.name, id, t: 'deleted'}, by);
 			},
 
-			async getManifest(id: string): Promise<AssetManifest> {
-				record('getManifest', id);
-				maybeFail();
-
-				const entry = require(id);
-
-				return {
-					assets: clone(entry.assets.assets ?? []),
-					characters: clone(entry.assets.characters ?? []),
-					missing: (entry.assets.assets ?? [])
-						.filter(asset => !entry.blobs.has(asset.id))
-						.map(asset => asset.id),
-					rev: entry.assetRev,
-					version: 1
-				};
-			},
-
-			async putManifest(
-				id: string,
-				manifest: AssetManifestBody,
-				ifMatch?: number
-			) {
-				record('putManifest', id);
-				maybeFail();
-
-				const entry = require(id);
-
-				// Own rev, own precondition — `PutManifest` in `server/store/assets.go`.
-				if (ifMatch !== undefined && ifMatch !== entry.assetRev) {
-					throw new ServerError('asset rev mismatch', {
-						code: 'conflict',
-						lastClient: entry.lastClient,
-						rev: entry.assetRev,
-						status: 412,
-						updatedAt: entry.updatedAt
-					});
-				}
-
-				entry.assets = clone(manifest);
-				entry.assetRev += 1;
-
-				notify({by: by.name, rev: entry.assetRev, story: id, t: 'assets'}, by);
-
-				return {rev: entry.assetRev};
-			},
-
-			async diffAssets(
-				id: string,
-				assets: {id: string; hash: string; bytes: number}[]
-			): Promise<AssetDiffResponse> {
-				record('diffAssets', id);
-				maybeFail();
-
-				const entry = require(id);
-				const missing: string[] = [];
-				const present: string[] = [];
-				const stale: string[] = [];
-
-				for (const asset of assets) {
-					const held = entry.blobs.get(asset.id);
-
-					if (!held) {
-						missing.push(asset.id);
-					} else if (held.hash !== asset.hash) {
-						stale.push(asset.id);
-					} else {
-						present.push(asset.id);
-					}
-				}
-
-				return {missing, present, stale};
-			},
-
-			async headAsset(id: string, assetId: string) {
-				record('headAsset', id);
-
-				const held = require(id).blobs.get(assetId);
-
-				return held ? {bytes: held.bytes, hash: held.hash} : undefined;
-			},
-
-			async getAssetBlob(id: string, assetId: string): Promise<Blob> {
-				record('getAssetBlob', id);
-				maybeFail();
-
-				const held = require(id).blobs.get(assetId);
-
-				if (!held) {
-					throw new ServerError('no asset', {
-						code: 'not_found',
-						status: 404
-					});
-				}
-
-				return held.blob;
-			},
-
-			async putAssetBlob(
-				id: string,
-				assetId: string,
-				blob: Blob,
-				hash: string
-			): Promise<void> {
-				record('putAssetBlob', id);
-				maybeFail();
-
-				require(id).blobs.set(assetId, {blob, bytes: blob.size, hash});
-			},
-
 			async listRevisions(id: string): Promise<RevisionsResponse> {
 				record('listRevisions', id);
 				maybeFail();
@@ -756,7 +631,6 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 	}
 
 	return {
-		assetRevOf: id => stories.get(id)?.assetRev ?? 0,
 		calls,
 		client: makeClient,
 		deleted: id => stories.get(id)?.deleted ?? false,

@@ -14,11 +14,6 @@
 import {v4 as uuid} from '@lukeed/uuid';
 import * as React from 'react';
 import {getAppInfo} from '../../../util/app-info';
-import {
-	onAssetLibraryChange,
-	refreshAssetLibrary,
-	slidersAssetStore
-} from '../../../dialogs/sliders-assets/asset-store-context';
 import {unusedName} from '../../../util/unused-name';
 import {usePrefsContext} from '../../prefs';
 import {
@@ -32,13 +27,7 @@ import {
 	isPersistableStoryChange
 } from '../persistable-changes';
 import {applyPulledStory, pullAllowed} from './apply-pull';
-import {syncStoryAssets, type AssetSyncProgress} from './asset-sync';
 import {checkoutStory, type CheckoutProgress} from './checkout-story';
-import {
-	pullStoryAssets,
-	type AssetPullProgress,
-	type AssetPullResult
-} from './pull-assets';
 import {
 	NOT_MODIFIED,
 	createServerClient,
@@ -116,34 +105,23 @@ export type {ReconcileAction, ReconcileInput} from './reconcile';
 // Context
 // ---------------------------------------------------------------------------
 
-export type SyncProgress =
-	| CheckoutProgress
-	| AssetSyncProgress
-	| AssetPullProgress;
-
-/** Art coming down into a story already on screen. Never blocks the card. */
-export function isAssetPullProgress(
-	progress?: SyncProgress
-): progress is AssetPullProgress {
-	return progress?.phase === 'download';
-}
-
 /**
- * Is this story coming down rather than going up? Checkout is the only half that leaves a
- * story on screen with art missing, so it is the only half the story list blocks on. The
- * two progress shapes are told apart by phase: `scan`/`diff`/`upload`/`manifest` are a
- * push, and a push has nothing to wait for.
+ * A checkout in flight. Art is no longer part of it: the shared asset library syncs
+ * records on its own and fetches blobs lazily (`store/asset-library`).
  */
+export type SyncProgress = CheckoutProgress;
+
+/** Is this story coming down? The story list blocks its card on it. */
 export function isCheckoutProgress(
 	progress?: SyncProgress
 ): progress is CheckoutProgress {
-	return progress?.phase === 'story' || progress?.phase === 'assets';
+	return progress?.phase === 'story';
 }
 
 export interface ServerSyncActions {
 	/** Marks a local story synced and writes it to the server for the first time. */
 	publish(story: Story, options?: {newIdentity?: boolean}): Promise<void>;
-	/** Pulls a ghost down: story, then every asset it needs. */
+	/** Pulls a ghost down. Art follows through the asset library, lazily. */
 	checkout(storyId: string): Promise<void>;
 	/** Tombstones the story on the server. Local text is untouched. */
 	removeFromServer(storyId: string, purge?: boolean): Promise<void>;
@@ -166,13 +144,6 @@ export interface ServerSyncActions {
 export const POLL_INTERVAL = 30000;
 export const SOCKET_POLL_INTERVAL = 300000;
 
-/**
- * How long a library change waits before it is pushed. Longer than the text debounce on
- * purpose: dropping six files fires the change signal six times, and one scan of the
- * library at the end is the whole point of coalescing.
- */
-export const ASSET_SYNC_DEBOUNCE_MS = 3000;
-
 export interface ServerSyncContextProps {
 	/**
 	 * Undefined until the backend prefs are filled in. Dialogs that read one-off endpoints
@@ -187,27 +158,9 @@ export interface ServerSyncContextProps {
 	index: StoryIndexEntry[];
 	connected: boolean;
 	lastError?: string;
-	/** In-flight checkout or asset upload, by story id. Drives the progress bar. */
+	/** In-flight checkout, by story id. Drives the progress bar. */
 	progress: Record<string, SyncProgress | undefined>;
 	actions: ServerSyncActions;
-
-	/**
-	 * Pull this story's art now. Fire-and-forget: resolves when the pull settles.
-	 *
-	 * Not on `actions` because it is not an author's command — nothing is confirmed,
-	 * nothing is undone and the story list offers no button for it. It is the same call the
-	 * poll and the socket make, reachable by a dialog that has a better reason than a timer
-	 * to think the art moved: an editor opening on a picture would otherwise wait up to
-	 * 30 s to find out somebody else had changed it.
-	 *
-	 * `AssetPullResult.changed` is the answer to "did anything actually land" and is read
-	 * off what the library holds, not off what the pull intended. `undefined` means no pull
-	 * ran: no client, or a story this browser does not sync.
-	 *
-	 * Two callers at once SHARE one run — the second is handed the first's promise. Not a
-	 * debounce: nothing is dropped and nothing is deferred.
-	 */
-	pullAssets(storyId: string): Promise<AssetPullResult | undefined>;
 
 	// -------------------------------------------------------------------
 	// Presence and soft locks — all of it optional, all of it silent when the socket is
@@ -251,7 +204,6 @@ export const ServerSyncContext = React.createContext<ServerSyncContextProps>({
 	lock: () => undefined,
 	presence: emptyPresence(),
 	progress: {},
-	pullAssets: async () => undefined,
 	records: {},
 	socketConnected: false,
 	stealPassage: () => undefined
@@ -433,57 +385,14 @@ export function useServerSync(): ServerSyncContextProps {
 	const clientName =
 		backendUsername || `user-${(backendClientId || '').slice(0, 4)}`;
 
-	/** Story id -> the library fingerprint the server was last told about. */
-	const assetFingerprints = React.useRef(new Map<string, string>());
-	/** Story id -> pending debounce timer for a background asset sync. */
-	const assetTimers = React.useRef(
-		new Map<string, ReturnType<typeof setTimeout>>()
-	);
-	const assetSyncRef = React.useRef<(story: Story) => void>(() => {});
 	/**
-	 * Land a story the queue merged. Through a ref for the same reason `assetSyncRef` is:
-	 * the queue is memoised on `client`, and this closes over `dispatch` and the story
-	 * list, both of which move on every render.
+	 * Land a story the queue merged. Through a ref: the queue is memoised on `client`,
+	 * and this closes over `dispatch` and the story list, both of which move on every
+	 * render.
 	 */
 	const applyPulledStoryRef = React.useRef<
 		(story: Story, rev: number) => boolean
 	>(() => false);
-	/** Story id -> manifest rev this browser has already taken art from. */
-	const assetPullRevs = React.useRef(new Map<string, number>());
-	/**
-	 * Story id -> the pull in flight for it, so a second caller can be handed the first
-	 * one's promise instead of starting a second run over the same library.
-	 *
-	 * A `Set` before, which answered the second caller with nothing at all. That was fine
-	 * while every caller was a timer, and wrong the moment one of them was a dialog waiting
-	 * to hear whether anything landed: "a pull is already running" and "nothing arrived"
-	 * are different answers and were being given the same way.
-	 */
-	const assetPulls = React.useRef(
-		new Map<string, Promise<AssetPullResult | undefined>>()
-	);
-	/** Story id -> the index row's asset signature as the index last reported it. */
-	const assetSignatures = React.useRef(new Map<string, string>());
-	/**
-	 * Story id -> (asset id -> hash) as last agreed with the server, by a push that wrote
-	 * or a pull that reported it. In memory only: a reload starts blank and the first
-	 * push pulls before it writes.
-	 */
-	const assetSyncedHashes = React.useRef(
-		new Map<string, Map<string, string>>()
-	);
-	/** Story id -> the pull warnings last shown, so a poll does not repeat them. */
-	const assetPullWarnings = React.useRef(new Map<string, string>());
-	const pullAssetsRef = React.useRef<
-		(
-			storyId: string,
-			signature?: string
-		) => Promise<AssetPullResult | undefined>
-	>(async () => undefined);
-	/** `pullAssets` minus the "does this browser sync it" gate. Push reaches it here. */
-	const runAssetPullRef = React.useRef<
-		(storyId: string) => Promise<AssetPullResult | undefined>
-	>(async () => undefined);
 
 	const client = React.useMemo<ServerClient | undefined>(() => {
 		if (!backendUrl || !backendToken || !backendClientId) {
@@ -530,11 +439,7 @@ export function useServerSync(): ServerSyncContextProps {
 			 * would diff against a base the store never reached.
 			 */
 			onMerged: (merged, rev) =>
-				applyPulledStoryRef.current(merged, rev),
-			// Through a ref: the queue is memoised on `client` alone, and rebuilding it
-			// whenever a callback identity changed would drop every pending debounce
-			// timer with it — the author's last sentence among them.
-			onPushed: story => assetSyncRef.current(story)
+				applyPulledStoryRef.current(merged, rev)
 		});
 	}, [client]);
 
@@ -593,9 +498,6 @@ export function useServerSync(): ServerSyncContextProps {
 			// pull now writes no `pushedHash` at all.
 			previousRef.current.set(story.id, outcome.story);
 
-			// Text that arrived from somebody else usually names art that did too.
-			void pullAssetsRef.current(story.id);
-
 			return true;
 		},
 		[recordStore]
@@ -626,329 +528,6 @@ export function useServerSync(): ServerSyncContextProps {
 			applyPull(fetched.story, fetched.rev);
 		},
 		[applyPull, client]
-	);
-
-	const pushAssets = React.useCallback(
-		async (story: Story, options: {quiet?: boolean} = {}) => {
-			if (!client) {
-				return;
-			}
-
-			const store = slidersAssetStore(story.id);
-			const attempt = (ifMatch: number | undefined, lastFingerprint?: string) =>
-				syncStoryAssets({
-					client,
-					ifMatch,
-					lastFingerprint,
-					onProgress: next => {
-						// The autosave path runs this after every push. Scanning and diffing
-						// are not news; only bytes actually going up are worth a progress
-						// row, or the story card blinks on every keystroke batch.
-						if (
-							options.quiet &&
-							(next.phase === 'scan' || next.phase === 'diff')
-						) {
-							return;
-						}
-
-						setStoryProgress(story.id, next);
-					},
-					story,
-					store,
-					syncedHashes: assetSyncedHashes.current.get(story.id)
-				});
-
-			try {
-				// Never push blind. No rev yet means this tab has not seen the server's art
-				// for this story, and an unconditional write is how a stale device put its
-				// old bytes over another's edit. Pull (which merges) to learn the rev.
-				if (!assetPullRevs.current.has(story.id)) {
-					if (!(await runAssetPullRef.current(story.id))) {
-						return;
-					}
-				}
-
-				let result;
-
-				try {
-					result = await attempt(
-						assetPullRevs.current.get(story.id),
-						options.quiet ? assetFingerprints.current.get(story.id) : undefined
-					);
-				} catch (error) {
-					if (!isServerError(error) || !error.conflict) {
-						throw error;
-					}
-
-					// Someone else wrote first. ONE pull and ONE retry, never a loop: two
-					// tabs trading 412s would each pull and push forever. A second refusal
-					// waits for the next library event or poll.
-					const theirRev = error.rev;
-
-					logSync('asset', 'push 412: pulling once', story.id, () => ({
-						rev: theirRev
-					}));
-
-					if (!(await runAssetPullRef.current(story.id))) {
-						return;
-					}
-
-					try {
-						result = await attempt(assetPullRevs.current.get(story.id));
-					} catch (retryError) {
-						if (!isServerError(retryError) || !retryError.conflict) {
-							throw retryError;
-						}
-
-						// Quiet on purpose: not an error the author can act on, and a
-						// banner per text push would be noise. The next event tries again.
-						const againRev = retryError.rev;
-
-						assetFingerprints.current.delete(story.id);
-						logSync('asset', 'push 412 again: waiting', story.id, () => ({
-							rev: againRev
-						}));
-						return;
-					}
-				}
-
-				// Only a run that reached the manifest counts. Remembering a half-finished
-				// one would skip the retry that finishes it.
-				assetFingerprints.current.set(story.id, result.fingerprint);
-
-				if (result.syncedHashes) {
-					assetSyncedHashes.current.set(story.id, result.syncedHashes);
-				}
-
-				// Our own manifest write moves the rev, and the index row with it. Claim it
-				// here or the next poll reads it as somebody else's art and pulls it back.
-				if (!result.unchanged && result.rev > 0) {
-					assetPullRevs.current.set(story.id, result.rev);
-				}
-			} catch (error) {
-				// Art failing to upload is worth reporting but must not undo the text
-				// push that just succeeded.
-				assetFingerprints.current.delete(story.id);
-				setLastError(error instanceof Error ? error.message : String(error));
-			} finally {
-				setStoryProgress(story.id, undefined);
-			}
-		},
-		[client, setStoryProgress]
-	);
-
-	/**
-	 * Art has no queue of its own, so this is it: coalesce, then sync in the background.
-	 *
-	 * Two things call it. A story push, because a text edit can be the first thing that
-	 * names a picture; and a library change, because dropping a file in the asset dialog
-	 * never touches story text and would otherwise reach the server only at the next
-	 * Publish. Both are cheap when nothing moved — `lastFingerprint` short-circuits the
-	 * whole run before any request goes out.
-	 */
-	const scheduleAssetSync = React.useCallback(
-		(story: Story) => {
-			if (!client || !backendAutosave || story.sync !== true) {
-				return;
-			}
-
-			const existing = assetTimers.current.get(story.id);
-
-			if (existing) {
-				clearTimeout(existing);
-			}
-
-			assetTimers.current.set(
-				story.id,
-				setTimeout(() => {
-					assetTimers.current.delete(story.id);
-
-					// Re-read: the debounce is seconds long and the story it was armed
-					// with may have been edited, unshared or deleted since.
-					const current = storiesRef.current.find(
-						item => item.id === story.id
-					);
-
-					if (current?.sync === true) {
-						void pushAssets(current, {quiet: true});
-					}
-				}, ASSET_SYNC_DEBOUNCE_MS)
-			);
-		},
-		[backendAutosave, client, pushAssets]
-	);
-
-	React.useEffect(() => {
-		assetSyncRef.current = scheduleAssetSync;
-	}, [scheduleAssetSync]);
-
-	/**
-	 * A pull's warnings — "your library already has a different image named …" — on the
-	 * same channel as every other asset problem. Once per distinct set per story: the
-	 * same unlandable row comes back on every manifest rev, and a poll must not repeat it.
-	 */
-	const reportPullWarnings = React.useCallback(
-		(storyId: string, warnings: string[]) => {
-			const key = [...warnings].sort().join('\n');
-
-			if (key === (assetPullWarnings.current.get(storyId) ?? '')) {
-				return;
-			}
-
-			assetPullWarnings.current.set(storyId, key);
-
-			if (warnings.length > 0) {
-				logSync('asset', 'pull warnings', storyId, () => ({warnings}));
-				setLastError(warnings.join(' '));
-			}
-		},
-		[]
-	);
-
-	/**
-	 * Art coming DOWN into a story this browser already holds.
-	 *
-	 * Checkout used to be the only path, so a picture added by another editor never
-	 * arrived: the card said synced and the stage drew `? bg forest` until the story was
-	 * unpublished and published again. `pullStoryAssets` is cheap to ask — a manifest GET,
-	 * then a compare against the local library — so every caller here simply asks.
-	 *
-	 * The result is handed back rather than swallowed, because one caller is now a dialog
-	 * opening on this story, and it has to know whether anything arrived. `changed` is the
-	 * honest field for that: `pull-assets.ts` reads it off what the library HOLDS once the
-	 * pull is done, never off what the pull set out to fetch. `undefined` means no pull ran
-	 * — no client, or not a story this browser syncs — or that one ran and threw, which is
-	 * reported on `lastError` and is not something a caller can do anything else about.
-	 */
-	const runAssetPull = React.useCallback(
-		(
-			storyId: string,
-			signature?: string
-		): Promise<AssetPullResult | undefined> => {
-			if (!client) {
-				return Promise.resolve(undefined);
-			}
-
-			const inFlight = assetPulls.current.get(storyId);
-
-			if (inFlight) {
-				// SHARED, not dropped and not debounced: a second caller waits on the run
-				// already going and gets its answer. Nothing is delayed and nothing is
-				// silently discarded — two asks a millisecond apart describe the same
-				// library, so a second manifest GET could only agree with the first.
-				//
-				// What the joiner does NOT get is its `signature` recorded, deliberately:
-				// the run in flight was armed with whatever the caller before it knew, so
-				// claiming the newer signature would say a row had been seen that this pull
-				// never looked at. Left unrecorded, the next poll asks again, and the rev
-				// guard in `pull-assets.ts` makes that ask one small GET.
-				return inFlight;
-			}
-
-			const run = (async (): Promise<AssetPullResult | undefined> => {
-				try {
-					const result = await pullStoryAssets({
-						client,
-						lastRev: assetPullRevs.current.get(storyId),
-						onProgress: next => setStoryProgress(storyId, next),
-						store: slidersAssetStore(storyId),
-						storyId,
-						syncedHashes: assetSyncedHashes.current.get(storyId)
-					});
-
-					assetPullRevs.current.set(storyId, result.rev);
-					assetSyncedHashes.current.set(storyId, result.syncedHashes);
-
-					if (!result.skipped) {
-						reportPullWarnings(storyId, result.warnings);
-					}
-
-					if (signature !== undefined) {
-						assetSignatures.current.set(storyId, signature);
-					}
-
-					if (result.changed) {
-						// Everything drawing on this library re-reads: the stage resolver and
-						// both asset dialogs. It also schedules a push, which is the point of
-						// `changed` being narrow — see the note in `pull-assets.ts`.
-						refreshAssetLibrary();
-					}
-
-					return result;
-				} catch (error) {
-					// Missing art is worth saying out loud, but it must not mark the story in
-					// error: its text is fine and still syncing.
-					setLastError(error instanceof Error ? error.message : String(error));
-					return undefined;
-				}
-			})().finally(() => {
-				assetPulls.current.delete(storyId);
-				setStoryProgress(storyId, undefined);
-			});
-
-			// Recorded after the promise exists, and the cleanup above is a `.finally` on the
-			// OUTSIDE for that reason. A `finally` inside the async body runs synchronously if
-			// the body throws before its first `await` — which is before this line — and the
-			// entry it cleared would then be the one written here, leaving the story unable to
-			// pull for the life of the tab.
-			assetPulls.current.set(storyId, run);
-
-			return run;
-		},
-		[client, reportPullWarnings, setStoryProgress]
-	);
-
-	const pullAssets = React.useCallback(
-		(
-			storyId: string,
-			signature?: string
-		): Promise<AssetPullResult | undefined> => {
-			// The index signature is claimed only by a pull that actually ran. Claiming it
-			// up front looks harmless and is not: a pull refused because the client was
-			// mid-rebuild (the credentials just changed) would leave the signature saying
-			// "seen", and the poll would never look at that story again — art stuck until
-			// the page was reloaded. Measured exactly that way.
-			if (!client) {
-				return Promise.resolve(undefined);
-			}
-
-			// Only a story this browser holds AND syncs. A ghost's art arrives with its
-			// checkout, and an unsynced local story has no business reading the server's.
-			if (
-				storiesRef.current.find(item => item.id === storyId)?.sync !== true
-			) {
-				return Promise.resolve(undefined);
-			}
-
-			return runAssetPull(storyId, signature);
-		},
-		[client, runAssetPull]
-	);
-
-	React.useEffect(() => {
-		pullAssetsRef.current = pullAssets;
-		runAssetPullRef.current = runAssetPull;
-	}, [pullAssets, runAssetPull]);
-
-	React.useEffect(() => {
-		const timers = assetTimers.current;
-
-		return () => {
-			timers.forEach(timer => clearTimeout(timer));
-			timers.clear();
-		};
-	}, []);
-
-	// Art changed in a dialog. The signal is scope-less, so ask every synced story; the
-	// fingerprint makes the ones whose library did not move free.
-	React.useEffect(
-		() =>
-			onAssetLibraryChange(() => {
-				storiesRef.current
-					.filter(story => story.sync === true)
-					.forEach(story => scheduleAssetSync(story));
-			}),
-		[scheduleAssetSync]
 	);
 
 	/**
@@ -1092,57 +671,6 @@ export function useServerSync(): ServerSyncContextProps {
 		void refresh();
 	}, [refresh]);
 
-	/**
-	 * The poll's half of the pull. The index row carries each story's asset count, byte
-	 * total and manifest rev, so a change in any of them says the art moved — no extra
-	 * request to find out.
-	 *
-	 * First sight of a story counts as a change, and deliberately so: that is what repairs
-	 * a browser holding art from before any of this existed. `pullAssets` answers a
-	 * needless ask with one small GET.
-	 */
-	React.useEffect(() => {
-		for (const entry of index) {
-			if (entry.deleted) {
-				continue;
-			}
-
-			// Not ours to pull yet — the stories may simply not have loaded. Leave the
-			// signature unrecorded so the next sweep tries again.
-			if (
-				storiesRef.current.find(story => story.id === entry.id)?.sync !== true
-			) {
-				continue;
-			}
-
-			// `assetRev` is the manifest's OWN rev and moves on every manifest write. The
-			// two totals move only when bytes are added or dropped, so without it an edit's
-			// settings, an anchor or a cutout sidecar changed the art on one machine and
-			// every other one kept drawing the old picture until its page was reloaded: the
-			// 30s poll, the 5min poll and Refresh From Server all read the row as unmoved.
-			//
-			// A server too old to send it reports `undefined`, and the placeholder for that
-			// is a CONSTANT on purpose. Anything derived from the moment — a counter, a
-			// clock, a random — would make every signature differ from the last one and pull
-			// every story on every poll, for as long as the tab is open, against a server
-			// that by definition has nothing new to say. A constant degrades to exactly the
-			// behaviour that shipped before this line: counts and bytes still wake the poll,
-			// a metadata-only change does not, until the server is upgraded. `-` rather than
-			// `0` so that "did not say" stays distinguishable from a real rev 0, which is
-			// what a story whose manifest has never been written reports.
-			const signature = `${entry.assetCount}:${entry.assetBytes}:${
-				entry.assetRev ?? '-'
-			}`;
-
-			if (assetSignatures.current.get(entry.id) === signature) {
-				continue;
-			}
-
-			// The signature is recorded by the pull itself, and only once it has run.
-			void pullAssetsRef.current(entry.id, signature);
-		}
-	}, [index]);
-
 	// The polling fallback. It is not disabled when the socket is up, only slowed: a
 	// message lost across a reconnect would otherwise never be noticed.
 	React.useEffect(() => {
@@ -1224,7 +752,6 @@ export function useServerSync(): ServerSyncContextProps {
 
 			handleServerMessage(message, {
 				onReconciled: () => setRecords({...allSyncRecords()}),
-				pullAssets: storyId => void pullAssetsRef.current(storyId),
 				reconcile: reconcileStory,
 				records: recordStore,
 				refresh: () => void refresh(),
@@ -1443,7 +970,6 @@ export function useServerSync(): ServerSyncContextProps {
 				});
 				previousRef.current.set(target.id, target);
 				setRecords({...allSyncRecords()});
-				await pushAssets(target);
 			} catch (error) {
 				// The claim above was optimistic; hand it back so the next edit retries.
 				updateSyncRecord(target.id, {
@@ -1457,7 +983,7 @@ export function useServerSync(): ServerSyncContextProps {
 
 			await refresh();
 		},
-		[client, pushAssets, refresh]
+		[client, refresh]
 	);
 
 	const republish = React.useCallback(
@@ -1485,10 +1011,9 @@ export function useServerSync(): ServerSyncContextProps {
 			});
 			previousRef.current.set(target.id, target);
 			setRecords({...allSyncRecords()});
-			await pushAssets(target);
 			await refresh();
 		},
-		[client, pushAssets, refresh]
+		[client, refresh]
 	);
 
 	const checkout = React.useCallback(
@@ -1566,9 +1091,8 @@ export function useServerSync(): ServerSyncContextProps {
 			});
 			previousRef.current.set(storyId, story);
 			setRecords({...allSyncRecords()});
-			await pushAssets(story);
 		},
-		[client, pushAssets]
+		[client]
 	);
 
 	const resolveTakeTheirs = React.useCallback(
@@ -1676,7 +1200,6 @@ export function useServerSync(): ServerSyncContextProps {
 			lock,
 			presence,
 			progress,
-			pullAssets,
 			records,
 			socketConnected,
 			stealPassage
@@ -1695,7 +1218,6 @@ export function useServerSync(): ServerSyncContextProps {
 			presence,
 			progress,
 			publish,
-			pullAssets,
 			records,
 			refresh,
 			removeFromServer,

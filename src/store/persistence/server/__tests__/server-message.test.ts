@@ -198,28 +198,26 @@ describe('planServerMessage', () => {
 	});
 
 	/**
-	 * Asset bytes are not part of the story document, so there is nothing to reconcile.
-	 * What moved is the row's counts — which is why this asks for the whole index rather
-	 * than patching a row it cannot fill in.
+	 * The old per-story art message. The server still sends it (old routes live on); the
+	 * client ignores it — the shared asset library has its own feed.
 	 */
-	it('refreshes AND pulls art on an assets message', () => {
+	it('plans nothing for the old assets message', () => {
 		expect(
 			planServerMessage(
 				{by: 'jules', rev: 3, story: 's1', t: 'assets'},
 				view([held])
 			)
-		).toEqual([{type: 'refresh'}, {storyId: 's1', type: 'pullAssets'}]);
+		).toEqual([]);
 	});
 
-	it('pulls art even for a story we do not hold, and lets the puller refuse', () => {
-		// `pullAssets` in the hook is the one that knows about `sync: true` and about a
-		// pull already in flight. Deciding it twice is how the two answers come to differ.
+	/** The library feed moved. Only the seq matters; the engine reads `/changes`. */
+	it('hands a lib message to the library engine, nothing about stories', () => {
 		expect(
 			planServerMessage(
-				{by: 'jules', rev: 3, story: 'stranger', t: 'assets'},
+				{by: 'jules', id: 'a1', rev: 2, seq: 881, t: 'lib', type: 'asset'},
 				view([held])
 			)
-		).toEqual([{type: 'refresh'}, {storyId: 'stranger', type: 'pullAssets'}]);
+		).toEqual([{seq: 881, type: 'lib'}]);
 	});
 
 	/**
@@ -286,7 +284,6 @@ describe('planServerMessage', () => {
 interface EnvCalls {
 	onReconciled: number;
 	order: string[];
-	pullAssets: string[];
 	reconcile: {story: Story; server: ServerStoryState}[];
 	refresh: number;
 }
@@ -300,7 +297,6 @@ function recordingEnv(options: {
 	const calls: EnvCalls = {
 		onReconciled: 0,
 		order: [],
-		pullAssets: [],
 		reconcile: [],
 		refresh: 0
 	};
@@ -310,10 +306,6 @@ function recordingEnv(options: {
 		onReconciled: () => {
 			calls.onReconciled++;
 			calls.order.push('onReconciled');
-		},
-		pullAssets: storyId => {
-			calls.pullAssets.push(storyId);
-			calls.order.push('pullAssets');
 		},
 		reconcile: (story, server) => {
 			calls.reconcile.push({server, story});
@@ -425,7 +417,7 @@ describe('handleServerMessage', () => {
 		expect(harness.calls.onReconciled).toBe(1);
 	});
 
-	it('refreshes and pulls on an assets message, in that order', () => {
+	it('does nothing to stories on an old assets message', () => {
 		const harness = recordingEnv({stories: [held]});
 
 		handleServerMessage(
@@ -433,9 +425,7 @@ describe('handleServerMessage', () => {
 			harness.env
 		);
 
-		expect(harness.calls.order).toEqual(['refresh', 'pullAssets']);
-		expect(harness.calls.pullAssets).toEqual(['s1']);
-		expect(harness.calls.reconcile).toEqual([]);
+		expect(harness.calls.order).toEqual([]);
 	});
 
 	it('touches nothing for a presence message', () => {
@@ -471,7 +461,7 @@ describe('what it writes down', () => {
 			'story: reconcile',
 			'story: not held, refresh',
 			'deleted: reconcile',
-			'assets: refresh and pull assets',
+			'assets: no story effect',
 			'pong: no story effect'
 		]);
 	});
@@ -499,7 +489,7 @@ describe('what it writes down', () => {
 		);
 
 		expect(syncLog({event: 'socket'})[0]).toMatchObject({
-			detail: {did: ['refresh', 'pullAssets']},
+			detail: {did: []},
 			storyId: 's1'
 		});
 	});
@@ -525,7 +515,6 @@ function browser(server: FakeServer, name: string) {
 
 	const env: ServerMessageEnv = {
 		onReconciled: () => undefined,
-		pullAssets: () => undefined,
 		reconcile: async (story, state) => {
 			decisions.push(
 				await reconcileVerified({
@@ -707,24 +696,15 @@ describe('against fakeServer', () => {
 			expect(b.inbox).toEqual([{by: 'a', id: 's1', rev: 1, t: 'story'}]);
 		});
 
-		it('suppresses it on a tombstone and on an asset write too', async () => {
+		it('suppresses it on a tombstone too', async () => {
 			const a = join('a');
 			const b = join('b');
 
 			await a.push(storyWithText('s1', 'one'));
-			await a.client.putManifest('s1', {
-				assets: [],
-				characters: [],
-				version: 1
-			});
 			await a.client.deleteStory('s1');
 
 			expect(a.inbox).toEqual([]);
-			expect(b.inbox.map(message => message.t)).toEqual([
-				'story',
-				'assets',
-				'deleted'
-			]);
+			expect(b.inbox.map(message => message.t)).toEqual(['story', 'deleted']);
 		});
 
 		it('keys the suppression on the id the HTTP write carried', async () => {
