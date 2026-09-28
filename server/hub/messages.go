@@ -78,6 +78,16 @@ type assetsMessage struct {
 	By    string `json:"by"`
 }
 
+// libMessage is the asset library's advisory "seq moved" (asset-library-contract.md).
+type libMessage struct {
+	T    string `json:"t"`
+	Seq  int64  `json:"seq"`
+	Type string `json:"type"`
+	ID   string `json:"id"`
+	Rev  int    `json:"rev"`
+	By   string `json:"by"`
+}
+
 type stolenMessage struct {
 	T       string `json:"t"`
 	Story   string `json:"story"`

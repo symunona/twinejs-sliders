@@ -33,6 +33,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"twine-story-store/api"
+	"twine-story-store/lib"
 )
 
 // EventsPath is where the socket lives. Exported so routes.go and the client agree
@@ -208,6 +209,12 @@ func (h *Hub) RevisionMetaChanged(id string, rev int, by api.Origin) {
 
 func (h *Hub) AssetsChanged(story string, rev int, by api.Origin) {
 	h.broadcast(assetsMessage{T: "assets", Story: story, Rev: rev, By: by.Name}, by.ID)
+}
+
+// LibChanged announces a library record write ({"t":"lib",...}). Same no-echo rule as
+// stories: connections whose hello id equals the writer's X-Client-Id are skipped.
+func (h *Hub) LibChanged(c lib.Change, exceptClientID string) {
+	h.broadcast(libMessage{T: "lib", Seq: c.Seq, Type: c.Type, ID: c.ID, Rev: c.Rev, By: c.By}, exceptClientID)
 }
 
 // ---------------------------------------------------------------------------

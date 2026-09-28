@@ -17,11 +17,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"twine-story-store/api"
 	"twine-story-store/hub"
+	"twine-story-store/lib"
 	"twine-story-store/store"
 )
 
@@ -70,6 +72,12 @@ func run() error {
 		return err
 	}
 
+	libStore, err := lib.Open(lib.Options{Dir: filepath.Join(cfg.DataDir, "lib")})
+	if err != nil {
+		return err
+	}
+	defer libStore.Close()
+
 	// The hub is the websocket layer: change bus, presence and soft locks, all in
 	// memory. It is constructed before the handler because the handler needs it three
 	// times over — as the notifier every write announces itself through, as the presence
@@ -88,6 +96,8 @@ func run() error {
 		Notifier:      events,
 		Presence:      events,
 		Events:        events,
+		Lib:           libStore,
+		LibNotifier:   events,
 	})
 
 	ln, err := listenAndAnnounce(cfg.Addr, os.Stdout)
@@ -103,7 +113,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	go janitor(ctx, st)
+	go janitor(ctx, st, libStore, cfg.OrphanTTL)
 
 	srv := &http.Server{
 		Handler: handler,
@@ -172,8 +182,13 @@ func listenAndAnnounce(addr string, out io.Writer) (net.Listener, error) {
 // daily. At start because a crash mid-upload is exactly when debris appears, and daily
 // because the TTLs are measured in days — a tighter loop would only spend I/O proving
 // nothing changed.
-func janitor(ctx context.Context, st *store.Store) {
+func janitor(ctx context.Context, st *store.Store, ls *lib.Store, orphanTTL time.Duration) {
 	sweep := func() {
+		if lr, err := ls.Sweep(time.Now(), orphanTTL); err != nil {
+			log.Printf("janitor: lib: %v", err)
+		} else if lr.Blobs > 0 || lr.TempFiles > 0 {
+			log.Printf("janitor: lib: removed %d orphan blobs (%d bytes), %d temp files", lr.Blobs, lr.Bytes, lr.TempFiles)
+		}
 		res, err := st.Sweep(time.Now())
 		if err != nil {
 			log.Printf("janitor: %v", err)

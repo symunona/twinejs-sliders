@@ -216,6 +216,40 @@ contract.
 Losing the socket costs nothing but latency: clients fall back to polling `GET /stories`,
 and `/ping` reports `events` so they know which mode they are in.
 
+### Asset library — `/api/v1/lib`
+
+Contract: [`docs/sliders/plans/asset-library-contract.md`](../docs/sliders/plans/asset-library-contract.md).
+Code: `lib/`. Same bearer auth + CORS. Old `/stories/{id}/assets` routes untouched.
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/lib/blobs/has` | `{hashes}` → `{missing}` |
+| `PUT` | `/lib/blobs/{sha}` | raw bytes; hashed while streaming; 422 mismatch, 413 over `MAX_ASSET_BYTES`; exists → 200 no-op |
+| `GET`/`HEAD` | `/lib/blobs/{sha}` | bytes, `ETag: "<sha>"`, immutable cache, Range |
+| `GET` | `/lib/changes?since=&limit=` | `{seq, items[{seq,record}], more}`; one item per record, newest seq; limit ≤ 2000 |
+| `GET` | `/lib/{type}/{id}` | record; tombstone = 200 `deleted:true` |
+| `PUT` | `/lib/{type}/{id}` | `If-None-Match: *` create, `If-Match: "<rev>"` update, neither 428 → `{record, seq}` |
+| `DELETE` | `/lib/{type}/{id}` | `If-Match` required; tombstone, rev+1 |
+| `GET` | `/lib/{type}/{id}/revs` | newest first, ≤ 50 |
+
+`{type}` ∈ `collections assets characters bindings`.
+
+- Errors: `{"error":"<code>",...}` — kebab codes, **not** the story API's `{error:{code,message}}`.
+- One mutex for all record writes. Order: precondition → shape → collection → namespace → blobs.
+- Write: rev file → record file (tmp+fsync+rename) → feed line (fsync) → socket `{t:"lib",seq,type,id,rev,by}`, skipped for writer's `X-Client-Id`.
+- `seq` = last line of `lib/feed.jsonl` at start. Torn last line cut. Record newer than its feed line → re-appended.
+- All records in memory. Unknown fields kept verbatim (top-level raw JSON).
+- Janitor: lib blob named by no record and no kept rev, older than `ORPHAN_TTL` → gone.
+
+```
+DATA_DIR/lib/blobs/ab/<sha>          + <sha>.mime
+DATA_DIR/lib/records/<type>/<id>.json
+DATA_DIR/lib/revs/<type>/<id>/<rev>.json
+DATA_DIR/lib/feed.jsonl               {seq,type,id,rev}
+```
+
+Throwaway server: `scripts/lib-server-test.sh -- <cmd>` → `LIB_SERVER_URL`, `LIB_TOKEN`.
+
 ### Things worth knowing
 
 - **`rev` is a write counter, per story, never reused.** It is the ETag, the `If-Match`
@@ -286,6 +320,7 @@ config.go      .env parser and defaults
 api/           routes, handlers, auth and CORS middleware, the Notifier seam
 hub/           the websocket: change bus, presence, soft locks, all in memory
 store/         the filesystem: stories, revisions, assets, janitor
+lib/           asset library: records, revs, feed, blobs, GC, its HTTP routes
 ```
 
 `api.Notifier` is where `hub.Hub` plugs in: handlers announce every accepted change

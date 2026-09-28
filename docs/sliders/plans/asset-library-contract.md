@@ -110,3 +110,15 @@ Blob GC: live = any sha named by a current record or any kept rev.
 3. `base` (last agreed server copy) is persisted with the record. Reload does not reset it.
 4. 412 → 3-way merge base/local/current. Never a blind retry with the local body.
 5. Outbox persisted. Reload resumes it.
+
+## Server notes
+
+- Other error codes: `404 not-found`, `413 too-large`, `422 hash-mismatch` (`got`), `400 bad-request` (`detail`, non-record input: bad sha, bad `since`/`limit`, bad `/blobs/has` body).
+- `If-Match` on an unknown id → `412 stale` with `current: null`. Unparseable `If-Match` → `400 bad-record`. Both headers sent → `If-Match` wins.
+- Ids: `collection`/`asset`/`character` must be lowercase 8-4-4-4-12 hex (any version); binding id = story-id pattern `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`.
+- Body `id`/`type` optional; if present must match path. `deleted` in a PUT body is honoured: `true` = delete (same `collection-not-empty` rule).
+- Names compared exact, case-sensitive. Asset `blob` required. Binding `own` must be a live collection (`collection-missing`). "Bound" = `own` or listed in `collections`.
+- `DELETE` on an unknown id → 404. Delete on a tombstone is allowed (rev+1).
+- Socket skip is by `X-Client-Id` = hello `client` (existing hub rule). Other tabs get it only if they use distinct client ids.
+- `at` = `2006-01-02T15:04:05Z` (seconds). Blob mime = PUT `Content-Type`, default `application/octet-stream`; first upload wins.
+- `scripts/lib-server-test.sh`: ports 26000-27999 on the dev box are held by a podman `pasta` forwarder, so 27101 may be busy on the host; `LIB_PORT=` overrides.

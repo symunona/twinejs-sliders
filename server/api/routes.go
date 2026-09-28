@@ -9,6 +9,7 @@ package api
 import (
 	"net/http"
 
+	"twine-story-store/lib"
 	"twine-story-store/store"
 )
 
@@ -36,6 +37,10 @@ type Options struct {
 	// Events is the websocket handler for GET /api/v1/events, normally *hub.Hub. Nil
 	// means the route does not exist and clients fall back to polling.
 	Events http.Handler
+	// Lib is the shared asset library mounted at /api/v1/lib. Nil means not mounted.
+	Lib *lib.Store
+	// LibNotifier announces lib writes, normally *hub.Hub. Nil means none.
+	LibNotifier lib.Notifier
 }
 
 type server struct {
@@ -90,6 +95,14 @@ func NewHandler(opts Options) http.Handler {
 	mux.HandleFunc("GET /api/v1/stories/{id}/assets/{assetId}", s.getAsset)
 	mux.HandleFunc("PUT /api/v1/stories/{id}/assets/{assetId}", s.putAsset)
 	mux.HandleFunc("DELETE /api/v1/stories/{id}/assets/{assetId}", s.deleteAsset)
+
+	if opts.Lib != nil {
+		lib.Register(mux, lib.HandlerOptions{
+			Store:        opts.Lib,
+			Notifier:     opts.LibNotifier,
+			MaxBlobBytes: opts.MaxAssetBytes,
+		})
+	}
 
 	// gzip is innermost so it only ever sees a handler's own body, and so a hijacked
 	// websocket upgrade passes through auth and CORS before it reaches the wrapper that
