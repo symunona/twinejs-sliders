@@ -62,6 +62,7 @@ import {
 import {useAssetUsage} from '../sliders-assets/use-asset-usage';
 import {useSceneRefRename} from '../sliders-assets/use-scene-ref-rename';
 import {SharedPrompt} from '../sliders-assets/shared-prompt';
+import {markAssetOpen} from '../../store/asset-library/open-assets';
 import {AdjustSlider} from './adjust-slider';
 import {
 	BackgroundSupport,
@@ -1590,6 +1591,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		undefined,
 		assetId ? [assetId] : []
 	);
+
+	// Open art: a remote delete of it toasts (LibraryToasts).
+	React.useEffect(() => (assetId ? markAssetOpen(assetId) : undefined), [assetId]);
 
 	React.useEffect(() => {
 		if (!assetId || assetChanges === 0) {

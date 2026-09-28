@@ -116,14 +116,23 @@ export const ConflictCard: React.FC<ConflictCardProps> = props => {
 			return;
 		}
 
-		const values = Object.values(picks);
+		// Hidden picture fields (pixelHash, w, h …) follow the pixels' pick.
+		const all: Record<string, FieldPick> = {...picks};
+
+		for (const field of conflict.fields) {
+			if (HIDDEN_FIELDS.has(field.split('.')[0]) && picks.blob) {
+				all[field] = picks.blob;
+			}
+		}
+
+		const values = Object.values(all);
 
 		if (values.every(pick => pick === 'mine')) {
 			resolve('mine');
 		} else if (values.every(pick => pick === 'theirs')) {
 			resolve('theirs');
 		} else {
-			resolve({picks});
+			resolve({picks: all});
 		}
 	}
 

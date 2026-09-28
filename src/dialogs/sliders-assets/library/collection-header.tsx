@@ -58,6 +58,33 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = props => {
 		[collection?.description]
 	);
 
+	// Stable: PromptButton re-validates whenever `validate` changes identity.
+	const collectionId = collection?.id;
+	const validateName = React.useCallback(
+		(value: string) => {
+			const trimmed = value.trim();
+
+			if (!trimmed) {
+				return {
+					message: t('dialogs.library.collectionNameEmpty'),
+					valid: false
+				};
+			}
+
+			const holder = engine.collectionByName(trimmed);
+
+			return holder && holder.id !== collectionId
+				? {
+						message: t('dialogs.library.collectionNameTaken', {
+							name: trimmed
+						}),
+						valid: false
+				  }
+				: {valid: true};
+		},
+		[collectionId, engine, t]
+	);
+
 	function update(patch: Partial<CollectionRecord>) {
 		if (!collection) {
 			return;
@@ -137,27 +164,7 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = props => {
 						onSubmit={value => update({name: value.trim()})}
 						open={renameOpen}
 						prompt={t('common.renamePrompt', {name: collection.name})}
-						validate={value => {
-							const trimmed = value.trim();
-
-							if (!trimmed) {
-								return {
-									message: t('dialogs.library.collectionNameEmpty'),
-									valid: false
-								};
-							}
-
-							const holder = engine.collectionByName(trimmed);
-
-							return holder && holder.id !== collection.id
-								? {
-										message: t('dialogs.library.collectionNameTaken', {
-											name: trimmed
-										}),
-										valid: false
-								  }
-								: {valid: true};
-						}}
+						validate={validateName}
 						value={draft}
 					/>
 					<CheckboxButton

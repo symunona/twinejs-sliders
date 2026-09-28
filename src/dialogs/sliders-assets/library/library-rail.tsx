@@ -131,22 +131,26 @@ export const LibraryRail: React.FC<LibraryRailProps> = props => {
 		}
 	}
 
-	function validateNew(value: string) {
-		const trimmed = value.trim();
+	// Stable: PromptButton re-validates whenever `validate` changes identity.
+	const validateNew = React.useCallback(
+		(value: string) => {
+			const trimmed = value.trim();
 
-		if (trimmed === '') {
-			return {message: t('dialogs.library.collectionNameEmpty'), valid: false};
-		}
+			if (trimmed === '') {
+				return {message: t('dialogs.library.collectionNameEmpty'), valid: false};
+			}
 
-		if (engine.collectionByName(trimmed)) {
-			return {
-				message: t('dialogs.library.collectionNameTaken', {name: trimmed}),
-				valid: false
-			};
-		}
+			if (engine.collectionByName(trimmed)) {
+				return {
+					message: t('dialogs.library.collectionNameTaken', {name: trimmed}),
+					valid: false
+				};
+			}
 
-		return {valid: true};
-	}
+			return {valid: true};
+		},
+		[engine, t]
+	);
 
 	/** Tiles land on any collection; collections reorder only among attached ones. */
 	function dropProps(collection: CollectionRecord, reorderable: boolean) {

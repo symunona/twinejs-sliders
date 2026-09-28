@@ -9,6 +9,7 @@ import {StoriesContextProvider} from './store/stories';
 import {StoryFormatsContextProvider} from './store/story-formats';
 import {ServerSyncProvider} from './store/persistence/server';
 import {LibraryProvider} from './store/asset-library/library-provider';
+import {LibraryToasts} from './dialogs/sliders-assets/library/library-toasts';
 import {StateLoader} from './store/state-loader';
 import {ThemeSetter} from './store/theme-setter';
 import './styles/typography.css';
@@ -26,6 +27,7 @@ export const App: React.FC = () => (
 						<ServerSyncProvider>
 							{/* The shared asset library's engine: one per session. */}
 							<LibraryProvider>
+								<LibraryToasts />
 								<HotkeysProvider>
 									<React.Suspense fallback={<LoadingCurtain />}>
 										<Routes />

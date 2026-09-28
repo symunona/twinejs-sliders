@@ -6,6 +6,7 @@ import {BuildInfo} from '../../story-edit/toolbar/build-info';
 import {
 	BuildActions,
 	AppActions,
+	LibrarySyncChip,
 	SyncActions,
 	SyncStatus
 } from '../../../route-actions';
@@ -27,7 +28,12 @@ export const StoryListToolbar: React.FC<StoryListToolbarProps> = props => {
 
 	return (
 		<RouteToolbar
-			leadingControls={<SyncStatus />}
+			leadingControls={
+				<>
+					<SyncStatus />
+					<LibrarySyncChip />
+				</>
+			}
 			pinnedControls={<StorageQuota watch={stories} />}
 			trailingControls={<BuildInfo />}
 			tabs={{
