@@ -75,3 +75,24 @@ npm run deploy-cloudflare rebuild            # force
 
 `~/.local/go/bin/go` for `go test ./...` in `server/`.
 `SLIDERS_GO` for Playwright is `/usr/local/go/bin/go`.
+
+## Legacy art → asset library
+
+Old per-story art (server `assets.json` + blobs) is NOT migrated by the app. One-shot import:
+
+```sh
+node scripts/lib-import-legacy.mjs --dry-run --all <backupRoot>     # plan, writes nothing
+node scripts/lib-import-legacy.mjs --all <backupRoot>               # or <storyDir>...
+```
+
+- Server/token: `--server/--token`, else `LIB_SERVER_URL/LIB_TOKEN`, else twine-cli profile.
+- Per story: own collection (story name, numbered if taken), binding id = story id,
+  assets (recipe, owner, sourceAsset remapped), characters (old `frames` migrated, poses
+  -> new uuids), binding refs. Exact dup assets folded. Pose image named like its
+  character -> `<name>-pose`. Re-run = skip. Story itself untouched.
+- No pixelHash/phash (no decoder in node).
+- Local try: `LIB_PORT=29101 scripts/lib-server-test.sh`, PUT the story, run with env.
+- Backup 2026-09-28 (pre asset-library deploy): `/mnt/data_ssd/dev/twinery/ignotas/backups/`
+  `pre-asset-library-2026-09-28.tgz` (DATA_DIR+binary+.env, has token) and
+  `demos-2026-09-28/` (per story: story.json, assets.json, characters.json,
+  blobs-by-id/, blobs-by-name/, INDEX.md). Also taskbot `~/dev/twinejs-sliders/server/backups/`.

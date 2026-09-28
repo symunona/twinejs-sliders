@@ -275,6 +275,47 @@ function toCharacter(record: CharacterRecord): Character {
 	} as Character);
 }
 
+/**
+ * Old per-story `AssetMeta` → `addAsset` fields. The inverse of `toMeta`: recipe keys go
+ * into `recipe`, the rest stays flat. `blob`, `bytes`, `mime` come from the bytes, so they
+ * are not here. Ids are not mapped: an old `a_xxxx` `sourceAsset` means nothing in the
+ * library, the caller remaps it. Sidecars need bytes, the caller's too.
+ * `scripts/lib-import-legacy`.
+ */
+export function assetFieldsFromMeta(meta: AssetMeta): {
+	name: string;
+	kind: AssetKind;
+	tags: string[];
+	w: number;
+	h: number;
+	animated: boolean;
+	duration?: number;
+	ownerCharacter?: string;
+	recipe?: AssetRecipe;
+} {
+	const recipe: AssetRecipe = {};
+
+	for (const key of RECIPE_KEYS) {
+		if (meta[key] !== undefined) {
+			(recipe as Record<string, unknown>)[key] = JSON.parse(
+				JSON.stringify(meta[key])
+			);
+		}
+	}
+
+	return {
+		animated: !!meta.animated,
+		h: meta.h,
+		kind: meta.kind,
+		name: meta.name,
+		tags: [...(meta.tags ?? [])],
+		w: meta.w,
+		...(typeof meta.duration === 'number' ? {duration: meta.duration} : {}),
+		...(meta.ownerCharacter ? {ownerCharacter: meta.ownerCharacter} : {}),
+		...(Object.keys(recipe).length ? {recipe} : {})
+	};
+}
+
 /** Character → record fields (everything but the id, which is `charId`). */
 function characterFields(character: Character): Record<string, unknown> {
 	const rest = JSON.parse(JSON.stringify(character)) as Record<string, unknown>;
