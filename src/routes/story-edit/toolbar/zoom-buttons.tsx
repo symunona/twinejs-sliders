@@ -1,8 +1,15 @@
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {IconGridDots, IconLayoutGrid, IconSquare} from '@tabler/icons';
+import {IconZoomIn, IconZoomOut} from '@tabler/icons';
 import {IconButton} from '../../../components/control/icon-button';
-import {updateStory, useStoriesContext, Story} from '../../../store/stories';
+import {
+	maxZoom,
+	minZoom,
+	steppedZoom,
+	updateStory,
+	useStoriesContext,
+	Story
+} from '../../../store/stories';
 import './zoom-buttons.css';
 
 export interface ZoomButtonsProps {
@@ -15,7 +22,9 @@ export const ZoomButtons: React.FC<ZoomButtonsProps> = React.memo(({story}) => {
 
 	const handleZoomChange = React.useCallback(
 		(zoom: number) => {
-			dispatch(updateStory(stories, story, {zoom}));
+			if (zoom !== story.zoom) {
+				dispatch(updateStory(stories, story, {zoom}));
+			}
 		},
 		[dispatch, stories, story]
 	);
@@ -24,28 +33,25 @@ export const ZoomButtons: React.FC<ZoomButtonsProps> = React.memo(({story}) => {
 		<div className="zoom-buttons">
 			<span className="legend">{t('routes.storyEdit.zoomButtons.legend')}</span>
 			<IconButton
-				icon={<IconSquare />}
+				disabled={story.zoom <= minZoom}
+				icon={<IconZoomOut />}
 				iconOnly
-				label={t('routes.storyEdit.zoomButtons.passageNamesAndExcerpts')}
+				label={t('routes.storyEdit.zoomButtons.zoomOut')}
+				onClick={() => handleZoomChange(steppedZoom(story.zoom, -1))}
+			/>
+			<button
+				className="zoom-percent"
 				onClick={() => handleZoomChange(1)}
-				selectable
-				selected={story.zoom === 1}
-			/>
+				title={t('routes.storyEdit.zoomButtons.zoomReset')}
+			>
+				{Math.round(story.zoom * 100)}%
+			</button>
 			<IconButton
-				icon={<IconLayoutGrid />}
+				disabled={story.zoom >= maxZoom}
+				icon={<IconZoomIn />}
 				iconOnly
-				label={t('routes.storyEdit.zoomButtons.passageNames')}
-				onClick={() => handleZoomChange(0.6)}
-				selectable
-				selected={story.zoom === 0.6}
-			/>
-			<IconButton
-				icon={<IconGridDots />}
-				iconOnly
-				label={t('routes.storyEdit.zoomButtons.storyStructure')}
-				onClick={() => handleZoomChange(0.3)}
-				selectable
-				selected={story.zoom === 0.3}
+				label={t('routes.storyEdit.zoomButtons.zoomIn')}
+				onClick={() => handleZoomChange(steppedZoom(story.zoom, 1))}
 			/>
 		</div>
 	);

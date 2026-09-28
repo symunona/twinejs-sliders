@@ -1,8 +1,11 @@
 import {useTranslation} from 'react-i18next';
 import {useCommand} from '../../hotkeys';
-import {Story, updateStory, useStoriesContext} from '../../store/stories';
-
-const zoomLevels = [0.3, 0.6, 1];
+import {
+	steppedZoom,
+	Story,
+	updateStory,
+	useStoriesContext
+} from '../../store/stories';
 
 /**
  * Registers the zoom commands for the story map. The keys they're bound to are
@@ -18,30 +21,16 @@ export function useZoomShortcuts(story: Story) {
 		}
 	}
 
-	function stepZoom(delta: number) {
-		const index = zoomLevels.indexOf(story.zoom);
-
-		// If the story is at a zoom level we don't know about, leave it alone.
-
-		if (index === -1) {
-			return;
-		}
-
-		setZoom(
-			zoomLevels[Math.min(Math.max(index + delta, 0), zoomLevels.length - 1)]
-		);
-	}
-
 	useCommand({
 		id: 'view.zoomOut',
 		label: t('hotkeys.commands.view.zoomOut'),
-		run: () => stepZoom(-1),
+		run: () => setZoom(steppedZoom(story.zoom, -1)),
 		scope: 'story-map'
 	});
 	useCommand({
 		id: 'view.zoomIn',
 		label: t('hotkeys.commands.view.zoomIn'),
-		run: () => stepZoom(1),
+		run: () => setZoom(steppedZoom(story.zoom, 1)),
 		scope: 'story-map'
 	});
 	useCommand({

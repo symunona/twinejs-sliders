@@ -80,6 +80,7 @@ function transitionStep(
  * @param target Zoom value to transition towrds
  * @param scrollTarget DOM element whose scroll position should be manipulated
  * to match the returned value
+ * @return the visible zoom, and `jump` to show a zoom immediately
  */
 export function useZoomTransition(
 	target: number,
@@ -87,6 +88,14 @@ export function useZoomTransition(
 ) {
 	const [current, setCurrent] = React.useState(target);
 	const transition = React.useRef<ZoomTransition>();
+	const currentRef = React.useRef(current);
+	// A zoom set by `jump` that the story hasn't caught up to yet. Until it has,
+	// the gap between `target` and `current` is not a transition to run.
+	const jumpedTo = React.useRef<number>();
+	// Where to scroll once the DOM is drawn at the jumped-to zoom.
+	const pendingScroll = React.useRef<Point>();
+
+	currentRef.current = current;
 
 	// This queues a single transition step using requestAnimationFrame. It's
 	// crucial that this callback have no dependencies; otherwise things could get
@@ -98,7 +107,13 @@ export function useZoomTransition(
 		}
 
 		window.requestAnimationFrame(timestamp => {
-			const t = transition.current as ZoomTransition;
+			const t = transition.current;
+
+			// A jump cancelled the transition since this frame was queued.
+
+			if (!t) {
+				return;
+			}
 
 			if (t.lastTimestamp) {
 				// Complete the transition in 0.5 seconds, not 1.
@@ -143,6 +158,14 @@ export function useZoomTransition(
 	// Start a new transition.
 
 	React.useEffect(() => {
+		if (jumpedTo.current !== undefined) {
+			if (jumpedTo.current !== target) {
+				return;
+			}
+
+			jumpedTo.current = undefined;
+		}
+
 		if (!transition.current && current !== target && scrollTarget) {
 			transition.current = {
 				scrollTarget,
@@ -166,5 +189,43 @@ export function useZoomTransition(
 		}
 	}, [current, scrollTarget, step, target]);
 
-	return current;
+	React.useLayoutEffect(() => {
+		if (pendingScroll.current && scrollTarget) {
+			scrollTarget.scrollLeft = pendingScroll.current.left;
+			scrollTarget.scrollTop = pendingScroll.current.top;
+			pendingScroll.current = undefined;
+		}
+	}, [current, scrollTarget]);
+
+	/**
+	 * Shows a zoom right away, with no transition, keeping the content under
+	 * `focus` (a point in the scroll target's viewport) where it is. The story's
+	 * zoom should be set to the same value afterward; until it is, a difference
+	 * between the two is left alone.
+	 */
+	const jump = React.useCallback(
+		(zoom: number, focus: Point) => {
+			if (!scrollTarget) {
+				return;
+			}
+
+			const from = currentRef.current;
+			const base = pendingScroll.current ?? {
+				left: scrollTarget.scrollLeft,
+				top: scrollTarget.scrollTop
+			};
+
+			transition.current = undefined;
+			jumpedTo.current = zoom;
+			pendingScroll.current = {
+				left: ((base.left + focus.left) / from) * zoom - focus.left,
+				top: ((base.top + focus.top) / from) * zoom - focus.top
+			};
+			currentRef.current = zoom;
+			setCurrent(zoom);
+		},
+		[scrollTarget]
+	);
+
+	return {jump, visibleZoom: current};
 }

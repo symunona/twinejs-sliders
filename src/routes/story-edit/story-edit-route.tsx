@@ -24,6 +24,7 @@ import {useInitialPassageCreation} from './use-initial-passage-creation';
 import {usePassageChangeHandlers} from './use-passage-change-handlers';
 import {useStorySceneErrors} from './use-story-scene-errors';
 import {useViewCenter} from './use-view-center';
+import {useWheelZoom} from './use-wheel-zoom';
 import {useZoomShortcuts} from './use-zoom-shortcuts';
 import {useZoomTransition} from './use-zoom-transition';
 import './story-edit-route.css';
@@ -44,7 +45,10 @@ export const InnerStoryEditRoute: React.FC = () => {
 		handleSelectPassage,
 		handleSelectRect
 	} = usePassageChangeHandlers(story);
-	const visibleZoom = useZoomTransition(story.zoom, mainContent.current);
+	const {jump, visibleZoom} = useZoomTransition(
+		story.zoom,
+		mainContent.current
+	);
 	const sceneErrorCounts = useStorySceneErrors(story.passages);
 	// Links with no passage behind them, drawn as dashed placeholders. A scene's `links:`
 	// cannot auto-create the way `[[…]]` does, so this is how an author gets from a link
@@ -79,6 +83,7 @@ export const InnerStoryEditRoute: React.FC = () => {
 	}, [blurPassage, focusPassage, storyId]);
 
 	useZoomShortcuts(story);
+	useWheelZoom(story, mainContent, visibleZoom, jump);
 	useInitialPassageCreation(story, getCenter);
 
 	return (

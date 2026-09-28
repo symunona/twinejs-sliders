@@ -26,109 +26,57 @@ describe('<ZoomButtons>', () => {
 		);
 	}
 
-	it('displays a button that sets the story zoom to 1', () => {
+	function zoom() {
+		return screen.getByTestId('story-inspector-default').dataset.zoom;
+	}
+
+	function renderAtZoom(zoom: number) {
 		const story = fakeStory();
 
-		story.zoom = 0.6;
+		story.zoom = zoom;
 		renderComponent({stories: [story]});
+	}
+
+	it('shows the zoom as a percentage', () => {
+		renderAtZoom(0.75);
+		expect(screen.getByText('75%')).toBeInTheDocument();
+	});
+
+	it('resets the zoom to 100% when the percentage is clicked', () => {
+		renderAtZoom(0.4);
+		fireEvent.click(screen.getByText('40%'));
+		expect(zoom()).toBe('1');
+	});
+
+	it('steps the zoom in', () => {
+		renderAtZoom(1);
 		fireEvent.click(
-			screen.getByLabelText(
-				'routes.storyEdit.zoomButtons.passageNamesAndExcerpts'
-			)
+			screen.getByRole('button', {name: 'routes.storyEdit.zoomButtons.zoomIn'})
 		);
-		expect(screen.getByTestId('story-inspector-default').dataset.zoom).toBe(
-			'1'
-		);
+		expect(zoom()).toBe('1.25');
 	});
 
-	it('presses the zoom 1 button if the story has that zoom', () => {
-		const story = fakeStory();
-
-		story.zoom = 1;
-		renderComponent({stories: [story]});
-		expect(
-			screen.getByLabelText(
-				'routes.storyEdit.zoomButtons.passageNamesAndExcerpts'
-			)
-		).toHaveAttribute('aria-pressed', 'true');
-	});
-
-	it("doesn't press the zoom 1 button if the story doesn't have that zoom", () => {
-		const story = fakeStory();
-
-		story.zoom = 0.6;
-		renderComponent({stories: [story]});
-		expect(
-			screen.getByLabelText(
-				'routes.storyEdit.zoomButtons.passageNamesAndExcerpts'
-			)
-		).toHaveAttribute('aria-pressed', 'false');
-	});
-
-	it('displays a button that sets the story zoom to 0.6', () => {
-		const story = fakeStory();
-
-		story.zoom = 1;
-		renderComponent({stories: [story]});
+	it('steps the zoom out', () => {
+		renderAtZoom(1);
 		fireEvent.click(
-			screen.getByLabelText('routes.storyEdit.zoomButtons.passageNames')
+			screen.getByRole('button', {
+				name: 'routes.storyEdit.zoomButtons.zoomOut'
+			})
 		);
-		expect(screen.getByTestId('story-inspector-default').dataset.zoom).toBe(
-			'0.6'
-		);
+		expect(zoom()).toBe('0.9');
 	});
 
-	it('presses the zoom 0.6 button if the story has that zoom', () => {
-		const story = fakeStory();
-
-		story.zoom = 0.6;
-		renderComponent({stories: [story]});
+	it('disables zoom in at the maximum and zoom out at the minimum', () => {
+		renderAtZoom(2);
 		expect(
-			screen.getByLabelText('routes.storyEdit.zoomButtons.passageNames')
-		).toHaveAttribute('aria-pressed', 'true');
-	});
-
-	it("doesn't press the zoom 0.6 button if the story doesn't have that zoom", () => {
-		const story = fakeStory();
-
-		story.zoom = 1;
-		renderComponent({stories: [story]});
+			screen.getByRole('button', {name: 'routes.storyEdit.zoomButtons.zoomIn'})
+		).toBeDisabled();
+		renderAtZoom(0.2);
 		expect(
-			screen.getByLabelText('routes.storyEdit.zoomButtons.passageNames')
-		).toHaveAttribute('aria-pressed', 'false');
-	});
-
-	it('displays a button that sets the story zoom to 0.3', () => {
-		const story = fakeStory();
-
-		story.zoom = 1;
-		renderComponent({stories: [story]});
-		fireEvent.click(
-			screen.getByLabelText('routes.storyEdit.zoomButtons.storyStructure')
-		);
-		expect(screen.getByTestId('story-inspector-default').dataset.zoom).toBe(
-			'0.3'
-		);
-	});
-
-	it('presses the zoom 0.3 button if the story has that zoom', () => {
-		const story = fakeStory();
-
-		story.zoom = 0.3;
-		renderComponent({stories: [story]});
-		expect(
-			screen.getByLabelText('routes.storyEdit.zoomButtons.storyStructure')
-		).toHaveAttribute('aria-pressed', 'true');
-	});
-
-	it("doesn't press the zoom 0.3 button if the story doesn't have that zoom", () => {
-		const story = fakeStory();
-
-		story.zoom = 1;
-		renderComponent({stories: [story]});
-		expect(
-			screen.getByLabelText('routes.storyEdit.zoomButtons.storyStructure')
-		).toHaveAttribute('aria-pressed', 'false');
+			screen.getAllByRole('button', {
+				name: 'routes.storyEdit.zoomButtons.zoomOut'
+			})[1]
+		).toBeDisabled();
 	});
 
 	it('is accessible', async () => {
