@@ -34,10 +34,18 @@ World
 - Deterministic. No timers. Engine debounce injected as a clock the test advances.
 
 Fixtures: `png(color, w, h)` → real PNG bytes (tiny), so hashes differ per colour.
+A fixture decoder (`pngDecoder`) stands in for createImageBitmap. Harness + fixtures live
+in `src/testing/` (jest runs every file under `__tests__/` as a suite).
 
-Real server: `LIB_SERVER_URL=http://127.0.0.1:27101 LIB_TOKEN=… npx jest multi-user`
-spins nothing; the suite points `HttpTransport` at it and wipes via a fresh `DATA_DIR`
-per run (script `scripts/lib-server-test.sh` starts Go on a temp dir).
+Each browser's engine talks to the fake through the real `HttpTransport` (fake exposes a
+`fetch`), so the request log is method / path / status / If-Match / error code.
+
+Real server: **multi-user runs against the fake only.** It needs socket delivery and
+exact request counts (D2, E3), which a real server + real websocket cannot give
+deterministically. What keeps the fake honest is `contract.test.ts`, which runs the same
+cases against both:
+`LIB_PORT=29101 scripts/lib-server-test.sh -- npx jest packages/asset-library/src/__tests__/contract`
+(fresh `DATA_DIR` per run).
 
 ## Scenarios
 
@@ -66,7 +74,7 @@ Each named after the bug class it pins. `→` = expected.
 | B2 | bo repaints `night` offline. ana repaints `night`, pushes. bo online, settle. | bo's record in `conflict` state. Server = ana's. Nothing lost: bo's blob still in bo's cache. |
 | B3 | B2 then bo resolves **mine**. settle. | server + ana = bo's pixels. rev = ana's rev + 1. |
 | B4 | B2 then bo resolves **keep both**. settle. | `night` = ana's, `night-2` = bo's, both on both browsers. |
-| B5 | B2 then bo resolves **theirs**. | bo = ana's. bo's local blob may be GC'd. No write sent. |
+| B5 | B2 then bo resolves **theirs**. | bo = ana's. No write sent. (Blob cache GC not built; not asserted.) |
 | B6 | bo renames to `a`, ana renames to `b`, concurrently. | conflict on `name`. Nothing auto-picked. |
 | B7 | bo edits (dirty). ana deletes. settle. | bo gets delete-vs-edit conflict. Resolve restore → record back with bo's edit. |
 | B8 | bo edits `tags`, ana edits `tags` differently. | set-merge: union of adds, both removes applied. No conflict. |
@@ -76,9 +84,10 @@ Each named after the bug class it pins. `→` = expected.
 
 | # | Steps | Expect |
 |---|---|---|
-| C1 | bo's base is rev 3, server at 5 (bo offline through 2 of ana's edits). bo edits, online. | bo's PUT 412 → merge → second PUT with If-Match 5. Server never goes back to rev-3 content. |
+| C1 | bo's base is rev 3, server at 5 (bo offline through 2 of ana's edits). bo edits, online, pushes before pulling. | bo's PUT 412 → merge → second PUT with If-Match 5. Server never goes back to rev-3 content. (Pushing first on purpose: a normal reconnect pulls first and merges without a 412.) |
 | C2 | any record push | request log: `blobs/has` and blob PUTs precede the record PUT that names them. |
 | C3 | server lost a blob (test deletes it). bo pushes record naming it. | 409 `blob-missing` → bo uploads → retry succeeds. |
+| C3b | blob gone from server and from every cache. | record parked as `blob-lost`, settle ends (no retry loop). |
 | C4 | blob upload fails mid-way (transport throws once). | record not sent. Retry later sends blob then record. |
 
 ### D. No ping-pong (past: two browsers pushing art at each other forever)
@@ -111,7 +120,12 @@ Each named after the bug class it pins. `→` = expected.
 | F7 | pixel dupe: same image re-encoded. | `pixelHash` match reported (decoder injected in tests). |
 | F8 | move asset `stool` from `Mine` to `tavern-set`. | collection field changes, name clash checked in target. |
 | F9 | copy asset. | new id, same sha, `sourceAsset` set, zero blob uploads. |
-| F10 | delete collection still bound by a story. | 409, nothing deleted. |
+| F10 | delete collection still bound by a story, bo knows the binding. | refused locally, nothing sent, nothing deleted. |
+| F10b | same, empty collection, binding not pulled yet by bo. | 409 `collection-not-empty`, bo reverts its local delete, reports it. |
+
+F10 split: deleting a non-empty collection means tombstoning its children first (the
+server refuses the collection otherwise), so "409, nothing deleted" only holds when the
+client refuses before sending, or the collection is already empty.
 
 ### G. Resolution, fork, update-all
 
@@ -143,7 +157,8 @@ offline windows, random reloads. After final `settle()` and resolving every conf
 - no record whose last local edit was never acknowledged unless it went through a conflict.
 - total settle passes bounded.
 
-Seeds that failed once are pinned as fixed cases.
+Seeds that failed once are pinned as fixed cases (42 and 1337 caught tombstone PUTs
+naming un-uploaded blobs). `LIB_FUZZ=N` runs N more seeds.
 
 ## Also
 

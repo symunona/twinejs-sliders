@@ -122,3 +122,39 @@ Blob GC: live = any sha named by a current record or any kept rev.
 - Socket skip is by `X-Client-Id` = hello `client` (existing hub rule). Other tabs get it only if they use distinct client ids.
 - `at` = `2006-01-02T15:04:05Z` (seconds). Blob mime = PUT `Content-Type`, default `application/octet-stream`; first upload wins.
 - `scripts/lib-server-test.sh`: ports 26000-27999 on the dev box are held by a podman `pasta` forwarder, so 27101 may be busy on the host; `LIB_PORT=` overrides.
+
+## Client notes
+
+`packages/asset-library`. Simplest reading taken where the contract is silent; nothing here
+asks the server to behave differently.
+
+- **Tombstones and blobs.** The server skips blob checks on `deleted: true`. The client
+  still uploads every sha a PUT body names first, tombstones included (repaint then
+  delete, pushed as one PUT). Otherwise a later restore names bytes nobody has. Found by
+  convergence seeds 42 / 1337. A plain `DELETE` is used only when nothing but `deleted`
+  differs from base; anything else is `PUT` with `deleted: true`.
+- **Name clashes.** `name-taken` / `collection-name-taken` on create *or* update → client
+  retries as `<name>-2`, `-3` … (base = the name it first tried, skipping names it knows
+  locally), max 20, then emits `renamed-on-clash`. Clashes the client can see locally are
+  refused before sending on rename / move / putCharacter / createCollection; `addAsset`
+  suffixes locally.
+- **Delete vs edit** (either side deleted, other side changed any field) = conflict on
+  `deleted`. `theirs` takes the server copy whole; `mine` = restore/delete with my fields.
+- **Merge**: `recipe`, `sidecars`, `poses` per key; `tags` as sets; rest per field.
+  Conflicted field keeps the server value until resolved.
+- **Collection delete**: refused locally while any known binding lists it or it holds
+  live records (`cascade` tombstones children first, collection last). `409
+  collection-not-empty` → client restores its local copy and emits `delete-refused`.
+  Race: with `cascade`, children already pushed stay deleted.
+- **Ordering**: a record whose collection (or binding `own`) is a local create not yet
+  acknowledged waits for it. Children tombstones go before their collection's.
+- **Cursor**: a write whose `seq` = cursor + 1 advances the cursor without a read (own
+  write, no socket echo). Any gap → pull on next sync.
+- **412 with `current: null`** on an update = server has no such record → client drops
+  base and re-creates with `If-None-Match: *`.
+- **Parked records** (out of the outbox until resolved, so no retry loops):
+  `collection-missing`, `bad-record` (`rejected`), and blob-missing when no local copy
+  exists (`blob-lost`).
+- **Identity headers**: `X-Client-Name` = display name, `X-Client-Id` = per-tab id (same
+  id the socket hello uses), so the writer's own tab gets no echo.
+- Local records are keyed `type/id`: a binding id is a story id and may look like a uuid.
