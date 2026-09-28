@@ -1,12 +1,23 @@
 import {assetFragment, musicFragment} from '@sliders/asset-store';
 import {AssetMeta} from '@sliders/scene-types';
-import {IconMusic, IconPhotoEdit, IconTrash, IconWriting} from '@tabler/icons';
+import {
+	IconDots,
+	IconMusic,
+	IconPhotoEdit,
+	IconTrash,
+	IconWriting
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Badge} from '../../components/badge/badge';
 import {ButtonBar} from '../../components/container/button-bar';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {IconButton} from '../../components/control/icon-button';
+import {
+	LabeledMenuItem,
+	MenuButton,
+	MenuSeparator
+} from '../../components/control/menu-button';
 import {
 	PromptButton,
 	PromptValidationResponse
@@ -16,11 +27,19 @@ import {setAssetDragData} from '../passage-edit/scene-preview/asset-drag';
 import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
 import {copyText} from '../../util/copy-text';
 import {AssetPreview} from './asset-preview';
+import {LIBRARY_ASSET_MIME} from './library/library-model';
 import {SoundPreview} from './sound-preview';
 import {TileUses} from './tile-uses';
 
 export interface AssetTileProps {
 	allTags: string[];
+	/** Library badges (usage, fork, sync state), before the tags. */
+	badges?: React.ReactNode;
+	/**
+	 * Library tile menu. Edit and Rename are prepended here, so the menu opens the same
+	 * rename prompt the pencil does.
+	 */
+	menuItems?: (LabeledMenuItem | MenuSeparator)[];
 	/** Highlighted and scrolled to--something asked for this tile by name. */
 	focused?: boolean;
 	meta: AssetMeta;
@@ -58,7 +77,9 @@ function formatBytes(bytes: number): string {
 export const AssetTile: React.FC<AssetTileProps> = props => {
 	const {
 		allTags,
+		badges,
 		focused,
+		menuItems,
 		meta,
 		nameTaken,
 		onChangeTags,
@@ -134,8 +155,11 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		<div
 			className={`sliders-tile${focused ? ' focused' : ''}`}
 			data-asset-id={meta.id}
-			draggable={!!dragPayload || isSound}
+			draggable={!!dragPayload || isSound || !!menuItems}
 			onDragStart={event => {
+				// Any tile can land on a collection in the Library rail (move, Alt = copy).
+				event.dataTransfer.setData(LIBRARY_ASSET_MIME, meta.id);
+
 				if (dragPayload) {
 					setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta));
 					return;
@@ -207,6 +231,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			</div>
 			<TileUses passages={usedIn ?? []} />
 			<div className="sliders-tile-badges">
+				{badges}
 				{unreferenced && (
 					<Badge
 						label={t('dialogs.slidersAssets.unreferenced')}
@@ -276,14 +301,34 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					onRemove={tag => onChangeTags(meta.tags.filter(t => t !== tag))}
 					tags={meta.tags}
 				/>
-				<ConfirmButton
-					confirmVariant="danger"
-					icon={<IconTrash />}
-					iconOnly
-					label={t('common.delete')}
-					onConfirm={onDelete}
-					prompt={t('dialogs.slidersAssets.deletePrompt', {name: meta.name})}
-				/>
+				{menuItems ? (
+					<MenuButton
+						icon={<IconDots />}
+						iconOnly
+						items={[
+							{
+								disabled: isSound || meta.animated,
+								label: t('dialogs.library.menu.edit'),
+								onClick: onEdit
+							},
+							{
+								label: t('common.rename'),
+								onClick: () => setRenameOpen(true)
+							},
+							...menuItems
+						]}
+						label={t('dialogs.library.menu.more', {name: meta.name})}
+					/>
+				) : (
+					<ConfirmButton
+						confirmVariant="danger"
+						icon={<IconTrash />}
+						iconOnly
+						label={t('common.delete')}
+						onConfirm={onDelete}
+						prompt={t('dialogs.slidersAssets.deletePrompt', {name: meta.name})}
+					/>
+				)}
 			</ButtonBar>
 		</div>
 	);

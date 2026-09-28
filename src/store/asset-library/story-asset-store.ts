@@ -399,6 +399,36 @@ export function storyView(engine: LibraryEngine, storyId: string): StoryView {
 	};
 }
 
+/**
+ * Library UI: any asset records (any collection, attached or not) as this story sees
+ * them — `own`, collection name, pose owner.
+ */
+export function libraryMetas(
+	engine: LibraryEngine,
+	storyId: string,
+	records: AssetRecord[]
+): LibraryAssetMeta[] {
+	const view = storyView(engine, storyId);
+
+	return records.map(record =>
+		toMeta(
+			record,
+			view.owners.get(record.id) ??
+				(typeof record.ownerCharacter === 'string'
+					? record.ownerCharacter
+					: undefined),
+			view.collections.get(record.collection) ??
+				engine.get(record.collection, 'collection'),
+			view.own
+		)
+	);
+}
+
+/** Library UI: a character record in the old `Character` shape. */
+export function characterFromRecord(record: CharacterRecord): Character {
+	return toCharacter(record);
+}
+
 // ---------------------------------------------------------------------------
 // The facade
 // ---------------------------------------------------------------------------

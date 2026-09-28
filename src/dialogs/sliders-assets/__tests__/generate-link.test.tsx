@@ -4,6 +4,7 @@ import * as React from 'react';
 import {FakeStateProvider} from '../../../test-util';
 import {AssetGeneratorDialog} from '../../asset-generator/asset-generator';
 import {DialogsContext} from '../../context/dialogs-context';
+import {AssetScopeProvider} from '../asset-store-context';
 import {SlidersAssetsDialog} from '../sliders-assets';
 
 /**
@@ -46,6 +47,7 @@ function renderDialog(dispatch: jest.Mock) {
 	render(
 		<FakeStateProvider>
 			<DialogsContext.Provider value={{dialogs: [], dispatch}}>
+				<AssetScopeProvider storyId="s1">
 				<SlidersAssetsDialog
 					collapsed={false}
 					onChangeCollapsed={jest.fn()}
@@ -54,6 +56,7 @@ function renderDialog(dispatch: jest.Mock) {
 					onChangeProps={jest.fn()}
 					onClose={jest.fn()}
 				/>
+				</AssetScopeProvider>
 			</DialogsContext.Provider>
 		</FakeStateProvider>
 	);

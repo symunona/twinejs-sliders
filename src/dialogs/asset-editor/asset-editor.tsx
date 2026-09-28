@@ -12,7 +12,6 @@ import classNames from 'classnames';
 import {
 	IconAdjustments,
 	IconContrast,
-	IconCopy,
 	IconCrop,
 	IconDeviceFloppy,
 	IconEraser,
@@ -62,6 +61,7 @@ import {
 } from '../sliders-assets/asset-store-context';
 import {useAssetUsage} from '../sliders-assets/use-asset-usage';
 import {useSceneRefRename} from '../sliders-assets/use-scene-ref-rename';
+import {SharedPrompt} from '../sliders-assets/shared-prompt';
 import {AdjustSlider} from './adjust-slider';
 import {
 	BackgroundSupport,
@@ -1797,53 +1797,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				/>
 			)}
 			{sharedAsk && (
-				<div
-					aria-label={t('dialogs.assetEditor.sharedTitle')}
+				<SharedPrompt
 					className="asset-editor-shared-prompt"
-					data-testid="asset-editor-shared-prompt"
-					role="alertdialog"
-				>
-					<p>
-						{t('dialogs.assetEditor.sharedPrompt', {
-							collection: sharedAsk.info.collection.name,
-							count: sharedAsk.info.stories.length,
-							name: sharedAsk.info.name,
-							stories: sharedAsk.info.stories
-								.map(
-									story =>
-										`${story.storyName ?? story.storyId}${
-											story.by ? ` (${story.by})` : ''
-										}`
-								)
-								.join(', ')
-						})}
-						{sharedAsk.info.collection.locked &&
-							` ${t('dialogs.assetEditor.sharedLocked')}`}
-					</p>
-					<ButtonBar>
-						{sharedAsk.info.canUpdateAll && (
-							<IconButton
-								icon={<IconDeviceFloppy />}
-								label={t('dialogs.assetEditor.sharedUpdateAll')}
-								onClick={() => void answerShared('all')}
-								variant="danger"
-							/>
-						)}
-						{sharedAsk.info.canFork && (
-							<IconButton
-								icon={<IconCopy />}
-								label={t('dialogs.assetEditor.sharedFork')}
-								onClick={() => void answerShared('fork')}
-								variant="create"
-							/>
-						)}
-						<IconButton
-							icon={<IconX />}
-							label={t('common.cancel')}
-							onClick={() => void answerShared(undefined)}
-						/>
-					</ButtonBar>
-				</div>
+					info={sharedAsk.info}
+					onAnswer={scope => void answerShared(scope)}
+					testId="asset-editor-shared-prompt"
+				/>
 			)}
 		</>
 	);
