@@ -148,12 +148,26 @@ export function useVoiceToolEnv(options: UseVoiceToolEnvOptions): VoiceToolEnv {
 
 	/** The manifest and the parsed scenes, both of which three tools want. */
 	const catalog = React.useCallback(async () => {
-		const [assets, characters] = await Promise.all([
+		const [assets, characters, names] = await Promise.all([
 			assetStore.list({includePoseImages: true}),
-			assetStore.listCharacters()
+			assetStore.listCharacters(),
+			// Test doubles of the store predate the library.
+			assetStore.nameIndex?.()
 		]);
 
-		return catalogFromManifest(manifestOf(assets, characters));
+		return catalogFromManifest({
+			...manifestOf(assets, characters),
+			...(names
+				? {
+						ambiguous: names.ambiguous,
+						shadowed: manifestOf(names.shadowed, []).assets,
+						qualified: {
+							assets: names.qualifiedAssets,
+							characters: names.qualifiedCharacters
+						}
+				  }
+				: {})
+		});
 	}, [assetStore]);
 
 	const scenesOf = React.useCallback((): Map<string, Scene> => {

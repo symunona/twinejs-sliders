@@ -52,4 +52,20 @@ export interface Manifest {
 	rev: number;
 	/** Manifest entries whose bytes the store does not have. Computed, never stored. */
 	missing: string[];
+	/**
+	 * Shared asset library only. Qualified names (`collection/name`) → asset id, and
+	 * `collection/charId` → character id. Plain names stay in `assets`/`characters`,
+	 * already resolved first-wins by the story's collection order.
+	 */
+	qualified?: {assets?: Record<string, string>; characters?: Record<string, string>};
+	/**
+	 * Plain names two or more attached collections hold (not shadowed by the story's own)
+	 * → those collections' names, in resolution order. Lint warns on each use.
+	 */
+	ambiguous?: Record<string, string[]>;
+	/**
+	 * Assets a later collection holds under a name an earlier one already answers to.
+	 * Reachable only by qualified name; never listed, never "unused".
+	 */
+	shadowed?: AssetMetaRow[];
 }

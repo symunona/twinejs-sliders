@@ -207,12 +207,11 @@ export const PassageEditContents: React.FC<
 					}
 				}
 
-				// `list()` hides pose images, which is right: those belong to their character.
-				const asset = (await assetStore.list()).find(
-					meta => meta.name === span.ref
-				);
+				// Resolution order, first wins, `coll/name` too -- the same answer the
+				// preview draws. Pose images belong to their character, not here.
+				const asset = await assetStore.lookup(span.ref);
 
-				if (asset) {
+				if (asset && !asset.ownerCharacter) {
 					dialogsDispatch({
 						component: AssetEditorDialog,
 						// Editing needs the room -- the preview is the point.

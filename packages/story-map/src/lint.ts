@@ -495,6 +495,23 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 			const rows = resolveSceneAssets(entry.scene, catalog, {scenes: lookup});
 			const file = fileOf(entry.passage);
 
+			// Cast refs name characters, which no row carries by name.
+			for (const [id, patch] of Object.entries(entry.scene.entities ?? {})) {
+				const ref = patch?.ref ?? id;
+				const holders = catalog.characters.has(ref)
+					? catalog.ambiguous.get(ref)
+					: undefined;
+
+				if (holders) {
+					findings.push({
+						file,
+						level: 'warn',
+						line: findKeyLine(entry.block.text, id) + entry.block.lineOffset,
+						message: `Ambiguous character '${ref}' — in ${holders.join(', ')}; ${holders[0]}'s wins. Write ${holders[0]}/${ref} to pin it.`
+					});
+				}
+			}
+
 			for (const row of rows) {
 				// An inherited row's problem belongs to the passage that wrote it; that
 				// passage is linted too, so reporting it twice is noise.
@@ -503,6 +520,19 @@ export function lintStory(input: StoryLintInput): LintFinding[] {
 				}
 
 				const line = findKeyLine(entry.block.text, row.key) + entry.block.lineOffset;
+
+				const holders = row.qualified
+					? undefined
+					: catalog.ambiguous.get(row.name);
+
+				if (holders && row.present !== 'unknown') {
+					findings.push({
+						file,
+						level: 'warn',
+						line,
+						message: `Ambiguous asset '${row.name}' (${row.via}) — in ${holders.join(', ')}; ${holders[0]}'s wins. Write ${holders[0]}/${row.name} to pin it.`
+					});
+				}
 
 				if (row.present === 'unknown') {
 					findings.push({

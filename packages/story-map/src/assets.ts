@@ -45,6 +45,8 @@ export interface AssetRow {
 	present: AssetPresence;
 	/** Reached through `from:` rather than written in this scene (spec 12 §4 step 5). */
 	inherited: boolean;
+	/** Set when the scene wrote the qualified `collection/name` form. */
+	qualified?: boolean;
 	/**
 	 * The YAML key a linter should point its line number at — `bg`, the entity id, the fx
 	 * id. Resolution has no text, so it cannot compute a line itself; it can say which key
@@ -63,6 +65,8 @@ export interface AssetCatalog {
 	/** Manifest entries the store has no bytes for. */
 	missing: Set<string>;
 	manifest: Manifest;
+	/** Name → collections holding it, when more than one attached one does. */
+	ambiguous: Map<string, string[]>;
 }
 
 /**
@@ -144,6 +148,32 @@ export async function catalogFromManifest(
 		}
 	}
 
+	for (const asset of manifest.shadowed ?? []) {
+		if (!byId.has(asset.id)) {
+			byId.set(asset.id, asset);
+		}
+	}
+
+	// Qualified names (`tavern-set/night`) reach the same rows. A plain name wins over a
+	// qualified reading (asset names may contain `/`), so these never overwrite.
+	for (const [qualified, id] of Object.entries(manifest.qualified?.assets ?? {})) {
+		const row = byId.get(id);
+
+		if (row && !byName.has(qualified)) {
+			byName.set(qualified, row);
+		}
+	}
+
+	for (const [qualified, id] of Object.entries(
+		manifest.qualified?.characters ?? {}
+	)) {
+		const character = characters.get(id);
+
+		if (character && !characters.has(qualified)) {
+			characters.set(qualified, character);
+		}
+	}
+
 	if (assetPath) {
 		for (const asset of manifest.assets ?? []) {
 			if (missing.has(asset.id)) {
@@ -158,7 +188,9 @@ export async function catalogFromManifest(
 		}
 	}
 
-	return {byId, byName, characters, manifest, missing, paths};
+	const ambiguous = new Map(Object.entries(manifest.ambiguous ?? {}));
+
+	return {ambiguous, byId, byName, characters, manifest, missing, paths};
 }
 
 function presenceOf(catalog: AssetCatalog, id: string): AssetPresence {
@@ -204,7 +236,9 @@ function rowFor(
 		name: meta.name,
 		path: catalog.paths.get(meta.id),
 		present: presenceOf(catalog, meta.id),
-		via
+		via,
+		// Reached as `collection/name`: pinned, so never ambiguous.
+		...(!catalog.byId.has(ref) && ref !== meta.name ? {qualified: true} : {})
 	};
 }
 

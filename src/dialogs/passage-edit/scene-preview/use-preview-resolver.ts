@@ -9,9 +9,11 @@ import {
 /**
  * Bridges the gap between how authors write scenes and how the store keys things.
  *
- * Scene YAML refers to assets by NAME (`bg: tavern-night`), because ids like `a_8f21` are
- * unwritable. The store keys by id. This resolver accepts either: it tries the id first,
- * then falls back to a name lookup.
+ * Scene YAML refers to assets by NAME (`bg: tavern-night`, or qualified
+ * `tavern-set/night`), because uuids are unwritable. The store keys by id. This resolver
+ * accepts either: `store.meta` takes the id, and the library facade also resolves names
+ * there (resolution order, first wins, qualified form); the name index is the fallback
+ * for a plain `AssetStore`.
  */
 export function createNamedResolver(store: AssetStore): AssetResolver & {
 	invalidate: () => void;
@@ -26,7 +28,16 @@ export function createNamedResolver(store: AssetStore): AssetResolver & {
 
 		if (!loading) {
 			loading = store.list({includePoseImages: true}).then(all => {
-				byName = new Map(all.map(asset => [asset.name, asset]));
+				// First wins, like the library's resolution order (and the story-map
+				// catalog). The library's view already hides shadowed names.
+				byName = new Map();
+
+				for (const asset of all) {
+					if (!byName.has(asset.name)) {
+						byName.set(asset.name, asset);
+					}
+				}
+
 				loading = undefined;
 				return byName;
 			});
