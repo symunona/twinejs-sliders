@@ -785,11 +785,11 @@ export async function uploadAssets(
 ): Promise<void> {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
-	await expect(page.getByRole('dialog', {name: 'Assets'})).toBeVisible({
+	await expect(page.getByRole('dialog', {name: 'Library'})).toBeVisible({
 		timeout: 20000
 	});
 	await page
-		.getByRole('dialog', {name: 'Assets'})
+		.getByRole('dialog', {name: 'Library'})
 		.locator('input[type="file"]')
 		.setInputFiles(files);
 }
@@ -798,7 +798,7 @@ export async function openAssetManager(page: Page): Promise<Locator> {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
 
-	const dialog = page.getByRole('dialog', {name: 'Assets'});
+	const dialog = page.getByRole('dialog', {name: 'Library'});
 
 	await expect(dialog).toBeVisible({timeout: 20000});
 	return dialog;

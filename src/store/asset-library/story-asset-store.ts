@@ -551,11 +551,18 @@ export class LibraryAssetStore implements AssetStore {
 
 		ids.delete(this.scope);
 
-		return [...ids].sort().map(storyId => ({
-			by: engine.binding(storyId)?.by || undefined,
-			storyId,
-			storyName: stories.name(storyId)
-		}));
+		return [...ids].sort().map(storyId => {
+			const binding = engine.binding(storyId);
+
+			return {
+				by: binding?.by || undefined,
+				storyId,
+				// Not on this device: its own collection carries the story's name.
+				storyName:
+					stories.name(storyId) ??
+					(binding && engine.get(binding.own, 'collection')?.name)
+			};
+		});
 	}
 
 	private info(

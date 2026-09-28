@@ -321,7 +321,7 @@ export const AssetGeneratorDialog: React.FC<
 		const {SlidersAssetsDialog} = await import('../sliders-assets');
 
 		requestAssetFocus(ref);
-		dispatch({type: 'addDialog', component: SlidersAssetsDialog});
+		dispatch({type: 'addDialog', component: SlidersAssetsDialog, maximized: true});
 	}
 
 	async function handleDelete(generation: Generation) {

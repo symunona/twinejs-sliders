@@ -18,6 +18,16 @@ interface Toast {
 
 export const TOAST_MS = 10000;
 
+/** Conflict paths as a person reads them: `blob` is the pixels, the rest rides along. */
+export function conflictFields(fields: string[]): string {
+	const hidden = new Set(['bytes', 'mime', 'w', 'h', 'pixelHash', 'phash']);
+	const words = fields
+		.filter(field => !hidden.has(field))
+		.map(field => (field === 'blob' ? 'pixels' : field.replace(/^recipe\./, '')));
+
+	return Array.from(new Set(words)).join(', ');
+}
+
 function nameOf(engine: LibraryEngine, id: string): string {
 	const record = engine.get(id);
 
@@ -65,7 +75,7 @@ export const LibraryToasts: React.FC = () => {
 		} else if (notice.kind === 'conflict') {
 			push(
 				t('dialogs.library.toast.conflict', {
-					fields: notice.fields.join(', '),
+					fields: conflictFields(notice.fields),
 					name: nameOf(engine, notice.id)
 				})
 			);

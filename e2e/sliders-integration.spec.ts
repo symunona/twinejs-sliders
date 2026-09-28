@@ -53,7 +53,7 @@ async function openAssetManager(page: Page) {
 	await expect(assetDialog(page)).toBeVisible();
 }
 
-const assetDialog = (page: Page) => page.getByRole('dialog', {name: 'Assets'});
+const assetDialog = (page: Page) => page.getByRole('dialog', {name: 'Library'});
 
 /** Character dialogs stack on top of the Assets dialog, so scope tab clicks to it. */
 async function assetTab(page: Page, name: string) {
@@ -126,7 +126,7 @@ test.describe('Sliders end to end', () => {
 
 		// --- assets -------------------------------------------------------
 		await openAssetManager(page);
-		await uploadInto(page, 'Assets', [
+		await uploadInto(page, 'Library', [
 			fixture('tavern-night.png'),
 			fixture('street-dusk.png')
 		]);
@@ -135,7 +135,7 @@ test.describe('Sliders end to end', () => {
 		).toBeVisible({timeout: 20000});
 
 		await assetTab(page, 'Objects');
-		await uploadInto(page, 'Assets', [
+		await uploadInto(page, 'Library', [
 			fixture('table.png'),
 			fixture('candle-flicker.gif')
 		]);

@@ -1228,7 +1228,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
-		dispatch({component: SlidersAssetsDialog, type: 'addDialog'});
+		dispatch({component: SlidersAssetsDialog, maximized: true, type: 'addDialog'});
 		requestAssetFocus(ref);
 	}
 

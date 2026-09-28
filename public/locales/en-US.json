@@ -410,6 +410,7 @@
 			"changedElsewhereKeep": "Keep Editing",
 			"sharedTitle": "Shared Art",
 			"sharedPrompt": "“{{name}}” is shared art ({{collection}}), used in {{count}} other stories: {{stories}}. Change it for everyone, or make a copy for this story only?",
+			"sharedPromptForeign": "“{{name}}” lives in {{collection}}, a collection other stories can attach. Change it there for everyone, or make a copy for this story only?",
 			"sharedLocked": "The collection is locked, so it can only be copied.",
 			"sharedUpdateAll": "Update All",
 			"sharedFork": "Fork for This Story",
@@ -819,7 +820,7 @@
 			"usages": {
 				"title": "Usages of {{name}}",
 				"none": "No story uses it.",
-				"remote": "Story {{id}}… (not on this device)",
+				"remote": "{{id}} (not on this device)",
 				"thisStory": "(this story)",
 				"by": "by {{by}}"
 			},

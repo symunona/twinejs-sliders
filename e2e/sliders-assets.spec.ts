@@ -34,7 +34,7 @@ async function clearAssetLibrary(page: import('@playwright/test').Page) {
 async function openAssetManager(page: import('@playwright/test').Page) {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
-	await expect(page.getByRole('dialog', {name: 'Assets'})).toBeVisible();
+	await expect(page.getByRole('dialog', {name: 'Library'})).toBeVisible();
 }
 
 /**
@@ -86,7 +86,7 @@ test.describe('Sliders asset manager', () => {
 		await openAssetManager(page);
 		await shot(page, '01-assets-empty');
 
-		await uploadInto(page, 'Assets', [fixture('tavern-night.png')]);
+		await uploadInto(page, 'Library', [fixture('tavern-night.png')]);
 
 		const tile = page.locator('.sliders-tile', {hasText: 'tavern-night'});
 
@@ -107,7 +107,7 @@ test.describe('Sliders asset manager', () => {
 		await createStory(page, 'Animated asset test');
 		await openAssetManager(page);
 		await page.getByRole('tab', {name: 'Objects'}).click();
-		await uploadInto(page, 'Assets', [fixture('candle-flicker.gif')]);
+		await uploadInto(page, 'Library', [fixture('candle-flicker.gif')]);
 
 		const tile = page.locator('.sliders-tile', {hasText: 'candle-flicker'});
 
@@ -122,18 +122,21 @@ test.describe('Sliders asset manager', () => {
 		await shot(page, '03-assets-animated-gif');
 	});
 
-	test('warns instead of silently duplicating a re-uploaded file', async ({page}) => {
+	test('asks instead of silently duplicating a re-uploaded file', async ({page}) => {
 		await createStory(page, 'Duplicate asset test');
 		await openAssetManager(page);
-		await uploadInto(page, 'Assets', [fixture('street-dusk.png')]);
+		await uploadInto(page, 'Library', [fixture('street-dusk.png')]);
 		await expect(
 			page.locator('.sliders-tile', {hasText: 'street-dusk'})
 		).toBeVisible({timeout: 15000});
 
-		await uploadInto(page, 'Assets', [fixture('street-dusk.png')]);
-		await expect(page.locator('.sliders-upload-report')).toContainText(
-			'already uploaded'
-		);
+		await uploadInto(page, 'Library', [fixture('street-dusk.png')]);
+
+		// The Library's dupe dialog: Cancel adds nothing.
+		const ask = page.getByRole('alertdialog', {name: 'Already in the Library'});
+
+		await expect(ask).toContainText('same file');
+		await ask.getByRole('button', {name: 'Cancel'}).click();
 		await expect(page.locator('.sliders-tile', {hasText: 'street-dusk'})).toHaveCount(
 			1
 		);
@@ -146,7 +149,7 @@ test.describe('Sliders asset manager', () => {
 		await page.getByRole('tab', {name: 'FX'}).click();
 
 		const dropZone = page
-			.getByRole('dialog', {name: 'Assets'})
+			.getByRole('dialog', {name: 'Library'})
 			.locator('.upload-drop-zone:visible');
 		const base64 = readFileSync(fixture('table.png')).toString('base64');
 		const dataTransfer = await page.evaluateHandle(async encoded => {
@@ -173,7 +176,7 @@ test.describe('Sliders asset manager', () => {
 		await createStory(page, 'Object fragment test');
 		await openAssetManager(page);
 		await page.getByRole('tab', {name: 'Objects'}).click();
-		await uploadInto(page, 'Assets', [fixture('table.png')]);
+		await uploadInto(page, 'Library', [fixture('table.png')]);
 
 		const tile = page.locator('.sliders-tile', {hasText: 'table'});
 
@@ -289,7 +292,7 @@ test.describe('Sliders character editor', () => {
 			page.getByRole('dialog', {name: 'Characters'}).locator('.pose-list-item')
 		).toHaveCount(1, {timeout: 20000});
 
-		const assets = page.getByRole('dialog', {name: 'Assets'});
+		const assets = page.getByRole('dialog', {name: 'Library'});
 		const tile = assets.locator('.sliders-tile', {hasText: 'Joren'});
 
 		await expect(tile).toBeVisible({timeout: 15000});

@@ -13,7 +13,7 @@ const fixture = (name: string) => path.join(FIXTURES, name);
 
 test.describe.configure({mode: 'serial'});
 
-const assetDialog = (page: Page) => page.getByRole('dialog', {name: 'Assets'});
+const assetDialog = (page: Page) => page.getByRole('dialog', {name: 'Library'});
 const characterDialog = (page: Page) =>
 	page.getByRole('dialog', {name: 'Characters'}).last();
 

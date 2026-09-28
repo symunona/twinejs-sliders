@@ -27,10 +27,11 @@ export const App: React.FC = () => (
 						<ServerSyncProvider>
 							{/* The shared asset library's engine: one per session. */}
 							<LibraryProvider>
-								<LibraryToasts />
 								<HotkeysProvider>
 									<React.Suspense fallback={<LoadingCurtain />}>
 										<Routes />
+										{/* Inside Suspense: useTranslation suspends until the locale loads. */}
+										<LibraryToasts />
 									</React.Suspense>
 								</HotkeysProvider>
 							</LibraryProvider>

@@ -7,6 +7,9 @@
 	display: flex;
 	flex: 1 1 0;
 	min-height: 0;
+	/* Nothing in here may scroll the card itself: a focused tile's scrollIntoView
+	   would shift the whole dialog, rail included. Rail and main scroll on their own. */
+	overflow: hidden;
 }
 
 .library-rail {
@@ -101,6 +104,16 @@
 	flex-direction: column;
 	min-height: 0;
 	min-width: 0;
+	/* Cramped (a short, unmaximized dialog): the whole column scrolls. */
+	overflow-y: auto;
+}
+
+.library-main .sliders-tablist {
+	flex-wrap: wrap;
+}
+
+.library-main .upload-drop-zone {
+	min-height: calc(var(--grid-size) * 20);
 }
 
 .library-header {
@@ -331,7 +344,21 @@ button.library-badge {
 
 .library-conflict-table {
 	border-collapse: collapse;
+	table-layout: fixed;
 	width: 100%;
+}
+
+.library-conflict-table th:first-child {
+	width: 12%;
+}
+
+.library-conflict-table th:last-child {
+	width: 22%;
+}
+
+.library-conflict-table td {
+	font-size: 90%;
+	overflow-wrap: anywhere;
 }
 
 .library-conflict-table th,

@@ -257,7 +257,12 @@ export const UsagesPanel: React.FC<UsagesPanelProps> = props => {
 		<ul className="library-usages">
 			{stories.map(id => (
 				<li key={id}>
-					{storyName(id) ?? t('dialogs.library.usages.remote', {id: id.slice(0, 8)})}
+					{storyName(id) ??
+						t('dialogs.library.usages.remote', {
+							id:
+								engine.get(engine.binding(id)?.own ?? '', 'collection')?.name ??
+								id.slice(0, 8)
+						})}
 					{id === storyId && ` ${t('dialogs.library.usages.thisStory')}`}
 					{engine.binding(id)?.by && (
 						<span className="library-usages-by">

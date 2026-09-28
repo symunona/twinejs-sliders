@@ -58,12 +58,17 @@ export const SharedPrompt: React.FC<SharedPromptProps> = props => {
 		>
 			<p>
 				{message ??
-					t('dialogs.assetEditor.sharedPrompt', {
-						collection: info.collection.name,
-						count: info.stories.length,
-						name: info.name,
-						stories: sharedStoriesText(info)
-					})}
+					t(
+						info.stories.length
+							? 'dialogs.assetEditor.sharedPrompt'
+							: 'dialogs.assetEditor.sharedPromptForeign',
+						{
+							collection: info.collection.name,
+							count: info.stories.length,
+							name: info.name,
+							stories: sharedStoriesText(info)
+						}
+					)}
 				{info.collection.locked && ` ${t('dialogs.assetEditor.sharedLocked')}`}
 			</p>
 			<ButtonBar>

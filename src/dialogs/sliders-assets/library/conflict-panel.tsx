@@ -4,6 +4,7 @@ import {
 	ConflictInfo,
 	ENVELOPE_FIELDS,
 	FieldPick,
+	getPath,
 	LibraryEngine,
 	LibRecord,
 	deepEqual
@@ -95,8 +96,21 @@ export const ConflictCard: React.FC<ConflictCardProps> = props => {
 		(conflict.local as AssetRecord).collection ?? conflict.id
 	);
 	const fieldsKind = conflict.kind === 'fields' && !!theirs;
-	const shown = fieldsKind ? changedFields(conflict) : [];
 	const conflictTop = new Set(conflict.fields.map(field => field.split('.')[0]));
+	// Conflicting paths (nested ones like `recipe.edits` on their own row), then fields
+	// that changed on one side only: auto-merged.
+	const rows: {path: string; conflicting: boolean}[] = fieldsKind
+		? [
+				...conflict.fields
+					.filter(
+						path => path !== 'deleted' && !HIDDEN_FIELDS.has(path.split('.')[0])
+					)
+					.map(path => ({conflicting: true, path})),
+				...changedFields(conflict)
+					.filter(field => !conflictTop.has(field))
+					.map(path => ({conflicting: false, path}))
+		  ]
+		: [];
 
 	function resolve(choice: ConflictChoice) {
 		setError(undefined);
@@ -196,7 +210,7 @@ export const ConflictCard: React.FC<ConflictCardProps> = props => {
 						<tbody>
 							{isAsset && (
 								<tr className="library-conflict-pictures">
-									<th>{t('dialogs.library.conflict.pixels')}</th>
+									<th />
 									{[conflict.base, conflict.local, theirs].map(
 										(record, index) => (
 											<td key={index}>
@@ -211,72 +225,65 @@ export const ConflictCard: React.FC<ConflictCardProps> = props => {
 									<td />
 								</tr>
 							)}
-							{shown.map(field => {
-								const conflicting = conflict.fields.filter(
-									path => path === field || path.startsWith(`${field}.`)
-								);
+							{rows.map(({conflicting, path}) => (
+								<tr
+									className={conflicting ? 'conflicting' : 'auto-merged'}
+									data-field={path}
+									key={path}
+								>
+									<th>{path === 'blob' ? t('dialogs.library.conflict.pixels') : path}</th>
+									{[conflict.base, conflict.local, theirs].map((record, index) => {
+										const value = record ? getPath(record, path) : undefined;
+										const text = path === 'blob' ? show(value).slice(0, 8) : show(value);
 
-								return (
-									<tr
-										className={
-											conflictTop.has(field) ? 'conflicting' : 'auto-merged'
-										}
-										data-field={field}
-										key={field}
-									>
-										<th>{field}</th>
-										<td>{show(conflict.base?.[field])}</td>
-										<td>{show(conflict.local[field])}</td>
-										<td>{show(theirs![field])}</td>
-										<td>
-											{conflicting.length === 0 ? (
-												<span className="library-conflict-auto">
-													{t('dialogs.library.conflict.autoMerged')}
-												</span>
-											) : (
-												conflicting.map(path => (
-													<span className="library-conflict-pick" key={path}>
-														{path !== field && <em>{path}</em>}
-														{(['mine', 'theirs'] as FieldPick[]).map(pick => (
-															<label key={pick}>
-																<input
-																	checked={!keepBoth && picks[path] === pick}
-																	disabled={keepBoth && path === 'blob'}
-																	name={`${conflict.id}-${path}`}
-																	onChange={() => {
-																		if (path === 'blob') {
-																			setKeepBoth(false);
-																		}
+										return (
+											<td key={index} title={show(value)}>
+												{text.length > 80 ? `${text.slice(0, 80)}…` : text}
+											</td>
+										);
+									})}
+									<td>
+										{!conflicting ? (
+											<span className="library-conflict-auto">
+												{t('dialogs.library.conflict.autoMerged')}
+											</span>
+										) : (
+											<span className="library-conflict-pick">
+												{(['mine', 'theirs'] as FieldPick[]).map(pick => (
+													<label key={pick}>
+														<input
+															checked={!keepBoth && picks[path] === pick}
+															name={`${conflict.id}-${path}`}
+															onChange={() => {
+																if (path === 'blob') {
+																	setKeepBoth(false);
+																}
 
-																		setPicks({...picks, [path]: pick});
-																	}}
-																	type="radio"
-																/>
-																{pick === 'mine'
-																	? t('dialogs.library.conflict.mine')
-																	: who}
-															</label>
-														))}
-														{path === 'blob' && picturesDiffer && (
-															<label>
-																<input
-																	checked={keepBoth}
-																	name={`${conflict.id}-${path}`}
-																	onChange={() => setKeepBoth(true)}
-																	type="radio"
-																/>
-																{t('dialogs.library.conflict.keepBoth', {
-																	name: `${recordName(conflict.local)}-2`
-																})}
-															</label>
-														)}
-													</span>
-												))
-											)}
-										</td>
-									</tr>
-								);
-							})}
+																setPicks({...picks, [path]: pick});
+															}}
+															type="radio"
+														/>
+														{pick === 'mine' ? t('dialogs.library.conflict.mine') : who}
+													</label>
+												))}
+												{path === 'blob' && picturesDiffer && (
+													<label>
+														<input
+															checked={keepBoth}
+															name={`${conflict.id}-${path}`}
+															onChange={() => setKeepBoth(true)}
+															type="radio"
+														/>
+														{t('dialogs.library.conflict.keepBoth', {
+															name: `${recordName(conflict.local)}-2`
+														})}
+													</label>
+												)}
+											</span>
+										)}
+									</td>
+								</tr>
+							))}
 							{conflict.fields.includes('deleted') && (
 								<tr className="conflicting" data-field="deleted">
 									<th>{t('dialogs.library.conflict.deleted')}</th>

@@ -14,7 +14,13 @@ export function useOpenSlidersAssets() {
 	const {dispatch} = useDialogsContext();
 
 	return React.useCallback(
-		() => dispatch({type: 'addDialog', component: SlidersAssetsDialog}),
+		// Maximized: the Library has a collections rail beside the grid.
+		() =>
+			dispatch({
+				type: 'addDialog',
+				component: SlidersAssetsDialog,
+				maximized: true
+			}),
 		[dispatch]
 	);
 }

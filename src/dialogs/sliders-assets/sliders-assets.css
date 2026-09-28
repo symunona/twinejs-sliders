@@ -39,7 +39,11 @@
 }
 
 .sliders-tab {
+	background: none;
+	border: none;
 	border-bottom: 3px solid transparent;
+	color: inherit;
+	font: inherit;
 	cursor: pointer;
 	padding: var(--control-inner-padding) var(--grid-size);
 }

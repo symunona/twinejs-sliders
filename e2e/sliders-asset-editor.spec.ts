@@ -27,7 +27,7 @@ async function clearAssetLibrary(page: Page) {
 async function openAssetManager(page: Page) {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
-	await expect(page.getByRole('dialog', {name: 'Assets'})).toBeVisible();
+	await expect(page.getByRole('dialog', {name: 'Library'})).toBeVisible();
 }
 
 async function uploadInto(page: Page, dialogName: string, files: string[]) {
@@ -40,7 +40,7 @@ async function uploadInto(page: Page, dialogName: string, files: string[]) {
 /** Uploads one background and opens the editor on it. */
 async function openEditor(page: Page, file: string, name: string) {
 	await openAssetManager(page);
-	await uploadInto(page, 'Assets', [fixture(file)]);
+	await uploadInto(page, 'Library', [fixture(file)]);
 
 	const tile = page.locator('.sliders-tile', {hasText: name});
 
@@ -123,7 +123,7 @@ test.describe('Sliders asset editor', () => {
 		await createStory(page, 'Animated edit test');
 		await openAssetManager(page);
 		await page.getByRole('tab', {name: 'Objects'}).click();
-		await uploadInto(page, 'Assets', [fixture('candle-flicker.gif')]);
+		await uploadInto(page, 'Library', [fixture('candle-flicker.gif')]);
 
 		const tile = page.locator('.sliders-tile', {hasText: 'candle-flicker'});
 

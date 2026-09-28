@@ -69,7 +69,7 @@ async function clearAssetLibrary(page: Page) {
 async function openAssetManager(page: Page) {
 	await page.getByRole('tab', {name: 'Story'}).click();
 	await page.getByRole('button', {name: 'Assets', exact: true}).click();
-	await expect(page.getByRole('dialog', {name: 'Assets'})).toBeVisible();
+	await expect(page.getByRole('dialog', {name: 'Library'})).toBeVisible();
 }
 
 /** The file input is visually hidden, so set files on it directly. */
@@ -153,7 +153,7 @@ test.describe('Sliders bundle export and import', () => {
 		// street-dusk is the control: it is in the library and the story never names it,
 		// so it must NOT be in the zip. A 40 MB library must not follow a one-scene story.
 		await openAssetManager(page);
-		await uploadInto(page, 'Assets', [
+		await uploadInto(page, 'Library', [
 			fixture('tavern-night.png'),
 			fixture('street-dusk.png')
 		]);
@@ -280,7 +280,7 @@ test.describe('Sliders bundle export and import', () => {
 
 		await createStory(page, 'Clash Local Library');
 		await openAssetManager(page);
-		await uploadInto(page, 'Assets', [impostor]);
+		await uploadInto(page, 'Library', [impostor]);
 		await expect(
 			page.locator('.sliders-tile', {hasText: 'tavern-night'})
 		).toBeVisible({timeout: 25000});
