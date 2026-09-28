@@ -28,10 +28,12 @@ import {
 	CharacterRecord,
 	CollectionKind,
 	CollectionRecord,
+	ENVELOPE_FIELDS,
 	LibRecord,
 	RECORD_TYPES,
 	RecordOf,
 	RecordType,
+	RevEntry,
 	WriteResult,
 	namespaceName,
 	parseRecordKey,
@@ -78,6 +80,8 @@ export interface StatusEvent {
 	pending: number;
 	conflicts: number;
 	offline: boolean;
+	/** Blobs being fetched right now. Left out when none. */
+	downloading?: number;
 }
 
 export type Notice =
@@ -189,6 +193,85 @@ export interface ConflictInfo {
 	base?: LibRecord;
 	local: LibRecord;
 	current: LibRecord | null;
+}
+
+export type ActivityAction =
+	| 'created'
+	| 'renamed'
+	| 'moved'
+	| 'repainted'
+	| 'deleted'
+	| 'restored'
+	| 'edited';
+
+/** One rev of one record, with the rev before it: what the Activity feed lists. */
+export interface ActivityEntry {
+	id: string;
+	type: RecordType;
+	rev: number;
+	by: string;
+	at: string;
+	action: ActivityAction;
+	/** Changed top-level fields (edited), or `old → new` (renamed). */
+	detail?: string;
+	record: LibRecord;
+	previous?: LibRecord;
+}
+
+/** Fields that ARE the picture. Versions → Restore copies these and nothing else. */
+const PICTURE_FIELDS = [
+	'blob',
+	'sidecars',
+	'mime',
+	'bytes',
+	'w',
+	'h',
+	'pixelHash',
+	'phash',
+	'recipe',
+	'animated',
+	'duration'
+] as const;
+
+/** What one rev did, compared with the rev before it. */
+export function describeChange(
+	previous: LibRecord | undefined,
+	next: LibRecord
+): {action: ActivityAction; detail?: string} {
+	if (!previous) {
+		return {action: 'created'};
+	}
+
+	if (next.deleted && !previous.deleted) {
+		return {action: 'deleted'};
+	}
+
+	if (!next.deleted && previous.deleted) {
+		return {action: 'restored'};
+	}
+
+	const oldName = namespaceName(previous) ?? (previous as {name?: string}).name;
+	const newName = namespaceName(next) ?? (next as {name?: string}).name;
+
+	if (oldName !== newName) {
+		return {action: 'renamed', detail: `${oldName} → ${newName}`};
+	}
+
+	if (previous.collection !== next.collection) {
+		return {action: 'moved'};
+	}
+
+	if (previous.blob !== next.blob) {
+		return {action: 'repainted'};
+	}
+
+	const fields = Object.keys({...previous, ...next}).filter(
+		field =>
+			!(ENVELOPE_FIELDS as readonly string[]).includes(field) &&
+			!deepEqual(previous[field], next[field])
+	);
+
+	return {action: 'edited', detail: fields.join(', ')};
 }
 
 export interface LibraryEngineOptions {
@@ -422,7 +505,22 @@ export class LibraryEngine {
 			}
 		}
 
-		return {pending: this.outbox.length, conflicts, offline: this.offline};
+		const status: StatusEvent = {
+			pending: this.outbox.length,
+			conflicts,
+			offline: this.offline
+		};
+
+		if (this.blobFetches.size) {
+			status.downloading = this.blobFetches.size;
+		}
+
+		return status;
+	}
+
+	/** Shas being fetched right now: tiles show a spinner, the chip shows `↓`. */
+	downloading(): string[] {
+		return [...this.blobFetches.keys()];
 	}
 
 	private emitStatus() {
@@ -2069,6 +2167,143 @@ export class LibraryEngine {
 	}
 
 	// =========================================================================
+	// History (Versions…, Activity)
+	// =========================================================================
+
+	/** Server revs of one record, newest first. Empty for one the server never saw. */
+	async revs(id: string, type?: RecordType): Promise<RevEntry[]> {
+		const record = this.stored(id, type);
+
+		if (!record?.base) {
+			return [];
+		}
+
+		return this.transport.revs(record.type, record.id);
+	}
+
+	/**
+	 * The last `limit` revs of a collection and everything that lives (or lived) in it,
+	 * newest first. The change feed is compacted to one item per record, so this reads
+	 * each record's `/revs` instead: demo scale, one request per record.
+	 */
+	async activity(collection: string, limit = 50): Promise<ActivityEntry[]> {
+		const targets = [...this.records.values()].filter(record => {
+			if (!record.base) {
+				return false;
+			}
+
+			if (record.type === 'collection') {
+				return record.id === collection;
+			}
+
+			return (
+				(record.type === 'asset' || record.type === 'character') &&
+				((record.local as AssetRecord).collection === collection ||
+					(record.base as AssetRecord).collection === collection)
+			);
+		});
+		const out: ActivityEntry[] = [];
+
+		for (let index = 0; index < targets.length; index += 6) {
+			const lists = await Promise.all(
+				targets
+					.slice(index, index + 6)
+					.map(target =>
+						this.transport
+							.revs(target.type, target.id)
+							.catch(() => [] as RevEntry[])
+					)
+			);
+
+			for (const revs of lists) {
+				revs.forEach((entry, at) => {
+					const previous = revs[at + 1]?.record;
+					const record = entry.record;
+
+					if (
+						record.type !== 'collection' &&
+						record.collection !== collection &&
+						previous?.collection !== collection
+					) {
+						return;
+					}
+
+					out.push({
+						...describeChange(previous, record),
+						at: entry.at,
+						by: entry.by,
+						id: record.id,
+						previous,
+						record,
+						rev: entry.rev,
+						type: record.type
+					});
+				});
+			}
+		}
+
+		return out
+			.sort((a, b) => b.at.localeCompare(a.at) || b.rev - a.rev)
+			.slice(0, limit);
+	}
+
+	/**
+	 * A new rev built from an old one. `picture` (Versions → Restore) takes the bytes and
+	 * recipe only; `all` (Activity → Revert) takes every content field, name and
+	 * tombstone included. Blobs the old rev names are fetched first: blob before record.
+	 */
+	async restoreRev(
+		target: LibRecord,
+		scope: 'picture' | 'all' = 'picture'
+	): Promise<LibRecord> {
+		for (const sha of recordBlobs(target)) {
+			if (!(await this.blobs.has(sha))) {
+				await this.blobBytes(sha);
+			}
+		}
+
+		const latest = this.require(target.id, target.type).local;
+		let next: Record<string, unknown>;
+
+		if (scope === 'picture') {
+			next = {...latest};
+
+			for (const field of PICTURE_FIELDS) {
+				if (target[field] === undefined) {
+					delete next[field];
+				} else {
+					next[field] = clone(target[field]);
+				}
+			}
+		} else {
+			next = {
+				...clone(target),
+				at: latest.at,
+				by: latest.by,
+				id: latest.id,
+				rev: latest.rev,
+				type: latest.type
+			};
+		}
+
+		const record = next as LibRecord;
+
+		if (
+			!record.deleted &&
+			(record.type === 'asset' || record.type === 'character')
+		) {
+			this.assertLiveCollection(record.collection);
+			this.assertNameFree(
+				record.collection,
+				namespaceName(record)!,
+				recordKey(record.type, record.id)
+			);
+		}
+
+		return this.stage(record);
+	}
+
+	// =========================================================================
 	// Blobs
 	// =========================================================================
 
@@ -2093,9 +2328,13 @@ export class LibraryEngine {
 
 				await this.blobs.put(sha, bytes, mime);
 				return {bytes, mime};
-			})().finally(() => this.blobFetches.delete(sha));
+			})().finally(() => {
+				this.blobFetches.delete(sha);
+				this.emitStatus();
+			});
 
 			this.blobFetches.set(sha, fetching);
+			this.emitStatus();
 		}
 
 		return this.track(fetching);
