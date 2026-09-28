@@ -26,13 +26,13 @@ describe('sliders toolbar buttons', () => {
 		await renderComponent(<SlidersAssetsButton />);
 		fireEvent.click(screen.getByText('routes.storyEdit.toolbar.slidersAssets'));
 		await act(async () => Promise.resolve());
-		expect(screen.getByText('dialogs.slidersAssets.title')).toBeInTheDocument();
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	it('opens the asset manager from its shortcut', async () => {
 		await renderComponent(<SlidersAssetsButton />);
 		await pressKey('a');
-		expect(screen.getByText('dialogs.slidersAssets.title')).toBeInTheDocument();
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	it('opens the character editor from its shortcut', async () => {
@@ -53,7 +53,7 @@ describe('sliders toolbar buttons', () => {
 		fireEvent.keyDown(document.querySelector('input[type="text"]')!, {key: 'a'});
 		await act(async () => Promise.resolve());
 		expect(
-			screen.queryByText('dialogs.slidersAssets.title')
+			screen.queryByText('dialogs.library.title')
 		).not.toBeInTheDocument();
 	});
 });

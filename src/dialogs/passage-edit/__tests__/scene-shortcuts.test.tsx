@@ -126,7 +126,7 @@ describe('passage editor scene shortcuts', () => {
 	it('opens the asset manager with alt+a while the cursor is in the scene text', async () => {
 		await renderComponent(stateWith());
 		await pressInPassageText('a');
-		expect(screen.getByText('dialogs.slidersAssets.title')).toBeInTheDocument();
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	it('opens the scene editor with alt+p while the cursor is in the scene text', async () => {
@@ -143,7 +143,7 @@ describe('passage editor scene shortcuts', () => {
 			screen.queryByText('routes.storyEdit.toolbar.slidersAssets')
 		).not.toBeInTheDocument();
 		await pressInPassageText('a');
-		expect(screen.getByText('dialogs.slidersAssets.title')).toBeInTheDocument();
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	it('opens the scene editor with the editor toolbars hidden', async () => {
@@ -160,7 +160,7 @@ describe('passage editor scene shortcuts', () => {
 	it('opens the asset manager without CodeMirror', async () => {
 		await renderComponent(stateWith({useCodeMirror: false}));
 		await pressInPassageText('a');
-		expect(screen.getByText('dialogs.slidersAssets.title')).toBeInTheDocument();
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	// Two registrations of one ID both answer the key, and which one runs is registration

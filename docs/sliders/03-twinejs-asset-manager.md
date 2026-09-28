@@ -32,17 +32,16 @@ interface AssetStore {
 **Rule: the asset library is a separate store from story text.** Story text goes through
 undo, archive, and import/export. You do not want 40 MB of sprites riding along.
 
-**Rule: one library per story.** The scope is the story id — an OPFS subdirectory, an
-IndexedDB key prefix, an Electron story folder. Art uploaded while writing one story is
-invisible from another, so `bg: forest` in two stories is two pictures. Reuse is deliberate:
-the asset manager's **Import…** tab reads another story's library and copies one asset (or
-one character, poses and all) at a time, through the same rules the bundle importer uses.
+**Shared library, not one per story** (plans `plans/asset-library-1..2`). Records sync one
+by one, blobs by sha256. Each story = own collection (`kind: story`) + attached
+collections, in order. Reuse = attach, not copy. Old Import… tab is gone. Bundle import
+unchanged.
 
-The unscoped library that predates this is scope `''`. It is never written to again. On
-first load after the upgrade, each story is given the assets its own scenes reference —
-resolved exactly as the bundle exporter resolves them, ids kept so no scene needs rewriting
-(`src/store/migrate-legacy-assets.ts`). Whatever no story named stays put and shows up in
-the Import… tab as a source.
+| Piece | Where |
+|---|---|
+| engine (records, outbox, merge, blobs) | `packages/asset-library` |
+| per-story facade (`AssetStore` view) | `src/store/asset-library/story-asset-store.ts` |
+| Library dialog | `src/dialogs/sliders-assets/sliders-assets.tsx` + `library/` |
 
 ## Upload → WebP (D14)
 
@@ -73,7 +72,7 @@ real wasm encoder; not v1.
 ## Asset ids
 
 - Identity: short random id, `a_8f21`. Stable when a file is re-uploaded after an edit.
-- Also store a content hash → warn "you already uploaded this" instead of silently duping.
+- Content hash (sha256) + pixel hash + dHash → dupe dialog instead of silently duping.
 - **Passage text only ever contains ids.** Never paths. Keeps scenes portable and diffable,
   and means a story still opens in stock Twine (renders placeholders).
 
@@ -93,25 +92,59 @@ interface AssetMeta {
 }
 ```
 
-## UI (D7/D8)
+## UI — the Library (D7/D8)
+
+Story toolbar **Assets** → Library dialog, opens maximized.
 
 ```
-┌─ Assets ───────────────────────────────────────────────┐
-│ [Backgrounds] [Objects] [Characters] [FX]   🔍 tag ▾   │
-├────────────────────────────────────────────────────────┤
-│  ▢ tavern/night   ▢ street/dusk   ▢ candle   ▢ table   │
-│  ◈ Mira (7 poses)    ◈ Joren (4 poses)                 │
-└────────────────────────────────────────────────────────┘
-        click ◈ Mira → Character Editor (04)
+┌ Library ─────────────────────────────────────────────────────────┐
+│ Mine: Night Market │ tavern-set  shared · 42 items  ☁ synced      │
+│ ATTACHED  ↕ drag   │ Rename  ☐ Locked  Activity  Delete           │
+│ ☑ tavern-set 🔒    │ Add Files  Search  Tags  ⚠ Dupes 2           │
+│ TEAM               │ Backgrounds Objects Characters FX Sounds Gen… │
+│ ☐ ui-icons         │ ▢ night ●4 ⑂ ↑   ▢ day ●1 ⚠   ▢ bar ◌        │
+│ ☐ Story: Old Mill  │                                              │
+│ + New Collection   │                                              │
+│ ⌕ All Assets       │                                              │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+| Part | Does |
+|---|---|
+| Mine | story's own collection. Not detachable. Uploads default here. |
+| Attached | checkbox = detach (warns: names only found there). Drag = resolution order (`engine.bind`). |
+| Team | every other collection, other stories' own ones too. Tick = attach. |
+| + New Collection | shared, name unique team-wide, auto-attached. |
+| All Assets | every asset, attached or not. |
+| Header | rename, description, lock (edits ask to fork), sync chip, Activity (last 50: who/what/when, view, revert), delete (refused while attached). |
+| Filter row | kind (Backgrounds…Sounds) as filter, not tabs. Generate… link. |
+| Tile badges | `●N` stories using it (click → list), `⑂` fork / shadowed, `↑` pending, `⚠` conflict, spinner = downloading, Unused = no scene names it. |
+| Tile menu | Edit, Rename, Move to Collection…, Copy to Mine (fork), Unfork, Show Usages, Versions… (restore = new rev on old blob), Delete. |
+| Shared art | rename / delete / repaint → Update All / Fork / Cancel. Delete: no fork. Locked: no Update All. |
+| Drag | files → shown collection. Tile → rail collection = move (Alt = copy). Tile → stage = scene snippet. |
+| Dupe dialog | exact: use existing (attach) / new name same blob (default) / separate. Pixel or dHash: "Looks like…", default separate. |
+| ⚠ Dupes | groups by tier (same file / same picture / looks alike). Merge: survivor, preview, rewrite scenes in stories on this device, tombstone rest. Other devices' stories listed, not rewritten. |
+| Conflicts | chip → panel: base / mine / theirs thumbs, row per conflicting path, auto-merged rows, keep both → `name-2`. |
+
+| Sync chip | Meaning |
+|---|---|
+| `☁ synced` | nothing pending |
+| `↑N` | N records waiting |
+| `↓` | blobs downloading |
+| `⚠ N conflicts` | click → panel |
+| `⦸ offline` | edits queue locally |
+
+- Story list top bar: same chip, whole library. Conflicts → Library Conflicts dialog.
+- Toasts only: name taken on create (saved `-2`), remote delete of art open in editor, conflict.
+- Scene autocomplete: `coll/name` for names two collections hold (grey); unattached team names last (italic), pick = attach.
+- Story rename → own collection renamed (numbered if taken), unless renamed by hand.
+- Story delete (never synced, or removed from server) → binding tombstoned. Own collection kept.
 
 | Rule | |
 |---|---|
 | Pose images | **hidden** from the flat list. `ownerCharacter` set → filtered out. |
-| Characters | shown as **collections**, one tile each. |
-| Click a character | opens the [character editor](04-twinejs-character-editor.md), tab per character. |
-| Tags | free-form. Filter and group by them. |
-| Drop files | onto a tab → uploads into that kind. |
+| Characters | one tile each. Click → [character editor](04-twinejs-character-editor.md). New characters land in Mine. |
+| Tags | free-form. Filter by them. |
 
 ### Copy-paste is the daily feature
 

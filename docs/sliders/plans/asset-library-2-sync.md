@@ -1,6 +1,6 @@
 # Asset library 2/3 — sync, sync UI, editing collections
 
-Status: plan. Model in `asset-library-1-architecture.md`.
+Status: **shipped** (2026-09-28). Model in `asset-library-1-architecture.md`.
 
 ## Principles
 
@@ -289,3 +289,27 @@ Everything else silent.
 - Offline create same name ×2 → second becomes `-2`.
 - Fork → YAML unchanged, story renders fork, other story renders original.
 - Unfork → original shows again.
+
+## Shipped / deferred
+
+| Shipped | |
+|---|---|
+| Records, blobs, feed, 3-way merge, outbox, socket wake | engine + Go server |
+| Sync chips | per shown collection (Library header) + aggregate (story list top bar) |
+| Tile sync badges | `↑` pending, `⚠` conflict (→ panel), spinner downloading |
+| Conflict panel | base/mine/theirs thumbs, per-path picks, auto-merged rows, keep both; hidden picture fields follow the pixels pick |
+| Shared-art prompt | repaint / rename / delete / tags / versions restore: Update All / Fork / Cancel; locked hides Update All |
+| Activity | last 50 revs of a collection, from per-record `/revs` (feed is compacted); view + revert |
+| Versions | rev list with thumbs; restore = new rev on the old blob |
+| Toasts | name-taken rename, remote delete of open art, conflict created |
+
+| Deferred | Why |
+|---|---|
+| Toast Rename / Replace hers buttons | toast is text only; rename from the tile |
+| Rename Update All rewriting other devices' stories | local stories rewritten, others not |
+| Move: stories that lose access | listed + "Move and attach" binds them; no preview of shadow changes |
+| Reorder: list shadow changes | lint re-runs; no inline list |
+| Activity via one feed read | per-record `/revs`, one request per record: demo scale |
+| Offline retry timer | engine retries on socket/poll/edit only; poll is 5 min with a live socket |
+| `✎name` locks | see plan 1 |
+

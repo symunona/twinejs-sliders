@@ -108,6 +108,7 @@ Editor-only keys (`locked:`) are never read by the player. Local-only story fiel
 ## Known gaps
 
 - No conflict UI in the story editor — only on the story list.
-- Library UI (collections rail, attach, conflicts, sync chips) not built yet: facade +
-  engine hooks only. `twine-cli` still reads the old per-story manifest.
+- Library UI shipped (rail, attach, conflicts, chips). Deferred list: plans
+  `asset-library-1/2`, "Shipped / deferred". `twine-cli` still reads the old per-story
+  manifest.
 - A story living only in a browser library is linted by nothing but the editor.

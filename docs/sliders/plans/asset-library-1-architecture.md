@@ -1,6 +1,6 @@
 # Asset library 1/3 — architecture
 
-Status: plan. Replaces per-story asset libraries. Demo service: no migration, rebuild by hand.
+Status: **shipped** (2026-09-28). Replaces per-story asset libraries. Demo service: no migration, rebuild by hand. UI summary: `../03-twinejs-asset-manager.md`.
 
 Series:
 1. **architecture** — data model, how collections relate to stories, library UI (this file)
@@ -257,3 +257,23 @@ rewrites scene references in affected stories (preview list first), tombstones t
 - Per-user permissions. One team, one token.
 - Migration. Rebuild demo stories' assets by hand.
 - Sound-specific tooling beyond exact dedup.
+
+## Shipped / deferred
+
+| Shipped | |
+|---|---|
+| Model, resolution order, qualified names, ambiguous lint | engine + facade + story-map |
+| Library dialog | rail (Mine / Attached / Team / New / All), grid, filter row, badges, tile menu |
+| Dedup | upload dupe dialog (exact / pixel / dHash), Duplicates view with merge + preview |
+| Autocomplete | `coll/name` for shadowed/ambiguous, team names at the bottom, pick attaches |
+| Story rename / delete | own collection follows rename; delete tombstones binding, keeps collection |
+
+| Deferred | Why |
+|---|---|
+| `✎name` editing-lock badge | presence focus is one per client; taking `lib:<id>` drops the passage lock |
+| Merge rewriting other devices' stories | only local story text is editable; listed in the preview instead |
+| Characters in non-Mine collections | tiles read-only-ish: edit/tags/delete need the collection in the story's view; new characters land in Mine |
+| Rename collection rewrites `old/x` refs | not done; plain refs unaffected |
+| Server `/blobs/similar` | client-side dHash only |
+| `twine-cli` | still reads the old per-story manifest |
+
