@@ -319,3 +319,9 @@
 	font-size: 85%;
 	margin: 0;
 }
+
+/* Rail toggle sits before the title: icon-sized, not the full-width title button. */
+.library-dialog h2 .dialog-card-header .icon-button {
+	flex: 0 0 auto;
+	width: auto;
+}
