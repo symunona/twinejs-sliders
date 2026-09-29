@@ -17,9 +17,8 @@ import {Story} from '../../../../store/stories';
  * appears, and closing it says not to. Opening it from here says that again, the other
  * way round, which is why this clears the dismissal.
  *
- * A hook rather than a handler inside the button, because the passage editor binds the
- * same action to a key whether or not its toolbar--and so this button--is on screen. See
- * `PassageEditContents`.
+ * A hook rather than a handler inside the button, so that anything else that wants to
+ * show the preview toggles it the same way.
  */
 export function useScenePreviewToggle(storyId: string) {
 	const {dialogs, dispatch} = useDialogsContext();
@@ -47,15 +46,9 @@ export function useScenePreviewToggle(storyId: string) {
 
 export interface ScenePreviewButtonProps {
 	/**
-	 * Command this button answers to. The passage editor shows a second copy of it under
-	 * its own ID, because the two want different keys--one is pressed with the map in
-	 * front, the other with the cursor in the scene text.
-	 */
-	commandId?: string;
-	/**
 	 * Scope the shortcut registers in, or null to register nothing--the passage editor's
-	 * copy passes null, because the editor itself owns that registration. The button
-	 * still shows the key: the chip reads the keymap, not the registration.
+	 * copy passes null, because the story map toolbar's copy owns the registration. See
+	 * `SlidersAssetsButton`.
 	 */
 	hotkeyScope?: string | null;
 	label?: string;
@@ -63,25 +56,24 @@ export interface ScenePreviewButtonProps {
 }
 
 export const ScenePreviewButton: React.FC<ScenePreviewButtonProps> = props => {
-	const {
-		commandId = 'scene.togglePreview',
-		hotkeyScope = 'story-map',
-		label,
-		story
-	} = props;
+	const {hotkeyScope = 'global', label, story} = props;
 	const {open, toggle} = useScenePreviewToggle(story.id);
 	const {t} = useTranslation();
 
+	// Global, and allowed in text fields: `alt+p` types nothing, and it has to work from
+	// the map, the passage text, and every dialog alike.
+
 	useCommand({
-		id: commandId,
-		label: t(`hotkeys.commands.${commandId}`),
+		allowInInput: true,
+		id: 'scene.togglePreview',
+		label: t('hotkeys.commands.scene.togglePreview'),
 		run: toggle,
 		scope: hotkeyScope
 	});
 
 	return (
 		<IconButton
-			commandId={commandId}
+			commandId="scene.togglePreview"
 			icon={<IconMovie />}
 			label={label ?? t('routes.storyEdit.toolbar.scenePreview')}
 			onClick={toggle}

@@ -54,6 +54,11 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'app.keyboardShortcuts', scope: 'global'},
 	// Opens the passage finder from anywhere; see `default-keymap.ts`.
 	{id: 'passage.find', scope: 'global'},
+	// The Story toolbar's tools, on one Alt chord each everywhere; see `default-keymap.ts`.
+	{id: 'sliders.assets', scope: 'global'},
+	{id: 'sliders.characters', scope: 'global'},
+	{id: 'sliders.generator', scope: 'global'},
+	{id: 'scene.togglePreview', scope: 'global'},
 
 	{id: 'story.create', scope: 'story-list'},
 	{id: 'story.edit', scope: 'story-list'},
@@ -91,10 +96,6 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'build.publishToFile', scope: 'story-map'},
 	{id: 'build.exportAsTwee', scope: 'story-map'},
 
-	{id: 'scene.togglePreview', scope: 'story-map'},
-	{id: 'sliders.assets', scope: 'story-map'},
-	{id: 'sliders.characters', scope: 'story-map'},
-	{id: 'sliders.generator', scope: 'story-map'},
 
 	// `dialog` is resolved inside every dialog, including the ones with a scope of their
 	// own, so only commands that belong to any dialog live here. `dialog.maximize` also
@@ -103,8 +104,6 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'dialog.maximize', scope: 'dialog'},
 
 	{id: 'passage.rename', scope: 'passage-editor'},
-	{id: 'scene.edit', scope: 'passage-editor'},
-	{id: 'scene.assets', scope: 'passage-editor'},
 	// Registered in both scopes by the preview, because the beat it launches from is the
 	// one on its stage whether the author is typing in the passage text or standing in
 	// the preview itself. Same shape as `passage.rename`, which is also two rows.

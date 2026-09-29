@@ -14,11 +14,15 @@ export const SlidersCharactersButton: React.FC = () => {
 		[dispatch]
 	);
 
+	// Global and allowed in text fields, like the asset manager: see
+	// `SlidersAssetsButton`.
+
 	useCommand({
+		allowInInput: true,
 		id: 'sliders.characters',
 		label: t('hotkeys.commands.sliders.characters'),
 		run: handleClick,
-		scope: 'story-map'
+		scope: 'global'
 	});
 
 	return (

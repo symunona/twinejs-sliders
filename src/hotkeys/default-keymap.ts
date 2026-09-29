@@ -38,6 +38,17 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// the chord that takes the key back off the browser's print dialog, and it is
 	// wanted with focus in the passage text and in dialogs, hence `global`.
 	'passage.find': {bindings: ['mod+p']},
+	// The Story toolbar's tools, from the map, the passage text, or any dialog. They
+	// used to be split: a bare letter on the map (`a`, `c`, `g`, `shift+p`) and, for two
+	// of them, a second command on an Alt chord in the passage editor. Neither answered
+	// from inside a dialog, and the same tool had a different key depending on where
+	// focus was. One chord that types nothing works everywhere, so there is one key to
+	// remember. On macOS Option+letter types a character, so these are dead there until
+	// rebound--see the passage editor note below.
+	'sliders.assets': {bindings: ['alt+a']},
+	'sliders.characters': {bindings: ['alt+c']},
+	'sliders.generator': {bindings: ['alt+g']},
+	'scene.togglePreview': {bindings: ['alt+p']},
 
 	// Dialogs. Dialogs are mostly text fields, so this has to be a chord that
 	// produces no character and that CodeMirror doesn't use.
@@ -72,23 +83,14 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'view.zoomReset': {bindings: ['0']},
 	'build.play': {bindings: ['mod+enter']},
 	'build.test': {bindings: ['mod+shift+enter']},
-	// The scene preview is a dialog now, opened from the Story toolbar like the asset
-	// manager, so its show/hide key belongs to the map. Bare `p` is already the fuzzy
-	// finder's, hence the shifted one.
-	'scene.togglePreview': {bindings: ['shift+p']},
-	'sliders.assets': {bindings: ['a']},
-	'sliders.characters': {bindings: ['c']},
-	'sliders.generator': {bindings: ['g']},
 
 	// Passage editor. Focus lives in CodeMirror the whole time these are wanted, so
 	// they have to be chords that type nothing. Alt+letter is that on Linux and
 	// Windows; on macOS Option+P is a real character (π), and `event.key` is what the
 	// dispatcher matches on, so these are dead there until someone rebinds them.
-
-	'scene.edit': {bindings: ['alt+p']},
-	'scene.assets': {bindings: ['alt+a']},
-	// Test from the beat on the stage. Alt+T rather than the map's bare `t`, for the same
-	// reason as the two above: focus is in CodeMirror, where a bare letter types.
+	//
+	// Test from the beat on the stage. Alt+T rather than the map's bare `t`: focus is
+	// in CodeMirror, where a bare letter types.
 	'scene.test': {bindings: ['alt+t']},
 
 	// Scene preview. Viewer keys, so they only fire once focus is inside the

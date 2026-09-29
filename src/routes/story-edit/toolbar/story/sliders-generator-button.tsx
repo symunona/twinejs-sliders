@@ -20,11 +20,15 @@ export const SlidersGeneratorButton: React.FC = () => {
 		[dispatch]
 	);
 
+	// Global and allowed in text fields, like the asset manager: see
+	// `SlidersAssetsButton`.
+
 	useCommand({
+		allowInInput: true,
 		id: 'sliders.generator',
 		label: t('hotkeys.commands.sliders.generator'),
 		run: handleClick,
-		scope: 'story-map'
+		scope: 'global'
 	});
 
 	return (

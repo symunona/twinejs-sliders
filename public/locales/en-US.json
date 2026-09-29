@@ -1645,8 +1645,6 @@
 			},
 			"scene": {
 				"togglePreview": "Show or Hide Scene Editor",
-				"edit": "Edit Scene",
-				"assets": "Asset Manager",
 				"previousBeat": "Previous Beat",
 				"nextBeat": "Next Beat",
 				"play": "Play or Pause Scene",

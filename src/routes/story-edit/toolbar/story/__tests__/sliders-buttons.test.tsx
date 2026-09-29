@@ -17,8 +17,8 @@ describe('sliders toolbar buttons', () => {
 		return result;
 	}
 
-	async function pressKey(key: string) {
-		fireEvent.keyDown(document.activeElement!, {key});
+	async function pressKey(key: string, init: KeyboardEventInit = {}) {
+		fireEvent.keyDown(document.activeElement!, {key, ...init});
 		await act(async () => Promise.resolve());
 	}
 
@@ -31,19 +31,51 @@ describe('sliders toolbar buttons', () => {
 
 	it('opens the asset manager from its shortcut', async () => {
 		await renderComponent(<SlidersAssetsButton />);
-		await pressKey('a');
+		await pressKey('a', {altKey: true});
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
+	});
+
+	// One key everywhere: the map, a text field, and a dialog, none of which is the scope
+	// the button sits in.
+
+	it('opens the asset manager from its shortcut while the author is typing', async () => {
+		await renderComponent(
+			<>
+				<SlidersAssetsButton />
+				<input aria-hidden type="text" />
+			</>
+		);
+		fireEvent.keyDown(document.querySelector('input[type="text"]')!, {
+			altKey: true,
+			key: 'a'
+		});
+		await act(async () => Promise.resolve());
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
+	});
+
+	it('opens the asset manager from its shortcut inside a dialog', async () => {
+		await renderComponent(
+			<>
+				<SlidersAssetsButton />
+				<div data-hotkey-scope="dialog">
+					<button>inside</button>
+				</div>
+			</>
+		);
+		screen.getByText('inside').focus();
+		await pressKey('a', {altKey: true});
 		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	it('opens the character editor from its shortcut', async () => {
 		await renderComponent(<SlidersCharactersButton />);
-		await pressKey('c');
+		await pressKey('c', {altKey: true});
 		expect(
 			screen.getByText('dialogs.slidersCharacters.title')
 		).toBeInTheDocument();
 	});
 
-	it("doesn't open the asset manager while the author is typing", async () => {
+	it("doesn't open the asset manager on a bare a while the author is typing", async () => {
 		await renderComponent(
 			<>
 				<SlidersAssetsButton />

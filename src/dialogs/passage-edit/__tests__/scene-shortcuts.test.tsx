@@ -8,15 +8,18 @@ import {
 	FakeStateProviderProps,
 	fakeStory
 } from '../../../test-util';
+import {ScenePreviewButton} from '../../../routes/story-edit/toolbar/story/scene-preview-button';
+import {SlidersAssetsButton} from '../../../routes/story-edit/toolbar/story/sliders-assets-button';
 import {PassageEditStack} from '../passage-edit-stack';
 
-// The passage editor's two scene keys, pressed where they are actually pressed: with
+// The scene editor and asset manager keys, pressed where they are actually pressed: with
 // the cursor in the scene text.
 //
-// Regression: both were registered by <StoryFormatToolbar>, which renders only when
+// Regression: both were once registered by <StoryFormatToolbar>, which renders only when
 // three preferences line up. With the toolbar hidden nothing registered the command and
-// the key was dead--not only in the text, everywhere. They are registered by
-// <PassageEditContents> now; the toolbar just shows buttons for them.
+// the key was dead. Both are global now and owned by the story map toolbar, which is
+// always mounted behind the editor; `MapToolbar` below stands in for it. The editor's
+// toolbar just shows buttons for them.
 
 jest.mock('../../../components/control/code-area/code-area');
 jest.mock('../../../components/tag/tag-grid');
@@ -61,16 +64,33 @@ const TestStack: React.FC = () => {
 	const {stories} = useStoriesContext();
 
 	return (
-		<PassageEditStack
-			collapsed={false}
-			onChangeCollapsed={jest.fn()}
-			onChangeHighlighted={jest.fn()}
-			onChangeMaximized={jest.fn()}
-			onChangeProps={jest.fn()}
-			onClose={jest.fn()}
-			passageIds={stories[0].passages.map(({id}) => id)}
-			storyId={stories[0].id}
-		/>
+		<>
+			<MapToolbar />
+			<PassageEditStack
+				collapsed={false}
+				onChangeCollapsed={jest.fn()}
+				onChangeHighlighted={jest.fn()}
+				onChangeMaximized={jest.fn()}
+				onChangeProps={jest.fn()}
+				onClose={jest.fn()}
+				passageIds={stories[0].passages.map(({id}) => id)}
+				storyId={stories[0].id}
+			/>
+		</>
+	);
+};
+
+/**
+ * The story map toolbar's two buttons, which own the keys.
+ */
+const MapToolbar: React.FC = () => {
+	const {stories} = useStoriesContext();
+
+	return (
+		<>
+			<ScenePreviewButton story={stories[0]} />
+			<SlidersAssetsButton />
+		</>
 	);
 };
 
@@ -129,21 +149,18 @@ describe('passage editor scene shortcuts', () => {
 		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
+	it('opens the asset manager with the editor toolbars hidden', async () => {
+		await renderComponent(stateWith({passageEditorToolbars: false}));
+		await pressInPassageText('a');
+		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
+	});
+
 	it('opens the scene editor with alt+p while the cursor is in the scene text', async () => {
 		await renderComponent(stateWith());
 		await pressInPassageText('p');
 		expect(
 			screen.getByText('dialogs.passageEdit.scenePreview.title')
 		).toBeInTheDocument();
-	});
-
-	it('opens the asset manager with the editor toolbars hidden', async () => {
-		await renderComponent(stateWith({passageEditorToolbars: false}));
-		expect(
-			screen.queryByText('routes.storyEdit.toolbar.slidersAssets')
-		).not.toBeInTheDocument();
-		await pressInPassageText('a');
-		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
 	});
 
 	it('opens the scene editor with the editor toolbars hidden', async () => {
@@ -154,28 +171,31 @@ describe('passage editor scene shortcuts', () => {
 		).toBeInTheDocument();
 	});
 
-	// The format toolbar is the only thing that ever showed these buttons, and it needs
-	// CodeMirror. The keys don't.
+	// The format toolbar is the only thing that ever showed the button, and it needs
+	// CodeMirror. The key doesn't.
 
-	it('opens the asset manager without CodeMirror', async () => {
+	it('opens the scene editor without CodeMirror', async () => {
 		await renderComponent(stateWith({useCodeMirror: false}));
-		await pressInPassageText('a');
-		expect(screen.getByText('dialogs.library.title')).toBeInTheDocument();
+		await pressInPassageText('p');
+		expect(
+			screen.getByText('dialogs.passageEdit.scenePreview.title')
+		).toBeInTheDocument();
 	});
 
 	// Two registrations of one ID both answer the key, and which one runs is registration
 	// order. Every card in the stack renders the editor contents, and the visible toolbar
-	// has buttons for the same two commands, so both are chances to register twice.
+	// has buttons for the same two commands, so both are chances to register twice. Only
+	// the map toolbar's copy may register.
 
 	it('registers each scene command once with the toolbars showing', async () => {
 		await renderComponent(stateWith(undefined, 3));
-		expect(liveCount('scene.assets')).toBe(1);
-		expect(liveCount('scene.edit')).toBe(1);
+		expect(liveCount('sliders.assets')).toBe(1);
+		expect(liveCount('scene.togglePreview')).toBe(1);
 	});
 
 	it('registers each scene command once with the toolbars hidden', async () => {
 		await renderComponent(stateWith({passageEditorToolbars: false}, 3));
-		expect(liveCount('scene.assets')).toBe(1);
-		expect(liveCount('scene.edit')).toBe(1);
+		expect(liveCount('sliders.assets')).toBe(1);
+		expect(liveCount('scene.togglePreview')).toBe(1);
 	});
 });
