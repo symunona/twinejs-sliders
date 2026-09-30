@@ -347,7 +347,17 @@ export class SlidersStage extends CustomElement {
 		const from = resolveStage(base);
 		const to = resolveStage(entry);
 
-		await this.renderer.apply(to, diffStages(from, to));
+		// Under a page transition (`transitions.ts`) the view transition IS the entrance. A
+		// diff here plays inside its live "new" picture: the backdrop fades up from black for
+		// the whole push/zoom, a half-drawn scene. Draw the opening picture outright instead.
+		const underPageTransition = document.documentElement.hasAttribute(
+			'data-sliders-transition'
+		);
+
+		await this.renderer.apply(
+			to,
+			underPageTransition ? [] : diffStages(from, to)
+		);
 		this.markReady();
 		publishStage(entry);
 		this.addEventListener('click', this.handleClick);

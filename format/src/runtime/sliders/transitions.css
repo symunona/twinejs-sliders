@@ -108,7 +108,13 @@
 	animation-name: sliders-vt-to-bottom;
 }
 
-/* zoom: the old page swells and fades, the new one grows into place. */
+/* zoom: the old page swells and fades, the new one grows into place. Both are part
+   transparent and the new one is smaller than the screen, so what is behind them shows:
+   the canvas, white, a pale frame flashing round a black cinema stage. Paint it the
+   cinema backdrop instead. */
+:root[data-sliders-transition='zoom']:has(body.sliders-cinema)::view-transition {
+	background: #000;
+}
 :root[data-sliders-transition='zoom']::view-transition-old(root) {
 	animation-name: sliders-vt-zoom-out;
 }
