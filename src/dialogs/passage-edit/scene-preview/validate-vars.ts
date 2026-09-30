@@ -18,7 +18,8 @@ import {
 	VARS_SEPARATOR,
 	VARS_SEPARATOR_RE,
 	nearMissSeparator,
-	nearestKey
+	nearestKey,
+	varsUnknownNameErrors
 } from '@sliders/scene-schema';
 
 export interface VarValidationInput {
@@ -281,3 +282,24 @@ export function varsSeparatorErrors(text: string): SceneError[] {
  * reach it too. One rule, one message, one place for it to be wrong.
  */
 export {varsValueErrors} from '@sliders/scene-schema';
+
+/**
+ * Vars values that read a name nothing defines — `transition.name: zoom` for `"zoom"`.
+ *
+ * The rule is the package's; the story is ours. A name is known when some vars section in
+ * the story sets it, when it is a Chapbook namespace, or when it is a global the player's
+ * window will have too (`Math`, `Date`, `undefined`). Chapbook puts story variables on
+ * `window` as well, which is why a bare name resolves at all.
+ */
+export function varsUnknownNameWarnings(
+	text: string,
+	passages: {text: string}[]
+): SceneError[] {
+	// Live text as well as the story's copy of it, as in `unknownVariableErrors`.
+	const defined = definedVariables([text, ...passages.map(one => one.text)]);
+
+	return varsUnknownNameErrors(
+		text,
+		name => BUILTIN_ROOTS.has(name) || defined.has(name) || name in globalThis
+	);
+}

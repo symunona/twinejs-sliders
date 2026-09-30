@@ -62,8 +62,10 @@ export {
 	varsConditionError,
 	varsConditionSource,
 	varsLineName,
+	varsUnknownNameErrors,
 	varsValueError,
 	varsValueErrors,
+	varsValueNames,
 	varsValueSource
 } from './vars-section';
 export type {
@@ -71,5 +73,6 @@ export type {
 	SplitVarsSection,
 	VarsDeclaration,
 	VarsIgnoredLine,
-	VarsScan
+	VarsScan,
+	VarsValueName
 } from './vars-section';

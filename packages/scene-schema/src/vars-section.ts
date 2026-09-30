@@ -406,3 +406,186 @@ export function varsValueErrors(text: string): SceneError[] {
 
 	return out;
 }
+
+// ---------------------------------------------------------------------------
+// Free names: a value that compiles and still dies when it runs.
+// ---------------------------------------------------------------------------
+
+/** Words a value may use that are not names at all. */
+const JS_WORDS = new Set([
+	'await',
+	'delete',
+	'false',
+	'in',
+	'instanceof',
+	'new',
+	'null',
+	'of',
+	'this',
+	'true',
+	'typeof',
+	'void'
+]);
+
+/** A name a vars value reads, and where in the value it sits (0-based). */
+export interface VarsValueName {
+	name: string;
+	index: number;
+}
+
+/**
+ * The names a vars value reads from outside itself: `zoom` in `zoom`, `a` and `b` in
+ * `a + b.c`, nothing in `"zoom"` or `{zoom: 1}`.
+ *
+ * A token scan, not a parser, and it errs toward saying NOTHING: a name it cannot place
+ * for certain is left out, and a value that binds names of its own (`=>`, `function`) is
+ * skipped whole. The caller turns a hit into a warning, so a miss costs a warning and a
+ * false hit costs an author's trust in all of them.
+ *
+ * Only meaningful for a value that compiles — `varsValueError` first.
+ */
+export function varsValueNames(value: string): VarsValueName[] {
+	if (/=>|\bfunction\b/.test(value)) {
+		return [];
+	}
+
+	const names: VarsValueName[] = [];
+	/** Open brackets, innermost last, to tell an object key from a ternary branch. */
+	const open: string[] = [];
+	let prev = '';
+	let i = 0;
+
+	while (i < value.length) {
+		const char = value[i];
+
+		if (char === '"' || char === "'" || char === '`') {
+			// Template literals are skipped whole, `${}` included: see the header.
+			let end = i + 1;
+
+			while (end < value.length && value[end] !== char) {
+				end += value[end] === '\\' ? 2 : 1;
+			}
+
+			i = end + 1;
+			prev = char;
+			continue;
+		}
+
+		const word = /^[A-Za-z_$][\w$]*/.exec(value.slice(i));
+
+		if (word) {
+			const rest = value.slice(i + word[0].length).trimStart();
+			const isProperty = prev === '.';
+			const isKey =
+				open[open.length - 1] === '{' &&
+				(prev === '{' || prev === ',') &&
+				rest.startsWith(':');
+
+			if (!isProperty && !isKey && !JS_WORDS.has(word[0])) {
+				names.push({index: i, name: word[0]});
+			}
+
+			i += word[0].length;
+			prev = 'a';
+			continue;
+		}
+
+		const number = /^\d[\w.]*/.exec(value.slice(i));
+
+		if (number) {
+			i += number[0].length;
+			prev = '0';
+			continue;
+		}
+
+		if (char === '{' || char === '[' || char === '(') {
+			open.push(char);
+		} else if (char === '}' || char === ']' || char === ')') {
+			open.pop();
+		}
+
+		if (!/\s/.test(char)) {
+			prev = char;
+		}
+
+		i++;
+	}
+
+	return names;
+}
+
+/**
+ * Vars values that read a name nothing defines.
+ *
+ * `config.body.transition.name: zoom` compiles — `return (zoom)` is fine JavaScript — and
+ * then stops the story with "zoom is not defined" the moment the passage is shown. The
+ * author meant the string `"zoom"`.
+ *
+ * A WARNING, not an error: the name may be set by the story's JavaScript, which nothing
+ * here can see. `isKnown` is the caller's, because only the caller knows the story (every
+ * vars section in it) and the globals the player will run with.
+ *
+ * Values that do not compile are left to `varsValueErrors`; one squiggle per mistake.
+ */
+export function varsUnknownNameErrors(
+	text: string,
+	isKnown: (name: string) => boolean
+): SceneError[] {
+	const split = splitVarsSection(text);
+
+	if (!split) {
+		return [];
+	}
+
+	const out: SceneError[] = [];
+
+	for (const declaration of scanVarsLines(split.vars).declarations) {
+		if (varsValueError(declaration.value)) {
+			continue;
+		}
+
+		const start = declaration.text.indexOf(
+			declaration.value,
+			declaration.text.indexOf(':') + 1
+		);
+
+		for (const {index, name} of varsValueNames(declaration.value)) {
+			if (isKnown(name)) {
+				continue;
+			}
+
+			const col = start + index + 1;
+			const quoted = JSON.stringify(declaration.value);
+			// Only when the whole value is the one bare word: that is a string somebody
+			// forgot to quote. `a + b` with `b` unknown is a typo, and quoting it is wrong.
+			const fix: SceneFix | undefined =
+				declaration.value === name
+					? {
+							col,
+							endCol: col + name.length,
+							endLine: declaration.line,
+							label: `Quote it as ${quoted}`,
+							line: declaration.line,
+							replaces: name,
+							text: quoted
+					  }
+					: undefined;
+
+			out.push({
+				code: 'unknown-variable',
+				col,
+				endCol: col + name.length,
+				endLine: declaration.line,
+				...(fix ? {fix} : {}),
+				hint: fix
+					? `Values are JavaScript expressions, so text has to be quoted: '${declaration.name}: ${quoted}'.`
+					: `Set '${name}' in a vars section, or check the spelling. The player stops with "${name} is not defined".`,
+				line: declaration.line,
+				message: `'${declaration.name}' reads '${name}', which nothing sets.`,
+				severity: 'warning'
+			});
+		}
+	}
+
+	return out;
+}

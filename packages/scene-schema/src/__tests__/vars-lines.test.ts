@@ -14,8 +14,10 @@ import {
 	splitVarsSectionAt,
 	varsConditionError,
 	varsConditionSource,
+	varsUnknownNameErrors,
 	varsValueError,
 	varsValueErrors,
+	varsValueNames,
 	varsValueSource
 } from '../vars-section';
 
@@ -277,5 +279,68 @@ describe('varsValueErrors', () => {
 
 	it('reports the line within the passage, vars being at the top', () => {
 		expect(varsValueErrors('ok: 1\nbad: two words\n--\nx')[0].line).toBe(2);
+	});
+});
+
+describe('varsValueNames', () => {
+	const names = (value: string) => varsValueNames(value).map(one => one.name);
+
+	it('finds a bare word', () => {
+		expect(varsValueNames('zoom')).toEqual([{index: 0, name: 'zoom'}]);
+	});
+
+	it('finds the roots an expression reads, not its properties', () => {
+		expect(names('a + b.c * Math.max(d, 1)')).toEqual(['a', 'b', 'Math', 'd']);
+	});
+
+	it('ignores strings, numbers and literals', () => {
+		expect(names('"zoom" + \'a\\\'b\' + `x${y}` + 1.5 + true + null')).toEqual([]);
+	});
+
+	it('ignores object keys but not ternary branches', () => {
+		expect(names('{zoom: 1, fade: x}')).toEqual(['x']);
+		expect(names('c ? a : b')).toEqual(['c', 'a', 'b']);
+	});
+
+	it('says nothing about a value that binds names of its own', () => {
+		expect(names('[1, 2].map(x => x + 1)')).toEqual([]);
+		expect(names('function () { return y }')).toEqual([]);
+	});
+});
+
+describe('varsUnknownNameErrors', () => {
+	const known = (name: string) => ['has_weapon', 'Math'].includes(name);
+
+	it('warns about a bare word, and offers to quote it', () => {
+		const [error] = varsUnknownNameErrors(
+			'config.body.transition.name: zoom\n--\nx',
+			known
+		);
+
+		expect(error).toMatchObject({
+			code: 'unknown-variable',
+			col: 30,
+			endCol: 34,
+			line: 1,
+			severity: 'warning'
+		});
+		expect(error.fix).toMatchObject({replaces: 'zoom', text: '"zoom"'});
+	});
+
+	it('says nothing about names the caller knows', () => {
+		expect(
+			varsUnknownNameErrors('a: has_weapon\nb: Math.max(1, 2)\nc: "zoom"\n--\nx', known)
+		).toEqual([]);
+	});
+
+	it('does not offer to quote a name inside an expression', () => {
+		const [error] = varsUnknownNameErrors('a: has_weapon && tpyo\n--\nx', known);
+
+		expect(error).toMatchObject({col: 18, endCol: 22});
+		expect(error.fix).toBeUndefined();
+	});
+
+	it('leaves a value that does not compile to varsValueErrors', () => {
+		expect(varsUnknownNameErrors('d: 500ms\n--\nx', known)).toEqual([]);
 	});
 });

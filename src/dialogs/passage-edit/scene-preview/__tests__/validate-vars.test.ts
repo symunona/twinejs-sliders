@@ -199,3 +199,25 @@ describe('unknownVariableErrors() on entity and beat if:', () => {
 		).toEqual([]);
 	});
 });
+
+describe('vars values reading a name nothing sets', () => {
+	it('warns about an unquoted word, in a passage with no scene', () => {
+		const errors = parseSceneText(
+			'config.body.transition.name: zoom\nok: has_weapon\nm: Math.PI\nc: config.testing\n--\nHi.',
+			passages
+		).errors;
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]).toMatchObject({
+			code: 'unknown-variable',
+			line: 1,
+			severity: 'warning'
+		});
+	});
+
+	it('knows a variable set earlier in the same passage', () => {
+		expect(
+			parseSceneText('mine: 1\ncopy: mine\n--\nHi.', passages).errors
+		).toEqual([]);
+	});
+});
