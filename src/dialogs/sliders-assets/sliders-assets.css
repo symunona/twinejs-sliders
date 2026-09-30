@@ -295,6 +295,38 @@
 	padding: 0 4px;
 }
 
+/* Art the story does not reference: a diagonal ribbon across the tile's top-right corner.
+   It may cover a corner of the thumbnail--that costs less than a badge line under every
+   tile in the row. The wrapper clips the band to the tile's rounded corner. */
+.sliders-tile-ribbon {
+	border-radius: var(--corner-round);
+	height: 64px;
+	overflow: hidden;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: 64px;
+	z-index: 1;
+}
+
+.sliders-tile-ribbon span {
+	background: var(--light-orange);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	color: var(--dark-orange);
+	font-size: 70%;
+	font-weight: bold;
+	left: -2px;
+	line-height: 1.6;
+	pointer-events: auto;
+	position: absolute;
+	text-align: center;
+	text-transform: uppercase;
+	top: 14px;
+	transform: rotate(45deg);
+	width: 90px;
+}
+
 .sliders-tile-badges {
 	display: flex;
 	flex-wrap: wrap;

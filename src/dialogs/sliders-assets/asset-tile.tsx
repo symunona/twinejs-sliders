@@ -183,6 +183,15 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					: undefined
 			}
 		>
+			{/* A corner ribbon over the art, not a badge under it: the badge cost every tile in
+			    the grid row a line of height. */}
+			{unreferenced && (
+				<div className="sliders-tile-ribbon">
+					<span title={t('dialogs.slidersAssets.unreferencedTitle')}>
+						{t('dialogs.slidersAssets.unreferenced')}
+					</span>
+				</div>
+			)}
 			<div
 				className="sliders-tile-art"
 				// The button below says the same thing, but the picture is what an author
@@ -232,13 +241,6 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			<TileUses passages={usedIn ?? []} />
 			<div className="sliders-tile-badges">
 				{badges}
-				{unreferenced && (
-					<Badge
-						label={t('dialogs.slidersAssets.unreferenced')}
-						title={t('dialogs.slidersAssets.unreferencedTitle')}
-						variant="warning"
-					/>
-				)}
 				{meta.animated && <Badge label={t('dialogs.slidersAssets.animated')} />}
 				{meta.tags.map(tag => (
 					<Badge key={tag} label={tag} />

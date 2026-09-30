@@ -130,6 +130,15 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 			ref={tileRef}
 			title={t('dialogs.slidersAssets.dragToStage')}
 		>
+			{/* A corner ribbon over the art, not a badge under it: the badge cost every tile in
+			    the grid row a line of height. */}
+			{unreferenced && (
+				<div className="sliders-tile-ribbon">
+					<span title={t('dialogs.slidersAssets.unreferencedCharacterTitle')}>
+						{t('dialogs.slidersAssets.unreferenced')}
+					</span>
+				</div>
+			)}
 			{over && (
 				<div className="sliders-tile-drop-hint">
 					{t('dialogs.slidersAssets.dropHintPoses', {name: character.name})}
@@ -154,13 +163,6 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 			</button>
 			<TileUses passages={usedIn ?? []} />
 			<div className="sliders-tile-badges">
-				{unreferenced && (
-					<Badge
-						label={t('dialogs.slidersAssets.unreferenced')}
-						title={t('dialogs.slidersAssets.unreferencedCharacterTitle')}
-						variant="warning"
-					/>
-				)}
 				{character.tags.map(tag => (
 					<Badge key={tag} label={tag} />
 				))}
