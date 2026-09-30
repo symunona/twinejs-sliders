@@ -69,9 +69,15 @@ export const GradePopover: React.FC<GradePopoverProps> = props => {
 	const {t} = useTranslation();
 	const [cardEl, setCardEl] = React.useState<HTMLDivElement | null>(null);
 	const {attributes, styles} = usePopper(anchor, cardEl, {
-		// Down, into the stage: the row sits across the stage's top edge, and up would be
-		// the editor's own chrome. Popper flips when there is no room.
-		placement: 'bottom-end',
+		// Beside the button, not below it: the panel is taller than a docked stage, and on
+		// a side placement Popper's overflow guard slides it up and down to stay on screen
+		// (below, it would only ever slide sideways and hang off the bottom). Left first,
+		// because the selection row ends at the stage's right edge.
+		modifiers: [
+			{name: 'flip', options: {fallbackPlacements: ['right-start', 'bottom-end']}},
+			{name: 'preventOverflow', options: {padding: 8}}
+		],
+		placement: 'left-start',
 		strategy: 'fixed'
 	});
 	// Through refs so the listeners live exactly as long as the popover, whatever the
