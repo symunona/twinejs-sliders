@@ -62,6 +62,14 @@ import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 import {injectEffectSupport, syncEffect} from './effect-host';
 import {effectIsIdle} from './effects';
+import {
+	GRADE_DUR_VAR,
+	GRADE_EASE_VAR,
+	GRADE_PX_VAR,
+	GRADE_VAR,
+	holdGrade,
+	type GradeHandle
+} from './grade';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
 export const ENTER_RISE = 0.03;
@@ -140,6 +148,14 @@ interface EntityRecord {
 	placeholderId?: string;
 	exiting: boolean;
 	exitTimer?: ReturnType<typeof setTimeout>;
+	/** The `grade:` filter on screen, held so its SVG half stays in the document. */
+	grade?: GradeHandle;
+	/** The outgoing picture of a grade cross-fade, and the hold on its old filter. */
+	gradeGhost?: {
+		el: HTMLImageElement;
+		handle: GradeHandle;
+		timer: ReturnType<typeof setTimeout>;
+	};
 }
 
 /** What one entity needs before any DOM is touched. Resolved off the critical path. */
@@ -524,6 +540,7 @@ export class DomRenderer implements Renderer {
 			}
 
 			this.stopAnim(rec);
+			this.dropGrade(rec);
 		}
 
 		this.rootEl?.removeEventListener('click', this.handleLinkClick);
@@ -989,6 +1006,9 @@ export class DomRenderer implements Renderer {
 		this.setContent(rec, res);
 		this.applyPoseFit(rec, res);
 		this.applyEffect(rec, res);
+		// Snapped: the enter fade is the arrival, and a grade fading in under it would read
+		// as the sprite changing colour on its way in.
+		this.syncGrade(rec, res.entity, 0);
 		this.entityLayerEl?.appendChild(el);
 
 		// Enter: fade + slight rise. Snap into the start pose with transitions off, force a
@@ -1106,6 +1126,14 @@ export class DomRenderer implements Renderer {
 		// both. A scale left out here would snap while the move glides, which is exactly
 		// what listing width/height in the CSS transition is there to prevent.
 		const {duration, ease} = durations.longest(ENTITY_TRANSFORM_KINDS, rec.id);
+
+		// ABOVE the syncAnim bail-out too: a walking sprite still walks into the sunset.
+		this.syncGrade(
+			rec,
+			res.entity,
+			durations.duration('grade', rec.id),
+			durations.ease('grade', rec.id)
+		);
 
 		// Steps still on their feet keep the screen: the stage's own `pose` is the list's
 		// FIRST step, so drawing it here would flash step 1 on every keystroke. `syncAnim`
@@ -1279,6 +1307,7 @@ export class DomRenderer implements Renderer {
 
 			rec.el.remove();
 			this.entities.delete(rec.id);
+			this.dropGrade(rec);
 		};
 
 		if (duration <= 0) {
@@ -1457,6 +1486,139 @@ export class DomRenderer implements Renderer {
 		});
 	}
 
+	/**
+	 * The entity's `grade:`, as the custom property the stylesheet hangs the filter on.
+	 *
+	 * On the sprite BOX, read by its children: the `<img>`, a pose cross-fade's ghost and an
+	 * effect's layers all take `filter: var(--sliders-grade)` (`styles.ts`, `effect-host.ts`),
+	 * so the art and its glitch bands are graded alike without a wrapper element — wrapping
+	 * would reparent the `<img>` and restart an animated one. The link glow is written AFTER
+	 * the grade in the same filter list, so it keeps its own colour.
+	 *
+	 * Timing: a native grade (contrast, hue, saturation, blur) rides the element's own CSS
+	 * `filter` transition. A grade with an SVG half cannot — `url()` does not interpolate —
+	 * so the new grade snaps on the `<img>` and a copy of it wearing the OLD filter fades
+	 * out on top. Effect layers snap in that case; they are interference, and a tear that
+	 * cross-fades would read as two tears.
+	 */
+	private syncGrade(
+		rec: EntityRecord,
+		entity: StageEntity,
+		duration: number,
+		ease = cssEase(undefined, 'grade')
+	): void {
+		const style = rec.el.style;
+		const next = holdGrade(this.doc, entity.grade);
+		const prevCss = rec.grade?.css ?? '';
+
+		if (next.css === prevCss) {
+			next.release();
+			// The timing belongs to the beat that changed the grade. Left behind, it would
+			// also time the link glow's hover fade on every beat after.
+			style.removeProperty(GRADE_DUR_VAR);
+			style.removeProperty(GRADE_EASE_VAR);
+			this.syncGradeScale(rec);
+			return;
+		}
+
+		const prev = rec.grade;
+		const svg = prevCss.startsWith('url(') || next.css.startsWith('url(');
+		const fade = duration > 0 && svg && !!rec.img && !!rec.img.isConnected;
+
+		// A cross-fade still running is overtaken: its picture is two grades old.
+		this.finishGradeGhost(rec);
+
+		if (duration > 0 && !svg) {
+			style.setProperty(GRADE_DUR_VAR, `${duration}s`);
+			style.setProperty(GRADE_EASE_VAR, ease);
+		} else {
+			style.removeProperty(GRADE_DUR_VAR);
+			style.removeProperty(GRADE_EASE_VAR);
+		}
+
+		if (fade) {
+			const ghost = rec.img!.cloneNode(false) as HTMLImageElement;
+
+			ghost.classList.add('sliders-ghost');
+			ghost.setAttribute('aria-hidden', 'true');
+			ghost.style.filter = prevCss || 'none';
+			ghost.style.transitionDuration = `${duration}s`;
+			ghost.style.transitionTimingFunction = ease;
+			// Straight after the picture, so an effect overlay still paints over both.
+			rec.img!.after(ghost);
+			void ghost.offsetWidth;
+			ghost.style.opacity = '0';
+			rec.gradeGhost = {
+				el: ghost,
+				handle: prev ?? {css: '', release() {}},
+				timer: setTimeout(() => this.finishGradeGhost(rec), duration * 1000)
+			};
+		} else {
+			prev?.release();
+		}
+
+		if (next.css) {
+			style.setProperty(GRADE_VAR, next.css);
+		} else {
+			style.removeProperty(GRADE_VAR);
+		}
+
+		rec.grade = next.css ? next : undefined;
+		this.syncGradeScale(rec);
+	}
+
+	private finishGradeGhost(rec: EntityRecord): void {
+		const ghost = rec.gradeGhost;
+
+		if (!ghost) {
+			return;
+		}
+
+		clearTimeout(ghost.timer);
+		ghost.el.remove();
+		ghost.handle.release();
+		rec.gradeGhost = undefined;
+	}
+
+	/** Let go of everything a grade holds. For an entity leaving for good. */
+	private dropGrade(rec: EntityRecord): void {
+		this.finishGradeGhost(rec);
+		rec.grade?.release();
+		rec.grade = undefined;
+	}
+
+	/**
+	 * CSS px per pixel of the art, for a grade's `blur` (see `GRADE_PX_VAR`). Written only
+	 * while the grade blurs, so an ordinary sprite's inline style carries nothing new.
+	 */
+	private syncGradeScale(rec: EntityRecord): void {
+		const style = rec.el.style;
+
+		if (!rec.entity.grade?.blur) {
+			style.removeProperty(GRADE_PX_VAR);
+			return;
+		}
+
+		const art = rec.character?.size ?? rec.res?.meta;
+		let scale = 1;
+
+		if (art && art.w > 0 && art.h > 0) {
+			if (rec.entity.fit) {
+				const x = this.box.width / art.w;
+				const y = this.box.height / art.h;
+
+				scale = rec.entity.fit === 'cover' ? Math.max(x, y) : Math.min(x, y);
+			} else {
+				scale = rec.metrics.height / art.h;
+			}
+		}
+
+		style.setProperty(
+			GRADE_PX_VAR,
+			String(Number.isFinite(scale) && scale > 0 ? Math.round(scale * 1e4) / 1e4 : 1)
+		);
+	}
+
 	private metricsFor(res: ResolvedEntity): SpriteMetrics {
 		// A resolved character decides this, not the declared kind: an `auto` entity that
 		// found a character is a character, whatever the parser was able to say about it.
@@ -1516,6 +1678,7 @@ export class DomRenderer implements Renderer {
 		style.transform = `translate3d(${rec.rect.left}px, ${y}px, 0)${
 			rot ? ` rotate(${rot}deg)` : ''
 		} scaleX(${entity.flip ? -1 : 1})`;
+		this.syncGradeScale(rec);
 		style.opacity = String(
 			from ? from.opacity : clamp01(entity.opacity ?? 1)
 		);
@@ -1563,6 +1726,7 @@ export class DomRenderer implements Renderer {
 		style.opacity = String(
 			from ? from.opacity : clamp01(entity.opacity ?? 1)
 		);
+		this.syncGradeScale(rec);
 	}
 
 	/**

@@ -118,6 +118,18 @@ Displace it and only the difference shows — red fringe one side, cyan the othe
 
 `screen` brightens even at rest: washed-out photo, not a signal coming apart.
 
+### Under a scene `grade:`
+
+| Layer | Filter |
+|---|---|
+| `band` | `var(--sliders-grade, none)` — graded like the art |
+| `split-a` / `split-b` | `var(--sliders-grade,) url(#chan-…)` — grade FIRST, then isolate. `lighten` vs graded base stays identity at rest. |
+| `scanlines`, `noise` | none. Interference, not picture. |
+
+Generated per-effect rules must NOT write `filter` on `band` / `split-*` — it would drop the
+grade. Asset editor preview has no `--sliders-grade`, so the var falls away. Spec 02, "Colour
+grade".
+
 Channel isolation needs `filter: url(#…)` — CSS alone cannot touch one channel. The two
 `feColorMatrix` filters are injected as an inline `<svg><defs>`, because a fragment reference
 resolves against the DOCUMENT and the published player is one HTML file.

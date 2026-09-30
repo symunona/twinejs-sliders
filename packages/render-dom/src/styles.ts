@@ -310,7 +310,9 @@ export const RENDER_DOM_CSS = `
 }
 
 .sliders-entity[data-sliders-link] > img {
-	transition: filter 0.18s ease;
+	/* The glow's own fade, unless a beat is fading this sprite's grade right now. */
+	transition-duration: var(--sliders-grade-dur, 0.18s);
+	transition-timing-function: var(--sliders-grade-ease, ease);
 }
 
 /* A glow that follows the ART, not the box.
@@ -325,7 +327,9 @@ export const RENDER_DOM_CSS = `
 .sliders-entity[data-sliders-link]:hover > img,
 .sliders-entity[data-sliders-link]:focus > img,
 .sliders-entity[data-sliders-link]:focus-visible > img {
-	filter:
+	/* The grade first, the glow after it, in one list: a sunset-warm hero still lights up
+	   gold, not a warmer gold. */
+	filter: var(--sliders-grade,)
 		drop-shadow(0 0 2px var(--sliders-highlight, #ffd257))
 		drop-shadow(0 0 6px var(--sliders-highlight, #ffd257))
 		drop-shadow(0 0 14px var(--sliders-highlight, #ffd257));
@@ -355,6 +359,13 @@ export const RENDER_DOM_CSS = `
 }
 
 .sliders-entity > img {
+	/* grade:. The renderer writes the filter on the sprite box as a custom property, so
+	   the picture, a pose cross-fade's ghost and an effect's layers read one value. A native
+	   grade fades on this transition; the duration is the beat's, and 0 otherwise. */
+	filter: var(--sliders-grade, none);
+	transition-property: filter;
+	transition-duration: var(--sliders-grade-dur, 0s);
+	transition-timing-function: var(--sliders-grade-ease, linear);
 	/* Box fit, not stretch: a frame whose aspect differs from the character's manifest
 	   size keeps its own shape inside the sprite box. Pinned by object-position, which
 	   the renderer overwrites with the entity's own origin (feet, by default) so a frame
@@ -369,6 +380,13 @@ export const RENDER_DOM_CSS = `
 .sliders-entity > .sliders-ghost {
 	transition-property: opacity;
 	transition-timing-function: ease;
+}
+
+/* An effect's layers fade a native grade with the picture they are copies of. */
+.sliders-entity .sliders-fx-layer {
+	transition-property: filter;
+	transition-duration: var(--sliders-grade-dur, 0s);
+	transition-timing-function: var(--sliders-grade-ease, linear);
 }
 
 .sliders-placeholder {
