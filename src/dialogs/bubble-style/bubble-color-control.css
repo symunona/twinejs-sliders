@@ -178,3 +178,41 @@
 	position: static;
 	transition: none;
 }
+
+/* -------------------------------------------------------------------------
+   The quick list — colours the story already uses. See `util/story-colors.ts`.
+   ------------------------------------------------------------------------- */
+
+/* Narrow: it belongs to the swatch beside it, not to the row. */
+.bubble-color-control .card-button > .icon-button {
+	padding: 0 2px;
+}
+
+.bubble-color-control .card-button > .icon-button .icon svg {
+	height: 14px;
+	width: 14px;
+}
+
+.bubble-color-swatches {
+	display: grid;
+	gap: calc(var(--grid-size) / 2);
+	grid-template-columns: repeat(6, 22px);
+	padding: calc(var(--grid-size) / 2);
+}
+
+.bubble-color-swatch {
+	background: none;
+	border-radius: 4px;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+}
+
+.bubble-color-swatch:hover .bubble-color-preview,
+.bubble-color-swatch:focus-visible .bubble-color-preview {
+	box-shadow: 0 0 0 2px var(--blue);
+}
+
+.bubble-color-swatch[aria-pressed='true'] .bubble-color-preview {
+	box-shadow: 0 0 0 2px var(--dark-gray);
+}

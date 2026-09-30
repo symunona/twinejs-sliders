@@ -34,6 +34,7 @@ import {
 } from '@sliders/scene-types';
 import {mergeBubbleStyle, parseLinkText} from '@sliders/render-dom';
 import {storyBubbleDefaults} from '../../../util/story-bubble';
+import {storyColors} from '../../../util/story-colors';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
@@ -968,6 +969,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 
 	/**
+	 * The colours the story already uses, for the beat row's colour wells. Stylesheet
+	 * included: a palette written once as CSS is the likeliest one to reuse.
+	 */
+	const swatches = React.useMemo(
+		() => (passages ? storyColors({passages, stylesheet}) : undefined),
+		[passages, stylesheet]
+	);
+
+	/**
 	 * The passages this scene can reach: every `links:` target, plus any `[[link]]` written
 	 * outside the block — prose under the scene is a way out too.
 	 *
@@ -1893,6 +1903,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				inherited={bubbleDefaults}
 				onSetBubble={handleBeatBubble}
 				onSetKey={handleBeatKey}
+				storyColors={swatches}
 			/>
 			{stageBody}
 		</div>

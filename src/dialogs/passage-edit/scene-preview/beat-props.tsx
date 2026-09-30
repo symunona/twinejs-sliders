@@ -87,6 +87,8 @@ export interface BeatPropsProps {
 	 * quietly re-time the line as well.
 	 */
 	autoAdvanceMs?: number;
+	/** Colours the story already uses, offered beside each colour well. */
+	storyColors?: string[];
 }
 
 /** The empty option: "whatever the character or the renderer already says". */
@@ -163,7 +165,8 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	editable,
 	inherited,
 	onSetKey,
-	onSetBubble
+	onSetBubble,
+	storyColors
 }) => {
 	const {t} = useTranslation();
 	/**
@@ -472,6 +475,8 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							*/}
 							<BubbleColorControl
 								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
+								swatches={storyColors}
+								swatchesLabel={t('dialogs.passageEdit.beatProps.storyColors')}
 								onChange={value => onSetBubble('color', value ?? null)}
 								value={style?.color}
 							>
@@ -479,6 +484,8 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							</BubbleColorControl>
 							<BubbleColorControl
 								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
+								swatches={storyColors}
+								swatchesLabel={t('dialogs.passageEdit.beatProps.storyColors')}
 								onChange={value => onSetBubble('bg', value ?? null)}
 								value={style?.bg}
 							>
@@ -486,6 +493,8 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							</BubbleColorControl>
 							<BubbleColorControl
 								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
+								swatches={storyColors}
+								swatchesLabel={t('dialogs.passageEdit.beatProps.storyColors')}
 								onChange={value => onSetBubble('accent', value ?? null)}
 								value={style?.accent}
 							>

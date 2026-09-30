@@ -38,6 +38,7 @@ import {
 import {storyBubbleDefaults, writeStoryBubbleVars} from '../../util/story-bubble';
 import {DialogComponentProps} from '../dialogs.types';
 import {BubbleColorControl} from '../bubble-style/bubble-color-control';
+import {storyColors} from '../../util/story-colors';
 import {
 	BubbleFontSwatch,
 	BubbleStyleDemo,
@@ -85,6 +86,10 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 		[story.passages]
 	);
 	const disabled = !start;
+	const swatches = React.useMemo(
+		() => storyColors({passages: story.passages, stylesheet: story.stylesheet}),
+		[story.passages, story.stylesheet]
+	);
 
 	function write(next: BubbleStyle) {
 		if (!start) {
@@ -167,6 +172,8 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 					clearLabel={t('dialogs.storyDefaults.clearColor')}
 					disabled={disabled}
 					editable
+					swatches={swatches}
+					swatchesLabel={t('dialogs.storyDefaults.storyColors')}
 					onChange={value => set('color', value)}
 					placeholder={t('dialogs.storyDefaults.colorPlaceholder')}
 					value={style.color}
@@ -177,6 +184,8 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 					clearLabel={t('dialogs.storyDefaults.clearColor')}
 					disabled={disabled}
 					editable
+					swatches={swatches}
+					swatchesLabel={t('dialogs.storyDefaults.storyColors')}
 					onChange={value => set('bg', value)}
 					placeholder={t('dialogs.storyDefaults.bgPlaceholder')}
 					value={style.bg}
@@ -187,6 +196,8 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 					clearLabel={t('dialogs.storyDefaults.clearColor')}
 					disabled={disabled}
 					editable
+					swatches={swatches}
+					swatchesLabel={t('dialogs.storyDefaults.storyColors')}
 					onChange={value => set('accent', value)}
 					placeholder={t('dialogs.storyDefaults.accentPlaceholder')}
 					value={style.accent}

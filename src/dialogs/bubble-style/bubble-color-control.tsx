@@ -18,12 +18,19 @@
  *     stylesheet. `bg:` has always accepted any CSS colour and the well would quietly
  *     narrow that to opaque hex.
  *
+ *   - The QUICK LIST, only when the caller hands one over, is every colour the story
+ *     already uses (`util/story-colors.ts`). Matching a colour set three scenes ago is the
+ *     common case, and the OS picker has no memory of it. A pick writes the string exactly
+ *     as the story spells it, `rgba(…)` included, which the well could not.
+ *
  * A value the well cannot show is still SHOWN, in the swatch, which is plain CSS and can
  * paint anything: the well falls back to black underneath it, but the author sees their
  * actual colour and the text field holds their actual string.
  */
 
+import {IconChevronDown} from '@tabler/icons';
 import * as React from 'react';
+import {CardButton} from '../../components/control/card-button';
 import './bubble-color-control.css';
 
 export interface BubbleColorControlProps {
@@ -37,6 +44,10 @@ export interface BubbleColorControlProps {
 	/** Adds the free-text field. On in the Defaults dialog, off in the beat row. */
 	editable?: boolean;
 	placeholder?: string;
+	/** Colours the story already uses. Empty or absent hides the quick list. */
+	swatches?: string[];
+	/** Label for the quick list's button and card. Required with `swatches`. */
+	swatchesLabel?: string;
 	/** The colour as the file states it, or nothing when no layer has set one. */
 	value?: string;
 }
@@ -71,8 +82,12 @@ export const BubbleColorControl: React.FC<BubbleColorControlProps> = ({
 	editable,
 	onChange,
 	placeholder,
+	swatches,
+	swatchesLabel,
 	value
 }) => {
+	const [swatchesOpen, setSwatchesOpen] = React.useState(false);
+
 	/**
 	 * What is in the text field while it is being typed in.
 	 *
@@ -114,6 +129,42 @@ export const BubbleColorControl: React.FC<BubbleColorControlProps> = ({
 					value={wellValue(value)}
 				/>
 			</span>
+			{swatches && swatches.length > 0 && (
+				<CardButton
+					ariaLabel={swatchesLabel ?? ''}
+					disabled={disabled}
+					icon={<IconChevronDown />}
+					iconOnly
+					label={swatchesLabel ?? ''}
+					onChangeOpen={setSwatchesOpen}
+					open={swatchesOpen}
+				>
+					<span className="bubble-color-swatches">
+						{swatches.map(swatch => (
+							<button
+								aria-pressed={swatch === value}
+								className="bubble-color-swatch"
+								key={swatch}
+								onClick={() => {
+									setSwatchesOpen(false);
+									onChange(swatch);
+								}}
+								title={swatch}
+								type="button"
+							>
+								<span
+									aria-hidden
+									className="bubble-color-preview"
+									style={{['--swatch' as string]: swatch}}
+								/>
+								<span className="bubble-color-control-clear-label">
+									{swatch}
+								</span>
+							</button>
+						))}
+					</span>
+				</CardButton>
+			)}
 			{editable && (
 				<input
 					aria-label={`${String(children)} value`}

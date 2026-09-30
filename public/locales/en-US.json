@@ -570,7 +570,8 @@
 				"fontCustom": "Written by hand in the passage",
 				"fontSample": "Abc",
 				"size": "Size",
-				"sizing": "Sizing"
+				"sizing": "Sizing",
+				"storyColors": "Colours used in this story"
 			},
 			"scenePreview": {
 				"title": "Scene Editor",
@@ -1039,6 +1040,7 @@
 			"none": "\u2014",
 			"sample": "Every line looks like",
 			"sampleLine": "The lamps go out.",
+			"storyColors": "Colours used in this story",
 			"title": "Defaults: {{story}}"
 		},
 		"storyDetails": {
