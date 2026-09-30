@@ -196,6 +196,59 @@ describe('setEntityKey on a beat', () => {
 	});
 });
 
+describe('grade writes', () => {
+	it('writes a grade as a flow map in slider order', () => {
+		const after = write(
+			PATCH_FIXTURE,
+			setEntityKey(PATCH_FIXTURE, {id: 'candle', kind: 'prop'}, 'grade', {
+				warmth: 30,
+				brightness: -15,
+				saturation: -20
+			})
+		);
+
+		expect(after).toContain(
+			'  candle: {at: [0.1, -0.2], layer: front, grade: {brightness: -15, warmth: 30, saturation: -20}}'
+		);
+		expect(parse(after).props.candle.grade).toEqual({
+			brightness: -15,
+			saturation: -20,
+			warmth: 30
+		});
+	});
+
+	it('replaces an existing grade map in one splice', () => {
+		const text = 'cast:\n  hero: {at: 0, grade: {warmth: 30}}\n';
+		const after = write(
+			text,
+			setEntityKey(text, {id: 'hero', kind: 'cast'}, 'grade', {hue: -10, warmth: 60})
+		);
+
+		expect(after).toBe('cast:\n  hero: {at: 0, grade: {warmth: 60, hue: -10}}\n');
+	});
+
+	it('writes into the beat the scrubber is on, promoting a dialogue line', () => {
+		const after = write(
+			FIXTURE,
+			setEntityKey(FIXTURE, {beat: 0, id: 'mira', kind: 'cast'}, 'grade', {
+				warmth: 60
+			})
+		);
+
+		expect(after).toContain(
+			'  - mira: {say: "You shouldn\'t have come back.", grade: {warmth: 60}}'
+		);
+	});
+
+	it('removes a grade', () => {
+		const text = 'cast:\n  hero: {at: 0, grade: {warmth: 30}}\n';
+
+		expect(
+			write(text, removeEntityKey(text, {id: 'hero', kind: 'cast'}, 'grade'))
+		).toBe('cast:\n  hero: {at: 0}\n');
+	});
+});
+
 describe('removeEntityKey', () => {
 	it('drops a key from a flow map and takes the separator with it', () => {
 		const after = write(
@@ -517,6 +570,7 @@ describe('half-typed and malformed input', () => {
 			// wants: every writable key at once, so none can go missing.
 			fit: 'cover',
 			flip: true,
+			grade: {warmth: 30, brightness: -15},
 			pose: 'idle',
 			poseLoop: 'once',
 			highlight: 'gold',

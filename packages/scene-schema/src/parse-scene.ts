@@ -20,6 +20,9 @@ import {
 	EASE_KINDS,
 	EASE_NAMES,
 	ENTITY_FITS,
+	GRADE_KEYS,
+	GRADE_RANGES,
+	clampGradeValue,
 	FIT_Z,
 	LAYERS,
 	LAYER_BASELINE,
@@ -38,7 +41,9 @@ import {
 	type BubbleStyle,
 	type Camera,
 	type EntityFit,
+	type EntityGrade,
 	type EntityKind,
+	type GradeKey,
 	type EntityPatch,
 	type EntityLink,
 	type EntityLinkSpan,
@@ -99,6 +104,7 @@ export const ENTITY_KEYS = [
 	'layer',
 	'z',
 	'opacity',
+	'grade',
 	'ref',
 	'link',
 	'highlight',
@@ -1757,6 +1763,23 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'grade': {
+				// `grade: ~` clears, like `link: ~` and `highlight: ~`. Anything else is a
+				// map, merged per key over what the entity already has (`mergeGrade`).
+				if (isNullNode(pair.value)) {
+					body.patch.grade = null;
+					break;
+				}
+
+				const grade = parseGrade(ctx, pair.value);
+
+				if (grade) {
+					body.patch.grade = grade;
+				}
+
+				break;
+			}
+
 			case 'ref': {
 				const ref = asSourceString(ctx, pair.value, 'ref');
 
@@ -1925,6 +1948,82 @@ function parseEntityBody(
 	}
 
 	return body;
+}
+
+/**
+ * `grade: {warmth: 30, brightness: -15}` — the asset editor's colour sliders, by the same
+ * names and over the same ranges (`GRADE_RANGES`).
+ *
+ * Out of range clamps with a warning rather than dropping the key: the author asked for
+ * MORE, and the most the slider goes is the nearest thing to what they meant. Unknown
+ * sub-keys warn and are dropped. An empty map parses, and warns, because under merge it
+ * changes nothing — `grade: ~` is the reset.
+ */
+function parseGrade(ctx: Ctx, node: unknown): EntityGrade | undefined {
+	if (!isMap(node)) {
+		addError(
+			ctx,
+			'bad-value',
+			'grade: must be a map of colour sliders, e.g. `grade: {warmth: 30, brightness: -15}`.',
+			node,
+			{hint: `Keys: ${GRADE_KEYS.join(', ')}. grade: ~ clears it.`}
+		);
+		return undefined;
+	}
+
+	const map = node as YAMLMap;
+	const grade: EntityGrade = {};
+
+	for (const pair of map.items as Pair<unknown, unknown>[]) {
+		const key = keyName(pair);
+
+		if (key === undefined) {
+			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+			continue;
+		}
+
+		if (!(GRADE_KEYS as readonly string[]).includes(key)) {
+			const fix = keyFix(key, GRADE_KEYS);
+
+			addError(ctx, 'unknown-key', `Unknown grade key '${key}'.`, pair.key, {
+				...fix,
+				hint: fix.hint ?? `A grade takes ${GRADE_KEYS.join(', ')}.`
+			});
+			continue;
+		}
+
+		const value = asNumber(ctx, pair.value, `grade ${key}`);
+
+		if (value === undefined) {
+			continue;
+		}
+
+		const gradeKey = key as GradeKey;
+		const clamped = clampGradeValue(gradeKey, value);
+
+		if (clamped !== value) {
+			const {max, min} = GRADE_RANGES[gradeKey];
+
+			addError(
+				ctx,
+				'bad-value',
+				`grade ${key} of ${value} is outside ${min} to ${max}; drawn as ${clamped}.`,
+				pair.value,
+				{severity: 'warning'}
+			);
+		}
+
+		grade[gradeKey] = clamped;
+	}
+
+	if (map.items.length === 0) {
+		addError(ctx, 'bad-value', 'An empty grade: changes nothing.', node, {
+			hint: 'A beat\u2019s grade merges over the one before it. grade: ~ clears it.',
+			severity: 'warning'
+		});
+	}
+
+	return grade;
 }
 
 function parseEntityMap(

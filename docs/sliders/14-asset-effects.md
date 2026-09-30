@@ -118,6 +118,13 @@ Displace it and only the difference shows — red fringe one side, cyan the othe
 
 `screen` brightens even at rest: washed-out photo, not a signal coming apart.
 
+### Under a scene `grade:`
+
+Overlay sits INSIDE `.sliders-entity-art`, the wrapper the grade filters. Layers blend with
+the art inside that group, then the composite is graded — same as grading a baked asset.
+Layers carry no grade of their own; nothing here knows a grade exists. Spec 02, "Colour
+grade".
+
 Channel isolation needs `filter: url(#…)` — CSS alone cannot touch one channel. The two
 `feColorMatrix` filters are injected as an inline `<svg><defs>`, because a fragment reference
 resolves against the DOCUMENT and the published player is one HTML file.

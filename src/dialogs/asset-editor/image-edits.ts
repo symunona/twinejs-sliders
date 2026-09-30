@@ -2,6 +2,16 @@
  * The pixel side of the asset editor. Kept free of React and of the DOM where
  * possible so the maths can be tested on its own.
  */
+import {
+	buildChannelLuts,
+	buildColorMatrix,
+	buildLut,
+	GAMMA_RANGE,
+	HUE_RANGE,
+	LEVEL_RANGE,
+	POP_RANGE,
+	TONE_KEYS
+} from '@sliders/scene-types';
 import type {
 	CropRect,
 	CutoutTuning,
@@ -15,11 +25,18 @@ import {axisSize, blendSeam, seamWidth, tiledSize} from './tile-edits';
 // where everything that acts on them lives.
 export type {CropRect, ImageEdits};
 
-export const GAMMA_RANGE = {max: 3, min: 0.1, step: 0.05};
-export const LEVEL_RANGE = {max: 100, min: -100, step: 1};
-export const HUE_RANGE = {max: 180, min: -180, step: 1};
-/** One-sided: `pop` only ever adds. Taking it away is what `contrast` is for. */
-export const POP_RANGE = {max: 100, min: 0, step: 1};
+// The ranges and the curve/matrix maths live in scene-types (`grade.ts`) too: a scene's
+// live `grade:` draws with the same functions this bakes with, and one copy is the only
+// way the two cannot drift. Re-exported so the editor keeps importing them from here.
+export {
+	buildChannelLuts,
+	buildColorMatrix,
+	buildLut,
+	GAMMA_RANGE,
+	HUE_RANGE,
+	LEVEL_RANGE,
+	POP_RANGE
+};
 
 export function defaultEdits(width: number, height: number): ImageEdits {
 	return {
@@ -31,16 +48,6 @@ export function defaultEdits(width: number, height: number): ImageEdits {
 		width
 	};
 }
-
-/** The adjustments one grey curve can express, in the order the curve applies them. */
-const TONE_KEYS = [
-	'brightness',
-	'contrast',
-	'gamma',
-	'shadows',
-	'highlights',
-	'pop'
-] as const;
 
 /** The adjustments that need all three channels at once, and so a colour matrix. */
 const MATRIX_KEYS = ['saturation', 'hue'] as const;
@@ -142,103 +149,6 @@ export function cropFromDrag(
 /** What `buildLut` needs. Spelled out so a test can hand it three numbers. */
 export type ToneEdits = Pick<ImageEdits, (typeof TONE_KEYS)[number]>;
 
-/**
- * A 256-entry lookup table for the tonal adjustments: brightness, contrast and gamma,
- * then the three that only touch one end of the range — shadows, highlights and pop.
- *
- * One table covers every channel, which is what makes a full-size preview cheap enough to
- * redraw as a slider is dragged. The tonal half of the panel is deliberately everything
- * that can live in a table like this; hue and saturation cannot, and cost a matrix.
- */
-export function buildLut(tone: ToneEdits): Uint8ClampedArray {
-	const lut = new Uint8ClampedArray(256);
-	const offset = ((tone.brightness ?? 0) / 100) * 255;
-	// The usual contrast factor, which keeps 128 fixed and can't blow up until
-	// contrast reaches its 100 limit.
-	const level = Math.min(Math.max(tone.contrast ?? 0, -100), 100) * 2.55;
-	const factor = (259 * (level + 255)) / (255 * (259 - level));
-	const exponent =
-		1 / Math.min(Math.max(tone.gamma ?? 1, GAMMA_RANGE.min), GAMMA_RANGE.max);
-	// Gains chosen so that every one of these curves stays monotonic at its limit: a
-	// slider that can reorder two tones turns a gradient inside out, which reads as
-	// corruption rather than as a strong edit.
-	const shadows = (clampLevel(tone.shadows) / 100) * 0.25;
-	const highlights = (clampLevel(tone.highlights) / 100) * 0.25;
-	const pop = Math.min(Math.max(tone.pop ?? 0, 0), 100) / 100;
-
-	for (let value = 0; value < 256; value++) {
-		const shifted = factor * (value + offset - 128) + 128;
-		let unit = Math.pow(Math.max(0, shifted) / 255, exponent);
-
-		// Weighted by how dark (or how light) the pixel already is, so each of these two
-		// leaves the other end of the range alone -- that is the whole point of having them
-		// as well as brightness.
-		unit += shadows * (1 - unit) * (1 - unit);
-		unit += highlights * unit * unit;
-		// Smoothstep: fixed at both ends, steeper through the middle. Mixed in rather than
-		// replacing, so `pop` is a dial and not a switch.
-		unit += pop * 0.5 * (smoothstep(unit) - unit);
-
-		// Uint8ClampedArray rounds and clamps on assignment.
-		lut[value] = 255 * unit;
-	}
-
-	return lut;
-}
-
-/**
- * The tone curve, once per channel, with warmth and tint folded in as a push on the
- * channels that name those axes: warmth trades blue for red, tint trades magenta for
- * green. Both ride on top of the curve, so they grade the picture the sliders above them
- * produced.
- */
-export function buildChannelLuts(edits: ImageEdits): {
-	r: Uint8ClampedArray;
-	g: Uint8ClampedArray;
-	b: Uint8ClampedArray;
-} {
-	const tone = buildLut(edits);
-	const warmth = (clampLevel(edits.warmth) / 100) * 40;
-	const tint = (clampLevel(edits.tint) / 100) * 40;
-
-	if (warmth === 0 && tint === 0) {
-		// The common case, and worth catching: three references to one table cost nothing
-		// and `applyChannelLuts` does not care that they are the same object.
-		return {b: tone, g: tone, r: tone};
-	}
-
-	return {
-		// Tint is split across red and blue against green so that it moves the hue without
-		// also moving the brightness, the way warmth's opposed pair already does.
-		b: shiftLut(tone, -warmth - tint / 2),
-		g: shiftLut(tone, tint),
-		r: shiftLut(tone, warmth - tint / 2)
-	};
-}
-
-/**
- * A 3x3 colour matrix for saturation and hue, in that order.
- *
- * Both are the matrices the CSS filter spec gives for `saturate()` and `hue-rotate()`, so
- * these two sliders land where the equivalent `filter:` would. Worth keeping that way:
- * anything that wants to preview a grade without baking it can say it in CSS and get the
- * same picture.
- *
- * `pop` lifts saturation a little as well as bending the curve. Google Photos' slider of
- * that name does the same, and it is the reason it reads as "pop" rather than "contrast".
- */
-export function buildColorMatrix(edits: ImageEdits): number[] {
-	const pop = Math.min(Math.max(edits.pop ?? 0, 0), 100) / 100;
-	const saturation =
-		(1 + clampLevel(edits.saturation) / 100) * (1 + pop * 0.25);
-	const radians =
-		(Math.min(Math.max(edits.hue ?? 0, HUE_RANGE.min), HUE_RANGE.max) *
-			Math.PI) /
-		180;
-
-	return multiply(saturateMatrix(saturation), hueMatrix(radians));
-}
-
 /** True when `buildColorMatrix` would return the identity. */
 function neutralMatrix(edits: ImageEdits): boolean {
 	return (
@@ -293,83 +203,6 @@ export function applyAdjustments(pixels: Uint8ClampedArray, edits: ImageEdits) {
 	if (!neutralMatrix(edits)) {
 		applyColorMatrix(pixels, buildColorMatrix(edits));
 	}
-}
-
-/** -100..100, and 0 for an absent slider. */
-function clampLevel(value?: number): number {
-	return Math.min(Math.max(value ?? 0, LEVEL_RANGE.min), LEVEL_RANGE.max);
-}
-
-/** The usual 3x-squared-minus-2x-cubed ease, on 0..1. Fixed at both ends. */
-function smoothstep(unit: number): number {
-	const clamped = Math.min(Math.max(unit, 0), 1);
-
-	return clamped * clamped * (3 - 2 * clamped);
-}
-
-/** A copy of a LUT with every entry pushed by `offset` 0..255 units. */
-function shiftLut(lut: Uint8ClampedArray, offset: number): Uint8ClampedArray {
-	const shifted = new Uint8ClampedArray(256);
-
-	for (let value = 0; value < 256; value++) {
-		shifted[value] = lut[value] + offset;
-	}
-
-	return shifted;
-}
-
-/** How much each channel weighs in the luminance these two matrices preserve. */
-const LUMA = {b: 0.072, g: 0.715, r: 0.213};
-
-/** `saturate()` from the CSS filter spec. */
-function saturateMatrix(amount: number): number[] {
-	const s = Math.max(0, amount);
-
-	return [
-		LUMA.r + (1 - LUMA.r) * s,
-		LUMA.g - LUMA.g * s,
-		LUMA.b - LUMA.b * s,
-		LUMA.r - LUMA.r * s,
-		LUMA.g + (1 - LUMA.g) * s,
-		LUMA.b - LUMA.b * s,
-		LUMA.r - LUMA.r * s,
-		LUMA.g - LUMA.g * s,
-		LUMA.b + (1 - LUMA.b) * s
-	];
-}
-
-/** `hue-rotate()` from the CSS filter spec, which is where the odd constants come from. */
-function hueMatrix(radians: number): number[] {
-	const cos = Math.cos(radians);
-	const sin = Math.sin(radians);
-
-	return [
-		0.213 + cos * 0.787 - sin * 0.213,
-		0.715 - cos * 0.715 - sin * 0.715,
-		0.072 - cos * 0.072 + sin * 0.928,
-		0.213 - cos * 0.213 + sin * 0.143,
-		0.715 + cos * 0.285 + sin * 0.14,
-		0.072 - cos * 0.072 - sin * 0.283,
-		0.213 - cos * 0.213 - sin * 0.787,
-		0.715 - cos * 0.715 + sin * 0.715,
-		0.072 + cos * 0.928 + sin * 0.072
-	];
-}
-
-/** Two 3x3 matrices, as one that does `a` after `b`. */
-function multiply(a: number[], b: number[]): number[] {
-	const out = new Array<number>(9);
-
-	for (let row = 0; row < 3; row++) {
-		for (let column = 0; column < 3; column++) {
-			out[row * 3 + column] =
-				a[row * 3] * b[column] +
-				a[row * 3 + 1] * b[3 + column] +
-				a[row * 3 + 2] * b[6 + column];
-		}
-	}
-
-	return out;
 }
 
 /**

@@ -5,7 +5,7 @@
  * every intermediate state alive and a shared sub-object would corrupt the history.
  */
 
-import {LAYER_BASELINE} from '@sliders/scene-types';
+import {LAYER_BASELINE, mergeGrade, normalizeGrade} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityPatch,
@@ -45,7 +45,8 @@ export function cloneEntity(entity: StageEntity): StageEntity {
 		...(entity.steps ? {steps: cloneSteps(entity.steps)} : {}),
 		// Copied for the same reason `at` is: a stage sequence is many clones of one
 		// declaration, and a shared object is a beat able to edit the beat before it.
-		...(entity.link ? {link: {...entity.link}} : {})
+		...(entity.link ? {link: {...entity.link}} : {}),
+		...(entity.grade ? {grade: {...entity.grade}} : {})
 	};
 }
 
@@ -152,6 +153,14 @@ export function mergePatch(
 		next.highlight = patch.highlight ?? undefined;
 	}
 
+	// MERGED per key, unlike everything above: a beat that warms a character for the
+	// sunset should not have to restate the brightness the scene already gave it. A key at
+	// rest in the patch resets that key; `grade: ~` clears the lot.
+	if (patch.grade !== undefined) {
+		next.grade =
+			patch.grade === null ? undefined : mergeGrade(next.grade, patch.grade);
+	}
+
 	return next;
 }
 
@@ -173,6 +182,8 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		// says the same thing.
 		link: patch.link ?? undefined,
 		highlight: patch.highlight ?? undefined,
+		// Keys at rest dropped, and nothing at all when that leaves nothing.
+		grade: normalizeGrade(patch.grade),
 		pose: patch.pose,
 		poseLoop: patch.poseLoop,
 		ref: patch.ref,

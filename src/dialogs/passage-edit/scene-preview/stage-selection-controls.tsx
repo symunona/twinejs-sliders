@@ -21,6 +21,7 @@
  */
 
 import {
+	IconAdjustments,
 	IconArrowDown,
 	IconArrowUp,
 	IconFlipHorizontal,
@@ -30,9 +31,14 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import type {AssetResolver, StageEntity} from '@sliders/scene-types';
+import type {
+	AssetResolver,
+	EntityGrade,
+	StageEntity
+} from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
+import {GradePopover} from './grade-popover';
 
 export interface StageSelectionControlsProps {
 	assets: AssetResolver;
@@ -71,6 +77,19 @@ export interface StageSelectionControlsProps {
 	 * only one of those an author discovers without being told.
 	 */
 	onOpenLink?: (to: string) => void;
+	/**
+	 * A grade slider moved: the WHOLE grade now on screen for the single selection. The
+	 * parent paints it live and writes it (`grade-write.ts`). Absent hides the button.
+	 */
+	onGrade?: (grade: EntityGrade | undefined) => void;
+	/** Write the grade on screen: a slider was let go of, or a reset clicked. */
+	onGradeCommit?: () => void;
+	/** The popover opened or closed. Closing is the parent's cue to flush its write. */
+	onGradeOpenChange?: (open: boolean) => void;
+	/** Where a grade write lands with the scrubber where it is, in words. */
+	gradeNote?: string;
+	/** Extra popover controls, beside Reset. */
+	gradeFooter?: React.ReactNode;
 }
 
 /** No pose chosen: the renderer falls back to `idle`, or to the manifest's first pose. */
@@ -132,7 +151,12 @@ export const StageSelectionControls: React.FC<
 		onPose,
 		onOpenLink,
 		onPreviewPose,
-		onStepZ
+		onStepZ,
+		gradeFooter,
+		gradeNote,
+		onGrade,
+		onGradeCommit,
+		onGradeOpenChange
 	} = props;
 	const {t} = useTranslation();
 	const single = entities.length === 1 ? entities[0] : undefined;
@@ -149,6 +173,24 @@ export const StageSelectionControls: React.FC<
 	// Single selection only: two sprites can lead two different places, and a button that
 	// silently picked one of them would be worse than no button.
 	const link = single?.link?.to;
+	const [gradeOpen, setGradeOpen] = React.useState(false);
+	const [gradeAnchor, setGradeAnchor] = React.useState<HTMLButtonElement | null>(
+		null
+	);
+	const gradeId = single?.id;
+	const onGradeOpenChangeRef = React.useRef(onGradeOpenChange);
+
+	onGradeOpenChangeRef.current = onGradeOpenChange;
+
+	const changeGradeOpen = React.useCallback((open: boolean) => {
+		setGradeOpen(open);
+		onGradeOpenChangeRef.current?.(open);
+	}, []);
+
+	// One sprite's popover: selecting something else, or two things, closes it.
+	React.useEffect(() => {
+		changeGradeOpen(false);
+	}, [changeGradeOpen, gradeId]);
 
 	// Nothing to offer, nothing to draw. The row floats OVER the stage rather than sitting
 	// above it, so it can come and go without moving the scene — which is what the empty
@@ -249,6 +291,29 @@ export const StageSelectionControls: React.FC<
 					// screen, where the stage is large enough not to care.
 					placement="top-end"
 					tooltipLabel={t('dialogs.passageEdit.scenePreview.poseHint')}
+				/>
+			)}
+			{single && onGrade && (
+				<IconButton
+					icon={<IconAdjustments />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.grade.button')}
+					onClick={() => changeGradeOpen(!gradeOpen)}
+					ref={setGradeAnchor}
+					selectable
+					selected={gradeOpen || !!single.grade}
+					tooltipLabel={t('dialogs.passageEdit.scenePreview.grade.hint')}
+				/>
+			)}
+			{single && onGrade && gradeOpen && (
+				<GradePopover
+					anchor={gradeAnchor}
+					footer={gradeFooter}
+					grade={single.grade}
+					note={gradeNote}
+					onChange={onGrade}
+					onClose={() => changeGradeOpen(false)}
+					onCommit={() => onGradeCommit?.()}
 				/>
 			)}
 			<IconButton

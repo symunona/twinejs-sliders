@@ -85,7 +85,11 @@ describe('entity effects', () => {
 
 		await renderer.apply(stage([entity({id: 'lamp'})]), []);
 
-		const box = boxOf(mount, 'lamp');
+		// The art wrapper inside the box, beside the picture: the one element a grade:
+		// filters, so the overlay is graded with the art it copies.
+		const box = boxOf(mount, 'lamp').querySelector(
+			':scope > .sliders-entity-art'
+		) as HTMLElement;
 		const fx = fxOf(mount, 'lamp')!;
 
 		expect(fx).not.toBeNull();

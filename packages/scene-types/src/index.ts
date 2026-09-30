@@ -10,6 +10,7 @@
  */
 
 import type {WalkArea} from './walk';
+import type {EntityGrade} from './grade';
 
 /**
  * Legacy layer vocabulary. NOT a stage concept any more — entities live in one z space and
@@ -259,6 +260,15 @@ export interface StageEntity {
 	 * and `bg: {fx:}` — the extension point that costs no format change.
 	 */
 	highlight?: string;
+	/**
+	 * A live colour grade on the art — the asset editor's colour sliders, drawn by the
+	 * renderer instead of baked, so a character can take a sunset's warmth for one scene
+	 * without a second copy of every pose.
+	 *
+	 * Keys at rest are never held: `normalizeGrade` drops them, and a grade with nothing
+	 * left is absent. State, like `pose`: every later beat inherits it.
+	 */
+	grade?: EntityGrade;
 }
 
 /**
@@ -469,7 +479,7 @@ export interface BeatBase {
  * hunting down three separate Pick lists that then quietly disagree.
  */
 export type EntityPatchBody = Partial<
-	Omit<StageEntity, 'id' | 'kind' | 'ref' | 'of' | 'link' | 'highlight'>
+	Omit<StageEntity, 'id' | 'kind' | 'ref' | 'of' | 'link' | 'highlight' | 'grade'>
 > & {
 	/**
 	 * `of` is the one key a patch can also CLEAR. Everything else is set-or-inherit, but a
@@ -486,6 +496,12 @@ export type EntityPatchBody = Partial<
 	link?: EntityLink | null;
 	/** Clearable beside `link`, so a beat can drop a hint's glow without dropping the link. */
 	highlight?: string | null;
+	/**
+	 * MERGED per key over the grade the entity already has, not replaced: a beat saying
+	 * `grade: {warmth: 60}` keeps the scene's brightness. A key at rest (`warmth: 0`) resets
+	 * that one key; `null` (`grade: ~`) clears the whole grade.
+	 */
+	grade?: EntityGrade | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -1072,7 +1088,8 @@ export type TransitionKind =
 	| 'bg'
 	| 'camera'
 	| 'fx'
-	| 'music';
+	| 'music'
+	| 'grade';
 
 export interface Transition {
 	kind: TransitionKind;
@@ -1157,6 +1174,9 @@ export const DEFAULT_EASES: Record<TransitionKind, EaseName> = {
 	exit: 'ease_in',
 	flip: 'ease_out',
 	fx: 'linear',
+	// Linear because a grade that goes through an SVG filter is drawn as a cross-fade, and
+	// an eased cross-fade looks mistimed.
+	grade: 'linear',
 	move: 'ease_out',
 	music: 'linear',
 	pose: 'linear',
@@ -1826,3 +1846,4 @@ export * from './passage-name';
 export * from './bubble-fonts';
 export * from './walk';
 export * from './scene-transition';
+export * from './grade';
