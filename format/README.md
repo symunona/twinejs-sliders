@@ -29,6 +29,7 @@ The edits into Chapbook's own files, runtime half:
 | `runtime/template/custom-elements/passage-link.ts` | a link to a passage that does not exist warns and does nothing, instead of throwing out of `go()` onto the error screen |
 | `runtime/display/custom-elements/error-handler.ts` | the error message always shows; only the stack waits for `config.testing` |
 | `runtime/logger/logger.ts` | `warn()` is never muted — `unmuted` is `{inserts: true}` in a production build, so warnings reached nobody |
+| `runtime/display/custom-elements/page-transition.ts` | `startTransition()` hands the swap to `sliders/transitions.ts` — scene transitions (link / scene / story default), readiness wait for `<sliders-stage>`. Chapbook's `crossfade`/`fadeInOut` live on there as aliases |
 
 And the editor half — these are the ones 0.2.0 shipped without:
 

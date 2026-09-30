@@ -49,6 +49,7 @@ import {currentPassage, resumeAtEnd} from './history';
 import {holdLinkList, holdLinkListAgain, releaseLinkList} from './link-list';
 import {stageFrom} from './scene-graph';
 import {takeStartBeat} from './start-beat';
+import {setLinkTransition} from './transitions';
 
 const {warn} = createLoggers('scene');
 
@@ -160,6 +161,16 @@ export class SlidersStage extends CustomElement {
 	private linkListEntries: LinkListEntry[] = [];
 	private timer?: number;
 	private cinema = false;
+	private markReady!: () => void;
+
+	/**
+	 * Settles once the opening picture is drawn — first `renderer.apply` done — or the
+	 * stage gave up trying. The page transition awaits it (capped), so the view
+	 * transition's "new" snapshot is the scene and not an empty box.
+	 */
+	readonly ready: Promise<void> = new Promise(resolve => {
+		this.markReady = resolve;
+	});
 
 	private handleClick = (event: MouseEvent) => {
 		// A link is a navigation, not an advance — in a bubble (an <a>) or on the stage (an
@@ -205,7 +216,45 @@ export class SlidersStage extends CustomElement {
 			return;
 		}
 
+		setLinkTransition(this.linkTransition(name));
 		go(to);
+	};
+
+	/** A link's own `transition:`, else this scene's `linkList:` default. */
+	private linkTransition(name: string): string | undefined {
+		return (
+			this.scene?.links?.[name]?.transition ?? this.scene?.linkList?.transition
+		);
+	}
+
+	/**
+	 * The markup list under the stage is Chapbook `<passage-link>`s, which never pass
+	 * through `followLink`. They announce themselves with `passage-navigate` just before
+	 * `go()`, so the transition is picked up here, by link name and target.
+	 */
+	private handleNavigate = (event: Event) => {
+		const link = event.target as HTMLElement | null;
+		const to = link?.getAttribute('to');
+		const text = link?.textContent?.trim() ?? '';
+
+		if (!to) {
+			return;
+		}
+
+		// By name first; Markdown may have reworded it, so then by a target only one has.
+		const byTarget = Object.keys(this.links).filter(
+			name => this.links[name] === to
+		);
+		const name =
+			this.links[text] === to
+				? text
+				: byTarget.length === 1
+				? byTarget[0]
+				: undefined;
+
+		if (name !== undefined) {
+			setLinkTransition(this.linkTransition(name));
+		}
 	};
 
 	/**
@@ -222,6 +271,15 @@ export class SlidersStage extends CustomElement {
 	};
 
 	async connectedCallback() {
+		try {
+			await this.connect();
+		} finally {
+			// Every way out, including a stage that failed to mount, so nothing waits on it.
+			this.markReady();
+		}
+	}
+
+	private async connect() {
 		const payload = decodePayload(this.getAttribute('scene') ?? '');
 
 		if (!payload) {
@@ -290,8 +348,10 @@ export class SlidersStage extends CustomElement {
 		const to = resolveStage(entry);
 
 		await this.renderer.apply(to, diffStages(from, to));
+		this.markReady();
 		publishStage(entry);
 		this.addEventListener('click', this.handleClick);
+		window.addEventListener('passage-navigate', this.handleNavigate);
 		this.listenForGesture();
 
 		// Alt+T in the editor: open on the beat the author was staging. Asked before the
@@ -355,6 +415,7 @@ export class SlidersStage extends CustomElement {
 		releaseLinkList(this.linkList);
 		this.linkList = undefined;
 		this.removeEventListener('click', this.handleClick);
+		window.removeEventListener('passage-navigate', this.handleNavigate);
 		// `once` removes it on the way in, never on the way out — a stage that left before
 		// the reader touched anything would otherwise unmute the NEXT stage's renderer
 		// through a closure over a destroyed one.

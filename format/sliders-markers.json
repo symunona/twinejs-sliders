@@ -20,6 +20,7 @@
     {"feature": "Comic bubble webfonts fetched by the player", "find": "fonts.googleapis.com/css2"},
     {"feature": "Asset effect overlay drawn by the player", "find": "sliders-fx"},
     {"feature": "In-stage link list drawn by a linkList: block", "find": "sliders-linklist"},
-    {"feature": "Glitch effect channel-split filters", "find": "sliders-fx-chan-a"}
+    {"feature": "Glitch effect channel-split filters", "find": "sliders-fx-chan-a"},
+    {"feature": "Scene transitions hooked into Chapbook's page-transition", "find": "before the new stage was drawn"}
   ]
 }

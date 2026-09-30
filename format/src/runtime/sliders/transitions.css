@@ -1,0 +1,169 @@
+/*
+ * Scene transitions (transitions.ts). The kind rides on <html data-sliders-transition>
+ * for the length of one view transition; duration and ease on --page-transition-*.
+ * `fade` keeps the browser's own cross-fade.
+ */
+
+:root[data-sliders-transition]::view-transition-old(root),
+:root[data-sliders-transition]::view-transition-new(root) {
+	animation-duration: var(--page-transition-duration, 0.3s);
+	animation-timing-function: var(--page-transition-ease, linear);
+}
+
+/* Through a colour: old out in the first half, new in over the second. */
+:root[data-sliders-transition='fade-dark']::view-transition {
+	background: #000;
+}
+
+:root[data-sliders-transition='fade-light']::view-transition {
+	background: #fff;
+}
+
+:root[data-sliders-transition='fade-through']::view-transition {
+	background: var(--page-background-color, Canvas);
+}
+
+:root[data-sliders-transition^='fade-']::view-transition-old(root) {
+	animation-name: sliders-vt-out-half;
+	mix-blend-mode: normal;
+}
+
+:root[data-sliders-transition^='fade-']::view-transition-new(root) {
+	animation-name: sliders-vt-in-half;
+	mix-blend-mode: normal;
+}
+
+/* Every moving kind paints opaque pages over each other, not added together. */
+:root[data-sliders-transition^='push-']::view-transition-old(root),
+:root[data-sliders-transition^='push-']::view-transition-new(root),
+:root[data-sliders-transition^='cover-']::view-transition-old(root),
+:root[data-sliders-transition^='cover-']::view-transition-new(root),
+:root[data-sliders-transition^='uncover-']::view-transition-old(root),
+:root[data-sliders-transition^='uncover-']::view-transition-new(root),
+:root[data-sliders-transition='zoom']::view-transition-old(root),
+:root[data-sliders-transition='zoom']::view-transition-new(root) {
+	mix-blend-mode: normal;
+}
+
+/* push: both move. The direction is where the content goes. */
+:root[data-sliders-transition='push-left']::view-transition-old(root) {
+	animation-name: sliders-vt-to-left;
+}
+:root[data-sliders-transition='push-left']::view-transition-new(root) {
+	animation-name: sliders-vt-from-right;
+}
+:root[data-sliders-transition='push-right']::view-transition-old(root) {
+	animation-name: sliders-vt-to-right;
+}
+:root[data-sliders-transition='push-right']::view-transition-new(root) {
+	animation-name: sliders-vt-from-left;
+}
+:root[data-sliders-transition='push-up']::view-transition-old(root) {
+	animation-name: sliders-vt-to-top;
+}
+:root[data-sliders-transition='push-up']::view-transition-new(root) {
+	animation-name: sliders-vt-from-bottom;
+}
+:root[data-sliders-transition='push-down']::view-transition-old(root) {
+	animation-name: sliders-vt-to-bottom;
+}
+:root[data-sliders-transition='push-down']::view-transition-new(root) {
+	animation-name: sliders-vt-from-top;
+}
+
+/* cover: the new page slides in over the old, which holds still. */
+:root[data-sliders-transition^='cover-']::view-transition-old(root) {
+	animation-name: sliders-vt-hold;
+}
+:root[data-sliders-transition='cover-left']::view-transition-new(root) {
+	animation-name: sliders-vt-from-right;
+}
+:root[data-sliders-transition='cover-right']::view-transition-new(root) {
+	animation-name: sliders-vt-from-left;
+}
+:root[data-sliders-transition='cover-up']::view-transition-new(root) {
+	animation-name: sliders-vt-from-bottom;
+}
+:root[data-sliders-transition='cover-down']::view-transition-new(root) {
+	animation-name: sliders-vt-from-top;
+}
+
+/* uncover: the old page slides off, the new one waits underneath. */
+:root[data-sliders-transition^='uncover-']::view-transition-old(root) {
+	z-index: 1;
+}
+:root[data-sliders-transition^='uncover-']::view-transition-new(root) {
+	animation-name: sliders-vt-hold;
+}
+:root[data-sliders-transition='uncover-left']::view-transition-old(root) {
+	animation-name: sliders-vt-to-left;
+}
+:root[data-sliders-transition='uncover-right']::view-transition-old(root) {
+	animation-name: sliders-vt-to-right;
+}
+:root[data-sliders-transition='uncover-up']::view-transition-old(root) {
+	animation-name: sliders-vt-to-top;
+}
+:root[data-sliders-transition='uncover-down']::view-transition-old(root) {
+	animation-name: sliders-vt-to-bottom;
+}
+
+/* zoom: the old page swells and fades, the new one grows into place. */
+:root[data-sliders-transition='zoom']::view-transition-old(root) {
+	animation-name: sliders-vt-zoom-out;
+}
+:root[data-sliders-transition='zoom']::view-transition-new(root) {
+	animation-name: sliders-vt-zoom-in;
+}
+
+@keyframes sliders-vt-out-half {
+	0% { opacity: 1; }
+	50%, 100% { opacity: 0; }
+}
+@keyframes sliders-vt-in-half {
+	0%, 50% { opacity: 0; }
+	100% { opacity: 1; }
+}
+@keyframes sliders-vt-hold {
+	from, to { opacity: 1; }
+}
+@keyframes sliders-vt-to-left {
+	from { transform: translateX(0); }
+	to { transform: translateX(-100%); }
+}
+@keyframes sliders-vt-to-right {
+	from { transform: translateX(0); }
+	to { transform: translateX(100%); }
+}
+@keyframes sliders-vt-to-top {
+	from { transform: translateY(0); }
+	to { transform: translateY(-100%); }
+}
+@keyframes sliders-vt-to-bottom {
+	from { transform: translateY(0); }
+	to { transform: translateY(100%); }
+}
+@keyframes sliders-vt-from-left {
+	from { transform: translateX(-100%); }
+	to { transform: translateX(0); }
+}
+@keyframes sliders-vt-from-right {
+	from { transform: translateX(100%); }
+	to { transform: translateX(0); }
+}
+@keyframes sliders-vt-from-top {
+	from { transform: translateY(-100%); }
+	to { transform: translateY(0); }
+}
+@keyframes sliders-vt-from-bottom {
+	from { transform: translateY(100%); }
+	to { transform: translateY(0); }
+}
+@keyframes sliders-vt-zoom-out {
+	from { opacity: 1; transform: scale(1); }
+	to { opacity: 0; transform: scale(1.15); }
+}
+@keyframes sliders-vt-zoom-in {
+	from { opacity: 0; transform: scale(0.85); }
+	to { opacity: 1; transform: scale(1); }
+}

@@ -26,6 +26,7 @@ import type {Modifier} from '../template/modifiers';
 import {showSceneLinks} from './config';
 import {encodePayload} from './stage-element';
 import {SCENE_MODIFIER} from './scene-only';
+import {noteSceneTransition} from './transitions';
 
 const {warn} = createLoggers('scene');
 
@@ -88,6 +89,9 @@ export const sceneModifier: Modifier = {
 		for (const message of messages) {
 			warn(message);
 		}
+
+		// How this passage arrives (`transitions.ts`). Only the first scene in it counts.
+		noteSceneTransition(scene.transition, Boolean(scene.from));
 
 		// Several scenes in one passage each need their own element identity.
 		const count = typeof state.count === 'number' ? state.count : 0;

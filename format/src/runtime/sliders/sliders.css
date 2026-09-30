@@ -1,3 +1,5 @@
+@import './transitions.css';
+
 /* The stage in the page column: a 16:9 box the passage flows around. */
 
 sliders-stage {

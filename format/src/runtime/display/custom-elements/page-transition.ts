@@ -1,6 +1,5 @@
-import timestring from 'timestring';
 import {DisplayChangeEventDetail} from '../../custom-events';
-import {get} from '../../state';
+import {startSlidersTransition} from '../../sliders/transitions';
 import {CustomElement} from '../../util/custom-element';
 import './page-transition.css';
 
@@ -21,57 +20,11 @@ export class PageTransition extends CustomElement {
     callback: () => void | Promise<void>,
     options: UpdateContentOptions = {}
   ) {
-    const transitionName = get('config.body.transition.name');
-    const transitionDuration = get('config.body.transition.duration');
-    const parsedDuration =
-      typeof transitionDuration === 'string'
-        ? timestring(transitionDuration, 's')
-        : 0;
+    // Sliders edit (see format/README.md): the swap, its transition (link, scene,
+    // story default) and the wait for a new <sliders-stage> live in the Sliders layer.
+    // Chapbook's crossfade / fadeInOut are still read there, as aliases.
 
-    if (
-      document.startViewTransition &&
-      typeof transitionName === 'string' &&
-      ['crossfade', 'fadeInOut'].includes(transitionName) &&
-      parsedDuration > 0
-    ) {
-      if (transitionName === 'crossfade') {
-        document.documentElement.style.setProperty(
-          '--page-transition-duration',
-          `${parsedDuration}s`
-        );
-        document.startViewTransition(async () => {
-          await callback();
-
-          if (!options.preserveWindowScroll) {
-            window.scrollTo(0, 0);
-          }
-        });
-      } else {
-        document.documentElement.style.setProperty(
-          '--page-transition-duration',
-          `${parsedDuration / 2}s`
-        );
-        const fadeOut = document.startViewTransition(async () => {
-          this.style.visibility = 'hidden';
-        });
-
-        await fadeOut.finished;
-        document.startViewTransition(async () => {
-          this.style.visibility = 'visible';
-          await callback();
-
-          if (!options.preserveWindowScroll) {
-            window.scrollTo(0, 0);
-          }
-        });
-      }
-    } else {
-      await callback();
-
-      if (!options.preserveWindowScroll) {
-        window.scrollTo(0, 0);
-      }
-    }
+    await startSlidersTransition(this, callback, options.preserveWindowScroll);
   }
 
   handleEvent({detail}: CustomEvent<DisplayChangeEventDetail>) {

@@ -38,7 +38,8 @@ import {
 	FIT_Z,
 	POSE_LOOPS,
 	LAYERS,
-	SCENE_LOCKS
+	SCENE_LOCKS,
+	SCENE_TRANSITION_KINDS
 } from '@sliders/scene-types';
 import {DEFAULT_DURATIONS} from '@sliders/scene-core';
 import {DialogCard} from '../../components/container/dialog-card';
@@ -74,7 +75,10 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	locked: `What the visual editor must not let a gesture change here: true for the whole stage, or a list — ${SCENE_LOCKS.join(
 		', '
 	)}. An editor hint only; the player ignores it. Use it on a shot that is already framed, where grabbing empty ground would pan it by accident.`,
-	props: 'Objects on stage. Same entry shape as cast:.'
+	props: 'Objects on stage. Same entry shape as cast:.',
+	transition: `How THIS scene arrives: transition: push-left 0.6s in_out, or {kind: push-left, dur: 0.6, ease: in_out}. Kinds: ${SCENE_TRANSITION_KINDS.join(
+		', '
+	)}. Order, first wins: the clicked link\u2019s transition:, the leaving scene\u2019s linkList: transition:, this, the story\u2019s config.body.transition.name / .duration / .ease. Not inherited through from: \u2014 a from: scene with none of the first three cuts, its stage change is the transition. Capped at 2s. Stepping back plays it reversed.`
 };
 
 const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
@@ -193,7 +197,8 @@ const LINK_HELP: KeyHelp<typeof LINK_KEYS> = {
 	icon: 'Icon name shown on the choice.',
 	if: 'Only offer this choice when the condition holds. See the warning below.',
 	to: 'Target passage name. Optional when a beat already wrote [[name->Target]].',
-	transition: 'How the next passage arrives, e.g. fade.'
+	transition:
+		'How the next passage arrives when this one is clicked: push-left 0.6s, fade-dark, cut. Beats the destination scene\u2019s own transition:. Same grammar as the scene key.'
 };
 
 /** A YAML sample. Monospaced, never wrapped, never editable. */

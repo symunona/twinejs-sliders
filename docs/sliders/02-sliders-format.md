@@ -170,6 +170,7 @@ links:
 | `beats` | seq | the timeline |
 | `links` | map of name → props | link targets + props |
 | `linkList` | map | where the link list draws, and what its entries inherit. Absent = Chapbook links under the stage. |
+| `transition` | word(s) or map | how THIS scene arrives. See Scene transitions. NOT inherited through `from:`. |
 
 #### No name of its own
 
@@ -668,7 +669,7 @@ creates a passage named `" Tavern Fight"` with a leading space — which then si
 to match the real one.
 
 Link props: `to`, `if`, `icon`, `transition`. `to:` is optional when the target is inline;
-the parser fills it in.
+the parser fills it in. `transition:` grammar: Scene transitions, below.
 
 **Ctrl-Space under `links:` lists every passage** and writes the whole entry:
 `Street: Street`. On `links:` itself it brings the map — `links: {Street: Street}`. The
@@ -765,6 +766,45 @@ and `bg: {fx:}` have, so a new look is a stylesheet, not a format change:
   border: 2px solid #6b4f1d;
 }
 ```
+
+### Scene transitions — `transition:`
+
+How the next passage arrives. One grammar (`parseSceneTransition`, scene-types) for link `transition:`, `linkList: {transition:}`, scene `transition:`, story `config.body.transition.name`.
+
+```yaml
+transition: push-left                     # kind only
+transition: push-left 0.6s in_out         # tokens any order
+transition: {kind: push-left, dur: 0.6, ease: in_out}
+```
+
+| Token | Values |
+|---|---|
+| kind | `cut` (`none`), `fade` (`crossfade`), `fade-dark`, `fade-light`, `fade-through` (`fadeInOut`), `push-left/right/up/down`, `cover-<dir>`, `uncover-<dir>`, `zoom` |
+| dur | `0.6s`, `600ms`, bare number = s. Capped 2s. `0` = cut. |
+| ease | beat `ease:` words (`ease_in_out`, `back_out`, …, CSS) + `in`, `out`, `inOut`/`in_out` |
+
+- No kind = `fade`. Unknown token = warning, skipped. Nothing readable = next layer answers.
+- Direction = where content goes. `push`: both move. `cover`: new slides over old. `uncover`: old slides off new.
+- Missing dur/ease: story `config.body.transition.duration` / `.ease`, then 300ms / per kind (fades linear, moves `ease_in_out`).
+
+Precedence, first wins:
+
+| # | Source |
+|---|---|
+| 1 | clicked link's own `transition:` |
+| 2 | leaving scene's `linkList: {transition:}` |
+| 3 | destination scene's top-level `transition:` |
+| — | destination has `from:`, none of 1–3 → `cut` (stage diff IS the transition) |
+| 4 | story `config.body.transition.name` / `.duration` / `.ease` (Chapbook vars) |
+| 5 | `fade` 300ms |
+
+Player:
+
+- View Transitions API. None in browser → cut. `prefers-reduced-motion` → fade.
+- Swap waits for the new `<sliders-stage>` first draw (`ready`), capped 800ms. No empty-stage flash.
+- Back step (keyboard) plays the arrival reversed: `push-left` ↔ `push-right`, `cover-left` ↔ `uncover-right`.
+- Links in the Chapbook list under the stage honour it too (`passage-navigate`).
+- Code: `format/src/runtime/sliders/transitions.ts` + `.css`. Hook: Chapbook `page-transition.ts`.
 
 ### Clickable objects: `link:`
 

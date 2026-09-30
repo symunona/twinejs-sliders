@@ -27,6 +27,9 @@ import {
 	POSE_LOOPS,
 	SCENE_LOCKS,
 	easeValue,
+	formatSceneTransition,
+	parseSceneTransition,
+	SCENE_TRANSITION_KEYS,
 	type Beat,
 	type BeatEase,
 	type BubbleAnchor,
@@ -75,6 +78,7 @@ export const TOP_LEVEL_KEYS = [
 	'music',
 	'autoAdvance',
 	'ease',
+	'transition',
 	'bubble',
 	'locked',
 	'beats',
@@ -1167,6 +1171,71 @@ function parseEaseToken(
 	}
 
 	return token;
+}
+
+/**
+ * `transition:` — on a link, on `linkList:`, or on the scene. One grammar, in
+ * `parseSceneTransition` (scene-types), which the player reads too.
+ *
+ * Kept as the string the author wrote; the map form is folded into the same one-line
+ * string. Every complaint is a WARNING: a transition that cannot be read falls through to
+ * the next layer and the scene plays.
+ */
+function parseTransitionNode(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): string | undefined {
+	if (isNullNode(node)) {
+		return undefined;
+	}
+
+	let spec: string | undefined;
+	let raw: unknown;
+
+	if (isScalar(node)) {
+		spec = asString(ctx, node, label);
+		raw = spec;
+	} else if (isMap(node)) {
+		const map: Record<string, unknown> = {};
+
+		for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === undefined) {
+				addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+				continue;
+			}
+
+			if (!(SCENE_TRANSITION_KEYS as readonly string[]).includes(key)) {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+					...keyFix(key, SCENE_TRANSITION_KEYS)
+				});
+				continue;
+			}
+
+			map[key] = scalarValue(pair.value);
+		}
+
+		raw = map;
+		spec = formatSceneTransition(map) || undefined;
+	} else {
+		addError(ctx, 'bad-value', `${label} must be a word or a map.`, node, {
+			hint: `${label}: push-left 0.6s, or {kind: push-left, dur: 0.6, ease: in_out}`,
+			severity: 'warning'
+		});
+		return undefined;
+	}
+
+	if (spec === undefined) {
+		return undefined;
+	}
+
+	for (const message of parseSceneTransition(raw).warnings) {
+		addError(ctx, 'bad-value', message, node, {severity: 'warning'});
+	}
+
+	return spec;
 }
 
 /**
@@ -2641,6 +2710,8 @@ function parseLinks(ctx: Ctx, map: YAMLMap, scene: Scene): void {
 						? asSourceString(ctx, prop.value, 'link to')
 						: key === 'if'
 						? parseIf(ctx, prop.value, 'link if')
+						: key === 'transition'
+						? parseTransitionNode(ctx, prop.value, 'link transition')
 						: asString(ctx, prop.value, `link ${key}`);
 
 				if (value !== undefined) {
@@ -2699,14 +2770,22 @@ function parseLinkList(ctx: Ctx, node: unknown): LinkListStyle | undefined {
 		}
 
 		switch (key) {
-			case 'as':
-			case 'icon':
 			case 'transition': {
-				// None of the three is checked against a list. `as:` is a style token a
-				// story may invent and paint in its own stylesheet, exactly as a bubble's
-				// is, and the other two are defaults for keys `links:` does not check
-				// either — a name the renderer cannot resolve draws no icon, it does not
-				// break the scene.
+				const value = parseTransitionNode(ctx, pair.value, 'linkList transition');
+
+				if (value !== undefined) {
+					style.transition = value;
+				}
+
+				break;
+			}
+
+			case 'as':
+			case 'icon': {
+				// Neither is checked against a list. `as:` is a style token a story may
+				// invent and paint in its own stylesheet, exactly as a bubble's is, and
+				// `icon:` is a default for a key `links:` does not check either — a name
+				// the renderer cannot resolve draws no icon, it does not break the scene.
 				const value = asString(ctx, pair.value, `linkList ${key}`);
 
 				if (value !== undefined) {
@@ -3192,6 +3271,18 @@ function parseSceneDoc(text: string): ParseResult {
 
 				if (seconds !== undefined) {
 					scene.autoAdvance = seconds;
+				}
+
+				break;
+			}
+
+			case 'transition': {
+				// This scene's own arrival. NOT inherited through `from:` — see
+				// `Scene.transition`.
+				const transition = parseTransitionNode(ctx, pair.value, 'transition');
+
+				if (transition !== undefined) {
+					scene.transition = transition;
 				}
 
 				break;

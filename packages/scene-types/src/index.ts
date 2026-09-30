@@ -757,6 +757,7 @@ export interface SceneLink {
 	to: string;
 	if?: string;
 	icon?: string;
+	/** How the next passage arrives. Grammar: `parseSceneTransition`. */
 	transition?: string;
 }
 
@@ -847,6 +848,14 @@ export interface Scene {
 	 * replaces did. A `dur: 0` is a different statement and still means "snap and go on".
 	 */
 	autoAdvance?: number;
+	/**
+	 * How THIS scene arrives when the reader lands on it, as written (`push-left 0.6s`).
+	 * Grammar: `parseSceneTransition`. Below the clicked link's own `transition:` and the
+	 * leaving scene's `linkList:` default, above the story's `config.body.transition.*`.
+	 * NOT inherited through `from:` — a `from:` scene with no transition anywhere cuts,
+	 * because its stage diff already is the transition.
+	 */
+	transition?: string;
 	/**
 	 * How this scene's stage changes move, for every beat that does not say otherwise.
 	 *
@@ -1816,3 +1825,4 @@ export interface Renderer {
 export * from './passage-name';
 export * from './bubble-fonts';
 export * from './walk';
+export * from './scene-transition';
