@@ -798,6 +798,10 @@ Precedence, first wins:
 | 4 | story `config.body.transition.name` / `.duration` / `.ease` (Chapbook vars) |
 | 5 | `fade` 300ms |
 
+⚠️ Chapbook vars are JS: **quote** the values. `config.body.transition.name: 'zoom'`, `.duration: '500ms'`, `.ease: 'out'`. Unquoted `500ms` breaks the story start.
+
+⚠️ Known gap: cut into a `from:` scene does not tween the inherited stage (fresh renderer, `from` picture never painted). Pre-existing.
+
 Player:
 
 - View Transitions API. None in browser → cut. `prefers-reduced-motion` → fade.
