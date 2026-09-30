@@ -42,6 +42,7 @@ import {
 	EASE_KINDS,
 	EASE_NAMES,
 	ENTITY_FITS,
+	GRADE_KEYS,
 	POSE_LOOPS,
 	LAYERS
 } from '@sliders/scene-types';
@@ -423,6 +424,10 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		// `links:` block's own keys — a door has no icon and no transition of its own.
 		case 'link':
 			return keys('entityLink', LINK_ENTITY_KEYS);
+
+		// `grade: {warmth: 30}` -- the asset editor's colour sliders, by name.
+		case 'grade':
+			return keys('grade', GRADE_KEYS);
 
 		// An `ease:` map is keyed by WHAT is moving, not by an entity key. Its members
 		// collide with real keys elsewhere in the subset (`bg`, `fx`, `pose`, `music`),
