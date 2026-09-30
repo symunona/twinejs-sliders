@@ -75,7 +75,7 @@ import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
 import {useActiveBeatMark} from './use-active-beat-mark';
 import {useRequestedBeat} from './preview-beat-request';
-import {useFirstBeat} from './use-first-beat';
+import {useArrivalBeat} from './use-arrival-beat';
 import {useStageSelection} from './use-stage-selection';
 import {
 	applyCameraPatch,
@@ -1307,9 +1307,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		setPlaying(p => !p);
 	}
 
-	// Arriving at a passage stands on its first beat, not on the stage before any beat ran.
-	useFirstBeat(passageId, parse, setBeat);
-	// After `useFirstBeat`, so an explicit request beats the arrival default.
+	// Arriving at a passage stands on state 0, so a first drag edits the scene's defaults.
+	useArrivalBeat(passageId, setBeat);
+	// After `useArrivalBeat`, so an explicit request beats the arrival default.
 	useRequestedBeat(passageId, parse, setBeat);
 
 	// Keep the scrubber in range when the author edits beats out from under it.

@@ -41,8 +41,8 @@ export function clearPreviewBeatRequest(): void {
  * Applies a pending request for this passage, once the parse can answer how many beats
  * there are.
  *
- * Runs after `useFirstBeat`, and wins: an explicit "beat 4" is a later instruction than
- * "this is a new passage, go to its opening shot".
+ * Runs after `useArrivalBeat`, and wins: an explicit "beat 4" is a later instruction than
+ * "this is a new passage, go to state 0".
  *
  * The scrubber counts STATES, not beats — state 0 is the stage before anything has run,
  * so beat N is state N+1. Clamped to the last state the parse produced, because a model
