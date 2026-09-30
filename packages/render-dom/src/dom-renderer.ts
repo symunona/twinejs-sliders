@@ -62,14 +62,7 @@ import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 import {injectEffectSupport, syncEffect} from './effect-host';
 import {effectIsIdle} from './effects';
-import {
-	GRADE_DUR_VAR,
-	GRADE_EASE_VAR,
-	GRADE_PX_VAR,
-	GRADE_VAR,
-	holdGrade,
-	type GradeHandle
-} from './grade';
+import {GRADE_PX_VAR, holdGrade, type GradeHandle} from './grade';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
 export const ENTER_RISE = 0.03;
@@ -117,6 +110,13 @@ export interface DomRendererOptions {
 interface EntityRecord {
 	id: EntityId;
 	el: HTMLDivElement;
+	/**
+	 * `.sliders-entity-art`: everything that DRAWS the sprite — the pose `<img>`, a pose
+	 * cross-fade's ghost, the effect overlay, a placeholder — and nothing that places it.
+	 * The `grade:` filter lives here (see `syncGrade`), so it survives whatever happens to
+	 * the picture inside: a pose swap, a step list, an animated file, a future canvas pose.
+	 */
+	art: HTMLDivElement;
 	entity: StageEntity;
 	/** Resolved manifest for cast entities. Undefined for props and unknown characters. */
 	character?: Character;
@@ -152,7 +152,7 @@ interface EntityRecord {
 	grade?: GradeHandle;
 	/** The outgoing picture of a grade cross-fade, and the hold on its old filter. */
 	gradeGhost?: {
-		el: HTMLImageElement;
+		el: HTMLDivElement;
 		handle: GradeHandle;
 		timer: ReturnType<typeof setTimeout>;
 	};
@@ -983,6 +983,9 @@ export class DomRenderer implements Renderer {
 		ease = cssEase(undefined, 'enter')
 	): void {
 		const el = this.el('div', 'sliders-entity');
+		const art = this.el('div', 'sliders-entity-art');
+
+		el.appendChild(art);
 
 		// Stable hooks the e2e suite selects on. Do not rename.
 		el.dataset.entityId = id;
@@ -993,6 +996,7 @@ export class DomRenderer implements Renderer {
 		const rec: EntityRecord = {
 			id,
 			el,
+			art,
 			entity: res.entity,
 			character: res.character,
 			poseName: res.poseName,
@@ -1334,7 +1338,7 @@ export class DomRenderer implements Renderer {
 				return;
 			}
 
-			rec.el.replaceChildren();
+			rec.art.replaceChildren();
 			rec.img = undefined;
 			rec.assetId = undefined;
 			rec.url = undefined;
@@ -1345,7 +1349,7 @@ export class DomRenderer implements Renderer {
 
 			ph.dataset.assetId = res.placeholderId ?? res.entity.ref;
 			ph.textContent = res.placeholderLabel ?? '?';
-			rec.el.appendChild(ph);
+			rec.art.appendChild(ph);
 
 			return;
 		}
@@ -1365,20 +1369,20 @@ export class DomRenderer implements Renderer {
 		img.draggable = false;
 		img.decoding = 'async';
 		img.src = res.url!;
-		rec.el.replaceChildren();
+		rec.art.replaceChildren();
 
 		// Cross-fade pose swaps: the outgoing image rides along on top, fading out.
 		if (previous && duration > 0) {
 			previous.classList.add('sliders-ghost');
 			previous.style.transitionDuration = `${duration}s`;
 			previous.style.transitionTimingFunction = ease;
-			rec.el.appendChild(img);
-			rec.el.appendChild(previous);
+			rec.art.appendChild(img);
+			rec.art.appendChild(previous);
 			void previous.offsetWidth;
 			previous.style.opacity = '0';
 			setTimeout(() => previous.remove(), duration * 1000);
 		} else {
-			rec.el.appendChild(img);
+			rec.art.appendChild(img);
 		}
 
 		rec.img = img;
@@ -1474,7 +1478,7 @@ export class DomRenderer implements Renderer {
 		}
 
 		// After the <img>, so the layers blend against the picture rather than under it.
-		rec.el.appendChild(rec.fx);
+		rec.art.appendChild(rec.fx);
 		// A plane's layers take the plane's own fit and sit centred; a sprite's take the
 		// registration point `applyPoseFit` just wrote, so a layer letterboxes exactly as the
 		// art does and a tear reads as a tear rather than as a permanent double image.
@@ -1487,19 +1491,19 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
-	 * The entity's `grade:`, as the custom property the stylesheet hangs the filter on.
+	 * The entity's `grade:`, as the `filter` of its art wrapper (`rec.art`).
 	 *
-	 * On the sprite BOX, read by its children: the `<img>`, a pose cross-fade's ghost and an
-	 * effect's layers all take `filter: var(--sliders-grade)` (`styles.ts`, `effect-host.ts`),
-	 * so the art and its glitch bands are graded alike without a wrapper element — wrapping
-	 * would reparent the `<img>` and restart an animated one. The link glow is written AFTER
-	 * the grade in the same filter list, so it keeps its own colour.
+	 * WRAPPER-level, never on the `<img>`: the picture inside is swapped all the time — a
+	 * pose change, every step of a step list, a cross-fade that holds two of them — and a
+	 * grade written per image would have to be re-applied at each swap and would drop out
+	 * of the ghost. On the wrapper, nothing inside needs to know a grade exists. It also
+	 * grades the effect overlay's composite exactly as a baked asset would look, and keeps
+	 * clear of the link glow, which is a `drop-shadow` on the OUTER box.
 	 *
-	 * Timing: a native grade (contrast, hue, saturation, blur) rides the element's own CSS
+	 * Timing: a native grade (contrast, hue, saturation, blur) rides the wrapper's own CSS
 	 * `filter` transition. A grade with an SVG half cannot — `url()` does not interpolate —
-	 * so the new grade snaps on the `<img>` and a copy of it wearing the OLD filter fades
-	 * out on top. Effect layers snap in that case; they are interference, and a tear that
-	 * cross-fades would read as two tears.
+	 * so the new grade snaps on the wrapper and a COPY of the wrapper wearing the old filter
+	 * fades out on top of it.
 	 */
 	private syncGrade(
 		rec: EntityRecord,
@@ -1507,45 +1511,36 @@ export class DomRenderer implements Renderer {
 		duration: number,
 		ease = cssEase(undefined, 'grade')
 	): void {
-		const style = rec.el.style;
+		const style = rec.art.style;
 		const next = holdGrade(this.doc, entity.grade);
 		const prevCss = rec.grade?.css ?? '';
 
 		if (next.css === prevCss) {
 			next.release();
-			// The timing belongs to the beat that changed the grade. Left behind, it would
-			// also time the link glow's hover fade on every beat after.
-			style.removeProperty(GRADE_DUR_VAR);
-			style.removeProperty(GRADE_EASE_VAR);
 			this.syncGradeScale(rec);
 			return;
 		}
 
 		const prev = rec.grade;
 		const svg = prevCss.startsWith('url(') || next.css.startsWith('url(');
-		const fade = duration > 0 && svg && !!rec.img && !!rec.img.isConnected;
+		const fade = duration > 0 && svg && rec.art.isConnected;
 
 		// A cross-fade still running is overtaken: its picture is two grades old.
 		this.finishGradeGhost(rec);
 
-		if (duration > 0 && !svg) {
-			style.setProperty(GRADE_DUR_VAR, `${duration}s`);
-			style.setProperty(GRADE_EASE_VAR, ease);
-		} else {
-			style.removeProperty(GRADE_DUR_VAR);
-			style.removeProperty(GRADE_EASE_VAR);
-		}
+		style.transitionDuration = duration > 0 && !svg ? `${duration}s` : '0s';
+		style.transitionTimingFunction = ease;
 
 		if (fade) {
-			const ghost = rec.img!.cloneNode(false) as HTMLImageElement;
+			const ghost = rec.art.cloneNode(true) as HTMLDivElement;
 
-			ghost.classList.add('sliders-ghost');
+			ghost.classList.add('sliders-entity-art-ghost');
 			ghost.setAttribute('aria-hidden', 'true');
-			ghost.style.filter = prevCss || 'none';
+			ghost.style.filter = prevCss;
+			ghost.style.transitionProperty = 'opacity';
 			ghost.style.transitionDuration = `${duration}s`;
 			ghost.style.transitionTimingFunction = ease;
-			// Straight after the picture, so an effect overlay still paints over both.
-			rec.img!.after(ghost);
+			rec.art.after(ghost);
 			void ghost.offsetWidth;
 			ghost.style.opacity = '0';
 			rec.gradeGhost = {
@@ -1557,12 +1552,7 @@ export class DomRenderer implements Renderer {
 			prev?.release();
 		}
 
-		if (next.css) {
-			style.setProperty(GRADE_VAR, next.css);
-		} else {
-			style.removeProperty(GRADE_VAR);
-		}
-
+		style.filter = next.css;
 		rec.grade = next.css ? next : undefined;
 		this.syncGradeScale(rec);
 	}
@@ -1666,7 +1656,7 @@ export class DomRenderer implements Renderer {
 		style.width = `${metrics.width}px`;
 		style.height = `${metrics.height}px`;
 		style.transformOrigin = `${metrics.origin.x * 100}% ${metrics.origin.y * 100}%`;
-		style.transitionDuration = `${Math.max(0, duration)}s`;
+		style.transitionDuration = boxDurations(rec.el, duration);
 		style.transitionTimingFunction = ease;
 		// Order is the renderer's to decide, and this is why `rot` is a key rather than a
 		// CSS string the author writes: the mirror has to come LAST so it is applied to the
@@ -1720,7 +1710,7 @@ export class DomRenderer implements Renderer {
 		style.width = '100%';
 		style.height = '100%';
 		style.transformOrigin = '50% 50%';
-		style.transitionDuration = `${Math.max(0, duration)}s`;
+		style.transitionDuration = boxDurations(rec.el, duration);
 		style.transitionTimingFunction = ease;
 		style.transform = `scaleX(${entity.flip ? -1 : 1})`;
 		style.opacity = String(
@@ -2316,6 +2306,22 @@ function normalizeCamera(camera: Camera | undefined): Camera {
 		at: {x: camera?.at?.x ?? 0, y: camera?.at?.y ?? 0},
 		zoom: safeZoom(camera?.zoom)
 	};
+}
+
+/** How long a clickable sprite's hover glow takes to come and go, seconds. */
+const GLOW_FADE = 0.18;
+
+/**
+ * `transition-duration` for a sprite box. One value, except on a clickable one: its
+ * stylesheet lists `filter` fifth for the hover glow (`styles.ts`), and the glow keeps its
+ * own short fade whatever the beat's move takes.
+ */
+function boxDurations(el: HTMLElement, duration: number): string {
+	const seconds = `${Math.max(0, duration)}s`;
+
+	return el.dataset.slidersLink === undefined
+		? seconds
+		: `${seconds}, ${seconds}, ${seconds}, ${seconds}, ${GLOW_FADE}s`;
 }
 
 function clamp01(n: number): number {

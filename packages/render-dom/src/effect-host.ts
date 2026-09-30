@@ -73,12 +73,8 @@ export const FX_CSS = `
 	mix-blend-mode: lighten;
 }
 
-/* A graded sprite's layers take its grade FIRST (\`--sliders-grade\`, set on the sprite
-   box by the renderer, empty everywhere else), so a split channel is a channel of the
-   graded picture and \`lighten\` against the graded base is still the identity at rest. */
-.sliders-fx-layer[data-fx='split-a'] { filter: var(--sliders-grade,) url(#sliders-fx-chan-a); }
-.sliders-fx-layer[data-fx='split-b'] { filter: var(--sliders-grade,) url(#sliders-fx-chan-b); }
-.sliders-fx-layer[data-fx='band'] { filter: var(--sliders-grade, none); }
+.sliders-fx-layer[data-fx='split-a'] { filter: url(#sliders-fx-chan-a); }
+.sliders-fx-layer[data-fx='split-b'] { filter: url(#sliders-fx-chan-b); }
 
 .sliders-fx-layer[data-fx='scanlines'] {
 	background-image: repeating-linear-gradient(

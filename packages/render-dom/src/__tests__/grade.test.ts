@@ -11,9 +11,7 @@ import {buildChannelLuts, buildColorMatrix} from '@sliders/scene-types';
 import type {Stage, StageEntity, Transition} from '@sliders/scene-types';
 import {DomRenderer} from '../dom-renderer';
 import {
-	GRADE_DUR_VAR,
 	GRADE_PX_VAR,
-	GRADE_VAR,
 	gradeFilter,
 	gradeFilterCount,
 	gradeIsNative,
@@ -203,14 +201,74 @@ describe('DomRenderer and grade:', () => {
 		return {box, mount, renderer};
 	}
 
-	it('writes the filter on the sprite box, where the stylesheet reads it', async () => {
+	const art = (box: HTMLElement) =>
+		box.querySelector(':scope > .sliders-entity-art') as HTMLElement;
+
+	it('writes the filter on the art wrapper, not the image or the box', async () => {
 		const {box, renderer} = await mounted();
 
 		await renderer.apply(stage([entity({grade: {hue: 20}, id: 'lamp'})]), []);
-		expect(box().style.getPropertyValue(GRADE_VAR)).toBe(gradeFilter({hue: 20}).css);
+		expect(art(box()).style.filter).toBe(gradeFilter({hue: 20}).css);
+		expect(art(box()).querySelector('img')).not.toBeNull();
+		expect((art(box()).querySelector('img') as HTMLElement).style.filter).toBe('');
+		expect(box().style.filter).toBe('');
 
 		await renderer.apply(stage([entity({id: 'lamp'})]), []);
-		expect(box().style.getPropertyValue(GRADE_VAR)).toBe('');
+		expect(art(box()).style.filter).toBe('');
+	});
+
+	it('keeps the grade across a pose change: the wrapper stays, the image swaps', async () => {
+		const {mount, renderer} = await mounted();
+		const mira = (pose: string): StageEntity => ({
+			...entity({grade: {warmth: 30}, id: 'mira', pose}),
+			kind: 'cast',
+			ref: 'mira'
+		});
+		const wrapper = () =>
+			mount.querySelector(
+				".sliders-entity[data-entity-id='mira'] > .sliders-entity-art"
+			) as HTMLElement;
+
+		await renderer.apply(stage([mira('idle')]), []);
+
+		const before = wrapper();
+		const img = before.querySelector('img');
+
+		await renderer.apply(stage([mira('angry')]), [
+			{duration: 0.2, entityId: 'mira', kind: 'pose'}
+		]);
+
+		expect(wrapper()).toBe(before);
+		expect(before.querySelector('img:not(.sliders-ghost)')).not.toBe(img);
+		expect(before.style.filter).toBe(gradeFilter({warmth: 30}).css);
+		expect(document.getElementById(gradeFilter({warmth: 30}).svg!.id)).not.toBeNull();
+	});
+
+	it('keeps the grade while a step list swaps the picture on its own clock', async () => {
+		const {mount, renderer} = await mounted();
+		const walker: StageEntity = {
+			...entity({grade: {warmth: 30}, id: 'mira', pose: 'idle'}),
+			kind: 'cast',
+			ref: 'mira',
+			steps: [
+				{dur: 0.1, name: 'idle'},
+				{dur: 0.1, name: 'angry'}
+			]
+		};
+
+		await renderer.apply(stage([walker]), []);
+
+		const wrapper = mount.querySelector(
+			".sliders-entity[data-entity-id='mira'] > .sliders-entity-art"
+		) as HTMLElement;
+		const first = wrapper.querySelector('img')?.getAttribute('src');
+
+		jest.advanceTimersByTime(150);
+		await Promise.resolve();
+
+		expect(wrapper.isConnected).toBe(true);
+		expect(wrapper.querySelector('img')?.getAttribute('src')).not.toBe(first);
+		expect(wrapper.style.filter).toBe(gradeFilter({warmth: 30}).css);
 	});
 
 	it('times a native change on the beat, through the CSS transition', async () => {
@@ -221,15 +279,11 @@ describe('DomRenderer and grade:', () => {
 			stage([entity({grade: {saturation: -50}, id: 'lamp'})]),
 			gradeTransition(0.8)
 		);
-		expect(box().style.getPropertyValue(GRADE_DUR_VAR)).toBe('0.8s');
-		expect(box().querySelector('.sliders-ghost')).toBeNull();
-
-		// The next beat leaves it alone, and takes the timing away with it.
-		await renderer.apply(stage([entity({grade: {saturation: -50}, id: 'lamp'})]), []);
-		expect(box().style.getPropertyValue(GRADE_DUR_VAR)).toBe('');
+		expect(art(box()).style.transitionDuration).toBe('0.8s');
+		expect(box().querySelector('.sliders-entity-art-ghost')).toBeNull();
 	});
 
-	it('cross-fades an SVG change: the old filter on a ghost that goes away', async () => {
+	it('cross-fades an SVG change: a copy of the wrapper with the old filter goes away', async () => {
 		const {box, renderer} = await mounted();
 
 		await renderer.apply(stage([entity({grade: {warmth: 30}, id: 'lamp'})]), []);
@@ -241,16 +295,20 @@ describe('DomRenderer and grade:', () => {
 			gradeTransition(0.5)
 		);
 
-		const ghost = box().querySelector('img.sliders-ghost') as HTMLImageElement;
+		const ghost = box().querySelector(
+			':scope > .sliders-entity-art-ghost'
+		) as HTMLElement;
 
 		expect(ghost).not.toBeNull();
 		expect(ghost.style.filter).toBe(`url(#${oldId})`);
-		expect(box().style.getPropertyValue(GRADE_DUR_VAR)).toBe('');
+		expect(ghost.querySelector('img')).not.toBeNull();
+		expect(art(box()).style.filter).toBe(gradeFilter({warmth: 60}).css);
+		expect(art(box()).style.transitionDuration).toBe('0s');
 		// Held until the ghost is gone: it is still drawing with it.
 		expect(document.getElementById(oldId)).not.toBeNull();
 
 		jest.advanceTimersByTime(600);
-		expect(box().querySelector('img.sliders-ghost')).toBeNull();
+		expect(box().querySelector('.sliders-entity-art-ghost')).toBeNull();
 		expect(document.getElementById(oldId)).toBeNull();
 		expect(gradeFilterCount(document)).toBe(1);
 	});
@@ -261,7 +319,7 @@ describe('DomRenderer and grade:', () => {
 		await renderer.apply(stage([entity({grade: {warmth: 30}, id: 'lamp'})]), []);
 		await renderer.apply(stage([entity({grade: {tint: 10}, id: 'lamp'})]), []);
 
-		expect(box().querySelector('.sliders-ghost')).toBeNull();
+		expect(box().querySelector('.sliders-entity-art-ghost')).toBeNull();
 		expect(gradeFilterCount(document)).toBe(1);
 	});
 

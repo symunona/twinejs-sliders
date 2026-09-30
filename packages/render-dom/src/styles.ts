@@ -288,15 +288,15 @@ export const RENDER_DOM_CSS = `
 /* Centred, unlike a sprite: object-position on a sprite pins the art at the entity's
    origin (a character's feet), which on a backdrop plane would crop the sky instead of the
    edges. */
-.sliders-entity[data-fit] > img {
+.sliders-entity[data-fit] > .sliders-entity-art > img {
 	object-position: 50% 50%;
 }
 
-.sliders-entity[data-fit='cover'] > img {
+.sliders-entity[data-fit='cover'] > .sliders-entity-art > img {
 	object-fit: cover;
 }
 
-.sliders-entity[data-fit='contain'] > img {
+.sliders-entity[data-fit='contain'] > .sliders-entity-art > img {
 	object-fit: contain;
 }
 
@@ -307,12 +307,9 @@ export const RENDER_DOM_CSS = `
 .sliders-entity[data-sliders-link] {
 	pointer-events: auto;
 	cursor: pointer;
-}
-
-.sliders-entity[data-sliders-link] > img {
-	/* The glow's own fade, unless a beat is fading this sprite's grade right now. */
-	transition-duration: var(--sliders-grade-dur, 0.18s);
-	transition-timing-function: var(--sliders-grade-ease, ease);
+	/* filter joins the box's own list for the glow below. The renderer writes one inline
+	   duration per list entry (layout), and the last one is the glow's 0.18s. */
+	transition-property: transform, opacity, width, height, filter;
 }
 
 /* A glow that follows the ART, not the box.
@@ -322,14 +319,15 @@ export const RENDER_DOM_CSS = `
    growing blur read as one faded border rather than as three rings; one shadow alone is
    either too tight to notice or too soft to locate.
 
+   On the OUTER box, and the grade on the art wrapper inside it: two elements, so a graded
+   sprite still glows its own highlight colour and neither filter overwrites the other.
+
    Focus is included because the element is a real tab stop: a reader on a keyboard has no
    hover, and the glow is the only thing that says which object is about to be opened. */
-.sliders-entity[data-sliders-link]:hover > img,
-.sliders-entity[data-sliders-link]:focus > img,
-.sliders-entity[data-sliders-link]:focus-visible > img {
-	/* The grade first, the glow after it, in one list: a sunset-warm hero still lights up
-	   gold, not a warmer gold. */
-	filter: var(--sliders-grade,)
+.sliders-entity[data-sliders-link]:hover,
+.sliders-entity[data-sliders-link]:focus,
+.sliders-entity[data-sliders-link]:focus-visible {
+	filter:
 		drop-shadow(0 0 2px var(--sliders-highlight, #ffd257))
 		drop-shadow(0 0 6px var(--sliders-highlight, #ffd257))
 		drop-shadow(0 0 14px var(--sliders-highlight, #ffd257));
@@ -350,22 +348,32 @@ export const RENDER_DOM_CSS = `
 .sliders-entity[data-highlight='cold'] { --sliders-highlight: #6fd2ff; }
 .sliders-entity[data-highlight='warm'] { --sliders-highlight: #ff9a3c; }
 
-.sliders-entity > img,
-.sliders-entity > .sliders-placeholder {
+/* Everything that DRAWS the sprite, and the one element a grade: filters. The renderer
+   writes the filter and its duration inline; a native grade fades on this transition. A
+   grade's cross-fade copy of it (-ghost) fades out on top. */
+.sliders-entity-art,
+.sliders-entity-art-ghost {
+	position: absolute;
+	inset: 0;
+	transition-property: filter;
+	transition-duration: 0s;
+	transition-timing-function: linear;
+}
+
+.sliders-entity-art-ghost {
+	transition-property: opacity;
+	pointer-events: none;
+}
+
+.sliders-entity-art > img,
+.sliders-entity-art > .sliders-placeholder {
 	position: absolute;
 	inset: 0;
 	width: 100%;
 	height: 100%;
 }
 
-.sliders-entity > img {
-	/* grade:. The renderer writes the filter on the sprite box as a custom property, so
-	   the picture, a pose cross-fade's ghost and an effect's layers read one value. A native
-	   grade fades on this transition; the duration is the beat's, and 0 otherwise. */
-	filter: var(--sliders-grade, none);
-	transition-property: filter;
-	transition-duration: var(--sliders-grade-dur, 0s);
-	transition-timing-function: var(--sliders-grade-ease, linear);
+.sliders-entity-art > img {
 	/* Box fit, not stretch: a frame whose aspect differs from the character's manifest
 	   size keeps its own shape inside the sprite box. Pinned by object-position, which
 	   the renderer overwrites with the entity's own origin (feet, by default) so a frame
@@ -377,16 +385,9 @@ export const RENDER_DOM_CSS = `
 	-webkit-user-drag: none;
 }
 
-.sliders-entity > .sliders-ghost {
+.sliders-entity-art > .sliders-ghost {
 	transition-property: opacity;
 	transition-timing-function: ease;
-}
-
-/* An effect's layers fade a native grade with the picture they are copies of. */
-.sliders-entity .sliders-fx-layer {
-	transition-property: filter;
-	transition-duration: var(--sliders-grade-dur, 0s);
-	transition-timing-function: var(--sliders-grade-ease, linear);
 }
 
 .sliders-placeholder {

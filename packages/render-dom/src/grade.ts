@@ -47,13 +47,6 @@ const NATIVE_KEYS = ['contrast', 'hue', 'saturation', 'blur'] as const;
  */
 export const GRADE_PX_VAR = '--sliders-grade-px';
 
-/** The custom property the stylesheet reads the whole filter from. See `styles.ts`. */
-export const GRADE_VAR = '--sliders-grade';
-
-/** The custom properties timing a grade change. */
-export const GRADE_DUR_VAR = '--sliders-grade-dur';
-export const GRADE_EASE_VAR = '--sliders-grade-ease';
-
 export interface GradeSvg {
 	/** Element id. A hash of the tables, so the same grade is the same filter. */
 	id: string;

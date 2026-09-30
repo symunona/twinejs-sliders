@@ -328,14 +328,35 @@ Render (`packages/render-dom/src/grade.ts`):
 
 | Grade uses | Drawn as | Beat change |
 |---|---|---|
-| only `contrast hue saturation blur` | native CSS `contrast() hue-rotate() saturate() blur()`, all four, fixed order | CSS `filter` transition, smooth |
-| any other key | `url(#sliders-grade-<hash>)` (+ `blur()`). SVG `feComponentTransfer` tables = `buildChannelLuts`, `feColorMatrix` = `buildColorMatrix`, `sRGB` | `url()` not interpolable → new grade snaps, ghost `<img>` with OLD filter fades out on top (cross-fade). Effect layers snap. |
+| only `contrast hue saturation blur` | native CSS `contrast() hue-rotate() saturate() blur()`, all four, fixed order | CSS `filter` transition on the wrapper, smooth |
+| any other key | `url(#sliders-grade-<hash>)` (+ `blur()`). SVG `feComponentTransfer` tables = `buildChannelLuts`, `feColorMatrix` = `buildColorMatrix`, `sRGB` | `url()` not interpolable → new grade snaps; a clone of the wrapper with the OLD filter fades out on top (cross-fade) |
 
-- Filter set as `--sliders-grade` on `.sliders-entity`. Read by `> img`, pose ghost, glitch `band` + `split-a/b` layers (grade first, then channel isolate). Scanlines/noise not graded.
-- Link glow: `filter: var(--sliders-grade,) drop-shadow(…)` on the img → glow NOT graded.
+DOM:
+
+```html
+<div class="sliders-entity">            <!-- place: transform, opacity; link glow drop-shadow -->
+  <div class="sliders-entity-art">      <!-- grade: filter, inline -->
+    <img>  <img class="sliders-ghost">  <div class="sliders-fx">…</div>
+  </div>
+  <div class="sliders-entity-art-ghost"><!-- only during an SVG grade cross-fade --></div>
+</div>
+```
+
+**Grade = wrapper-level, never per `<img>`. Why:**
+
+- The picture inside is swapped constantly: pose change, every step of a `pose:` list, animated
+  file, pose cross-fade holding two imgs, future multi-layer / canvas poses. A per-img filter
+  must be re-applied on every swap and drops out of ghosts. Wrapper survives all of it;
+  nothing inside needs to know about the grade.
+- Transitions animate one element.
+- Glitch overlay is inside → graded composite, like a baked asset. No per-layer rules.
+- Link glow `drop-shadow` is on the OUTER `.sliders-entity` → two elements, two filters,
+  never clash; glow keeps its highlight colour. Glow keeps its own 0.18 s fade (`boxDurations`).
+  Side effect: a glitch with `scanlines`/`noise` glows as its box (those layers fill it).
+
 - One `<filter>` per distinct grade in the shared `#sliders-fx-defs`, ref-counted, removed when last holder lets go (new grade, exit, destroy).
-- `blur` scaled by `--sliders-grade-px` = CSS px per art px.
-- Parity with asset editor: exact maths; only rounding differs (4-decimal tables).
+- `blur` scaled by `--sliders-grade-px` (on the box) = CSS px per art px.
+- Parity with asset editor, measured in Chromium: SVG path ±1 level. Native path matches unless an intermediate leaves gamut: CSS clamps between `hue-rotate()` and `saturate()`, the editor applies both as one matrix and clamps once (seen: contrast 30 + hue 40 + sat -50, blue 182 vs 196).
 
 ## Coordinates
 

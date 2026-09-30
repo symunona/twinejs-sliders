@@ -158,8 +158,8 @@ describe('a fit: entity', () => {
 	});
 
 	it('carries the full-bleed rules in the stylesheet as well', () => {
-		expect(RENDER_DOM_CSS).toContain(".sliders-entity[data-fit='cover'] > img");
-		expect(RENDER_DOM_CSS).toContain(".sliders-entity[data-fit='contain'] > img");
+		expect(RENDER_DOM_CSS).toContain(".sliders-entity[data-fit='cover'] > .sliders-entity-art > img");
+		expect(RENDER_DOM_CSS).toContain(".sliders-entity[data-fit='contain'] > .sliders-entity-art > img");
 	});
 });
 
