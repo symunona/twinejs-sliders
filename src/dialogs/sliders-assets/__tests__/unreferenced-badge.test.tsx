@@ -110,11 +110,12 @@ describe('the unused badge', () => {
 		).not.toBeInTheDocument();
 	});
 
-	/** It has to read as a caution, not as another tag. */
-	it('renders as a warning, not an ordinary tag badge', () => {
+	/** It has to read as a caution, not as another tag: a corner ribbon, not a badge. */
+	it('renders as a corner ribbon, not an ordinary tag badge', () => {
 		renderAsset(true);
-		expect(
-			screen.getByText('dialogs.slidersAssets.unreferenced')
-		).toHaveClass('variant-warning');
+		const label = screen.getByText('dialogs.slidersAssets.unreferenced');
+
+		expect(label.closest('.sliders-tile-ribbon')).toBeInTheDocument();
+		expect(label.closest('.sliders-tile-badges')).toBeNull();
 	});
 });
