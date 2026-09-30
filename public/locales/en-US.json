@@ -620,6 +620,16 @@
 				"poseHint": "Pick a pose. Hovering one shows it on the stage.",
 				"poseNamed": "Pose: {{pose}}",
 				"poseAuto": "Automatic",
+				"grade": {
+					"button": "Grade",
+					"hint": "Colour grade: tint this sprite to its backdrop without changing the image",
+					"title": "Grade",
+					"blur": "Blur",
+					"resetAll": "Reset grade",
+					"targetBeat": "Writes to beat {{beat}}, on top of the grade before it",
+					"targetNewBeat": "Writes to a new beat after beat {{beat}}",
+					"targetEntry": "Writes to the scene\u2019s own entry"
+				},
 				"moveBubble": "Move this bubble",
 				"moveBubbleAnchor": "Move where this bubble points",
 				"cameraToolOff": "Camera tool: turn it on to pan the shot by dragging empty ground, and to zoom with ctrl+wheel",

@@ -1,0 +1,47 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/metrics.css';
+
+/* Portalled to the body, so this number is compared against the full-screen editor (1000)
+   rather than trapped inside the stage's stacking context. Same as .menu-button-menu. */
+.scene-grade-popover {
+	background: var(--white);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: min(80vh, 640px);
+	overflow-y: auto;
+	padding: 8px 10px;
+	width: 18em;
+	z-index: 2000;
+}
+
+.scene-grade-popover-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.scene-grade-popover-title {
+	font-weight: bold;
+}
+
+.scene-grade-popover-note {
+	color: var(--dark-gray);
+	font-size: 85%;
+}
+
+.scene-grade-popover-sliders {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.scene-grade-popover-foot {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: flex-end;
+}

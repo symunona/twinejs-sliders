@@ -97,6 +97,8 @@ import {
 	type SceneWrite
 } from './use-scene-writer';
 import {useWalkHere, WalkHereInfo, WalkHereRequest} from './use-walk-here';
+import {gradeTarget} from './grade-write';
+import {applyGradeDraft, useGradeEdit} from './use-grade-edit';
 import './scene-preview.css';
 
 export interface ScenePreviewProps {
@@ -388,9 +390,32 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * The stage in AUTHORED space: `at` is the number in the YAML, `of` intact. The drag
 	 * patch paints onto this one, because a gesture writes the author's coordinate.
 	 */
+	/**
+	 * The Grade popover. Declared this early because its draft paints onto `localStage`,
+	 * like the drag patch; `commit` is reached through a ref because it is built further
+	 * down and depends on everything above.
+	 */
+	const gradeCommitRef = React.useRef<(writes: SceneWrite[], origin: string) => void>(
+		() => undefined
+	);
+	const gradeEdit = useGradeEdit({
+		beat,
+		commit: React.useCallback(
+			(writes: SceneWrite[], origin: string) =>
+				gradeCommitRef.current(writes, origin),
+			[]
+		),
+		parsedStage,
+		scene: parse.result?.scene,
+		states: parse.states
+	});
 	const localStage = React.useMemo(
-		() => applyCameraPatch(applyStagePatch(parsedStage, patch), cameraPatch),
-		[cameraPatch, parsedStage, patch]
+		() =>
+			applyGradeDraft(
+				applyCameraPatch(applyStagePatch(parsedStage, patch), cameraPatch),
+				gradeEdit.draft
+			),
+		[cameraPatch, gradeEdit.draft, parsedStage, patch]
 	);
 	/**
 	 * The stage as DRAWN: `of` resolved into absolute coordinates. Everything downstream of
@@ -651,6 +676,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			setCamera
 		]
 	);
+
+	gradeCommitRef.current = commit;
 
 	const handleCommit = React.useCallback(
 		(writes: SceneWrite[], origin: string = DRAG_ORIGIN) =>
@@ -1176,6 +1203,25 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 		return undefined;
 	}, [beat, editable, kindOf, parse.result, selection, t]);
+
+	/** Where a grade from the popover lands, in words. Single selection only. */
+	const gradeNote = React.useMemo(() => {
+		const entity =
+			selection.length === 1 ? stage.entities?.[selection[0]] : undefined;
+
+		if (!entity) {
+			return undefined;
+		}
+
+		switch (gradeTarget(parse.result?.scene, beat, entity)) {
+			case 'beat':
+				return t('dialogs.passageEdit.scenePreview.grade.targetBeat', {beat});
+			case 'newBeat':
+				return t('dialogs.passageEdit.scenePreview.grade.targetNewBeat', {beat});
+			default:
+				return t('dialogs.passageEdit.scenePreview.grade.targetEntry');
+		}
+	}, [beat, parse.result, selection, stage, t]);
 
 	// The beat on screen, lit up in the text the author is typing in.
 	useActiveBeatMark(
@@ -1868,6 +1914,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onOpenLink={onOpenPassage}
 				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}
+				gradeNote={gradeNote}
+				onGrade={grade =>
+					selection.length === 1 && gradeEdit.change(selection[0], grade)
+				}
+				onGradeCommit={gradeEdit.commit}
+				onGradeOpenChange={gradeEdit.openChange}
 			/>
 		</div>
 	);
