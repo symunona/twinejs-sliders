@@ -628,7 +628,12 @@
 					"resetAll": "Reset grade",
 					"targetBeat": "Writes to beat {{beat}}, on top of the grade before it",
 					"targetNewBeat": "Writes to a new beat after beat {{beat}}",
-					"targetEntry": "Writes to the scene\u2019s own entry"
+					"targetEntry": "Writes to the scene\u2019s own entry",
+					"matchBg": "Match bg",
+					"matchBgHint": "Suggest a grade that sits this sprite into the backdrop behind it. Tune it from there",
+					"matchBgNoBg": "No backdrop behind this sprite to match",
+					"matchBgNoSprite": "This sprite has no picture to measure yet",
+					"matchBgTainted": "The backdrop cannot be read: it comes from another site that does not allow it (CORS)"
 				},
 				"moveBubble": "Move this bubble",
 				"moveBubbleAnchor": "Move where this bubble points",

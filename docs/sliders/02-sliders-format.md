@@ -323,6 +323,7 @@ beats:
 | Transition | own kind `grade`, 0.5 s, `linear`. `dur:` / `ease: {grade: …}` retime it. |
 | Pose steps | not a step key. |
 | Editor | Grade button in the selection row (single selection). Popover sliders, live on stage, writes the beat under the scrubber (else `cast:`/`props:`). Beat write = only the keys that differ from the stage before it. Reset button. Keys at rest never written. |
+| Match bg | popover button. Samples backdrop under the sprite's box (`<img>` rects → `object-fit` source rect, 64 px canvas) vs the sprite's own opaque pixels (alpha ≥ 128). Suggests `brightness warmth tint saturation`, half way (`MATCH_STRENGTH` 0.5), capped ±40/60/50/50, written as the grade. Pure maths: `match-bg.ts`. Off + tooltip: no backdrop under it, or CORS-tainted backdrop. |
 
 Render (`packages/render-dom/src/grade.ts`):
 

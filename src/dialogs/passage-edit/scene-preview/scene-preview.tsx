@@ -98,6 +98,7 @@ import {
 } from './use-scene-writer';
 import {useWalkHere, WalkHereInfo, WalkHereRequest} from './use-walk-here';
 import {gradeTarget} from './grade-write';
+import {MatchBgButton} from './match-bg-button';
 import {applyGradeDraft, useGradeEdit} from './use-grade-edit';
 import './scene-preview.css';
 
@@ -1914,6 +1915,19 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onOpenLink={onOpenPassage}
 				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}
+				gradeFooter={
+					selection.length === 1 && (
+						<MatchBgButton
+							bgKey={stage.bg}
+							id={selection[0]}
+							onApply={grade => {
+								gradeEdit.change(selection[0], grade);
+								gradeEdit.commit();
+							}}
+							root={root.current}
+						/>
+					)
+				}
 				gradeNote={gradeNote}
 				onGrade={grade =>
 					selection.length === 1 && gradeEdit.change(selection[0], grade)
