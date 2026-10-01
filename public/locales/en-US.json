@@ -279,8 +279,9 @@
 			"backendTestAlsoHere": "Also here: {{names}}."
 		},
 		"assetEditor": {
-			"adjust": "Adjust",
-			"adjustNote": "Brightness and contrast shift every pixel; gamma bends the midtones without crushing black or blowing out white. Shadows, highlights and pop work on one part of the range each, and saturation, warmth, tint and hue move the colour rather than the light. All of it is baked into the saved image.",
+			"adjust": "Basic",
+			"adjustNote": "Brightness and contrast shift every pixel; gamma bends the midtones without crushing black or blowing out white. Shadows, highlights and pop work on one part of the range each, and saturation, warmth, tint and hue move the colour rather than the light. Blur softens the whole picture. All of it is baked into the saved image.",
+			"blur": "Blur",
 			"anchor": "Anchor",
 			"anchorHint": "Click the image to place the anchor.",
 			"anchorNote": "Scenes place this asset by its anchor, and it grows about that point when scaled. Bottom centre keeps a prop standing on the floor.",
@@ -416,7 +417,7 @@
 			"sharedFork": "Fork for This Story",
 			"toolsLabel": "Tool",
 			"tool": {
-				"adjust": "Color",
+				"adjust": "Basic",
 				"background": "Background",
 				"mask": "Mask",
 				"size": "Sizing",
@@ -425,7 +426,7 @@
 				"walk": "Walk area"
 			},
 			"toolHint": {
-				"adjust": "Color \u2014 brightness, contrast and gamma.",
+				"adjust": "Basic \u2014 light, colour and blur.",
 				"background": "Background \u2014 cut the subject out of its background.",
 				"mask": "Mask \u2014 cut holes by hand, where no model is going to find the edge for you.",
 				"size": "Sizing \u2014 anchor, resize and crop.",

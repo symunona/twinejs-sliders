@@ -1,6 +1,7 @@
 import {
 	anchorAfterCrop,
 	anchorBeforeCrop,
+	applyBlur,
 	applyColorMatrix,
 	applyLut,
 	buildChannelLuts,
@@ -305,7 +306,12 @@ describe('isNeutral and isUnedited', () => {
 describe('anchorAfterCrop', () => {
 	it('leaves the anchor alone when the crop is the whole image', () => {
 		expect(
-			anchorAfterCrop({x: 0.25, y: 0.75}, {h: 240, w: 320, x: 0, y: 0}, 320, 240)
+			anchorAfterCrop(
+				{x: 0.25, y: 0.75},
+				{h: 240, w: 320, x: 0, y: 0},
+				320,
+				240
+			)
 		).toEqual({x: 0.25, y: 0.75});
 	});
 
@@ -313,7 +319,12 @@ describe('anchorAfterCrop', () => {
 		// The anchor sits at 160, 120 in the source; the crop starts at 80, 60 and is half
 		// the image, so the same pixel is the middle of what is left.
 		expect(
-			anchorAfterCrop({x: 0.5, y: 0.5}, {h: 120, w: 160, x: 80, y: 60}, 320, 240)
+			anchorAfterCrop(
+				{x: 0.5, y: 0.5},
+				{h: 120, w: 160, x: 80, y: 60},
+				320,
+				240
+			)
 		).toEqual({x: 0.5, y: 0.5});
 		expect(
 			anchorAfterCrop({x: 0.5, y: 1}, {h: 120, w: 160, x: 0, y: 0}, 320, 240)
@@ -322,7 +333,12 @@ describe('anchorAfterCrop', () => {
 
 	it('clamps an anchor the crop cut away to the nearest edge', () => {
 		expect(
-			anchorAfterCrop({x: 0.9, y: 0.1}, {h: 120, w: 160, x: 0, y: 120}, 320, 240)
+			anchorAfterCrop(
+				{x: 0.9, y: 0.1},
+				{h: 120, w: 160, x: 0, y: 120},
+				320,
+				240
+			)
 		).toEqual({x: 1, y: 0});
 	});
 
@@ -369,15 +385,17 @@ describe('anchorBeforeCrop', () => {
 
 describe('sameEdits', () => {
 	it('sees through a fresh object with the same numbers', () => {
-		expect(sameEdits(defaultEdits(300, 150), defaultEdits(300, 150))).toBe(true);
+		expect(sameEdits(defaultEdits(300, 150), defaultEdits(300, 150))).toBe(
+			true
+		);
 	});
 
 	it('notices a moved crop', () => {
 		const edits = defaultEdits(300, 150);
 
-		expect(
-			sameEdits(edits, {...edits, crop: {...edits.crop, x: 1}})
-		).toBe(false);
+		expect(sameEdits(edits, {...edits, crop: {...edits.crop, x: 1}})).toBe(
+			false
+		);
 	});
 
 	it('notices any of the colour sliders', () => {
@@ -421,5 +439,60 @@ describe('sameTuning', () => {
 		const tuning = {softness: 0.3, threshold: 0.5};
 
 		expect(sameTuning(tuning, {...tuning, invert: false})).toBe(true);
+	});
+});
+
+describe('applyBlur', () => {
+	function solid(width: number, height: number, rgba: number[]) {
+		const pixels = new Uint8ClampedArray(width * height * 4);
+
+		for (let index = 0; index < pixels.length; index += 4) {
+			pixels.set(rgba, index);
+		}
+
+		return pixels;
+	}
+
+	it('leaves a flat opaque picture alone, edges included', () => {
+		const pixels = solid(8, 6, [40, 120, 200, 255]);
+
+		applyBlur(pixels, 8, 6, 10);
+		expect(Array.from(pixels)).toEqual(
+			Array.from(solid(8, 6, [40, 120, 200, 255]))
+		);
+	});
+
+	it('spreads a hard edge into a gradient', () => {
+		const pixels = solid(10, 1, [0, 0, 0, 255]);
+
+		for (let x = 5; x < 10; x++) {
+			pixels.set([255, 255, 255, 255], x * 4);
+		}
+
+		applyBlur(pixels, 10, 1, 4);
+
+		const reds = Array.from({length: 10}, (_, x) => pixels[x * 4]);
+
+		expect(reds[4]).toBeGreaterThan(0);
+		expect(reds[5]).toBeLessThan(255);
+		reds
+			.slice(1)
+			.forEach((red, x) => expect(red).toBeGreaterThanOrEqual(reds[x]));
+	});
+
+	it('does not bleed the colour of clear pixels into a cutout', () => {
+		const pixels = solid(10, 1, [0, 0, 0, 0]);
+
+		for (let x = 5; x < 10; x++) {
+			pixels.set([255, 0, 0, 255], x * 4);
+		}
+
+		applyBlur(pixels, 10, 1, 4);
+		expect(pixels[4 * 4 + 3]).toBeGreaterThan(0);
+		expect(pixels[4 * 4]).toBe(255);
+	});
+
+	it('counts blur as an edit', () => {
+		expect(isNeutral({...defaultEdits(4, 4), blur: 2})).toBe(false);
 	});
 });

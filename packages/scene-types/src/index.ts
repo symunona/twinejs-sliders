@@ -1473,6 +1473,11 @@ export interface ImageEdits {
 	saturation?: number;
 	/** -180 to 180 degrees. Rotates every hue around the colour wheel; 0 leaves them be. */
 	hue?: number;
+	/**
+	 * 0 to 50. Gaussian-ish blur radius in pixels of the saved image. Edges clamp rather
+	 * than fade, so a backdrop blurs without growing a dark rim.
+	 */
+	blur?: number;
 	crop: CropRect;
 	/** Output size in pixels. Starts out as the crop size. */
 	width: number;

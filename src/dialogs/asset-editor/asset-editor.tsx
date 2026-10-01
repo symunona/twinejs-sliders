@@ -96,6 +96,7 @@ import {
 	anchorBeforeCrop,
 	drawEdited,
 	GAMMA_RANGE,
+	BLUR_RANGE,
 	HUE_RANGE,
 	ImageEdits,
 	LEVEL_RANGE,
@@ -308,7 +309,9 @@ export function stageKey(progress: EngineProgress, cpu: boolean): string {
 
 	const closer = pass === 2 ? 'Closer' : '';
 
-	return `dialogs.assetEditor.stage.run${closer}${estimated ? 'Estimated' : ''}`;
+	return `dialogs.assetEditor.stage.run${closer}${
+		estimated ? 'Estimated' : ''
+	}`;
 }
 
 function elapsedLabel(seconds: number): string {
@@ -394,7 +397,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [saveAsOpen, setSaveAsOpen] = React.useState(false);
 	const [saving, setSaving] = React.useState(false);
 	/** Every asset's id and name, to spot a name clash before saving. */
-	const [library, setLibrary] = React.useState<{id: string; name: string}[]>([]);
+	const [library, setLibrary] = React.useState<{id: string; name: string}[]>(
+		[]
+	);
 	/**
 	 * Every name a scene can address--asset names AND character ids, one namespace. Wider
 	 * than `library`, which is assets alone: a rename to a character's id is refused by
@@ -558,7 +563,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// base is what stops a second pass stacking on an already-baked, already
 			// re-encoded picture.
 			const base = assetId ? await store.sidecar(assetId, 'src') : undefined;
-			const blob = assetId ? base ?? (await store.get(assetId)) : sourceImage?.blob;
+			const blob = assetId
+				? base ?? (await store.get(assetId))
+				: sourceImage?.blob;
 
 			if (!current) {
 				return;
@@ -607,12 +614,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			// the whole original, so it has to come back out of the crop it went into.
 			setOrigin(
 				restored
-					? anchorBeforeCrop(
-							stored,
-							restored.crop,
-							canvas.width,
-							canvas.height
-					  )
+					? anchorBeforeCrop(stored, restored.crop, canvas.width, canvas.height)
 					: stored
 			);
 			setBaseBlob(blob);
@@ -1292,7 +1294,12 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 
 			// Compared baked-to-baked: a crop changed since the floor was drawn moves every
 			// stored fraction, so it is a change even with no ring touched.
-			const bakedWalk = walkToBaked(walk, edits.crop, source.width, source.height);
+			const bakedWalk = walkToBaked(
+				walk,
+				edits.crop,
+				source.width,
+				source.height
+			);
 
 			if (!sameWalk(bakedWalk, meta.walk)) {
 				metaChanges.walk = bakedWalk;
@@ -1485,7 +1492,10 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				asset => asset.id !== meta?.id && asset.name.toLowerCase() === trimmed
 			);
 
-			if (clash || (trimmed !== meta?.name.toLowerCase() && taken.has(value.trim()))) {
+			if (
+				clash ||
+				(trimmed !== meta?.name.toLowerCase() && taken.has(value.trim()))
+			) {
 				return {
 					message: t('dialogs.assetEditor.renameTaken', {
 						name: clash?.name ?? value.trim()
@@ -1587,13 +1597,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	// Another editor (another tab, another machine, another dialog) can crop this asset,
 	// cut its background out or move its anchor. The library engine says so, per record:
 	// clean → reload quietly, dirty → the "changed elsewhere" prompt.
-	const assetChanges = useLibraryChange(
-		undefined,
-		assetId ? [assetId] : []
-	);
+	const assetChanges = useLibraryChange(undefined, assetId ? [assetId] : []);
 
 	// Open art: a remote delete of it toasts (LibraryToasts).
-	React.useEffect(() => (assetId ? markAssetOpen(assetId) : undefined), [assetId]);
+	React.useEffect(
+		() => (assetId ? markAssetOpen(assetId) : undefined),
+		[assetId]
+	);
 
 	React.useEffect(() => {
 		if (!assetId || assetChanges === 0) {
@@ -2110,6 +2120,16 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 										step={HUE_RANGE.step}
 										value={edits.hue ?? 0}
 									/>
+									<AdjustSlider
+										label={t('dialogs.assetEditor.blur')}
+										max={BLUR_RANGE.max}
+										min={BLUR_RANGE.min}
+										onChange={blur => changeEdits({blur: blur || undefined})}
+										resetLabel={t('dialogs.assetEditor.reset')}
+										resetTo={0}
+										step={BLUR_RANGE.step}
+										value={edits.blur ?? 0}
+									/>
 								</EditorSection>
 							)}
 							{tool === 'size' && (
@@ -2219,9 +2239,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 									<ButtonBar>
 										<IconButton
 											commandId="assetEditor.removeBackground"
-											disabled={
-												busy || hasCutout || !background?.engine
-											}
+											disabled={busy || hasCutout || !background?.engine}
 											icon={<IconWand />}
 											label={t('dialogs.assetEditor.removeBackground')}
 											onClick={handleRemoveBackground}

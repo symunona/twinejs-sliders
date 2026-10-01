@@ -20,6 +20,8 @@ export const LEVEL_RANGE = {max: 100, min: -100, step: 1};
 export const HUE_RANGE = {max: 180, min: -180, step: 1};
 /** One-sided: `pop` only ever adds. Taking it away is what `contrast` is for. */
 export const POP_RANGE = {max: 100, min: 0, step: 1};
+/** Radius in pixels of the saved image. */
+export const BLUR_RANGE = {max: 50, min: 0, step: 0.5};
 
 export function defaultEdits(width: number, height: number): ImageEdits {
 	return {
@@ -48,6 +50,9 @@ const MATRIX_KEYS = ['saturation', 'hue'] as const;
 /** The adjustments that pull the channels apart, and so one curve per channel. */
 const CHANNEL_KEYS = ['warmth', 'tint'] as const;
 
+/** The adjustments that look at neighbouring pixels, and so run over the whole buffer. */
+const SPATIAL_KEYS = ['blur'] as const;
+
 /** What an adjustment reads as when it is absent, which for gamma is not zero. */
 function level(edits: ImageEdits, key: AdjustKey): number {
 	return key === 'gamma' ? edits.gamma : edits[key] ?? 0;
@@ -56,12 +61,14 @@ function level(edits: ImageEdits, key: AdjustKey): number {
 type AdjustKey =
 	| (typeof TONE_KEYS)[number]
 	| (typeof MATRIX_KEYS)[number]
-	| (typeof CHANNEL_KEYS)[number];
+	| (typeof CHANNEL_KEYS)[number]
+	| (typeof SPATIAL_KEYS)[number];
 
 const ADJUST_KEYS: readonly AdjustKey[] = [
 	...TONE_KEYS,
 	...MATRIX_KEYS,
-	...CHANNEL_KEYS
+	...CHANNEL_KEYS,
+	...SPATIAL_KEYS
 ];
 
 /** True when the grey curve is the identity, so one table can serve all three channels. */
@@ -295,6 +302,95 @@ export function applyAdjustments(pixels: Uint8ClampedArray, edits: ImageEdits) {
 	}
 }
 
+/**
+ * Blurs RGBA in place: three box passes each way, which is close enough to a Gaussian
+ * that nobody can tell, and costs the same at any radius.
+ *
+ * Done on premultiplied colour, so a transparent pixel's leftover RGB cannot bleed a dark
+ * fringe into a cutout's edge. Edges clamp -- the border pixel repeats outward -- so an
+ * opaque backdrop stays opaque to its corners instead of fading to clear.
+ */
+export function applyBlur(
+	pixels: Uint8ClampedArray,
+	width: number,
+	height: number,
+	radius: number
+) {
+	// Three boxes of width w have a variance of 3 * (w^2 - 1) / 12; solving for the sigma a
+	// Gaussian of this radius would have (radius / 2) gives the half-width each box needs.
+	const sigma = radius / 2;
+	const half = Math.round((Math.sqrt(4 * sigma * sigma + 1) - 1) / 2);
+
+	if (half < 1 || width < 1 || height < 1) {
+		return;
+	}
+
+	const count = width * height;
+	const planes = [0, 1, 2, 3].map(() => new Float32Array(count));
+
+	for (let index = 0; index < count; index++) {
+		const alpha = pixels[index * 4 + 3] / 255;
+
+		planes[0][index] = pixels[index * 4] * alpha;
+		planes[1][index] = pixels[index * 4 + 1] * alpha;
+		planes[2][index] = pixels[index * 4 + 2] * alpha;
+		planes[3][index] = pixels[index * 4 + 3];
+	}
+
+	const scratch = new Float32Array(Math.max(width, height));
+
+	for (const plane of planes) {
+		for (let pass = 0; pass < 3; pass++) {
+			for (let y = 0; y < height; y++) {
+				boxLine(plane, y * width, 1, width, half, scratch);
+			}
+
+			for (let x = 0; x < width; x++) {
+				boxLine(plane, x, width, height, half, scratch);
+			}
+		}
+	}
+
+	for (let index = 0; index < count; index++) {
+		const alpha = planes[3][index];
+		const unpremultiply = alpha > 0 ? 255 / alpha : 0;
+
+		pixels[index * 4] = planes[0][index] * unpremultiply;
+		pixels[index * 4 + 1] = planes[1][index] * unpremultiply;
+		pixels[index * 4 + 2] = planes[2][index] * unpremultiply;
+		pixels[index * 4 + 3] = alpha;
+	}
+}
+
+/** One running-sum box pass along a row or column, edges clamped. */
+function boxLine(
+	plane: Float32Array,
+	start: number,
+	stride: number,
+	length: number,
+	half: number,
+	scratch: Float32Array
+) {
+	const at = (offset: number) =>
+		plane[start + Math.min(Math.max(offset, 0), length - 1) * stride];
+	let sum = 0;
+
+	for (let offset = -half; offset <= half; offset++) {
+		sum += at(offset);
+	}
+
+	for (let offset = 0; offset < length; offset++) {
+		scratch[offset] = sum;
+		sum += at(offset + half + 1) - at(offset - half);
+	}
+
+	const span = 2 * half + 1;
+
+	for (let offset = 0; offset < length; offset++) {
+		plane[start + offset * stride] = scratch[offset] / span;
+	}
+}
+
 /** -100..100, and 0 for an absent slider. */
 function clampLevel(value?: number): number {
 	return Math.min(Math.max(value ?? 0, LEVEL_RANGE.min), LEVEL_RANGE.max);
@@ -419,6 +515,16 @@ export function drawEdited(
 
 	if (!isNeutral(edits)) {
 		applyAdjustments(image.data, edits);
+	}
+
+	// After the grade, before the seam: the fold then blends two already-soft strips, and
+	// the radius scales with the preview so a small copy looks like the saved one.
+	const blur =
+		Math.min(Math.max(edits.blur ?? 0, BLUR_RANGE.min), BLUR_RANGE.max) *
+		(width / Math.max(1, edits.width));
+
+	if (blur > 0) {
+		applyBlur(image.data, width, height, blur);
 	}
 
 	if (seam === 0) {
