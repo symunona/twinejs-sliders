@@ -1,5 +1,5 @@
 import {i18n} from '../../util/i18n';
-import {passagePreviewsScene, passageSizes} from '../../util/passage-sizes';
+import {passagePreviewsScene} from '../../util/passage-sizes';
 import {Passage, Story} from './stories.types';
 
 export const passageDefaults = (): Omit<Passage, 'id' | 'story'> => ({
