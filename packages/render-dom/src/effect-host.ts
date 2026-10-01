@@ -161,6 +161,22 @@ export function injectEffectSupport(
 }
 
 /**
+ * The shared `<defs>` every generated SVG filter goes into — the effect channels and the
+ * `grade:` filters alike. One element for the document, created on first use.
+ */
+export function effectDefs(
+	doc: Document | undefined = globalThis.document
+): Element | null {
+	if (!doc) {
+		return null;
+	}
+
+	injectEffectSupport(doc);
+
+	return doc.getElementById(SUPPORT_DEFS_ID)?.querySelector('defs') ?? null;
+}
+
+/**
  * Injects the generated rules for one parameter set and hands back its class name.
  *
  * One `<style>` per distinct parameter set, keyed by the hash, rather than one per host: ten

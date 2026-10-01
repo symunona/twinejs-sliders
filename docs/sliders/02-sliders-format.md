@@ -246,6 +246,7 @@ cannot carry one.
 | `fit` | `cover` / `contain`. Draw it as a full-bleed PLANE, not a sprite. See Planes. |
 | `layer` | `back` / `mid` / `front`. Optional. |
 | `z` | numeric escape hatch within a layer |
+| `grade` | live colour grade on the art, bytes untouched. Map, merges per key on a beat. See Colour grade. |
 | `if` | on stage only when the condition holds. Its beats go with it. See Conditions. |
 
 ### Poses — `pose:`
@@ -296,6 +297,68 @@ beats:
 There is deliberately **no** `transform:` string key. Composition order is the renderer's, so
 that `at`, `scale`, `rot` and `flip` each stay one number the differ can time, the beat
 writer can patch and the editor can drag.
+
+### Colour grade — `grade:`
+
+Tint a sprite to its backdrop per scene / per beat. Asset file never changes.
+
+```yaml
+cast:
+  hero: {at: 0.3, grade: {warmth: 30, brightness: -15, saturation: -20}}
+beats:
+  - hero: {grade: {warmth: 60, hue: -10}}   # -> brightness -15, saturation -20 kept
+  - hero: {grade: {warmth: 0}}              # resets warmth only
+  - hero: {grade: ~}                        # clears all
+```
+
+| Rule | |
+|---|---|
+| Keys | asset editor colour sliders, same names, same maths: `brightness contrast gamma shadows highlights pop warmth tint saturation hue blur`. Source: `GRADE_KEYS` / `GRADE_RANGES`, `packages/scene-types/src/grade.ts`. |
+| Ranges | -100..100; `gamma` 0.1..3 (rest 1); `pop` 0..100; `hue` -180..180°; `blur` 0..50 px of the art at its own size. |
+| Out of range | clamped to the end, warning. |
+| Unknown sub-key | warning + near-miss fix, dropped. |
+| Beat / `from:` patch | MERGED per key over current grade. Absent key = inherited. |
+| Reset one key | write its rest value (`warmth: 0`, `gamma: 1`). |
+| Reset all | `grade: ~`. `grade: {}` = no-op, warns. |
+| Stage | keys at rest dropped; all at rest = no grade. |
+| Transition | own kind `grade`, 0.5 s, `linear`. `dur:` / `ease: {grade: …}` retime it. |
+| Pose steps | not a step key. |
+| Editor | Grade button in the selection row (single selection). Popover sliders, live on stage, writes the beat under the scrubber (else `cast:`/`props:`). Beat write = only the keys that differ from the stage before it. Reset button. Keys at rest never written. |
+| Match bg | popover button. Samples backdrop under the sprite's box (`<img>` rects → `object-fit` source rect, 64 px canvas) vs the sprite's own opaque pixels (alpha ≥ 128). Suggests `brightness warmth tint saturation`, half way (`MATCH_STRENGTH` 0.5), capped ±40/60/50/50, written as the grade. Pure maths: `match-bg.ts`. Off + tooltip: no backdrop under it, or CORS-tainted backdrop. |
+
+Render (`packages/render-dom/src/grade.ts`):
+
+| Grade uses | Drawn as | Beat change |
+|---|---|---|
+| only `contrast hue saturation blur` | native CSS `contrast() hue-rotate() saturate() blur()`, all four, fixed order | CSS `filter` transition on the wrapper, smooth |
+| any other key | `url(#sliders-grade-<hash>)` (+ `blur()`). SVG `feComponentTransfer` tables = `buildChannelLuts`, `feColorMatrix` = `buildColorMatrix`, `sRGB` | `url()` not interpolable → new grade snaps; a clone of the wrapper with the OLD filter fades out on top (cross-fade) |
+
+DOM:
+
+```html
+<div class="sliders-entity">            <!-- place: transform, opacity; link glow drop-shadow -->
+  <div class="sliders-entity-art">      <!-- grade: filter, inline -->
+    <img>  <img class="sliders-ghost">  <div class="sliders-fx">…</div>
+  </div>
+  <div class="sliders-entity-art-ghost"><!-- only during an SVG grade cross-fade --></div>
+</div>
+```
+
+**Grade = wrapper-level, never per `<img>`. Why:**
+
+- The picture inside is swapped constantly: pose change, every step of a `pose:` list, animated
+  file, pose cross-fade holding two imgs, future multi-layer / canvas poses. A per-img filter
+  must be re-applied on every swap and drops out of ghosts. Wrapper survives all of it;
+  nothing inside needs to know about the grade.
+- Transitions animate one element.
+- Glitch overlay is inside → graded composite, like a baked asset. No per-layer rules.
+- Link glow `drop-shadow` is on the OUTER `.sliders-entity` → two elements, two filters,
+  never clash; glow keeps its highlight colour. Glow keeps its own 0.18 s fade (`boxDurations`).
+  Side effect: a glitch with `scanlines`/`noise` glows as its box (those layers fill it).
+
+- One `<filter>` per distinct grade in the shared `#sliders-fx-defs`, ref-counted, removed when last holder lets go (new grade, exit, destroy).
+- `blur` scaled by `--sliders-grade-px` (on the box) = CSS px per art px.
+- Parity with asset editor, measured in Chromium: SVG path ±1 level. Native path matches unless an intermediate leaves gamut: CSS clamps between `hue-rotate()` and `saturate()`, the editor applies both as one matrix and clamps once (seen: contrast 30 + hue 40 + sat -50, blue 182 vs 196).
 
 ## Coordinates
 

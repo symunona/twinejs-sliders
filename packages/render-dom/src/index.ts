@@ -115,7 +115,14 @@ export {
 } from './effects';
 export type {EffectLayer} from './effects';
 export {
+	gradeFilter,
+	gradeIsNative,
+	holdGrade
+} from './grade';
+export type {GradeFilter, GradeHandle, GradeSvg} from './grade';
+export {
 	FX_CSS,
+	effectDefs,
 	injectEffectCss,
 	injectEffectSupport,
 	pruneEffectCss,

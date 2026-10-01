@@ -111,6 +111,12 @@ export const PassageToolbar: React.FC<PassageToolbarProps> = props => {
 						checked: isPassageSize(passage, passageSizes.largeWithPreview),
 						label: t('dialogs.passageEdit.sizeLargeWithPreview'),
 						onClick: () => handleSetSize(passageSizes.largeWithPreview)
+					},
+					{
+						checkable: true,
+						checked: isPassageSize(passage, passageSizes.widePreview),
+						label: t('dialogs.passageEdit.sizeWidePreview'),
+						onClick: () => handleSetSize(passageSizes.widePreview)
 					}
 				]}
 				label={t('dialogs.passageEdit.size')}

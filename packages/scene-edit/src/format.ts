@@ -7,7 +7,12 @@
  */
 
 import {stringify} from 'yaml';
-import {LAYER_BASELINE, type EntityLink, type Vec2} from '@sliders/scene-types';
+import {
+	GRADE_KEYS,
+	LAYER_BASELINE,
+	type EntityLink,
+	type Vec2
+} from '@sliders/scene-types';
 
 const DECIMALS = 3;
 
@@ -47,6 +52,10 @@ function isEntityLink(value: unknown): value is EntityLink {
 		value !== null &&
 		('to' in (value as EntityLink) || 'name' in (value as EntityLink))
 	);
+}
+
+function isPlainObject(value: unknown): value is object {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isVec2(value: unknown): value is Vec2 {
@@ -138,6 +147,17 @@ export function formatValue(
 
 	if (Array.isArray(value)) {
 		return `[${value.map(item => formatScalar(item)).join(', ')}]`;
+	}
+
+	// A grade is a flow map in the asset editor's slider order, whatever order the caller
+	// built it in, so two writes of the same grade are the same text.
+	if (key === 'grade' && isPlainObject(value)) {
+		const grade = value as Record<string, unknown>;
+		const parts = GRADE_KEYS.filter(name => grade[name] !== undefined).map(
+			name => `${name}: ${formatScalar(grade[name])}`
+		);
+
+		return `{${parts.join(', ')}}`;
 	}
 
 	return formatScalar(value);

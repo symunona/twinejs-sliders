@@ -8,6 +8,7 @@
  * receives the full target stage too, so a missing transition means "snap", never "wrong".
  */
 
+import {sameGrade} from '@sliders/scene-types';
 import type {
 	BeatEase,
 	Camera,
@@ -28,6 +29,8 @@ export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
 	exit: 0.3,
 	flip: 0.15,
 	fx: 0.3,
+	// Light changing, not a sprite moving: as slow as a backdrop crossfade.
+	grade: 0.5,
 	move: 0.3,
 	// A bed crossfades rather than cuts. Longer than anything visual on purpose: a picture
 	// that takes a second to change looks broken, and music that changes in a tenth of one
@@ -229,6 +232,18 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 				from: before.flip,
 				kind: 'flip',
 				to: after.flip
+			});
+		}
+
+		// Absent and all-at-rest are the same picture, so gaining `grade: {warmth: 0}` is
+		// not a change.
+		if (!sameGrade(before.grade, after.grade)) {
+			out.push({
+				duration: DEFAULT_DURATIONS.grade,
+				entityId: id,
+				from: before.grade ? {...before.grade} : undefined,
+				kind: 'grade',
+				to: after.grade ? {...after.grade} : undefined
 			});
 		}
 
