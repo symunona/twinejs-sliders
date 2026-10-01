@@ -223,6 +223,39 @@ double-clicked on. `pointer-events: none` hands all of that back to the card.
 	width: 100%;
 }
 
+/*
+A `widePreview` card: the stage IS the card. No excerpt; the title sits over the top of
+the picture on a dark scrim so it reads against any backdrop.
+*/
+
+.passage-card.scene-preview-only .card {
+	overflow: hidden;
+	padding: 0;
+	position: relative;
+}
+
+.passage-card.scene-preview-only .passage-card-scene {
+	aspect-ratio: auto;
+	border-radius: 0;
+	inset: 0;
+	margin: 0;
+	position: absolute;
+}
+
+.passage-card.scene-preview-only h2 {
+	background: hsla(0, 0%, 0%, 0.55);
+	color: white;
+	left: 0;
+	overflow: hidden;
+	padding: 2px calc(var(--grid-size) / 2);
+	position: absolute;
+	right: 0;
+	text-overflow: ellipsis;
+	top: 0;
+	white-space: nowrap;
+	z-index: 1;
+}
+
 /* Too small to read at this zoom; the title is the whole card then. */
 
 .compact-passage-cards .passage-card-scene {

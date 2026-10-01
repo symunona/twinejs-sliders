@@ -544,6 +544,7 @@
 			"sizeLarge": "Large",
 			"sizeLargeWithPreview": "Large With Scene",
 			"sizeSmall": "Small",
+			"sizeWidePreview": "Wide, Scene Only",
 			"sizeTall": "Tall",
 			"sizeWide": "Wide",
 			"beatProps": {

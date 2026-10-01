@@ -10,7 +10,7 @@ import {Passage, TagColors} from '../../store/stories';
 import {TagStripe} from '../tag/tag-stripe';
 import {passageIsEmpty} from '../../util/passage-is-empty';
 import {passageProse} from '../../util/passage-prose';
-import {passagePreviewsScene} from '../../util/passage-sizes';
+import {passageIsPreviewOnly, passagePreviewsScene} from '../../util/passage-sizes';
 import {PassageCardScene} from './passage-card-scene';
 import {IndexedPassage} from '@sliders/scene-index';
 import './passage-card.css';
@@ -79,6 +79,7 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 	} = props;
 	const {t} = useTranslation();
 	const showsScene = !ghost && passagePreviewsScene(passage);
+	const previewOnly = showsScene && passageIsPreviewOnly(passage);
 	const className = React.useMemo(
 		() =>
 			classNames('passage-card', {
@@ -87,10 +88,11 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 				'has-errors': !!errorCount,
 				'is-locked': !!lockedBy,
 				'has-scene-preview': showsScene,
+				'scene-preview-only': previewOnly,
 				selected: passage.selected,
 				[`tag-display-${tagDisplay}`]: true
 			}),
-		[errorCount, ghost, lockedBy, passage, showsScene, tagDisplay]
+		[errorCount, ghost, lockedBy, passage, previewOnly, showsScene, tagDisplay]
 	);
 	const container = React.useRef<HTMLDivElement>(null);
 	const excerpt = React.useMemo(() => {
@@ -236,7 +238,7 @@ export const PassageCard: React.FC<PassageCardProps> = React.memo(props => {
 						waitForDoubleClick
 					/>
 				</h2>
-				<CardContent>{excerpt}</CardContent>
+				{!previewOnly && <CardContent>{excerpt}</CardContent>}
 				{showsScene && (
 					<PassageCardScene
 						passages={scenePassages ?? []}
