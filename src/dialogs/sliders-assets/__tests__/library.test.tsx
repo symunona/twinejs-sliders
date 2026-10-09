@@ -386,7 +386,7 @@ describe('Library tile menu', () => {
 		await waitFor(() => expect(s.ana.engine.get(night.id, 'asset')).toBeUndefined());
 	});
 
-	it('Rename of shared art asks; Fork renames a copy, the original keeps its name', async () => {
+	it('Rename of shared art asks once; Just Here renames a copy, the original keeps its name', async () => {
 		const s = await setup();
 		const night = await upload(s.ana, s.tavernId, 'night', 'night', {kind: 'bg'});
 
@@ -401,13 +401,36 @@ describe('Library tile menu', () => {
 		const prompt = await screen.findByTestId('library-shared-prompt');
 
 		fireEvent.click(
-			within(prompt).getByRole('button', {name: 'dialogs.assetEditor.sharedFork'})
+			within(prompt).getByRole('button', {name: 'dialogs.library.renameJustHere'})
 		);
 
 		const own = s.ana.engine.binding(s.story.id)!.own;
 
 		await waitFor(() => expect(byName(s.ana, own, 'late')).toBeDefined());
 		expect(s.ana.engine.get<'asset'>(night.id, 'asset')!.name).toBe('night');
+	});
+
+	it('Rename Everywhere renames the shared record itself', async () => {
+		const s = await setup();
+		const night = await upload(s.ana, s.tavernId, 'night', 'night', {kind: 'bg'});
+
+		await showTavern(s);
+		await screen.findByText('night');
+		fireEvent.click(within(menu()).getByRole('button', {name: 'common.rename'}));
+		fireEvent.change(await screen.findByDisplayValue('night'), {
+			target: {value: 'late'}
+		});
+		fireEvent.click(screen.getByRole('button', {name: 'common.ok'}));
+
+		const prompt = await screen.findByTestId('library-shared-prompt');
+
+		fireEvent.click(
+			within(prompt).getByRole('button', {name: 'dialogs.library.renameEverywhere'})
+		);
+
+		await waitFor(() =>
+			expect(s.ana.engine.get<'asset'>(night.id, 'asset')!.name).toBe('late')
+		);
 	});
 });
 

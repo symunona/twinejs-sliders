@@ -50,7 +50,7 @@ import {
 } from '../../store/asset-library/story-asset-store';
 import {useStoriesContext} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
-import {renameSceneRefs} from '../../util/rename-scene-refs';
+import {planRename} from '../../util/rename-plan';
 import {AssetEditorDialog} from '../asset-editor';
 // Deep import, not the `../asset-generator` barrel: the barrel pulls the whole generator
 // (and its store) into this dialog's module graph. Only the dialog component is wanted.
@@ -126,6 +126,7 @@ type Ask =
 			info: SharedInfo;
 			run: (scope: EditScope) => Promise<void>;
 			allowFork?: boolean;
+			forkLabel?: string;
 			updateAllLabel?: string;
 			message?: string;
 	  }
@@ -578,69 +579,55 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 		scope: 'sliders-assets'
 	});
 
-	/** Other stories on this device that should follow a name change. */
-	function rewriteOtherStories(info: SharedInfo, from: string, to: string) {
-		for (const usage of info.stories) {
-			const other = stories.find(candidate => candidate.id === usage.storyId);
-
-			if (!other) {
-				continue;
-			}
-
-			const passageUpdates: Record<string, {text: string}> = {};
-
-			for (const passage of other.passages) {
-				const text = renameSceneRefs(passage.text, from, to);
-
-				if (text !== passage.text) {
-					passageUpdates[passage.id] = {text};
-				}
-			}
-
-			if (Object.keys(passageUpdates).length) {
-				storiesDispatch(
-					{passageUpdates, storyId: other.id, type: 'updatePassages'},
-					t('dialogs.slidersAssets.renameChange', {name: from})
-				);
-			}
-		}
-	}
-
-	async function handleRenameAsset(
-		id: string,
-		name: string,
-		updateScenes = false
-	) {
+	/**
+	 * One rename flow (`rename-plan.ts`): the scenes always follow, and shared art is the
+	 * only case that asks -- once, up front, about reach.
+	 */
+	async function handleRenameAsset(id: string, name: string) {
 		const oldName = engine?.get(id, 'asset')?.name;
-		let info: SharedInfo | undefined;
 
-		await withShared(
-			async scope => {
-				if (scope && !info) {
-					info = await store.sharedInfo(id);
-				}
+		setError(undefined);
 
+		try {
+			const info = await store.sharedInfo(id);
+			const rename = async (scope?: EditScope) => {
 				await store.update(id, {name}, scope ? {scope} : {});
 
-				if (updateScenes && oldName) {
-					renameScenes(oldName, name);
+				if (!oldName) {
+					return;
 				}
 
-				// Update All also carries the other stories on this device along.
-				if (scope === 'all' && oldName && info) {
-					rewriteOtherStories(info, oldName, name);
-				}
-			},
-			{
-				message: shared =>
-					t('dialogs.library.renameShared', {
-						collection: shared.collection.name,
-						count: shared.stories.length,
-						name: shared.name,
-						stories: sharedStoriesText(shared)
-					})
+				// Everywhere carries the other stories on this device along too.
+				renameScenes(oldName, name, scope === 'all' ? info?.stories : []);
+			};
+
+			if (!info || planRename(info) === 'now') {
+				await rename();
+				return;
 			}
-		);
+
+			setAsk({
+				forkLabel: t('dialogs.library.renameJustHere'),
+				info,
+				kind: 'shared',
+				message: t(
+					info.stories.length
+						? 'dialogs.library.renameShared'
+						: 'dialogs.library.renameSharedForeign',
+					{
+						collection: info.collection.name,
+						count: info.stories.length,
+						name: info.name,
+						stories: sharedStoriesText(info)
+					}
+				),
+				run: rename,
+				updateAllLabel: t('dialogs.library.renameEverywhere')
+			});
+		} catch (renameError) {
+			console.error('Library action failed', renameError);
+			setError(t('dialogs.library.actionError'));
+		}
 	}
 
 	async function handleChangeTags(id: string, tags: string[]) {
@@ -1073,9 +1060,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						onChangeTags={tags => void handleChangeTags(meta.id, tags)}
 						onDelete={() => void handleDeleteAsset(record)}
 						onEdit={() => openAssetEditor(meta.id)}
-						onRename={(name, updateScenes) =>
-							void handleRenameAsset(meta.id, name, updateScenes)
-						}
+						onRename={name => void handleRenameAsset(meta.id, name)}
 						unreferenced={
 							inView && synced.ready ? !synced.assetIds.has(meta.id) : undefined
 						}
@@ -1287,6 +1272,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 					{ask?.kind === 'shared' && (
 						<SharedPrompt
 							allowFork={ask.allowFork}
+							forkLabel={ask.forkLabel}
 							info={ask.info}
 							message={ask.message}
 							onAnswer={scope => void answerShared(scope)}

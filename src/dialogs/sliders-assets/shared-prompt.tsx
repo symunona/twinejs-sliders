@@ -15,6 +15,8 @@ export interface SharedPromptProps {
 	/** Delete has no fork: a copy of something being deleted is not deleting it. */
 	allowFork?: boolean;
 	className?: string;
+	/** Label of the Fork button, e.g. "Rename Just Here". */
+	forkLabel?: string;
 	/** Replaces the default question. The stories list is appended either way. */
 	message?: string;
 	testId?: string;
@@ -41,6 +43,7 @@ export const SharedPrompt: React.FC<SharedPromptProps> = props => {
 	const {
 		allowFork = true,
 		className = 'shared-art-prompt',
+		forkLabel,
 		info,
 		message,
 		onAnswer,
@@ -83,7 +86,7 @@ export const SharedPrompt: React.FC<SharedPromptProps> = props => {
 				{allowFork && info.canFork && (
 					<IconButton
 						icon={<IconCopy />}
-						label={t('dialogs.assetEditor.sharedFork')}
+						label={forkLabel ?? t('dialogs.assetEditor.sharedFork')}
 						onClick={() => onAnswer('fork')}
 						variant="create"
 					/>

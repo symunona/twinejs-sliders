@@ -61,7 +61,8 @@ import {
 } from '../sliders-assets/asset-store-context';
 import {useAssetUsage} from '../sliders-assets/use-asset-usage';
 import {useSceneRefRename} from '../sliders-assets/use-scene-ref-rename';
-import {SharedPrompt} from '../sliders-assets/shared-prompt';
+import {planRename} from '../../util/rename-plan';
+import {SharedPrompt, sharedStoriesText} from '../sliders-assets/shared-prompt';
 import {markAssetOpen} from '../../store/asset-library/open-assets';
 import {AdjustSlider} from './adjust-slider';
 import {
@@ -388,6 +389,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	const [sharedAsk, setSharedAsk] = React.useState<{
 		info: SharedInfo;
 		run: (scope: EditScope) => Promise<void>;
+		/** A rename asks about reach in its own words (`rename-plan.ts`). */
+		rename?: boolean;
 	}>();
 	const [renameOpen, setRenameOpen] = React.useState(false);
 	/** The name in the rename prompt, which is the asset's own--not `name`, which is the
@@ -1221,17 +1224,22 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * the scope the author picked. Resolves false when the author cancelled.
 	 */
 	async function withSharedScope(
-		write: (scope?: EditScope) => Promise<void>
+		write: (scope?: EditScope, info?: SharedInfo) => Promise<void>,
+		what?: 'rename'
 	): Promise<void> {
 		// Optional call: test doubles of the store predate the library.
 		const info = meta ? await store.sharedInfo?.(meta.id) : undefined;
 
-		if (!info?.shared) {
+		if (!info || planRename(info) === 'now') {
 			await write();
 			return;
 		}
 
-		setSharedAsk({info, run: write});
+		setSharedAsk({
+			info,
+			rename: what === 'rename',
+			run: scope => write(scope, info)
+		});
 	}
 
 	/** Writes the edit back over the asset it came from, keeping its id. */
@@ -1348,7 +1356,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * are all untouched, so an author who opened this to crop something and noticed the
 	 * name was wrong does not have to abandon the edit to fix it.
 	 */
-	async function handleRename(value: string, updateScenes = false) {
+	async function handleRename(value: string) {
 		const renamed = value.trim();
 
 		if (!meta || renamed === '' || renamed === meta.name) {
@@ -1360,8 +1368,9 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 		setError(undefined);
 
 		try {
-			await withSharedScope(scope =>
-				writeRename(renamed, oldName, updateScenes, scope)
+			await withSharedScope(
+				(scope, info) => writeRename(renamed, oldName, scope, info),
+				'rename'
 			);
 		} catch (renameError) {
 			console.error('Could not rename the asset', renameError);
@@ -1372,8 +1381,8 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	async function writeRename(
 		renamed: string,
 		oldName: string,
-		updateScenes: boolean,
-		scope?: EditScope
+		scope?: EditScope,
+		info?: SharedInfo
 	) {
 		if (!meta) {
 			return;
@@ -1397,9 +1406,13 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				return next;
 			});
 
-			if (updateScenes) {
-				renameScenes(oldName, updated.name);
-			}
+			// Always: a rename that leaves the scenes asking for the old name breaks them.
+			// Everywhere carries the other stories on this device along too.
+			renameScenes(
+				oldName,
+				updated.name,
+				scope === 'all' ? info?.stories : []
+			);
 
 			refreshAssetLibrary();
 		} catch (renameError) {
@@ -1504,8 +1517,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				};
 			}
 
-			// Allowed, but said out loud: the second submit carries those scenes along,
-			// and the plain one leaves them naming art that is gone.
+			// Allowed, and said out loud: those scenes follow the new name.
 			if (trimmed !== meta?.name.toLowerCase() && usedIn.length > 0) {
 				return {
 					message: t('dialogs.assetEditor.renameUsed', {
@@ -1813,7 +1825,28 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 			{sharedAsk && (
 				<SharedPrompt
 					className="asset-editor-shared-prompt"
+					forkLabel={
+						sharedAsk.rename ? t('dialogs.library.renameJustHere') : undefined
+					}
 					info={sharedAsk.info}
+					message={
+						sharedAsk.rename
+							? t(
+									sharedAsk.info.stories.length
+										? 'dialogs.library.renameShared'
+										: 'dialogs.library.renameSharedForeign',
+									{
+										collection: sharedAsk.info.collection.name,
+										count: sharedAsk.info.stories.length,
+										name: sharedAsk.info.name,
+										stories: sharedStoriesText(sharedAsk.info)
+									}
+							  )
+							: undefined
+					}
+					updateAllLabel={
+						sharedAsk.rename ? t('dialogs.library.renameEverywhere') : undefined
+					}
 					onAnswer={scope => void answerShared(scope)}
 					testId="asset-editor-shared-prompt"
 				/>
@@ -1830,17 +1863,6 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 				!detached &&
 				meta && (
 					<PromptButton
-						altSubmit={
-							usedIn.length > 0
-								? {
-										icon: <IconWriting />,
-										label: t('dialogs.assetEditor.renameUpdateScenes', {
-											count: usedIn.length
-										}),
-										onSubmit: value => handleRename(value, true)
-								  }
-								: undefined
-						}
 						icon={<IconWriting />}
 						iconOnly
 						label={t('common.rename')}

@@ -1,12 +1,6 @@
 import {defaultCharacter, slugify, uniqueName} from '@sliders/asset-store';
 import {AssetMeta, Character} from '@sliders/scene-types';
-import {
-	IconPencil,
-	IconTag,
-	IconTrash,
-	IconUserPlus,
-	IconX
-} from '@tabler/icons';
+import {IconTrash, IconUserPlus} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {Tab, TabList, TabPanel, Tabs} from 'react-tabs';
@@ -15,11 +9,15 @@ import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
 import {ConfirmButton} from '../../components/control/confirm-button';
 import {EditableTitle} from '../../components/control/editable-title';
-import {IconButton} from '../../components/control/icon-button';
 import {PromptButton} from '../../components/control/prompt-button';
 import {useCommand} from '../../hotkeys';
 import {useStoriesContext} from '../../store/stories';
+import type {
+	EditScope,
+	SharedInfo
+} from '../../store/asset-library/story-asset-store';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
+import {planRename, sceneRenames} from '../../util/rename-plan';
 import {renameSceneCharacter} from '../../util/rename-scene-character';
 import {AssetEditorDialog} from '../asset-editor';
 import {useDialogsContext} from '../context';
@@ -34,6 +32,7 @@ import {
 	posesFromFiles,
 	stepImagesFromFiles
 } from '../sliders-assets/character-poses';
+import {SharedPrompt, sharedStoriesText} from '../sliders-assets/shared-prompt';
 import {CharacterEditor} from './character-editor';
 import {
 	CharacterFocusRequest,
@@ -49,11 +48,10 @@ import './sliders-characters.css';
 /** How long a change sits before it's written to the asset store. */
 const SAVE_DELAY = 400;
 
-/** A rename the author has asked for but not yet decided the scenes' fate on. */
+/** A rename of a shared character, waiting on the one question: everywhere, or here. */
 interface PendingRename {
-	/** How many passages a ref rewrite would touch. Always more than zero. */
-	count: number;
 	id: string;
+	info: SharedInfo;
 }
 
 export interface SlidersCharactersDialogProps extends DialogComponentProps {
@@ -112,7 +110,6 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		focus?.pose && focus.characterId === activeId
 			? {name: focus.pose, serial: focus.serial}
 			: undefined;
-	const story = stories.find(candidate => candidate.id === storyId);
 
 	// Load the selected character into a local draft. Everything the editor does happens
 	// on the draft; the store gets it back on a debounce.
@@ -207,31 +204,49 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 		refresh();
 	}
 
-	/** The passages whose scene YAML would change, with the text they would end up with. */
-	function sceneRewrites(oldId: string, id: string) {
-		if (!story) {
-			return [];
-		}
+	/**
+	 * Every scene that writes the old id, in this story and -- for Rename Everywhere -- in
+	 * `others` on this device. One action per story, so each undo takes its whole rename
+	 * back.
+	 */
+	function renameScenes(oldId: string, id: string, others: {storyId: string}[]) {
+		const targets = [
+			storyId,
+			...others.map(usage => usage.storyId).filter(other => other !== storyId)
+		];
 
-		return story.passages
-			.map(passage => ({
-				passage,
-				text: renameSceneCharacter(passage.text, oldId, id)
-			}))
-			.filter(rewrite => rewrite.text !== rewrite.passage.text);
+		for (const target of targets) {
+			const subject = stories.find(candidate => candidate.id === target);
+
+			if (!subject) {
+				continue;
+			}
+
+			const passageUpdates = sceneRenames(
+				subject.passages,
+				oldId,
+				id,
+				renameSceneCharacter
+			);
+
+			if (Object.keys(passageUpdates).length > 0) {
+				undoableDispatch(
+					{type: 'updatePassages', passageUpdates, storyId: subject.id},
+					t('dialogs.slidersCharacters.renameChange', {id: oldId})
+				);
+			}
+		}
 	}
 
-	/**
-	 * Move the character onto a new id, and optionally carry every scene that writes the
-	 * old one along with it.
-	 */
-	async function applyRename(id: string, updateScenes: boolean) {
+	/** Move the character onto a new id. The scenes always follow (`rename-plan.ts`). */
+	async function applyRename(id: string, scope?: EditScope, info?: SharedInfo) {
 		if (!draft) {
 			return;
 		}
 
 		const oldId = draft.id;
 		const renamed = {...draft, id, name: id};
+		const options = scope ? {scope} : {};
 
 		setPendingRename(undefined);
 		setIdError(undefined);
@@ -247,10 +262,10 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			// One record, renamed: its uuid, poses and pose images stay. The old
 			// put-new + remove-old pair deleted the pose images both shared.
 			if (store.renameCharacter) {
-				await store.renameCharacter(oldId, id);
+				await store.renameCharacter(oldId, id, options);
 			}
 
-			await store.putCharacter(renamed);
+			await store.putCharacter(renamed, options);
 		} catch (error) {
 			latest.current = draft;
 			setIdError(
@@ -266,39 +281,17 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			await store.removeCharacter(oldId);
 		}
 
-		if (updateScenes && story) {
-			const rewrites = sceneRewrites(oldId, id);
-
-			if (rewrites.length > 0) {
-				// One action for the lot, so the whole rename is a single undo rather than
-				// one per passage.
-				undoableDispatch(
-					{
-						type: 'updatePassages',
-						passageUpdates: rewrites.reduce<Record<string, {text: string}>>(
-							(updates, rewrite) => {
-								updates[rewrite.passage.id] = {text: rewrite.text};
-								return updates;
-							},
-							{}
-						),
-						storyId: story.id
-					},
-					t('dialogs.slidersCharacters.renameChange', {id: oldId})
-				);
-			}
-		}
-
+		renameScenes(oldId, id, scope === 'all' && info ? info.stories : []);
 		setDraft(renamed);
 		setSelectedId(id);
 		refresh();
 	}
 
 	/**
-	 * Committing the title bar. Scenes address a character by id, so a rename that leaves
-	 * them alone breaks them — the author is told how many passages are at stake and picks.
+	 * Committing the title bar. Scenes address a character by id, so they always follow;
+	 * the one question left is reach, and only a shared character asks it.
 	 */
-	function handleRenameId(value: string) {
+	async function handleRenameId(value: string) {
 		if (!draft) {
 			return;
 		}
@@ -311,14 +304,15 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			return;
 		}
 
-		const rewrites = sceneRewrites(draft.id, id);
+		// Optional call: test doubles of the store predate the library.
+		const info = await store.sharedInfo?.(draft.id);
 
-		if (rewrites.length === 0) {
-			void applyRename(id, false);
+		if (!info || planRename(info) === 'now') {
+			await applyRename(id);
 			return;
 		}
 
-		setPendingRename({count: rewrites.length, id});
+		setPendingRename({id, info});
 	}
 
 	/** Is something else in this library already called this? Checked as the author types. */
@@ -520,7 +514,7 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 						<EditableTitle
 							editable
 							nameTaken={idTaken}
-							onRename={handleRenameId}
+							onRename={value => void handleRenameId(value)}
 							title={t('dialogs.slidersCharacters.renameIdTitle')}
 							value={draft.id}
 						/>
@@ -549,36 +543,28 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 			)}
 			{pendingRename && draft && (
 				<CardContent>
-					<p className="sliders-characters-rename" role="alert">
-						{t('dialogs.slidersCharacters.renamePrompt', {
-							count: pendingRename.count,
-							id: pendingRename.id,
-							oldId: draft.id
-						})}
-					</p>
-					{/* Updating the scenes is what the author almost always means, so it is
-					    the create-coloured default. Renaming the ID alone stays on offer for
-					    a character nobody has written into a scene on purpose yet. */}
-					<ButtonBar>
-						<IconButton
-							icon={<IconTag />}
-							label={t('dialogs.slidersCharacters.renameUpdateScenes', {
-								count: pendingRename.count
-							})}
-							onClick={() => void applyRename(pendingRename.id, true)}
-							variant="create"
-						/>
-						<IconButton
-							icon={<IconPencil />}
-							label={t('dialogs.slidersCharacters.renameIdOnly')}
-							onClick={() => void applyRename(pendingRename.id, false)}
-						/>
-						<IconButton
-							icon={<IconX />}
-							label={t('common.cancel')}
-							onClick={() => setPendingRename(undefined)}
-						/>
-					</ButtonBar>
+					<SharedPrompt
+						forkLabel={t('dialogs.library.renameJustHere')}
+						info={pendingRename.info}
+						message={t(
+							pendingRename.info.stories.length
+								? 'dialogs.library.renameShared'
+								: 'dialogs.library.renameSharedForeign',
+							{
+								collection: pendingRename.info.collection.name,
+								count: pendingRename.info.stories.length,
+								name: pendingRename.info.name,
+								stories: sharedStoriesText(pendingRename.info)
+							}
+						)}
+						onAnswer={scope =>
+							scope
+								? void applyRename(pendingRename.id, scope, pendingRename.info)
+								: setPendingRename(undefined)
+						}
+						testId="character-rename-prompt"
+						updateAllLabel={t('dialogs.library.renameEverywhere')}
+					/>
 				</CardContent>
 			)}
 			{idError && (

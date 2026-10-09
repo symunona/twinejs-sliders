@@ -192,3 +192,84 @@ describe('countSceneCharacterRefs', () => {
 		).toBe(2);
 	});
 });
+
+/**
+ * Several of the same art. A second drop of `candle` lands as `candle-2: {ref: candle}`
+ * (`uniqueEntityId`); a rename keeps that pairing readable instead of leaving `candle-2`
+ * pointing at `lantern`.
+ */
+describe('renameSceneCharacter, numbered copies', () => {
+	function scene(...lines: string[]) {
+		return ['[scene]', ...lines].join('\n');
+	}
+
+	it('renames the id, and the ref: only where a ref: was written', () => {
+		const text = scene(
+			'props:',
+			'  candle: {at: -0.2}',
+			'  lamp: {ref: candle, at: 0.4}'
+		);
+
+		expect(renameSceneCharacter(text, 'candle', 'lantern')).toBe(
+			scene('props:', '  lantern: {at: -0.2}', '  lamp: {ref: lantern, at: 0.4}')
+		);
+	});
+
+	it('moves a numbered copy along with its art, speakers and of: included', () => {
+		const text = scene(
+			'props:',
+			'  candle: {at: -0.2}',
+			'  candle-2: {ref: candle, at: 0.2}',
+			'  flame: {of: candle-2}',
+			'beats:',
+			'  - candle-2: {at: 0.3}'
+		);
+
+		expect(renameSceneCharacter(text, 'candle', 'lantern')).toBe(
+			scene(
+				'props:',
+				'  lantern: {at: -0.2}',
+				'  lantern-2: {ref: lantern, at: 0.2}',
+				'  flame: {of: lantern-2}',
+				'beats:',
+				'  - lantern-2: {at: 0.3}'
+			)
+		);
+	});
+
+	/** No `ref:` means the key IS the art: `candle-2` is a different picture. */
+	it('leaves a key that only looks numbered alone', () => {
+		const text = scene('props:', '  candle: {at: 0}', '  candle-2: {at: 0.4}');
+
+		expect(renameSceneCharacter(text, 'candle', 'lantern')).toBe(
+			scene('props:', '  lantern: {at: 0}', '  candle-2: {at: 0.4}')
+		);
+	});
+
+	/** Under `from:` a bare `candle-2:` patches the copy the base scene placed. */
+	it('follows a copy into a patch scene', () => {
+		const text = scene('from: Hall', 'props:', '  candle-2: {at: 0.5}');
+
+		expect(renameSceneCharacter(text, 'candle', 'lantern')).toBe(
+			scene('from: Hall', 'props:', '  lantern-2: {at: 0.5}')
+		);
+	});
+
+	it('keeps the old handle when the new one is already taken', () => {
+		const text = scene(
+			'props:',
+			'  candle: {at: 0}',
+			'  candle-2: {ref: candle}',
+			'  lantern-2: {at: 0.6}'
+		);
+
+		expect(renameSceneCharacter(text, 'candle', 'lantern')).toBe(
+			scene(
+				'props:',
+				'  lantern: {at: 0}',
+				'  candle-2: {ref: lantern}',
+				'  lantern-2: {at: 0.6}'
+			)
+		);
+	});
+});

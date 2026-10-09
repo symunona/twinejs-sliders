@@ -15,6 +15,12 @@
  *   beats:
  *     - mira: "Hello."  # a beat's speaker key is an entity id too
  *
+ * Numbered copies follow too. A second drop of the same art lands as `mira-2: {ref: mira}`
+ * (`uniqueEntityId`), so renaming `mira` to `tav` turns that into `tav-2: {ref: tav}` and
+ * moves its beat speakers and `of:` along with it. A key that only LOOKS numbered is left
+ * alone: `mira-2: {at: 0}` with no `ref:` is art of its own called `mira-2`. Under `from:` a
+ * bare `mira-2:` is a patch over the inherited copy, so it follows there.
+ *
  * Sibling of `rename-scene-targets.ts`, which does the same job for a PASSAGE rename, and
  * built the same way: edits are SPLICED at the node ranges the YAML parser reports, never
  * re-serialized, so the author's flow maps, comments and blank lines survive a rename they
@@ -43,6 +49,8 @@ interface Target {
 	end: number;
 	/** Inside `{…}`, where a plain scalar may not contain a comma or a brace. */
 	flow: boolean;
+	/** What goes there instead. */
+	to: string;
 }
 
 /**
@@ -91,11 +99,12 @@ function nameOf(node: unknown): string | undefined {
 function collect(
 	node: unknown,
 	id: string,
+	to: string,
 	flow: boolean,
 	targets: Target[]
 ): void {
 	if (isScalar(node) && nameOf(node) === id && Array.isArray(node.range)) {
-		targets.push({start: node.range[0], end: node.range[1], flow});
+		targets.push({start: node.range[0], end: node.range[1], flow, to});
 	}
 }
 
@@ -125,6 +134,7 @@ function explicitRef(body: unknown): string | undefined {
 function scanBody(
 	body: unknown,
 	id: string,
+	to: string,
 	shadowed: boolean,
 	targets: Target[]
 ): void {
@@ -138,7 +148,7 @@ function scanBody(
 		const key = nameOf(pair.key);
 
 		if (key === 'ref' || (key === 'of' && !shadowed)) {
-			collect(pair.value, id, !!map.flow, targets);
+			collect(pair.value, id, to, !!map.flow, targets);
 		}
 	}
 }
@@ -152,6 +162,7 @@ function scanBody(
 function scanEntry(
 	pair: Pair<unknown, unknown>,
 	id: string,
+	to: string,
 	flow: boolean,
 	shadowed: boolean,
 	targets: Target[]
@@ -159,15 +170,15 @@ function scanEntry(
 	const ref = explicitRef(pair.value);
 
 	if (ref !== undefined) {
-		scanBody(pair.value, id, shadowed, targets);
+		scanBody(pair.value, id, to, shadowed, targets);
 		return;
 	}
 
 	if (!shadowed && nameOf(pair.key) === id) {
-		collect(pair.key, id, flow, targets);
+		collect(pair.key, id, to, flow, targets);
 	}
 
-	scanBody(pair.value, id, shadowed, targets);
+	scanBody(pair.value, id, to, shadowed, targets);
 }
 
 /** The first pair of a beat map, when that beat has a speaker rather than a command. */
@@ -188,10 +199,13 @@ function beatSpeaker(item: unknown): Pair<unknown, unknown> | undefined {
 	return key !== undefined && !BEAT_COMMANDS.includes(key) ? first : undefined;
 }
 
-/** Every entity-bearing entry in the block: the three maps, then the beats. */
+/**
+ * Every entity-bearing entry in the block: the three maps, then the beats. `declared` is
+ * false for a beat speaker, which names an entity rather than putting one on stage.
+ */
 function forEachEntry(
 	root: YAMLMap,
-	visit: (pair: Pair<unknown, unknown>, flow: boolean) => void
+	visit: (pair: Pair<unknown, unknown>, flow: boolean, declared: boolean) => void
 ): void {
 	for (const pair of root.items as Pair<unknown, unknown>[]) {
 		const key = nameOf(pair.key);
@@ -200,22 +214,22 @@ function forEachEntry(
 			const map = pair.value as YAMLMap;
 
 			for (const entry of map.items as Pair<unknown, unknown>[]) {
-				visit(entry, !!map.flow);
+				visit(entry, !!map.flow, true);
 			}
 		} else if (key === 'beats' && isSeq(pair.value)) {
 			for (const item of (pair.value as YAMLSeq).items) {
 				const speaker = beatSpeaker(item);
 
 				if (speaker) {
-					visit(speaker, !!(item as YAMLMap).flow);
+					visit(speaker, !!(item as YAMLMap).flow, false);
 				}
 			}
 		}
 	}
 }
 
-/** Every place this block names the character, in the order they were written. */
-function characterTargets(blockText: string, id: string): Target[] {
+/** The block's root map, or undefined when it does not parse cleanly. */
+function parseRoot(blockText: string): YAMLMap | undefined {
 	// Same YAML version the scene parser uses, so this module and the preview never
 	// disagree about what a scalar says.
 	const doc = parseDocument(blockText, {version: '1.2'});
@@ -223,21 +237,20 @@ function characterTargets(blockText: string, id: string): Target[] {
 	// The parser RECOVERS from a syntax error rather than throwing, and the tree it
 	// recovers is a guess. A stale reference is visible and fixable; a mangled block is
 	// neither.
-	if (doc.errors.length > 0) {
-		return [];
+	if (doc.errors.length > 0 || !isMap(doc.contents)) {
+		return undefined;
 	}
 
-	const root = doc.contents;
+	return doc.contents as YAMLMap;
+}
 
-	if (!isMap(root)) {
-		return [];
-	}
-
+/** Every place this block names the character, in the order they were written. */
+function characterTargets(root: YAMLMap, id: string, to: string): Target[] {
 	// An entry keyed with the id but pointing somewhere else takes the NAME over from the
 	// character for the rest of the block, so neither that key nor any `of:` may move.
 	let shadowed = false;
 
-	forEachEntry(root as YAMLMap, pair => {
+	forEachEntry(root, pair => {
 		const ref = explicitRef(pair.value);
 
 		if (nameOf(pair.key) === id && ref !== undefined && ref !== id) {
@@ -247,9 +260,102 @@ function characterTargets(blockText: string, id: string): Target[] {
 
 	const targets: Target[] = [];
 
-	forEachEntry(root as YAMLMap, (pair, flow) =>
-		scanEntry(pair, id, flow, shadowed, targets)
+	forEachEntry(root, (pair, flow) =>
+		scanEntry(pair, id, to, flow, shadowed, targets)
 	);
+
+	return targets;
+}
+
+/** `mira-2` -> `2` when the key numbers a copy of `id` the way `uniqueEntityId` does. */
+function copyNumber(key: string | undefined, id: string): string | undefined {
+	if (key === undefined || !key.startsWith(`${id}-`)) {
+		return undefined;
+	}
+
+	const n = key.slice(id.length + 1);
+
+	return /^[0-9]+$/.test(n) ? n : undefined;
+}
+
+/**
+ * The numbered copies of `id` in this block, and the handle each moves to.
+ *
+ * A copy is a key `id-N` whose entry says `ref: id`. Without a `ref:` the key is the art
+ * itself, so `mira-2: {at: 0}` is something else and stays — except under `from:`, where a
+ * bare `mira-2:` patches the copy the base scene put on stage. A copy whose new handle is
+ * already an entity here keeps its old one rather than merge into it.
+ */
+function copyHandles(root: YAMLMap, id: string, newId: string): Map<string, string> {
+	const inherits = (root.items as Pair<unknown, unknown>[]).some(
+		pair => nameOf(pair.key) === 'from' && nameOf(pair.value) !== undefined
+	);
+	const ids = new Set<string>();
+	const copies = new Set<string>();
+	const vetoed = new Set<string>();
+
+	forEachEntry(root, (pair, _flow, declared) => {
+		const key = nameOf(pair.key);
+
+		if (key === undefined) {
+			return;
+		}
+
+		ids.add(key);
+
+		if (copyNumber(key, id) === undefined) {
+			return;
+		}
+
+		const ref = explicitRef(pair.value);
+
+		if (ref === id || (ref === undefined && inherits)) {
+			copies.add(key);
+		} else if (ref !== undefined || declared) {
+			vetoed.add(key);
+		}
+	});
+
+	const handles = new Map<string, string>();
+
+	for (const key of copies) {
+		const to = `${newId}-${copyNumber(key, id)}`;
+
+		if (!vetoed.has(key) && !ids.has(to)) {
+			handles.set(key, to);
+		}
+	}
+
+	return handles;
+}
+
+/** A copy's handle wherever the block names it: its key, beat speakers and `of:`. */
+function copyTargets(root: YAMLMap, handles: Map<string, string>): Target[] {
+	const targets: Target[] = [];
+
+	forEachEntry(root, (pair, flow) => {
+		const key = nameOf(pair.key);
+		const to = key === undefined ? undefined : handles.get(key);
+
+		if (key !== undefined && to !== undefined) {
+			collect(pair.key, key, to, flow, targets);
+		}
+
+		if (!isMap(pair.value)) {
+			return;
+		}
+
+		const body = pair.value as YAMLMap;
+
+		for (const bodyPair of body.items as Pair<unknown, unknown>[]) {
+			const of = nameOf(bodyPair.key) === 'of' ? nameOf(bodyPair.value) : undefined;
+			const ofTo = of === undefined ? undefined : handles.get(of);
+
+			if (of !== undefined && ofTo !== undefined) {
+				collect(bodyPair.value, of, ofTo, !!body.flow, targets);
+			}
+		}
+	});
 
 	return targets;
 }
@@ -269,7 +375,9 @@ export function countSceneCharacterRefs(
 		return 0;
 	}
 
-	return characterTargets(block.text, id).length;
+	const root = parseRoot(block.text);
+
+	return root ? characterTargets(root, id, id).length : 0;
 }
 
 /**
@@ -293,7 +401,19 @@ export function renameSceneCharacter(
 		return passageText;
 	}
 
-	const targets = characterTargets(block.text, oldId);
+	const root = parseRoot(block.text);
+
+	if (!root) {
+		return passageText;
+	}
+
+	// Both read the tree as the author wrote it, so a copy is recognised by its `ref:`
+	// before that `ref:` is rewritten. The two never overlap: one matches `oldId` whole,
+	// the other only `oldId-N`.
+	const targets = [
+		...characterTargets(root, oldId, newId),
+		...copyTargets(root, copyHandles(root, oldId, newId))
+	];
 
 	if (targets.length === 0) {
 		return passageText;
@@ -307,7 +427,9 @@ export function renameSceneCharacter(
 		const end = block.offset + target.end;
 
 		result =
-			result.slice(0, start) + scalarText(newId, target.flow) + result.slice(end);
+			result.slice(0, start) +
+			scalarText(target.to, target.flow) +
+			result.slice(end);
 	}
 
 	return result;

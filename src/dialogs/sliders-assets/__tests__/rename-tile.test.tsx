@@ -9,8 +9,9 @@ import {AssetTile} from '../asset-tile';
  * Renaming an asset from its tile, and the two double clicks the tile answers.
  *
  * The rule worth pinning: scene YAML addresses assets by NAME, so the prompt has to refuse
- * a name the library already answers to (`store.update` throws on it) and has to SAY
- * something when scenes already write the old one--nothing rewrites those beats.
+ * a name the library already answers to (`store.update` throws on it) and SAYS when scenes
+ * already write the old one. Those scenes always follow (`rename-plan.ts`), so there is
+ * one submit, never a second "and update the scenes" one.
  */
 
 function meta(overrides: Partial<AssetMeta> = {}): AssetMeta {
@@ -96,11 +97,8 @@ describe('renaming an asset from its tile', () => {
 		expect(screen.getByRole('button', {name: 'common.ok'})).toBeEnabled();
 	});
 
-	/**
-	 * Allowed, but loudly: renaming does not rewrite `bg: candle` in a scene, so those
-	 * beats are about to ask for art that no longer exists.
-	 */
-	it('warns when scenes already write the old name, without blocking', async () => {
+	/** Allowed, and said out loud: the scenes that write the old name follow it. */
+	it('says when scenes already write the old name, without blocking', async () => {
 		renderTile({usedIn: ['Tavern', 'Cellar']});
 
 		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
@@ -112,46 +110,20 @@ describe('renaming an asset from its tile', () => {
 		expect(screen.getByRole('button', {name: 'common.ok'})).toBeEnabled();
 	});
 
-	/**
-	 * The third way out of the prompt. `renameSceneRefs` rewrites the beats; the tile only
-	 * has to say how many scenes are at stake and hand the decision back.
-	 */
-	it('offers to carry the scenes along, and says so only when there are any', async () => {
+	/** The old second submit ("Rename And Update") is gone: the scenes follow every rename. */
+	it('has one submit even when scenes write the name', async () => {
 		const {onRename} = renderTile({usedIn: ['Tavern', 'Cellar']});
 
 		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
 		await userEvent.clear(renameField());
 		await userEvent.type(renameField(), 'lantern');
-		await userEvent.click(
-			screen.getByRole('button', {name: 'dialogs.slidersAssets.renameUpdateScenes'})
-		);
-		expect(onRename).toHaveBeenCalledWith('lantern', true);
-	});
-
-	it('offers only the plain rename when no scene writes the name', async () => {
-		renderTile();
-
-		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
 		expect(
 			screen.queryByRole('button', {
 				name: 'dialogs.slidersAssets.renameUpdateScenes'
 			})
 		).not.toBeInTheDocument();
-	});
-
-	/** Both submits run the same validation--neither is a way around a name clash. */
-	it('disables both submits on a name the library already answers to', async () => {
-		renderTile({nameTaken: name => name === 'lantern', usedIn: ['Tavern']});
-
-		await userEvent.click(screen.getByRole('button', {name: 'common.rename'}));
-		await userEvent.clear(renameField());
-		await userEvent.type(renameField(), 'lantern');
-		expect(
-			screen.getByRole('button', {
-				name: 'dialogs.slidersAssets.renameUpdateScenes'
-			})
-		).toBeDisabled();
-		expect(screen.getByRole('button', {name: 'common.ok'})).toBeDisabled();
+		await userEvent.click(screen.getByRole('button', {name: 'common.ok'}));
+		expect(onRename).toHaveBeenCalledWith('lantern');
 	});
 
 	it('refuses an empty name', async () => {

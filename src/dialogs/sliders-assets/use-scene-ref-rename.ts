@@ -1,24 +1,31 @@
 /**
  * Carrying the scenes along when a piece of art is renamed.
  *
- * Both places that rename an asset offer it -- the tile in the asset browser and the image
+ * Both places that rename an asset do it -- the tile in the asset browser and the image
  * editor's own title -- so the dispatch lives here rather than in either: one action for
  * the lot, so the whole rename is a single undo rather than one undo per passage.
  *
- * The rewrite itself is `renameSceneRefs`. This only decides which passages actually
- * change, which is not the same as which passages `useAssetUsage` lists: a block with a
- * YAML error is left alone on purpose.
+ * The rewrite itself is `sceneRenames` (see `rename-plan.ts`). A block with a YAML error
+ * is left alone on purpose.
  */
 
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {useStoriesContext} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
-import {renameSceneRefs} from '../../util/rename-scene-refs';
+import {sceneRenames} from '../../util/rename-plan';
 import {useAssetScope} from './asset-store-context';
 
-/** Rewrites every scene that names `oldName`. Returns how many passages changed. */
-export type SceneRefRename = (oldName: string, newName: string) => number;
+/**
+ * Rewrites every scene in this story that names `oldName`, plus the scenes of `others`
+ * this device holds (Rename Everywhere on shared art). Returns how many passages of THIS
+ * story changed.
+ */
+export type SceneRefRename = (
+	oldName: string,
+	newName: string,
+	others?: {storyId: string}[]
+) => number;
 
 export function useSceneRefRename(): SceneRefRename {
 	const storyId = useAssetScope();
@@ -28,32 +35,38 @@ export function useSceneRefRename(): SceneRefRename {
 	const story = stories.find(candidate => candidate.id === storyId);
 
 	return React.useCallback(
-		(oldName, newName) => {
-			if (!story) {
-				return 0;
-			}
+		(oldName, newName, others = []) => {
+			const subjects = [
+				story,
+				...others.map(usage =>
+					stories.find(candidate => candidate.id === usage.storyId)
+				)
+			];
+			let count = 0;
 
-			const passageUpdates: Record<string, {text: string}> = {};
-
-			for (const passage of story.passages) {
-				const text = renameSceneRefs(passage.text, oldName, newName);
-
-				if (text !== passage.text) {
-					passageUpdates[passage.id] = {text};
+			// One action per story, so each story's undo takes its whole rename back.
+			subjects.forEach((subject, index) => {
+				if (!subject || (index > 0 && subject === story)) {
+					return;
 				}
-			}
 
-			const count = Object.keys(passageUpdates).length;
+				const passageUpdates = sceneRenames(subject.passages, oldName, newName);
+				const changed = Object.keys(passageUpdates).length;
 
-			if (count > 0) {
-				dispatch(
-					{passageUpdates, storyId: story.id, type: 'updatePassages'},
-					t('dialogs.slidersAssets.renameChange', {name: oldName})
-				);
-			}
+				if (index === 0) {
+					count = changed;
+				}
+
+				if (changed > 0) {
+					dispatch(
+						{passageUpdates, storyId: subject.id, type: 'updatePassages'},
+						t('dialogs.slidersAssets.renameChange', {name: oldName})
+					);
+				}
+			});
 
 			return count;
 		},
-		[dispatch, story, t]
+		[dispatch, stories, story, t]
 	);
 }

@@ -46,11 +46,8 @@ export interface AssetTileProps {
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
 	onEdit: () => void;
-	/**
-	 * `updateScenes` carries every scene that writes the old name along with the rename.
-	 * The tile offers it only when there are scenes to carry -- see `renameSceneRefs`.
-	 */
-	onRename: (name: string, updateScenes?: boolean) => void;
+	/** The scenes that write the old name always follow -- see `rename-plan.ts`. */
+	onRename: (name: string) => void;
 	/** Does something else in this library already answer to this name? */
 	nameTaken?: (name: string) => boolean;
 	/** Passage names whose scenes write this asset's name. */
@@ -118,8 +115,8 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 
 	// Scene YAML addresses assets by NAME, so a rename is the one edit here that can
 	// break a scene. Two names in one namespace is refused outright (the store throws
-	// anyway); a name scenes already write is allowed, but not silently--either the author
-	// takes the second submit and the beats move too, or they keep saying the old word.
+	// anyway); a name scenes already write is allowed, and said out loud: those scenes
+	// follow the new name.
 	const validateName = React.useCallback(
 		(value: string): PromptValidationResponse => {
 			const trimmed = value.trim();
@@ -273,17 +270,6 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 					/>
 				)}
 				<PromptButton
-					altSubmit={
-						usedIn && usedIn.length > 0
-							? {
-									icon: <IconWriting />,
-									label: t('dialogs.slidersAssets.renameUpdateScenes', {
-										count: usedIn.length
-									}),
-									onSubmit: value => onRename(value.trim(), true)
-							  }
-							: undefined
-					}
 					icon={<IconWriting />}
 					iconOnly
 					label={t('common.rename')}
