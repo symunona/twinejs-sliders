@@ -6,6 +6,7 @@ import {
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	MOTION_KEYS,
 	SAY_KEYS
 } from '@sliders/scene-schema';
 import {EASE_KINDS} from '@sliders/scene-types';
@@ -70,6 +71,58 @@ describe('sceneHintContext()', () => {
 		expect(contextAt('[scene]\nbg:\n  id: hall\n  fx: |')).toMatchObject({
 			slot: {kind: 'bgFx'}
 		});
+	});
+
+	it('offers motions for an entity motion:, flow and block form', () => {
+		// The same presets as a backdrop's `fx:` -- one list, so the slot is the same one.
+		expect(
+			contextAt('[scene]\ncast:\n  mira: {at: 0, motion: |}')
+		).toMatchObject({slot: {kind: 'bgFx'}, typed: ''});
+		expect(
+			contextAt('[scene]\nprops:\n  hills: {fit: cover, motion: scr|}')
+		).toMatchObject({slot: {kind: 'bgFx'}, typed: 'scr'});
+		expect(contextAt('[scene]\ncast:\n  mira:\n    motion: |')).toMatchObject({
+			slot: {kind: 'bgFx'}
+		});
+		expect(
+			contextAt('[scene]\nbeats:\n  - mira: {motion: par|}')
+		).toMatchObject({slot: {kind: 'bgFx'}});
+	});
+
+	it('offers motions for id: inside a motion map, flow and block form', () => {
+		expect(
+			contextAt('[scene]\ncast:\n  mira: {motion: {id: |}}')
+		).toMatchObject({slot: {kind: 'bgFx'}});
+		expect(
+			contextAt('[scene]\ncast:\n  mira:\n    motion:\n      id: |')
+		).toMatchObject({slot: {kind: 'bgFx'}});
+	});
+
+	it('offers id and speed as the keys of a motion map', () => {
+		expect(
+			contextAt('[scene]\ncast:\n  mira: {motion: {|}}')
+		).toMatchObject({slot: {id: 'motion', kind: 'keys', names: MOTION_KEYS}});
+		expect(
+			contextAt('[scene]\ncast:\n  mira: {motion: {id: parallax_left, |}}')
+		).toMatchObject({slot: {id: 'motion', kind: 'keys', names: MOTION_KEYS}});
+		expect(
+			contextAt('[scene]\ncast:\n  mira:\n    motion:\n      |')
+		).toMatchObject({slot: {id: 'motion', kind: 'keys', names: MOTION_KEYS}});
+	});
+
+	it('offers motion, stretch and locked among the entity and beat keys', () => {
+		for (const passage of [
+			'[scene]\ncast:\n  mira: {|}',
+			'[scene]\nprops:\n  hills:\n    |',
+			'[scene]\nbeats:\n  - mira: {|}'
+		]) {
+			const names = (contextAt(passage)?.slot as {names?: readonly string[]})
+				.names;
+
+			expect(names).toEqual(
+				expect.arrayContaining(['motion', 'stretch', 'locked'])
+			);
+		}
 	});
 
 	it('offers backgrounds for id: inside a bg map', () => {

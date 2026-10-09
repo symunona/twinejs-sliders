@@ -24,6 +24,7 @@ import {
 	ENTITY_KEYS,
 	LINK_KEYS,
 	LINK_ENTITY_KEYS,
+	MOTION_KEYS,
 	SAY_KEYS,
 	TOP_LEVEL_KEYS,
 	parseScene,
@@ -101,7 +102,10 @@ export type HintSlot =
 	| {kind: 'fx'}
 	/** `music:` / `sfx:` — a sound asset's name. Both take the same list. */
 	| {kind: 'sound'}
-	/** `fx:` INSIDE a `bg:` map — a backdrop motion, not a stage effect. */
+	/**
+	 * A motion preset: `fx:` INSIDE a `bg:` map (a backdrop motion, not a stage effect), an
+	 * entity's `motion:`, and the `id:` of its long form. One list, the renderer's.
+	 */
 	| {kind: 'bgFx'}
 	/** `ease:` — a curve, by preset name. */
 	| {kind: 'ease'}
@@ -429,6 +433,10 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'grade':
 			return keys('grade', GRADE_KEYS);
 
+		// `motion: {id: scroll_infinite_left, speed: 12}` -- the bg `fx:` map minus the asset.
+		case 'motion':
+			return keys('motion', MOTION_KEYS);
+
 		// An `ease:` map is keyed by WHAT is moving, not by an entity key. Its members
 		// collide with real keys elsewhere in the subset (`bg`, `fx`, `pose`, `music`),
 		// which is why the value side below has to ask who owns the line before it
@@ -741,9 +749,12 @@ export function sceneHintContext(
 					return owner() === undefined ? found({kind: 'from'}) : undefined;
 
 				case 'id':
-					// Only ever inside a map, where it is that map's asset.
+					// Only ever inside a map, where it is that map's asset -- or, in a
+					// `motion:` map, which preset it is.
 					return owner() === 'bg'
 						? found({kind: 'bg'})
+						: owner() === 'motion'
+						? found({kind: 'bgFx'})
 						: owner() === 'music' || owner() === 'sfx'
 						? found({kind: 'sound'})
 						: undefined;
@@ -761,6 +772,10 @@ export function sceneHintContext(
 
 				case 'fx':
 					return found(owner() === 'bg' ? {kind: 'bgFx'} : {kind: 'fx'});
+
+				// An entity's own motion: the same presets a backdrop's `fx:` takes.
+				case 'motion':
+					return found({kind: 'bgFx'});
 
 				case 'music':
 				case 'sfx':
