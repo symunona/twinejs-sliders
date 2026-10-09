@@ -179,11 +179,13 @@ export function useStageViewZoom(
 	);
 
 	/**
-	 * The stage's box at this zoom, or undefined at 100%, where it just fills the
-	 * viewport.
+	 * The stage's box at this zoom, or undefined at 100% and below, where it just fills
+	 * the viewport. Zoomed out the canvas keeps the whole viewport and the RENDERER draws
+	 * the stage smaller inside it (`stageScale`), so the room around the frame shows the
+	 * sprites standing off stage instead of empty panel.
 	 */
 	const canvasStyle: React.CSSProperties | undefined =
-		zoom === 1 || !size
+		zoom <= 1 || !size
 			? undefined
 			: {
 					flex: 'none',
@@ -197,6 +199,7 @@ export function useStageViewZoom(
 		maxZoom,
 		minZoom,
 		resetZoom: () => zoomTo(1),
+		stageScale: Math.min(zoom, 1),
 		stepZoom,
 		zoom
 	};

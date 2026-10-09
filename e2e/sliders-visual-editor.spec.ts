@@ -116,10 +116,10 @@ test.describe('visual scene editor', () => {
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 		await page.waitForTimeout(300);
 
-		// Four corners plus the rotate dot.
+		// Four corners, four squeeze edges, the rotate dot.
 		const handles = page.locator('[data-handle]');
 
-		await expect(handles).toHaveCount(5);
+		await expect(handles).toHaveCount(9);
 
 		const beforeResize = await cmText(page);
 		// Pinned to a corner: the rotate dot is a `[data-handle]` too, and this is a resize.
@@ -169,10 +169,10 @@ test.describe('visual scene editor', () => {
 
 		await dragEntity(page, 'mira', 100, 0);
 
-		// Four corners plus the rotate dot.
+		// Four corners, four squeeze edges, the rotate dot.
 		const handles = page.locator('[data-handle]');
 
-		await expect(handles).toHaveCount(5);
+		await expect(handles).toHaveCount(9);
 
 		// Pinned to a corner: the rotate dot is a `[data-handle]` too, and this is a resize.
 		const handle = (await page.locator('[data-handle="nw"]').boundingBox())!;

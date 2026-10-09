@@ -193,7 +193,13 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 			});
 		}
 
-		if (before.scale !== after.scale) {
+		// A squeeze is a size change too, timed and eased as one: the renderer writes both
+		// into the same width and height.
+		if (
+			before.scale !== after.scale ||
+			(before.stretch?.x ?? 1) !== (after.stretch?.x ?? 1) ||
+			(before.stretch?.y ?? 1) !== (after.stretch?.y ?? 1)
+		) {
 			out.push({
 				duration: DEFAULT_DURATIONS.scale,
 				entityId: id,

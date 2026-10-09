@@ -73,6 +73,11 @@ export interface SceneStageProps {
 	 * a `body {}` rule out of the stage would restyle the editor.
 	 */
 	stylesheet?: string;
+	/**
+	 * The editor's zoomed-out view: below 1 the stage is drawn that much smaller inside the
+	 * host and sprites off the frame stay visible. See `DomRenderer.setViewScale`.
+	 */
+	viewScale?: number;
 }
 
 /**
@@ -92,7 +97,8 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	onRenderer,
 	sceneEase,
 	stage,
-	stylesheet
+	stylesheet,
+	viewScale = 1
 }) => {
 	const hostRef = React.useRef<HTMLDivElement>(null);
 	const rendererRef = React.useRef<DomRenderer>();
@@ -244,6 +250,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			rendererRef.current?.setMuted(muted);
 		}
 	}, [muted, ready]);
+
+	React.useEffect(() => {
+		if (ready) {
+			rendererRef.current?.setViewScale(viewScale);
+		}
+	}, [ready, viewScale]);
 
 	/**
 	 * Fire a beat's one-shot when the scrubber ARRIVES on it.

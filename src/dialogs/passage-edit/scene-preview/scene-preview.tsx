@@ -49,6 +49,8 @@ import {
 	assetDropWrites,
 	deleteWrites,
 	flipWrites,
+	lockWrites,
+	unstretchWrites,
 	poseWrite,
 	zWrites
 } from './scene-gestures';
@@ -505,6 +507,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		setPlaying(false);
 		setBeat(next);
 	}, []);
+	/**
+	 * A double click on an entity's line asked to see it: the overlay brings it into view
+	 * and flashes it. A counter rather than the id alone, so asking twice for the same
+	 * entity still answers twice.
+	 */
+	const [focusRequest, setFocusRequest] = React.useState<{
+		id: EntityId;
+		seq: number;
+	}>();
 	const {clear, select, selection} = useStageSelection({
 		beatSpans: parse.result?.beatSpans,
 		block,
@@ -512,6 +523,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		enabled: true,
 		kindOf,
 		onCaretBeat: goToBeat,
+		onFocusEntity: id =>
+			setFocusRequest(current => ({id, seq: (current?.seq ?? 0) + 1})),
 		scene: parse.result?.scene,
 		stageIds
 	});
@@ -884,7 +897,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			for (const id of selection) {
 				const entity = stage.entities?.[id];
 
-				if (!entity) {
+				// Locked holds against the keyboard too, not just the pointer.
+				if (!entity || entity.locked) {
 					continue;
 				}
 
@@ -954,6 +968,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	const flip = React.useCallback(
 		() => commit(flipWrites(stage, selection), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	const resetStretch = React.useCallback(
+		() => commit(unstretchWrites(stage, selection), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	const toggleEntityLock = React.useCallback(
+		() => commit(lockWrites(stage, selection), EDIT_ORIGIN),
 		[commit, selection, stage]
 	);
 
@@ -1796,6 +1820,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			cameraLocked={cameraLocked}
 			beatNote={beatNote}
 			editable={editable}
+			focusRequest={focusRequest}
 			grid={grid}
 			origStage={origStage}
 			prevStage={prevStage}
@@ -1814,6 +1839,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			parentOffsets={offsets}
 			onSelect={select}
 			onToggleFullScreen={() => onFullScreenChange(!fullScreen)}
+			overscan={viewZoom.stageScale < 1}
 			player={fullScreen}
 			renderer={renderer}
 			seal={seal}
@@ -1832,6 +1858,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				sceneEase={parse.result?.scene.ease}
 				stage={shownStage}
 				stylesheet={stylesheet}
+				viewScale={viewZoom.stageScale}
 			/>
 			{walkHere.layer}
 			{/* Over the stage rather than above it. A row that appeared with the
@@ -1911,6 +1938,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				note={beatNote}
 				onDelete={remove}
 				onFlip={flip}
+				onResetStretch={resetStretch}
+				onToggleLock={toggleEntityLock}
 				onPose={setPose}
 				onOpenLink={onOpenPassage}
 				onPreviewPose={setPosePreview}

@@ -27,6 +27,17 @@ export const RENDER_DOM_CSS = `
 	contain: layout paint;
 }
 
+/* The editor's zoomed-out view (setViewScale): sprites off the stage are drawn in the room
+   around it. The backdrop stays inside the frame — it IS the frame. */
+.sliders-root[data-overscan] .sliders-stage-box {
+	overflow: visible;
+	contain: layout;
+}
+
+.sliders-root[data-overscan] .sliders-layer[data-layer='bg'] {
+	overflow: hidden;
+}
+
 .sliders-camera {
 	position: absolute;
 	inset: 0;
@@ -384,6 +395,69 @@ export const RENDER_DOM_CSS = `
 	user-select: none;
 	-webkit-user-drag: none;
 }
+
+/* stretch: — the squeeze is the point, so the picture fills the stretched box. */
+.sliders-entity[data-stretch] > .sliders-entity-art > img {
+	object-fit: fill;
+}
+
+/*
+ * An entity's own motion: — the backdrop presets, played by the ART so the sprite's box
+ * keeps its transform for position. Percentages are of the sprite, so a scroll travels one
+ * sprite width and its twin (.sliders-entity-art-tile) waits one sprite width ahead; a
+ * plane is a stage wide, which makes a stack of planes at different speeds a parallax.
+ * The 1px overlap is the backdrop's, for the same hairline (see .sliders-bg-tile).
+ */
+.sliders-entity-art[data-motion] {
+	will-change: transform;
+	animation-iteration-count: infinite;
+	animation-timing-function: ease-in-out;
+	animation-direction: alternate;
+}
+
+.sliders-entity-art[data-motion='parallax_left'] { animation-name: sliders-bg-parallax-left; animation-duration: var(--sliders-motion-speed, 24s); }
+.sliders-entity-art[data-motion='parallax_right'] { animation-name: sliders-bg-parallax-right; animation-duration: var(--sliders-motion-speed, 24s); }
+.sliders-entity-art[data-motion='parallax_up'] { animation-name: sliders-bg-parallax-up; animation-duration: var(--sliders-motion-speed, 24s); }
+.sliders-entity-art[data-motion='parallax_down'] { animation-name: sliders-bg-parallax-down; animation-duration: var(--sliders-motion-speed, 24s); }
+
+.sliders-entity-art[data-motion='earthquake'] {
+	animation-name: sliders-bg-earthquake;
+	animation-duration: var(--sliders-motion-speed, 0.5s);
+	animation-timing-function: linear;
+	animation-direction: normal;
+}
+
+.sliders-entity-art[data-motion='circling'] {
+	animation-name: sliders-bg-circling;
+	animation-duration: var(--sliders-motion-speed, 30s);
+	animation-timing-function: linear;
+	animation-direction: normal;
+}
+
+/* A plane fills the stage, so a drift would show the stage edge: oversized like the
+   backdrop. A sprite has stage all round it and drifts at its own size. */
+.sliders-entity[data-fit] > .sliders-entity-art[data-motion^='parallax_left'],
+.sliders-entity[data-fit] > .sliders-entity-art[data-motion^='parallax_right'] { width: 116%; left: -8%; }
+.sliders-entity[data-fit] > .sliders-entity-art[data-motion^='parallax_up'],
+.sliders-entity[data-fit] > .sliders-entity-art[data-motion^='parallax_down'] { height: 116%; top: -8%; }
+.sliders-entity[data-fit] > .sliders-entity-art[data-motion='earthquake'] { width: 106%; height: 106%; left: -3%; top: -3%; }
+.sliders-entity[data-fit] > .sliders-entity-art[data-motion='circling'] { width: 108%; height: 108%; left: -4%; top: -4%; }
+
+.sliders-entity-art[data-motion^='scroll_infinite'] {
+	animation-direction: normal;
+	animation-timing-function: linear;
+	animation-duration: var(--sliders-motion-speed, 20s);
+}
+
+.sliders-entity-art[data-motion='scroll_infinite_left'] { animation-name: sliders-bg-scroll-left; }
+.sliders-entity-art[data-motion='scroll_infinite_right'] { animation-name: sliders-bg-scroll-right; }
+.sliders-entity-art[data-motion='scroll_infinite_up'] { animation-name: sliders-bg-scroll-up; }
+.sliders-entity-art[data-motion='scroll_infinite_down'] { animation-name: sliders-bg-scroll-down; }
+
+.sliders-entity-art-tile[data-motion='scroll_infinite_left'] { left: calc(100% - 1px); right: auto; width: 100%; }
+.sliders-entity-art-tile[data-motion='scroll_infinite_right'] { left: calc(-100% + 1px); right: auto; width: 100%; }
+.sliders-entity-art-tile[data-motion='scroll_infinite_up'] { top: calc(100% - 1px); bottom: auto; height: 100%; }
+.sliders-entity-art-tile[data-motion='scroll_infinite_down'] { top: calc(-100% + 1px); bottom: auto; height: 100%; }
 
 .sliders-entity-art > .sliders-ghost {
 	transition-property: opacity;

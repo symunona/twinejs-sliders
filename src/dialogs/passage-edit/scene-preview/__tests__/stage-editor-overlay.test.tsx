@@ -672,16 +672,17 @@ describe('<StageEditorOverlay>', () => {
 
 			const level = screen.getByTestId('stage-editor-rotate');
 
-			// mira's rect is 80..200 x 60..360, so the middle of its top edge is (140, 60).
+			// mira's rect is 80..200 x 60..360, so the middle of its top edge is (140, 60);
+			// the dot floats 18px above it, clear of the `n` squeeze handle.
 			expect(parseFloat(level.style.left)).toBeCloseTo(140, 6);
-			expect(parseFloat(level.style.top)).toBeCloseTo(60, 6);
+			expect(parseFloat(level.style.top)).toBeCloseTo(42, 6);
 
 			update({stage: tilted(90)});
 
 			const turned = screen.getByTestId('stage-editor-rotate');
 
-			// (140, 60) turned a quarter clockwise about (192, 333).
-			expect(parseFloat(turned.style.left)).toBeCloseTo(465, 6);
+			// (140, 42) turned a quarter clockwise about (192, 333).
+			expect(parseFloat(turned.style.left)).toBeCloseTo(483, 6);
 			expect(parseFloat(turned.style.top)).toBeCloseTo(281, 6);
 		});
 
@@ -705,8 +706,9 @@ describe('<StageEditorOverlay>', () => {
 
 	it('draws handles only for a single selection', () => {
 		renderOverlay({selection: ['mira']});
-		// Four corners to resize by, plus the rotate dot on the top edge.
-		expect(document.querySelectorAll('.stage-editor-handle')).toHaveLength(5);
+		// Four corners to resize by, four edges to squeeze by, plus the rotate dot.
+		expect(document.querySelectorAll('.stage-editor-handle')).toHaveLength(9);
+		expect(document.querySelectorAll('.stage-editor-handle.edge')).toHaveLength(4);
 		expect(document.querySelectorAll('.stage-editor-handle.rot')).toHaveLength(
 			1
 		);
@@ -784,5 +786,130 @@ describe('<StageEditorOverlay>', () => {
 		);
 
 		expect(onDropAsset).not.toHaveBeenCalled();
+	});
+
+	// mira's rect is 120 wide with its `e` edge handle at (200, 210); her origin sits
+	// 112px in from the left edge (192, 333), which is what the left edge's pinning moves.
+	describe('edge handles squeeze', () => {
+		it('writes stretch for that side only, and moves at so the far edge stays', () => {
+			const {onCommit, onSelect} = renderOverlay({selection: ['mira']});
+			const handle = screen.getByTestId('stage-editor-edge-e');
+
+			fireEvent(handle, pointer('pointerdown', 200, 210));
+			fireEvent(window, pointer('pointermove', 260, 230));
+			fireEvent(window, pointer('pointerup', 260, 230));
+
+			expect(onSelect).not.toHaveBeenCalled();
+
+			const writes = onCommit.mock.calls[0][0];
+
+			expect(writes[0]).toEqual({
+				id: 'mira',
+				key: 'stretch',
+				kind: 'cast',
+				ref: 'mira',
+				reset: [1, 1],
+				value: [1.5, 1]
+			});
+			expect(writes[1].key).toBe('at');
+			// 112/120 of 60 grown px, over 320 px per scene unit.
+			expect(writes[1].value.x).toBeCloseTo(-0.4 + (60 * 112) / 120 / 320, 2);
+			expect(writes[1].value.y).toBeCloseTo(stage.entities.mira.at.y, 5);
+		});
+
+		it('removes the key when the squeeze comes back to the art\u2019s own shape', () => {
+			const squeezed = parseSceneText(
+				[
+					'[scene]',
+					'cast:',
+					'  mira: {at: -0.4, stretch: [2, 1]}'
+				].join('\n')
+			).states[0];
+			const {onCommit} = renderOverlay({selection: ['mira'], stage: squeezed});
+			const handle = screen.getByTestId('stage-editor-edge-e');
+
+			// Half the width back off a 2x squeeze.
+			fireEvent(handle, pointer('pointerdown', 200, 210));
+			fireEvent(window, pointer('pointermove', 140, 210));
+			fireEvent(window, pointer('pointerup', 140, 210));
+
+			expect(onCommit.mock.calls[0][0][0]).toMatchObject({
+				key: 'stretch',
+				value: undefined
+			});
+		});
+	});
+
+	describe('selection controls own their press', () => {
+		it('a move edge drags the selection even where another sprite is on top', () => {
+			// candle (100..140, 100..140) is drawn over mira; mira's west edge at x 80 is
+			// clear of it, so press its north strip right above the candle instead.
+			const {onCommit, onSelect} = renderOverlay({selection: ['mira']});
+			const edge = screen.getByTestId('stage-editor-move-edge-n');
+
+			fireEvent(edge, pointer('pointerdown', 120, 60));
+			fireEvent(window, pointer('pointermove', 152, 60));
+			fireEvent(window, pointer('pointerup', 152, 60));
+
+			expect(onSelect).not.toHaveBeenCalled();
+			expect(onCommit.mock.calls[0][0]).toEqual([
+				expect.objectContaining({id: 'mira', key: 'at'})
+			]);
+		});
+
+		it('a corner handle press never reselects, whatever lies under it', () => {
+			const {onSelect} = renderOverlay({selection: ['mira']});
+			const handle = document.querySelector('.stage-editor-handle.nw')!;
+
+			fireEvent(handle, pointer('pointerdown', 80, 60));
+			fireEvent(window, pointer('pointerup', 80, 60));
+
+			expect(onSelect).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('locked:', () => {
+		const locked = parseSceneText(
+			[
+				'[scene]',
+				'cast:',
+				'  mira: {at: -0.4}',
+				'props:',
+				'  candle: {at: 0.4, layer: front, locked: true}'
+			].join('\n')
+		).states[0];
+
+		it('is not a hit target', () => {
+			expect(hitTargets(locked, id => RECTS[id]).map(t => t.id)).toEqual([
+				'mira'
+			]);
+		});
+
+		it('a press on it picks up what is behind it instead', () => {
+			const {frame, onSelect} = renderOverlay({stage: locked});
+
+			fireEvent(frame, pointer('pointerdown', 120, 120));
+
+			expect(onSelect).toHaveBeenCalledWith(['mira']);
+		});
+
+		it('shows no handles when selected through the caret', () => {
+			renderOverlay({selection: ['candle'], stage: locked});
+
+			expect(document.querySelector('.stage-editor-handle')).toBeNull();
+			expect(
+				document.querySelector('.stage-editor-selection.locked')
+			).not.toBeNull();
+		});
+	});
+
+	describe('zoomed out', () => {
+		it('draws the frame of the shot only when asked', () => {
+			const {update} = renderOverlay();
+
+			expect(screen.queryByTestId('stage-editor-frame')).toBeNull();
+			update({overscan: true});
+			expect(screen.getByTestId('stage-editor-frame')).toBeInTheDocument();
+		});
 	});
 });

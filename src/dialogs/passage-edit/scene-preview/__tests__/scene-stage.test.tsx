@@ -10,7 +10,8 @@ const mockRenderer = {
 	destroy: jest.fn(),
 	invalidate: jest.fn(),
 	mount: jest.fn(),
-	setMuted: jest.fn()
+	setMuted: jest.fn(),
+	setViewScale: jest.fn()
 };
 
 const mockDialogue = {

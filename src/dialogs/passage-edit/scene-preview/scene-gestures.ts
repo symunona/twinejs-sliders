@@ -81,6 +81,51 @@ export function flipWrites(stage: Stage, ids: EntityId[]): EntityKeyWrite[] {
 	}));
 }
 
+/**
+ * Back to the art's own aspect: the squeeze is dropped, `scale:` stays. Deletes the key on
+ * the entry and says `stretch: [1, 1]` on a beat, the way unflipping does.
+ */
+export function unstretchWrites(
+	stage: Stage,
+	ids: EntityId[]
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids)
+		.filter(entity => isStretched(entity))
+		.map(entity => ({
+			id: entity.id,
+			key: 'stretch',
+			kind: entity.kind,
+			ref: entity.ref,
+			reset: [1, 1],
+			value: undefined
+		}));
+}
+
+/** Drawn at some other aspect than the art's own. */
+export function isStretched(entity: StageEntity | undefined): boolean {
+	const stretch = entity?.stretch;
+
+	return !!stretch && (stretch.x !== 1 || stretch.y !== 1);
+}
+
+/**
+ * Lock or unlock: all locked when any was not, otherwise all unlocked. Always on the
+ * entry — `locked:` is an editor setting, not a moment of the scene.
+ */
+export function lockWrites(stage: Stage, ids: EntityId[]): EntityKeyWrite[] {
+	const entities = entitiesOf(stage, ids);
+	const lock = !entities.every(entity => entity.locked);
+
+	return entities.map(entity => ({
+		entry: true,
+		id: entity.id,
+		key: 'locked',
+		kind: entity.kind,
+		ref: entity.ref,
+		value: lock ? true : undefined
+	}));
+}
+
 // ---------------------------------------------------------------------------
 // z
 // ---------------------------------------------------------------------------

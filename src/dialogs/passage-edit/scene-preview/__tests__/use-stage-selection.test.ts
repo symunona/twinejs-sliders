@@ -62,6 +62,8 @@ function fakeEditor(lines: string[]) {
 	return {
 		marks,
 		editor: {
+			// Lines are 20px tall in this fake, so a click's y names its line.
+			coordsChar: (at: {top: number}) => ({ch: 0, line: Math.floor(at.top / 20)}),
 			getCursor: () => cursor,
 			getDoc: () => doc,
 			lineCount: () => lines.length,
@@ -82,7 +84,12 @@ function fakeEditor(lines: string[]) {
 			cursor = {ch: 0, line};
 			(handlers['cursorActivity'] ?? []).forEach(fn => fn());
 		},
-		cursor: () => cursor
+		cursor: () => cursor,
+		doubleClickLine(line: number) {
+			const event = {clientX: 4, clientY: line * 20 + 5};
+
+			(handlers['dblclick'] ?? []).forEach(fn => fn(this.editor, event));
+		}
 	};
 }
 
@@ -145,6 +152,53 @@ describe('entityHighlights()', () => {
 		expect(entityHighlights(block, scene, 'bram', 'cast').beats).toEqual([
 			{end: 11, start: 11}
 		]);
+	});
+});
+
+describe('useStageSelection() double click', () => {
+	function setup(fake: ReturnType<typeof fakeEditor>) {
+		const onFocusEntity = jest.fn();
+		const hook = renderHook(() =>
+			useStageSelection({
+				block,
+				editor: fake.editor,
+				enabled: true,
+				kindOf: () => 'cast',
+				onFocusEntity,
+				scene,
+				stageIds: ['mira', 'bram', 'candle']
+			})
+		);
+
+		return {...hook, onFocusEntity};
+	}
+
+	it('asks the stage to show the entity on an entry line', () => {
+		const fake = fakeEditor(passage.split('\n'));
+		const {onFocusEntity, result} = setup(fake);
+
+		act(() => fake.doubleClickLine(8));
+
+		expect(result.current.selection).toEqual(['candle']);
+		expect(onFocusEntity).toHaveBeenCalledWith('candle');
+	});
+
+	it('asks for the speaker on a beat line', () => {
+		const fake = fakeEditor(passage.split('\n'));
+		const {onFocusEntity} = setup(fake);
+
+		act(() => fake.doubleClickLine(11));
+
+		expect(onFocusEntity).toHaveBeenCalledWith('bram');
+	});
+
+	it('asks for nothing on a line that names no entity', () => {
+		const fake = fakeEditor(passage.split('\n'));
+		const {onFocusEntity} = setup(fake);
+
+		act(() => fake.doubleClickLine(3));
+
+		expect(onFocusEntity).not.toHaveBeenCalled();
 	});
 });
 

@@ -237,6 +237,31 @@ export interface StageEntity {
 	 */
 	rot?: number;
 	/**
+	 * Non-uniform size, `[x, y]` multipliers ON TOP of `scale` — the squeeze an edge handle
+	 * makes. Absent is `[1, 1]`, the art's own aspect.
+	 *
+	 * Its own key rather than a pair spelling of `scale`: every renderer, collector and
+	 * differ already reads `scale` as one number, and a corner drag has to keep resizing
+	 * uniformly without forgetting the squeeze. Same pivot as `scale` (the origin).
+	 */
+	stretch?: Vec2;
+	/**
+	 * A motion the sprite plays on its own — the backdrop's `fx:` presets, on any entity:
+	 * `motion: scroll_infinite_left` on a row of hills is one parallax layer, and several
+	 * at different speeds and `z` are a parallax stack.
+	 *
+	 * Same tokens and same `speed` (seconds per cycle) as `bg: {fx:}`, and the same open
+	 * door: an unknown token still reaches the DOM as `data-motion` for a story stylesheet.
+	 * State, like `pose`: every later beat inherits it, and `motion: ~` stops it.
+	 */
+	motion?: StageBgFx;
+	/**
+	 * Editor only: the stage will not select this entity by pointer, so a backdrop layer
+	 * cannot be grabbed by accident while staging the cast in front of it. The caret still
+	 * selects it. Never read by the player.
+	 */
+	locked?: boolean;
+	/**
 	 * Where clicking this entity takes the reader. Absent means it is scenery.
 	 *
 	 * STATE, like `pose` and unlike a beat's `sfx`: every later beat inherits it, so the
@@ -479,7 +504,10 @@ export interface BeatBase {
  * hunting down three separate Pick lists that then quietly disagree.
  */
 export type EntityPatchBody = Partial<
-	Omit<StageEntity, 'id' | 'kind' | 'ref' | 'of' | 'link' | 'highlight' | 'grade'>
+	Omit<
+		StageEntity,
+		'id' | 'kind' | 'ref' | 'of' | 'link' | 'highlight' | 'grade' | 'motion'
+	>
 > & {
 	/**
 	 * `of` is the one key a patch can also CLEAR. Everything else is set-or-inherit, but a
@@ -496,6 +524,8 @@ export type EntityPatchBody = Partial<
 	link?: EntityLink | null;
 	/** Clearable beside `link`, so a beat can drop a hint's glow without dropping the link. */
 	highlight?: string | null;
+	/** Clearable: `motion: ~` is how a beat stops a layer scrolling. */
+	motion?: StageBgFx | null;
 	/**
 	 * MERGED per key over the grade the entity already has, not replaced: a beat saying
 	 * `grade: {warmth: 60}` keeps the scene's brightness. A key at rest (`warmth: 0`) resets

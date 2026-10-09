@@ -221,6 +221,12 @@ export interface EntityKeyWrite {
 	 * inherits from it, and `flip: false` there is just noise.
 	 */
 	reset?: unknown;
+	/**
+	 * Always the `cast:` / `props:` entry, wherever the scrubber is. For keys that are
+	 * about the entity in the EDITOR rather than at a moment of the scene — `locked:` —
+	 * where splicing a beat would put an editor setting on the timeline.
+	 */
+	entry?: boolean;
 }
 
 /**
@@ -359,7 +365,12 @@ export function buildEntityEdit(
 	write: EntityKeyWrite
 ): TextEdit | undefined {
 	const {blockText, beat, scene} = context;
-	const plan = planEntityWrite(scene, beat, write.kind, write.id);
+	const plan = planEntityWrite(
+		scene,
+		write.entry ? 0 : beat,
+		write.kind,
+		write.id
+	);
 
 	if (plan.insertBeat) {
 		return insertBeatEdit(context, plan.insertBeat.index, [write]);
@@ -487,7 +498,7 @@ export function buildWriteEdits(
 		) {
 			const plan = planEntityWrite(
 				context.scene,
-				context.beat,
+				write.entry ? 0 : context.beat,
 				write.kind,
 				write.id
 			);
@@ -554,8 +565,12 @@ export function insertedBeatCount(
 		}
 
 		if (
-			planEntityWrite(context.scene, context.beat, write.kind, write.id)
-				.insertBeat
+			planEntityWrite(
+				context.scene,
+				write.entry ? 0 : context.beat,
+				write.kind,
+				write.id
+			).insertBeat
 		) {
 			ids.add(write.id);
 		}
@@ -635,7 +650,12 @@ export function writeSceneEdits(
 
 /** Values held locally while a gesture runs and until the parse catches up. */
 export interface StagePatch {
-	[id: string]: {at?: {x: number; y: number}; rot?: number; scale?: number};
+	[id: string]: {
+		at?: {x: number; y: number};
+		rot?: number;
+		scale?: number;
+		stretch?: {x: number; y: number};
+	};
 }
 
 /**
@@ -667,7 +687,8 @@ export function applyStagePatch(stage: Stage, patch: StagePatch): Stage {
 			...(patch[id].rot === undefined ? {} : {rot: patch[id].rot as number}),
 			...(patch[id].scale === undefined
 				? {}
-				: {scale: patch[id].scale as number})
+				: {scale: patch[id].scale as number}),
+			...(patch[id].stretch ? {stretch: patch[id].stretch as Vec2} : {})
 		};
 		changed = true;
 	}
@@ -714,7 +735,14 @@ export const PATCH_TIMEOUT_MS = 900;
 
 function agrees(
 	patched: StagePatch[string],
-	actual: {at: {x: number; y: number}; rot?: number; scale: number} | undefined
+	actual:
+		| {
+				at: {x: number; y: number};
+				rot?: number;
+				scale: number;
+				stretch?: {x: number; y: number};
+		  }
+		| undefined
 ): boolean {
 	if (!actual) {
 		return false;
@@ -738,6 +766,15 @@ function agrees(
 		return false;
 	}
 
+	// Absent is [1, 1], for the same reason absent is a level `rot`.
+	if (
+		patched.stretch &&
+		(Math.abs(patched.stretch.x - (actual.stretch?.x ?? 1)) > AGREE_EPSILON ||
+			Math.abs(patched.stretch.y - (actual.stretch?.y ?? 1)) > AGREE_EPSILON)
+	) {
+		return false;
+	}
+
 	return !(
 		patched.scale !== undefined &&
 		Math.abs(patched.scale - actual.scale) > AGREE_EPSILON
@@ -749,7 +786,12 @@ export function settlePatch(
 	patch: StagePatch,
 	entities: Record<
 		string,
-		{at: {x: number; y: number}; rot?: number; scale: number}
+		{
+			at: {x: number; y: number};
+			rot?: number;
+			scale: number;
+			stretch?: {x: number; y: number};
+		}
 	>
 ): StagePatch {
 	const next: StagePatch = {};

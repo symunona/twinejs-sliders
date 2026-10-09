@@ -255,6 +255,102 @@ renderer layer would start the argument again.
 	cursor: nesw-resize;
 }
 
+/* A bigger target than the square drawn: 9px is a precise click, and a near miss used to
+   land on the sprite underneath and change the selection instead. */
+.stage-editor-handle::before {
+	content: '';
+	inset: -5px;
+	position: absolute;
+}
+
+/* Edge handles squeeze one side. A bar rather than a square, so they read as "this side"
+   and are told apart from the corners at a glance. */
+.stage-editor-handle.edge.n,
+.stage-editor-handle.edge.s {
+	border-radius: 2px;
+	cursor: ns-resize;
+	height: 5px;
+	margin-left: -8px;
+	margin-top: -3px;
+	width: 15px;
+}
+
+.stage-editor-handle.edge.e,
+.stage-editor-handle.edge.w {
+	border-radius: 2px;
+	cursor: ew-resize;
+	height: 15px;
+	margin-left: -3px;
+	margin-top: -8px;
+	width: 5px;
+}
+
+/* The selection box's own outline is a move handle, wherever no handle sits on it. Above
+   every sprite (the marker layer is), so it grabs the selected entity even where another
+   is drawn on top. */
+.stage-editor-move-edge {
+	cursor: move;
+	pointer-events: auto;
+	position: absolute;
+	z-index: 4;
+}
+
+.stage-editor-move-edge.n,
+.stage-editor-move-edge.s {
+	height: 8px;
+	left: 0;
+	right: 0;
+}
+
+.stage-editor-move-edge.n {
+	top: -4px;
+}
+
+.stage-editor-move-edge.s {
+	bottom: -4px;
+}
+
+.stage-editor-move-edge.e,
+.stage-editor-move-edge.w {
+	bottom: 0;
+	top: 0;
+	width: 8px;
+}
+
+.stage-editor-move-edge.e {
+	right: -4px;
+}
+
+.stage-editor-move-edge.w {
+	left: -4px;
+}
+
+/* A double click on the entity's line: a short pulse so the eye finds it on the stage. */
+.stage-editor-selection.flash {
+	animation: stage-editor-flash 0.3s ease-out 3;
+}
+
+@keyframes stage-editor-flash {
+	from {
+		box-shadow:
+			0 0 0 1px rgba(0, 0, 0, 0.35),
+			0 0 0 6px rgba(74, 212, 255, 0.85);
+	}
+
+	to {
+		box-shadow:
+			0 0 0 1px rgba(0, 0, 0, 0.35),
+			0 0 0 14px rgba(74, 212, 255, 0);
+	}
+}
+
+/* Locked: selected by the caret, not grabbable. Dashed, so the missing handles read as a
+   rule rather than a bug. */
+.stage-editor-selection.locked {
+	border-style: dashed;
+	border-color: #ffd84a;
+}
+
 /* The rotate dot: the fifth handle, and the only one that is not a corner. Round rather
    than square so it is told apart from a resize handle by shape and not only by where it
    sits, and it keeps the selection box's cyan because it belongs to that box. */
@@ -274,6 +370,17 @@ renderer layer would start the argument again.
    that cross, and the cross is orange while it happens. */
 .stage-editor-readout .rot {
 	color: #ff9d5c;
+}
+
+/* The shot's frame in the zoomed-out view. Drawn over the sprites, and the room around it
+   dimmed rather than hidden: off-stage sprites stay visible and grabbable, but nobody can
+   mistake them for part of the picture. */
+.stage-editor-frame {
+	border: 1px dashed rgba(255, 255, 255, 0.75);
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.6),
+		0 0 0 100vmax rgba(5, 7, 12, 0.5);
+	position: absolute;
 }
 
 /* The measuring grid. Sits at the bottom of the marker layer — selection boxes, guides and

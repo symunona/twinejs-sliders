@@ -240,6 +240,9 @@ cannot carry one.
 | `of` | another entity's id. Makes `at` relative to it. See Relative placement. |
 | `scale` | uniform size multiplier. 1 = natural size. Scales about the origin, so a character keeps its feet on the floor. Must be > 0. |
 | `rot` | tilt, degrees CLOCKWISE, about the same origin `scale` grows about. Negative leans the other way. Absent = 0. |
+| `stretch` | squeeze. `[x, y]` multipliers on top of `scale`, same origin. Absent = `[1, 1]`. Both > 0. See Squeeze. |
+| `motion` | the backdrop's `fx:` presets on any entity. Token or `{id, speed}`. `motion: ~` stops. See Motion. |
+| `locked` | editor only. `true` = stage pointer never picks it up. Caret still selects. Player ignores. |
 | `pose` | which named pose of the character (D5). A list animates: see Poses. |
 | `poseLoop` | `all` (default) / `once`. How a `pose:` list ends. |
 | `flip` | mirror horizontally |
@@ -297,6 +300,38 @@ beats:
 There is deliberately **no** `transform:` string key. Composition order is the renderer's, so
 that `at`, `scale`, `rot` and `flip` each stay one number the differ can time, the beat
 writer can patch and the editor can drag.
+
+### Squeeze — `stretch:`
+
+```yaml
+props:
+  tree: {at: 0.5, stretch: [1.4, 1]}   # 40% wider, same height
+```
+
+| | |
+|---|---|
+| Form | `[x, y]` only. Bare number = error: that is `scale:`. |
+| Pivot | the origin, like `scale`. Picture fills the stretched box (`object-fit: fill`). |
+| Editor | edge handles (n/e/s/w) write it, opposite edge pinned (`at` moves too). Alt = about centre. Corners still write `scale`, squeeze kept. Selection row: Reset aspect ratio. |
+| Beats | inherited. Back to own shape on a beat = `stretch: [1, 1]`. Timed + eased as `scale`. |
+
+### Motion — `motion:`
+
+```yaml
+props:
+  far:  {ref: hills-far,  fit: cover, z: -4, motion: {id: scroll_infinite_left, speed: 40}}
+  near: {ref: hills-near, fit: cover, z: -2, motion: {id: scroll_infinite_left, speed: 8}}
+```
+
+| | |
+|---|---|
+| Tokens | `BG_MOTIONS` — same as `bg: {fx:}`. Unknown token → `data-motion` for a story stylesheet. |
+| `speed` | seconds per cycle. > 0. Absent = preset default. |
+| Drawn by | the ART (`.sliders-entity-art`), not the box. Box keeps position; editor rects unchanged. |
+| `scroll_infinite_*` | travels one SPRITE width; trailing twin copy a width ahead. Plane = stage wide = parallax layer. Art must tile. |
+| Plane drift | `parallax_*`, `earthquake`, `circling` oversize a plane like the backdrop. A sprite drifts at own size. |
+| Beats | state, inherited. `motion: ~` stops it. |
+| Demo | `docs/sliders/demos/parallax-hills.md`. |
 
 ### Colour grade — `grade:`
 
@@ -471,7 +506,7 @@ of them stack with the cast.
 | Values | `cover` fills the stage and crops. `contain` fits the whole picture in, letterboxed. Nothing else. |
 | Where | `cast:`, `props:`, `entities:`, and a beat body — everywhere `scale:` and `z:` are. |
 | Honors | `z`, `opacity`, `flip`, enter/exit fades. |
-| Ignores | `at`, `of`, `scale`, `rot`. **Warned, never silent.** |
+| Ignores | `at`, `of`, `scale`, `stretch`, `rot`. **Warned, never silent.** |
 | Default `z` | `-1` — same seed as `layer: back`, so a plane with no `z:` sits behind the whole derived 0..1 range. |
 | Explicit `z:` | wins, either key order. So does `layer:`. |
 | Ties at `-1` | broken by author order, like every other tie. |

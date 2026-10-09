@@ -150,6 +150,11 @@ interface EntityRecord {
 	exitTimer?: ReturnType<typeof setTimeout>;
 	/** The `grade:` filter on screen, held so its SVG half stays in the document. */
 	grade?: GradeHandle;
+	/**
+	 * The trailing copy of `art` a `motion: scroll_infinite_*` needs, and what it was cloned
+	 * from — the same two-copies trick the backdrop's twin plays (see `syncBgTwin`).
+	 */
+	motionTwin?: {el: HTMLElement; key: string};
 	/** The outgoing picture of a grade cross-fade, and the hold on its old filter. */
 	gradeGhost?: {
 		el: HTMLDivElement;
@@ -283,6 +288,8 @@ export class DomRenderer implements Renderer {
 
 	private box: StageBox = {left: 0, top: 0, width: 0, height: 0};
 	private camera: Camera = {at: {x: 0, y: 0}, zoom: 1};
+	/** See `setViewScale`. */
+	private viewScale = 1;
 
 	private observer?: ResizeObserver;
 	private windowResize?: () => void;
@@ -332,6 +339,10 @@ export class DomRenderer implements Renderer {
 		const root = this.el('div', 'sliders-root');
 
 		root.dataset.guides = String(!!this.opts.guides);
+
+		if (this.viewScale < 1) {
+			root.dataset.overscan = 'true';
+		}
 
 		const box = this.el('div', 'sliders-stage-box');
 		const camera = this.el('div', 'sliders-camera');
@@ -611,6 +622,34 @@ export class DomRenderer implements Renderer {
 		this.listeners.add(fn);
 
 		return () => this.listeners.delete(fn);
+	}
+
+	/**
+	 * Draw the stage smaller than the mount and stop clipping it (editor only).
+	 *
+	 * The editor's zoomed-out view: the stage box shrinks about the mount's centre and the
+	 * mount around it becomes visible off-stage room, so a sprite parked outside the frame
+	 * (waiting to walk on, or dragged off by accident) is drawn and can be grabbed. The
+	 * player never calls this — off stage is off stage there. 1 is the ordinary letterbox.
+	 */
+	setViewScale(scale: number): void {
+		const next = Number.isFinite(scale) && scale > 0 ? Math.min(scale, 1) : 1;
+
+		if (next === this.viewScale) {
+			return;
+		}
+
+		this.viewScale = next;
+
+		if (this.rootEl) {
+			if (next < 1) {
+				this.rootEl.dataset.overscan = 'true';
+			} else {
+				delete this.rootEl.dataset.overscan;
+			}
+		}
+
+		this.relayout();
 	}
 
 	setGuides(on: boolean): void {
@@ -1036,6 +1075,16 @@ export class DomRenderer implements Renderer {
 			el.dataset.fit = entity.fit;
 		} else {
 			delete el.dataset.fit;
+		}
+
+		// A squeezed sprite's picture has to FILL its box: the default `contain` would keep
+		// the art's own shape inside the stretched box and the squeeze would do nothing.
+		const stretch = entity.stretch;
+
+		if (stretch && (stretch.x !== 1 || stretch.y !== 1)) {
+			el.dataset.stretch = `${stretch.x} ${stretch.y}`;
+		} else {
+			delete el.dataset.stretch;
 		}
 	}
 
@@ -1610,6 +1659,23 @@ export class DomRenderer implements Renderer {
 	}
 
 	private metricsFor(res: ResolvedEntity): SpriteMetrics {
+		const metrics = this.uniformMetricsFor(res);
+		const stretch = res.entity.stretch;
+
+		// A squeeze widens or flattens the box about the same origin fraction, so the feet
+		// stay where `at` puts them whichever way the art was pulled.
+		if (!stretch || (stretch.x === 1 && stretch.y === 1)) {
+			return metrics;
+		}
+
+		return {
+			...metrics,
+			width: metrics.width * (stretch.x > 0 ? stretch.x : 1),
+			height: metrics.height * (stretch.y > 0 ? stretch.y : 1)
+		};
+	}
+
+	private uniformMetricsFor(res: ResolvedEntity): SpriteMetrics {
 		// A resolved character decides this, not the declared kind: an `auto` entity that
 		// found a character is a character, whatever the parser was able to say about it.
 		if (res.character || res.entity.kind === 'cast') {
@@ -1669,6 +1735,7 @@ export class DomRenderer implements Renderer {
 			rot ? ` rotate(${rot}deg)` : ''
 		} scaleX(${entity.flip ? -1 : 1})`;
 		this.syncGradeScale(rec);
+		this.syncMotion(rec);
 		style.opacity = String(
 			from ? from.opacity : clamp01(entity.opacity ?? 1)
 		);
@@ -1717,6 +1784,58 @@ export class DomRenderer implements Renderer {
 			from ? from.opacity : clamp01(entity.opacity ?? 1)
 		);
 		this.syncGradeScale(rec);
+		this.syncMotion(rec);
+	}
+
+	/**
+	 * An entity's own `motion:` — the backdrop's presets, played by the sprite's ART rather
+	 * than its box, so the box keeps `transform` for position and the hit rect the editor
+	 * measures stays where the author put the thing.
+	 *
+	 * Same contract as `syncBgFx`: a data attribute plus a custom property, never a class or
+	 * an inline animation, so an unknown token is a story stylesheet's to paint. A
+	 * `scroll_infinite_*` loop needs a second copy of the art a whole sprite ahead, rebuilt
+	 * whenever the art inside it changes (a pose swap, a step, a grade).
+	 */
+	private syncMotion(rec: EntityRecord): void {
+		const motion = rec.entity.motion;
+		const art = rec.art;
+
+		if (motion) {
+			if (art.dataset.motion !== motion.id) {
+				art.dataset.motion = motion.id;
+			}
+
+			art.style.setProperty(
+				'--sliders-motion-speed',
+				motion.speed === undefined ? '' : `${motion.speed}s`
+			);
+		} else if (art.dataset.motion !== undefined) {
+			delete art.dataset.motion;
+			art.style.removeProperty('--sliders-motion-speed');
+		}
+
+		if (!bgMotionTiles(motion?.id)) {
+			rec.motionTwin?.el.remove();
+			rec.motionTwin = undefined;
+
+			return;
+		}
+
+		const key = `${art.innerHTML}\u0000${art.getAttribute('style') ?? ''}`;
+
+		if (rec.motionTwin?.key === key && rec.motionTwin.el.parentNode === rec.el) {
+			return;
+		}
+
+		const twin = art.cloneNode(true) as HTMLElement;
+
+		twin.classList.add('sliders-entity-art-tile');
+		// The same picture twice: a reader being told about it should be told once.
+		twin.setAttribute('aria-hidden', 'true');
+		rec.motionTwin?.el.remove();
+		rec.el.appendChild(twin);
+		rec.motionTwin = {el: twin, key};
 	}
 
 	/**
@@ -2150,7 +2269,18 @@ export class DomRenderer implements Renderer {
 		const width = this.mountEl.clientWidth || this.mountEl.getBoundingClientRect().width;
 		const height = this.mountEl.clientHeight || this.mountEl.getBoundingClientRect().height;
 
-		this.box = computeStageBox(width, height, this.opts.aspect);
+		const fitted = computeStageBox(width, height, this.opts.aspect);
+		const scale = this.viewScale;
+
+		this.box =
+			scale < 1
+				? {
+						left: fitted.left + (fitted.width * (1 - scale)) / 2,
+						top: fitted.top + (fitted.height * (1 - scale)) / 2,
+						width: fitted.width * scale,
+						height: fitted.height * scale
+				  }
+				: fitted;
 
 		this.boxEl.style.left = `${this.box.left}px`;
 		this.boxEl.style.top = `${this.box.top}px`;

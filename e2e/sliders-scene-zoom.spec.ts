@@ -44,6 +44,10 @@ async function canvasWidth(page: Page) {
 		.width;
 }
 
+async function stageBoxWidth(page: Page) {
+	return (await page.locator('.sliders-stage-box').first().boundingBox())!.width;
+}
+
 async function viewportWidth(page: Page) {
 	return page
 		.locator('.scene-stage-viewport')
@@ -82,7 +86,11 @@ test.describe('scene editor view zoom', () => {
 			.getByRole('button', {name: 'Zoom Out'})
 			.click();
 		await expect(percent(page)).toHaveText('75%');
-		expect(await canvasWidth(page)).toBeLessThan(fit);
+		// Zoomed out the canvas keeps the viewport; the STAGE is drawn smaller inside it,
+		// with the room around it left for sprites standing off stage.
+		expect(await canvasWidth(page)).toBeCloseTo(fit, 0);
+		expect(await stageBoxWidth(page)).toBeLessThan(fit * 0.8);
+		await expect(page.getByTestId('stage-editor-frame')).toBeVisible();
 
 		await percent(page).click();
 		await expect(percent(page)).toHaveText('100%');
@@ -152,5 +160,71 @@ test.describe('scene editor view zoom', () => {
 		expect(Math.abs(marked.y - box.y)).toBeLessThan(3);
 		expect(Math.abs(marked.width - box.width)).toBeLessThan(3);
 		expect(Math.abs(marked.height - box.height)).toBeLessThan(3);
+	});
+
+	test('zoomed out, a sprite off stage is drawn and can be selected', async ({
+		page
+	}) => {
+		test.setTimeout(180000);
+		await createStory(page, 'Scene Zoom Overscan ' + Date.now());
+		await setStoryFormat(page, 'Sliders');
+		await closeDialogs(page);
+		await openPassage(page, 'Untitled Passage');
+		await setPassageText(
+			page,
+			`[scene]
+cast:
+  mira:  {at: -0.4}
+  joren: {at: 1.5}
+beats:
+  - mira: "Hello."
+`
+		);
+		await showScenePreview(page);
+		await page.locator('.scene-stage').first().waitFor({timeout: 20000});
+
+		const joren = page.locator('.sliders-entity[data-entity-id="joren"]');
+		const stageBox = page.locator('.sliders-stage-box').first();
+
+		await joren.waitFor({state: 'attached'});
+
+		// At 100% joren stands past the right edge: clipped away by the stage.
+		await expect(page.getByTestId('stage-editor-frame')).toHaveCount(0);
+
+		for (let i = 0; i < 2; i++) {
+			await page
+				.getByTestId('scene-preview')
+				.getByRole('button', {name: 'Zoom Out'})
+				.click();
+		}
+
+		await expect(percent(page)).toHaveText('50%');
+		await expect(page.getByTestId('stage-editor-frame')).toBeVisible();
+
+		const box = (await stageBox.boundingBox())!;
+		const sprite = (await joren.boundingBox())!;
+
+		// Drawn to the right of the frame, not clipped by it.
+		expect(sprite.x).toBeGreaterThan(box.x + box.width - 1);
+		expect(
+			await page.evaluate(
+				({x, y}) => {
+					const hit = document.elementFromPoint(x, y);
+
+					return !!hit?.closest('.sliders-entity[data-entity-id="joren"]') ||
+						hit?.closest('.stage-editor') !== null;
+				},
+				{x: sprite.x + sprite.width / 2, y: sprite.y + sprite.height / 2}
+			)
+		).toBe(true);
+
+		// A press on it selects it, like any sprite on the stage.
+		await page.mouse.click(
+			sprite.x + sprite.width / 2,
+			sprite.y + sprite.height / 2
+		);
+		await expect(
+			page.locator('.stage-editor-selection[data-entity-id="joren"]')
+		).toBeVisible();
 	});
 });

@@ -145,6 +145,11 @@ export interface StageSelectionOptions {
 	 * the opening state.
 	 */
 	onCaretBeat?: (beat: number) => void;
+	/**
+	 * A double click on an entity's line — its entry or a beat that speaks for it. The
+	 * single click already selected it; this is the author asking to SEE it on the stage.
+	 */
+	onFocusEntity?: (id: EntityId) => void;
 }
 
 export interface StageSelection {
@@ -164,6 +169,7 @@ export function useStageSelection(
 		enabled,
 		kindOf,
 		onCaretBeat,
+		onFocusEntity,
 		scene,
 		stageIds
 	} = options;
@@ -177,6 +183,7 @@ export function useStageSelection(
 		enabled,
 		kindOf,
 		onCaretBeat,
+		onFocusEntity,
 		scene,
 		selection
 	});
@@ -187,6 +194,7 @@ export function useStageSelection(
 		enabled,
 		kindOf,
 		onCaretBeat,
+		onFocusEntity,
 		scene,
 		selection
 	};
@@ -296,6 +304,38 @@ export function useStageSelection(
 		editor.on('cursorActivity', handler);
 
 		return () => editor.off('cursorActivity', handler);
+	}, [editor]);
+
+	// Double click -> show it on the stage. Read off the line the click landed on rather
+	// than the caret, which a double click may have moved as part of selecting a word.
+	React.useEffect(() => {
+		if (!editor) {
+			return;
+		}
+
+		const handler = (_cm: unknown, event: MouseEvent) => {
+			const {block: currentBlock, enabled: on, onFocusEntity: focus} =
+				latest.current;
+
+			if (!on || !focus || !currentBlock) {
+				return;
+			}
+
+			const at = editor.coordsChar(
+				{left: event.clientX, top: event.clientY},
+				'window'
+			);
+			const target = entityAtEditorLine(currentBlock, at.line);
+
+			if (target) {
+				setSelection([target.id]);
+				focus(target.id);
+			}
+		};
+
+		editor.on('dblclick', handler as never);
+
+		return () => editor.off('dblclick', handler as never);
 	}, [editor]);
 
 	// Selection -> marked lines.

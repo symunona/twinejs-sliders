@@ -24,6 +24,9 @@ import {
 	IconAdjustments,
 	IconArrowDown,
 	IconArrowUp,
+	IconAspectRatio,
+	IconLock,
+	IconLockOpen,
 	IconFlipHorizontal,
 	IconExternalLink,
 	IconMoodSmile,
@@ -56,6 +59,10 @@ export interface StageSelectionControlsProps {
 	note?: string;
 	onDelete: () => void;
 	onFlip: () => void;
+	/** Drop the squeeze. Shown only while something selected is stretched. */
+	onResetStretch?: () => void;
+	/** Lock or unlock the selection against the stage's pointer. */
+	onToggleLock?: () => void;
 	onPose: (pose: string | undefined) => void;
 	/**
 	 * Draw a pose on the stage without writing it: `AUTO_POSE` for the fallback, a name
@@ -149,6 +156,8 @@ export const StageSelectionControls: React.FC<
 		onDelete,
 		onFlip,
 		onPose,
+		onResetStretch,
+		onToggleLock,
 		onOpenLink,
 		onPreviewPose,
 		onStepZ,
@@ -231,6 +240,39 @@ export const StageSelectionControls: React.FC<
 				selectable
 				selected={entities.every(entity => entity.flip)}
 			/>
+			{onResetStretch &&
+				entities.some(
+					entity =>
+						!!entity.stretch &&
+						(entity.stretch.x !== 1 || entity.stretch.y !== 1)
+				) && (
+					<IconButton
+						icon={<IconAspectRatio />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.resetAspect')}
+						onClick={onResetStretch}
+					/>
+				)}
+			{onToggleLock && (
+				<IconButton
+					icon={
+						entities.every(entity => entity.locked) ? (
+							<IconLock />
+						) : (
+							<IconLockOpen />
+						)
+					}
+					iconOnly
+					label={
+						entities.every(entity => entity.locked)
+							? t('dialogs.passageEdit.scenePreview.unlockEntity')
+							: t('dialogs.passageEdit.scenePreview.lockEntity')
+					}
+					onClick={onToggleLock}
+					selectable
+					selected={entities.every(entity => entity.locked)}
+				/>
+			)}
 			{/* Depth is one number now, so these are the buttons the layer select used to
 			    be. They step `z:`, exactly as `[` / `]` and mod+down / mod+up do. */}
 			<IconButton

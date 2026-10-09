@@ -51,6 +51,7 @@ export const ENTITY_KEY_ORDER = [
 	'of',
 	'at',
 	'scale',
+	'stretch',
 	'rot',
 	'pose',
 	'poseLoop',
@@ -61,6 +62,9 @@ export const ENTITY_KEY_ORDER = [
 	'opacity',
 	// How it looks, after whether it can be seen at all.
 	'grade',
+	'motion',
+	// Editor only, and about the editor rather than the picture.
+	'locked',
 	// Last, and together: these two say what the entity DOES rather than how it looks, and
 	// an author scanning an entry for its geometry should not have to read past them.
 	'link',

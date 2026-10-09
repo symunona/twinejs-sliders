@@ -46,7 +46,9 @@ export function cloneEntity(entity: StageEntity): StageEntity {
 		// Copied for the same reason `at` is: a stage sequence is many clones of one
 		// declaration, and a shared object is a beat able to edit the beat before it.
 		...(entity.link ? {link: {...entity.link}} : {}),
-		...(entity.grade ? {grade: {...entity.grade}} : {})
+		...(entity.grade ? {grade: {...entity.grade}} : {}),
+		...(entity.stretch ? {stretch: cloneVec(entity.stretch)} : {}),
+		...(entity.motion ? {motion: {...entity.motion}} : {})
 	};
 }
 
@@ -143,6 +145,18 @@ export function mergePatch(
 		next.rot = patch.rot;
 	}
 
+	if (patch.stretch !== undefined) {
+		next.stretch = cloneVec(patch.stretch);
+	}
+
+	if (patch.motion !== undefined) {
+		next.motion = patch.motion === null ? undefined : {...patch.motion};
+	}
+
+	if (patch.locked !== undefined) {
+		next.locked = patch.locked;
+	}
+
 	// Clearable, like `of` and unlike everything above: a link is state that every later
 	// beat inherits, so `link: ~` is the only way to say "this door stops being a way out".
 	if (patch.link !== undefined) {
@@ -191,6 +205,10 @@ export function materialize(id: string, patch: EntityPatch): StageEntity {
 		// rotated carries no key rather than a number every renderer has to read.
 		rot: patch.rot,
 		scale: patch.scale ?? ENTITY_DEFAULTS.scale,
+		// No default for these three: absent is the identity (own aspect, still, unlocked).
+		stretch: patch.stretch && cloneVec(patch.stretch),
+		motion: patch.motion ? {...patch.motion} : undefined,
+		locked: patch.locked,
 		steps: patch.steps && cloneSteps(patch.steps),
 		z: patch.z
 	};

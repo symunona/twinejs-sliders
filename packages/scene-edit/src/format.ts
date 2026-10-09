@@ -130,6 +130,20 @@ export function formatValue(
 		return formatAt(value, options.relative ? 0 : LAYER_BASELINE);
 	}
 
+	// A squeeze reads as the pair the author would type, never as a `{x, y}` map.
+	if (key === 'stretch' && isVec2(value)) {
+		return `[${formatScalar(value.x)}, ${formatScalar(value.y)}]`;
+	}
+
+	// A motion is its token alone unless it was timed.
+	if (key === 'motion' && isPlainObject(value)) {
+		const motion = value as {id?: unknown; speed?: unknown};
+
+		return motion.speed === undefined
+			? formatScalar(motion.id)
+			: `{id: ${formatScalar(motion.id)}, speed: ${formatScalar(motion.speed)}}`;
+	}
+
 	// A link is written back the way it was written in: the `links:` entry it named, if it
 	// named one, and otherwise the passage. The map form survives only where it carries
 	// something a scalar cannot say — a condition of its own.

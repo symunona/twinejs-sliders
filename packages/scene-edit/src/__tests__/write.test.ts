@@ -581,6 +581,9 @@ describe('half-typed and malformed input', () => {
 			ref: 'tankard',
 			rot: 12,
 			scale: 0.8,
+			stretch: {x: 1.5, y: 0.75},
+			motion: {id: 'scroll_infinite_left', speed: 12},
+			locked: true,
 			z: 2
 		};
 		const written = write(

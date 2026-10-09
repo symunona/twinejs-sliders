@@ -96,6 +96,7 @@ export const ENTITY_KEYS = [
 	'at',
 	'of',
 	'scale',
+	'stretch',
 	'rot',
 	'pose',
 	'poseLoop',
@@ -105,11 +106,16 @@ export const ENTITY_KEYS = [
 	'z',
 	'opacity',
 	'grade',
+	'motion',
+	'locked',
 	'ref',
 	'link',
 	'highlight',
 	'if'
 ] as const;
+
+/** Keys inside the long form of an entity's `motion:` — `motion: {id: …, speed: 12}`. */
+export const MOTION_KEYS = ['id', 'speed'] as const;
 
 /**
  * Keys inside the long form of an entity's `link:` — `link: {to: Cellar, if: has_key}`.
@@ -128,7 +134,7 @@ export const LINK_ENTITY_KEYS = ['to', 'if'] as const;
  * the parser says so out loud, because a key that silently does nothing is the trap this
  * format keeps setting for its authors.
  */
-export const FIT_IGNORES = ['at', 'of', 'scale', 'rot'] as const;
+export const FIT_IGNORES = ['at', 'of', 'scale', 'stretch', 'rot'] as const;
 
 /**
  * Keys inside one step of a `pose:` list.
@@ -763,6 +769,100 @@ function parseAt(
 	return undefined;
 }
 
+
+/**
+ * `stretch: [x, y]` — two positive multipliers on top of `scale`. A bare number is not
+ * accepted: one number is what `scale:` already means, and guessing an axis for it would
+ * be a second meaning for the same spelling.
+ */
+function parseStretch(ctx: Ctx, node: unknown): Vec2 | undefined {
+	const hint = 'stretch: [x, y] squeezes the art. [1, 1] is its own shape, [1.5, 1] wider.';
+
+	if (!isSeq(node) || (node as YAMLSeq).items.length !== 2) {
+		addError(ctx, 'bad-value', 'stretch must be two numbers, [x, y].', node, {hint});
+		return undefined;
+	}
+
+	const items = (node as YAMLSeq).items;
+	const x = asNumber(ctx, items[0], 'stretch x');
+	const y = asNumber(ctx, items[1], 'stretch y');
+
+	if (x === undefined || y === undefined) {
+		return undefined;
+	}
+
+	if (x <= 0 || y <= 0) {
+		addError(ctx, 'bad-value', `stretch of [${x}, ${y}] is not a size.`, node, {
+			hint
+		});
+		return undefined;
+	}
+
+	return {x, y};
+}
+
+/**
+ * `motion: scroll_infinite_left`, or `motion: {id: scroll_infinite_left, speed: 12}`.
+ *
+ * The backdrop's `fx:` grammar, minus the asset: the entity already says what it is.
+ */
+function parseMotion(ctx: Ctx, node: unknown): StageBgFx | undefined {
+	if (isScalar(node)) {
+		const id = asString(ctx, node, 'motion');
+
+		return id === undefined ? undefined : {id};
+	}
+
+	if (isMap(node)) {
+		let id: string | undefined;
+		let speed: number | undefined;
+
+		for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === 'id') {
+				id = asString(ctx, pair.value, 'motion id');
+			} else if (key === 'speed') {
+				const value = asNumber(ctx, pair.value, 'motion speed');
+
+				if (value !== undefined) {
+					if (value <= 0) {
+						addError(
+							ctx,
+							'bad-value',
+							`motion speed of ${value} is not a length of time.`,
+							pair.value,
+							{hint: 'speed: is the seconds one cycle of the motion takes.'}
+						);
+					} else {
+						speed = value;
+					}
+				}
+			} else if (key !== undefined) {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+					...keyFix(key, MOTION_KEYS)
+				});
+			}
+		}
+
+		if (id === undefined) {
+			addError(ctx, 'bad-value', 'A motion entry needs an id.', node, {
+				hint: 'motion: {id: scroll_infinite_left, speed: 12}'
+			});
+			return undefined;
+		}
+
+		return {id, ...(speed !== undefined ? {speed} : {})};
+	}
+
+	addError(
+		ctx,
+		'bad-value',
+		'motion: must be a motion name, e.g. `motion: parallax_left` or `motion: {id: scroll_infinite_left, speed: 12}`.',
+		node
+	);
+	return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Bubble style
@@ -1803,6 +1903,41 @@ function parseEntityBody(
 				if (link) {
 					body.patch.link = link;
 					ctx.entityLinkNodes.push({link, node: pair.value});
+				}
+
+				break;
+			}
+
+			case 'stretch': {
+				const stretch = parseStretch(ctx, pair.value);
+
+				if (stretch) {
+					body.patch.stretch = stretch;
+				}
+
+				break;
+			}
+
+			case 'motion': {
+				if (isNullNode(pair.value)) {
+					body.patch.motion = null;
+					break;
+				}
+
+				const motion = parseMotion(ctx, pair.value);
+
+				if (motion) {
+					body.patch.motion = motion;
+				}
+
+				break;
+			}
+
+			case 'locked': {
+				const locked = asBoolean(ctx, pair.value, 'locked');
+
+				if (locked !== undefined) {
+					body.patch.locked = locked;
 				}
 
 				break;

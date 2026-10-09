@@ -107,6 +107,13 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	ref: 'The asset or character this id draws, when the id is not the asset name itself.',
 	rot: 'Tilt, in degrees clockwise, about the same origin scale: grows about — so a leaning character keeps its feet where they were. Negative leans the other way. Pin that origin in the asset or character editor.',
 	scale: 'Uniform size multiplier, about the origin, so feet stay on the floor. > 0.',
+	stretch:
+		'Squeeze: [x, y] multipliers on top of scale:, about the same origin — stretch: [1.4, 1] is wider, [1, 0.8] squatter. The edge handles on the stage write it; the selection row\u2019s reset button takes it away.',
+	motion: `A motion the entity plays by itself — the backdrop\u2019s fx: presets on any sprite or plane: ${BG_MOTIONS.join(
+		', '
+	)}. motion: {id: scroll_infinite_left, speed: 12} sets the seconds per cycle. Several planes at different z: and speeds are a parallax stack. motion: ~ stops it.`,
+	locked:
+		'Editor only. true and the stage will not pick this entity up by pointer — a backdrop layer stays put while you stage the cast in front of it. Clicking its line still selects it.',
 	z: 'Draw order for the whole stage. Higher is nearer. Otherwise depth comes from y.'
 };
 

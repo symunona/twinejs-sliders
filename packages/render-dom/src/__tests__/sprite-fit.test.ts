@@ -65,7 +65,26 @@ afterEach(() => {
 describe('sprite fit', () => {
 	it('box fits the frame instead of stretching it', () => {
 		expect(RENDER_DOM_CSS).toContain('object-fit: contain;');
-		expect(RENDER_DOM_CSS).not.toContain('object-fit: fill;');
+		// The one exception is a sprite the author squeezed on purpose (`stretch:`).
+		expect(
+			RENDER_DOM_CSS.replace(
+				/\.sliders-entity\[data-stretch\][^{]*\{\s*object-fit: fill;\s*\}/,
+				''
+			)
+		).not.toContain('object-fit: fill;');
+	});
+
+	it('fills the box when the author stretched the sprite', async () => {
+		const {mount, renderer} = await mounted();
+
+		await renderer.apply(
+			stage([entity({id: 'mira', stretch: {x: 1.5, y: 1}})]),
+			[]
+		);
+
+		const el = mount.querySelector<HTMLElement>('[data-entity-id="mira"]')!;
+
+		expect(el.dataset.stretch).toBe('1.5 1');
 	});
 
 	it('pins the frame at the entity origin — bottom centre by default', async () => {
@@ -84,5 +103,82 @@ describe('sprite fit', () => {
 		await renderer.apply(stage([entity({id: 'mira'})]), []);
 
 		expect(imgOf(mount, 'mira').style.objectPosition).toBe('25% 50%');
+	});
+});
+
+describe('stretch:, motion: and the zoomed-out view', () => {
+	it('stretches the box on one axis and leaves the other alone', async () => {
+		const {renderer} = await mounted();
+
+		await renderer.apply(stage([entity({id: 'mira'})]), []);
+
+		const plain = renderer.rectOf('mira')!;
+
+		await renderer.apply(
+			stage([entity({id: 'mira', stretch: {x: 2, y: 1}})]),
+			[]
+		);
+
+		const wide = renderer.rectOf('mira')!;
+
+		expect(wide.width).toBeCloseTo(plain.width * 2, 5);
+		expect(wide.height).toBeCloseTo(plain.height, 5);
+	});
+
+	it('hands motion: to the art as a data attribute and a speed', async () => {
+		const {mount, renderer} = await mounted();
+
+		await renderer.apply(
+			stage([entity({id: 'mira', motion: {id: 'parallax_left', speed: 7}})]),
+			[]
+		);
+
+		const art = mount.querySelector<HTMLElement>(
+			"[data-entity-id='mira'] > .sliders-entity-art"
+		)!;
+
+		expect(art.dataset.motion).toBe('parallax_left');
+		expect(art.style.getPropertyValue('--sliders-motion-speed')).toBe('7s');
+
+		await renderer.apply(stage([entity({id: 'mira'})]), []);
+
+		expect(art.dataset.motion).toBeUndefined();
+	});
+
+	it('adds a trailing copy for a scroll, and drops it when the scroll stops', async () => {
+		const {mount, renderer} = await mounted();
+		const tiles = () =>
+			mount.querySelectorAll("[data-entity-id='mira'] > .sliders-entity-art-tile");
+
+		await renderer.apply(
+			stage([entity({id: 'mira', motion: {id: 'scroll_infinite_left'}})]),
+			[]
+		);
+		expect(tiles()).toHaveLength(1);
+
+		await renderer.apply(stage([entity({id: 'mira'})]), []);
+		expect(tiles()).toHaveLength(0);
+	});
+
+	it('draws the stage smaller and stops clipping it when zoomed out', async () => {
+		const {mount, renderer} = await mounted();
+		const full = renderer.stageBox();
+
+		renderer.setViewScale(0.5);
+
+		const half = renderer.stageBox();
+
+		expect(half.width).toBeCloseTo(full.width / 2, 5);
+		expect(half.left + half.width / 2).toBeCloseTo(full.left + full.width / 2, 5);
+		expect(
+			mount.querySelector<HTMLElement>('.sliders-root')!.dataset.overscan
+		).toBe('true');
+
+		renderer.setViewScale(1);
+
+		expect(renderer.stageBox()).toEqual(full);
+		expect(
+			mount.querySelector<HTMLElement>('.sliders-root')!.dataset.overscan
+		).toBeUndefined();
 	});
 });

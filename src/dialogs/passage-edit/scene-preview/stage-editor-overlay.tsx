@@ -37,6 +37,7 @@ import {
 	boxRotation,
 	displaySize,
 	dragTo,
+	edgePoints,
 	gridCentre,
 	gridLines,
 	handlePoints,
@@ -50,9 +51,15 @@ import {
 	sceneToMount,
 	sceneTolerance,
 	snapTargetsX,
-	snapTargetsY
+	snapTargetsY,
+	stretchFrom
 } from './stage-geometry';
-import type {HandleId, HitTarget, SnapTarget} from './stage-geometry';
+import type {
+	EdgeId,
+	HandleId,
+	HitTarget,
+	SnapTarget
+} from './stage-geometry';
 import {entityTraces} from './stage-history';
 import {StageTraceLayer} from './stage-trace-layer';
 import type {TracePreview} from './stage-trace-layer';
@@ -125,8 +132,24 @@ const READOUT_GAP_PX = 8;
  */
 const READOUT_HEIGHT_PX = 30;
 
+/**
+ * How far above the box the rotate dot floats, MOUNT px.
+ *
+ * The middle of the top edge belongs to the `n` squeeze handle, so the turn moved off it:
+ * the same column, a short reach further out.
+ */
+const ROTATE_HANDLE_GAP_PX = 18;
+
+/**
+ * Presses on the selection's own controls: corners, edges, the rotate dot and the move
+ * strips along the box. Each of those claims the press itself; the frame's handler must
+ * not ALSO read it as a click on whatever sprite happens to lie under it, which is what
+ * switched the selection out from under the handle the author had just grabbed.
+ */
+const CONTROL_SELECTOR = '.stage-editor-handle, .stage-editor-move-edge';
+
 interface Gesture {
-	kind: 'move' | 'scale' | 'pan' | 'rot';
+	kind: 'move' | 'scale' | 'stretch' | 'pan' | 'rot';
 	pointerId: number;
 	/** Frame position in client px, read once: a drag must not thrash layout every frame. */
 	frame: {left: number; top: number};
@@ -150,6 +173,10 @@ interface Gesture {
 	rect?: Rect;
 	origin: Vec2;
 	handle?: HandleId;
+	/** Which edge a squeeze grabbed. */
+	edge?: EdgeId;
+	/** The `stretch:` the entity had when a squeeze began. Never accumulated. */
+	startStretch: Vec2;
 	moved: boolean;
 	/**
 	 * This press steps the scene forward if it turns out to be a tap.
@@ -257,6 +284,17 @@ export interface StageEditorOverlayProps {
 	cameraLocked?: boolean;
 	/** Double click landed on this entity: show it in the asset manager. */
 	onOpenEntity?: (id: EntityId) => void;
+	/**
+	 * The view is zoomed out and the renderer draws the stage smaller than the frame, with
+	 * the sprites off it still showing. The frame of the shot is then drawn ON TOP of
+	 * everything, and the room around it dimmed, so what the reader will see stays obvious.
+	 */
+	overscan?: boolean;
+	/**
+	 * Bring this entity into view and flash it — a double click on its line in the
+	 * passage text. A new `seq` is a new request.
+	 */
+	focusRequest?: {id: EntityId; seq: number};
 }
 
 /**
@@ -289,6 +327,12 @@ export function hitTargets(
 		// Skipped here rather than given a fake rect, so one rule covers the press, the
 		// hover cursor and the double click.
 		if (entity.fit) {
+			continue;
+		}
+
+		// `locked:` is the author saying "never pick this up by pointer". The caret still
+		// selects it, which is how it gets unlocked again.
+		if (entity.locked) {
 			continue;
 		}
 
@@ -364,6 +408,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		beatNote,
 		children,
 		editable,
+		focusRequest,
 		grid,
 		onAdvance,
 		onCameraPatch,
@@ -380,6 +425,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		parentOffsets,
 		prevStage,
 		onToggleFullScreen,
+		overscan,
 		player,
 		renderer,
 		seal,
@@ -408,6 +454,8 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	 */
 	const [pivotCentre, setPivotCentre] = React.useState(false);
 	const [dropActive, setDropActive] = React.useState(false);
+	/** The entity a focus request is flashing, until the flash runs out. */
+	const [flash, setFlash] = React.useState<EntityId>();
 	const dragging = active !== undefined;
 	const camera = stage.camera;
 
@@ -477,6 +525,46 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 
 		return renderer.subscribe(measure);
 	}, [renderer, stage]);
+
+	// A focus request: the stage takes the keyboard (arrows nudge the entity at once), the
+	// zoomed view scrolls the sprite into the middle, and its box flashes so the eye finds
+	// it. The selection itself was already set by the caller.
+	React.useEffect(() => {
+		if (!focusRequest) {
+			return;
+		}
+
+		const frame = frameRef.current;
+
+		frame?.focus({preventScroll: true});
+		setFlash(focusRequest.id);
+
+		const rect = renderer?.rectOf(focusRequest.id);
+		const viewport = frame?.closest?.('.scene-stage-viewport') as
+			| HTMLElement
+			| null
+			| undefined;
+
+		if (rect && viewport && frame) {
+			const frameBox = frame.getBoundingClientRect();
+			const viewBox = viewport.getBoundingClientRect();
+			const centreX =
+				frameBox.left - viewBox.left + viewport.scrollLeft + rect.left + rect.width / 2;
+			const centreY =
+				frameBox.top - viewBox.top + viewport.scrollTop + rect.top + rect.height / 2;
+
+			viewport.scrollLeft = centreX - viewport.clientWidth / 2;
+			viewport.scrollTop = centreY - viewport.clientHeight / 2;
+		}
+
+		frame?.scrollIntoView?.({block: 'nearest', inline: 'nearest'});
+
+		const timer = window.setTimeout(() => setFlash(undefined), 900);
+
+		return () => window.clearTimeout(timer);
+		// Only a new request may run this; a re-render with the same one must not re-flash.
+		// eslint-disable-next-line
+	}, [focusRequest?.seq]);
 
 	const targets = React.useMemo(
 		() =>
@@ -629,6 +717,64 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						reset: 0,
 						value: rot === 0 ? undefined : rot
 					});
+				}
+			} else if (gesture.kind === 'stretch') {
+				const id = gesture.ids[0];
+				const entity = current.stage.entities?.[id];
+
+				if (entity && gesture.rect && gesture.pivot) {
+					const result = stretchFrom(
+						gesture.edge!,
+						gesture.startStretch,
+						gesture.rect,
+						gesture.origin,
+						gesture.start,
+						pointer,
+						{aboutCentre: event.altKey, pivot: gesture.pivot, rot: entity.rot}
+					);
+					const stretch = {
+						x: roundCoord(result.stretch.x),
+						y: roundCoord(result.stretch.y)
+					};
+					const identity = stretch.x === 1 && stretch.y === 1;
+					const moved = mountToScene(box, camera, {
+						x: gesture.pivot.x + result.shift.x,
+						y: gesture.pivot.y + result.shift.y
+					});
+					const offset = current.parentOffsets?.[id];
+					const startAt = gesture.startAt[id];
+					// Only the axis that moved is rewritten: a pure x squeeze leaves `at: 0.4`
+					// a bare number instead of pinning the floor into a pair.
+					const at = {
+						x: roundCoord(
+							result.shift.x ? moved.x - (offset?.x ?? 0) : startAt.x - (offset?.x ?? 0)
+						),
+						y: roundCoord(
+							result.shift.y ? moved.y - (offset?.y ?? 0) : startAt.y - (offset?.y ?? 0)
+						)
+					};
+
+					patch[id] = {at, stretch};
+					writes.push({
+						id,
+						kind: entity.kind,
+						key: 'stretch',
+						ref: entity.ref,
+						// Same bargain as `scale`: the art's own shape is no key at all on the
+						// entry, and has to be said on a beat.
+						reset: [1, 1],
+						value: identity ? undefined : [stretch.x, stretch.y]
+					});
+
+					if (result.shift.x || result.shift.y) {
+						writes.push({
+							id,
+							kind: entity.kind,
+							key: 'at',
+							ref: entity.ref,
+							value: at
+						});
+					}
 				}
 			} else if (gesture.kind === 'scale') {
 				const id = gesture.ids[0];
@@ -878,14 +1024,38 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			// camera the debounced parse is still holding.
 			startCamera: cameraRef.current ?? camera,
 			startRot: primary?.rot ?? 0,
-			startScale: primary?.scale ?? 1
+			startScale: primary?.scale ?? 1,
+			startStretch: primary?.stretch ?? {x: 1, y: 1}
 		};
+	}
+
+	/**
+	 * A press on one of the selection's own controls. Claims the press outright — no
+	 * hit test, no selection change — so grabbing a handle that overlaps another sprite
+	 * works on the selected one, whatever is drawn on top there.
+	 */
+	function pressControl(
+		event: React.PointerEvent,
+		start: () => void
+	) {
+		if (event.button !== 0) {
+			return;
+		}
+
+		event.stopPropagation();
+		// Same bargain as the frame's own handler: no browser selection, so the next press
+		// cannot land inside one.
+		event.preventDefault();
+		frameRef.current?.focus();
+		start();
 	}
 
 	function handlePointerDown(event: React.PointerEvent) {
 		if (
 			(event.button !== 0 && event.button !== 1) ||
-			(event.target as HTMLElement).closest?.(OWN_PRESS_SELECTOR)
+			(event.target as HTMLElement).closest?.(OWN_PRESS_SELECTOR) ||
+			(event.button === 0 &&
+				(event.target as HTMLElement).closest?.(CONTROL_SELECTOR))
 		) {
 			return;
 		}
@@ -1040,7 +1210,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 	}
 
 	function handleDoubleClick(event: React.MouseEvent) {
-		if ((event.target as HTMLElement).closest?.(OWN_PRESS_SELECTOR)) {
+		if (
+			(event.target as HTMLElement).closest?.(OWN_PRESS_SELECTOR) ||
+			(event.target as HTMLElement).closest?.(CONTROL_SELECTOR)
+		) {
 			return;
 		}
 
@@ -1111,17 +1284,27 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		box && singleEntity ? originPoint(box, camera, singleEntity) : undefined;
 	// Turned the same way the corners are, so the dot stays on the top edge of the box the
 	// author can see rather than on the axis-aligned rect underneath it.
-	const rotateHandle = singleRect
+	const rotateAnchor = singleRect && rotateHandlePoint(singleRect);
+	const rotateBase = rotateAnchor && {
+		x: rotateAnchor.x,
+		y: rotateAnchor.y - ROTATE_HANDLE_GAP_PX
+	};
+	const rotateHandle = rotateBase
 		? singlePivot
-			? rotatePoint(rotateHandlePoint(singleRect), singlePivot, singleRot)
-			: rotateHandlePoint(singleRect)
+			? rotatePoint(rotateBase, singlePivot, singleRot)
+			: rotateBase
 		: undefined;
+	// Locked: still drawn as selected (the caret put it there), but nothing to grab.
+	const singleLocked = !!singleEntity?.locked;
 
 	// The entity a live move or resize is speaking for. A multi-select move reports the one
 	// that was grabbed first rather than four stacked readouts, and a pan reports nothing —
 	// the camera moved, the scene did not.
 	const readoutId =
-		active === 'move' || active === 'scale' || active === 'rot'
+		active === 'move' ||
+		active === 'scale' ||
+		active === 'stretch' ||
+		active === 'rot'
 			? selection[0]
 			: undefined;
 	const readoutEntity =
@@ -1191,6 +1374,18 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 						)}
 					</div>
 				)}
+				{overscan && box && (
+					<div
+						className="stage-editor-frame"
+						data-testid="stage-editor-frame"
+						style={{
+							height: box.height,
+							left: box.left,
+							top: box.top,
+							width: box.width
+						}}
+					/>
+				)}
 				{/* Above the grid, below the selection: the ruler's outlines and ghosts are
 				    what the grid lines are for, and the selection box still has to win. */}
 				{grid && (
@@ -1236,7 +1431,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 					return (
 						<React.Fragment key={id}>
 							<div
-								className="stage-editor-selection"
+								className={classNames('stage-editor-selection', {
+									flash: flash === id,
+									locked: entity.locked
+								})}
 								data-entity-id={id}
 								style={{
 									height: rect.height,
@@ -1245,7 +1443,27 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 									width: rect.width,
 									...boxRotation(rect, origin, entity.rot)
 								}}
-							/>
+							>
+								{/* The box's own outline is a move handle: a press on it drags
+								    the selection even where another sprite is drawn on top,
+								    which is the only way to grab something buried under a
+								    bigger thing standing in front of it. */}
+								{editable &&
+									!entity.locked &&
+									!entity.fit &&
+									(['n', 'e', 's', 'w'] as const).map(side => (
+										<div
+											className={`stage-editor-move-edge ${side}`}
+											data-testid={`stage-editor-move-edge-${side}`}
+											key={side}
+											onPointerDown={event =>
+												pressControl(event, () =>
+													beginGesture(event, 'move', selection)
+												)
+											}
+										/>
+									))}
+							</div>
 							{origin && (
 								<div
 									className={classNames('stage-editor-origin', {
@@ -1304,6 +1522,11 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							<span className="rot">
 								{Math.round(readoutEntity.rot ?? 0)}&deg;
 							</span>
+						) : active === 'stretch' ? (
+							<span className="scale">
+								&harr;{roundCoord(readoutEntity.stretch?.x ?? 1)} &varr;
+								{roundCoord(readoutEntity.stretch?.y ?? 1)}
+							</span>
 						) : active === 'scale' ? (
 							<span className="scale">
 								&times;{roundCoord(readoutEntity.scale ?? 1)}
@@ -1327,6 +1550,40 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				{editable &&
 					single !== undefined &&
 					!singleIsPlane &&
+					!singleLocked &&
+					singleRect &&
+					Object.entries(edgePoints(singleRect)).map(([edge, middle]) => {
+						const point = singlePivot
+							? rotatePoint(middle, singlePivot, singleRot)
+							: middle;
+
+						return (
+							<div
+								className={`stage-editor-handle edge ${edge}`}
+								data-handle={edge}
+								data-testid={`stage-editor-edge-${edge}`}
+								key={edge}
+								onPointerDown={event =>
+									pressControl(event, () => {
+										beginGesture(event, 'stretch', [single]);
+
+										if (gestureRef.current) {
+											gestureRef.current.edge = edge as EdgeId;
+										}
+									})
+								}
+								style={{
+									left: point.x,
+									top: point.y,
+									transform: singleRot ? `rotate(${singleRot}deg)` : undefined
+								}}
+							/>
+						);
+					})}
+				{editable &&
+					single !== undefined &&
+					!singleIsPlane &&
+					!singleLocked &&
 					singleRect &&
 					Object.entries(handlePoints(singleRect)).map(([handle, corner]) => {
 						const point = singlePivot
@@ -1338,14 +1595,11 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 							className={`stage-editor-handle ${handle}`}
 							data-handle={handle}
 							key={handle}
-							onPointerDown={event => {
-								event.stopPropagation();
-								// Same bargain as the frame's own handler: no browser
-								// selection, so the next press cannot land inside one.
-								event.preventDefault();
-								frameRef.current?.focus();
-								beginGesture(event, 'scale', [single], handle as HandleId);
-							}}
+							onPointerDown={event =>
+								pressControl(event, () =>
+									beginGesture(event, 'scale', [single], handle as HandleId)
+								)
+							}
 							style={{left: point.x, top: point.y}}
 						/>
 						);
@@ -1358,18 +1612,15 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 				    orange for the duration, so the author can see the centre of the turn
 				    without a second draggable thing to keep in sync. Moving that centre is
 				    the character/asset editor's business; there is no per-scene pivot. */}
-				{editable && single !== undefined && rotateHandle && (
+				{editable && single !== undefined && !singleLocked && rotateHandle && (
 					<div
 						aria-label={t('dialogs.passageEdit.scenePreview.rotate')}
 						className="stage-editor-handle rot"
 						data-handle="rot"
 						data-testid="stage-editor-rotate"
-						onPointerDown={event => {
-							event.stopPropagation();
-							event.preventDefault();
-							frameRef.current?.focus();
-							beginGesture(event, 'rot', [single]);
-						}}
+						onPointerDown={event =>
+							pressControl(event, () => beginGesture(event, 'rot', [single]))
+						}
 						role="button"
 						style={{
 							left: rotateHandle.x,

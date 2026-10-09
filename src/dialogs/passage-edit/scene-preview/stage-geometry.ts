@@ -517,6 +517,121 @@ export function scaleFrom(
 }
 
 // ---------------------------------------------------------------------------
+// Edge handles — the squeeze
+// ---------------------------------------------------------------------------
+
+export type EdgeId = 'n' | 'e' | 's' | 'w';
+
+const EDGE_IDS: readonly EdgeId[] = ['n', 'e', 's', 'w'];
+
+/** The four edge-midpoint handle positions in MOUNT px, for drawing them. */
+export function edgePoints(rect: Rect): Record<EdgeId, Vec2> {
+	const left = finite(rect?.left);
+	const top = finite(rect?.top);
+	const width = Math.max(0, finite(rect?.width));
+	const height = Math.max(0, finite(rect?.height));
+
+	return {
+		n: {x: left + width / 2, y: top},
+		e: {x: left + width, y: top + height / 2},
+		s: {x: left + width / 2, y: top + height},
+		w: {x: left, y: top + height / 2}
+	};
+}
+
+export interface StretchOptions {
+	/** Alt-drag: both opposite edges move, about the rect centre. */
+	aboutCentre?: boolean;
+	/** The sprite's tilt and what it turns about, so the drag is read along ITS axis. */
+	rot?: number;
+	pivot?: Vec2;
+}
+
+export interface StretchResult {
+	/** The new `stretch:`, both axes — only the grabbed one moves. */
+	stretch: Vec2;
+	/**
+	 * How far the sprite's ORIGIN has to move, MOUNT px, for the edge opposite the one
+	 * grabbed to stay put. The renderer sizes about the origin, so without this a squeeze
+	 * would pull both edges and the side the author did not touch would slide.
+	 */
+	shift: Vec2;
+}
+
+/**
+ * A squeeze from one edge handle: that side's size only, the opposite edge pinned.
+ *
+ * Measured in the sprite's own frame (the pointer is turned back about the pivot), so a
+ * tilted sprite stretches along its own width rather than the screen's. The factor is
+ * the new edge length over the one at drag start, applied to that axis of `startStretch`
+ * and clamped the way a corner resize is.
+ */
+export function stretchFrom(
+	edge: EdgeId,
+	startStretch: Vec2,
+	rect: Rect,
+	origin: Frac2,
+	startPointer: Vec2,
+	pointer: Vec2,
+	options: StretchOptions = {}
+): StretchResult {
+	const base = {
+		x: finite(startStretch?.x, 1),
+		y: finite(startStretch?.y, 1)
+	};
+	const none = {stretch: base, shift: {x: 0, y: 0}};
+
+	if (
+		!EDGE_IDS.includes(edge) ||
+		!rect ||
+		!Number.isFinite(startPointer?.x) ||
+		!Number.isFinite(pointer?.x)
+	) {
+		return none;
+	}
+
+	const start = unrotate(startPointer, options.pivot, options.rot);
+	const now = unrotate(pointer, options.pivot, options.rot);
+	const horizontal = edge === 'e' || edge === 'w';
+	const size = horizontal ? finite(rect.width) : finite(rect.height);
+
+	if (!(size > 0)) {
+		return none;
+	}
+
+	const travel = horizontal ? now.x - start.x : now.y - start.y;
+	// Growing means moving AWAY from the pinned side: right or down for e/s, left or up
+	// for w/n. Alt moves both sides, so the same travel is twice the change in size.
+	const sign = edge === 'e' || edge === 's' ? 1 : -1;
+	const centre = options.aboutCentre === true;
+	const axisBase = horizontal ? base.x : base.y;
+	const min = MIN_SCALE / Math.max(MIN_SCALE, axisBase);
+	const max = MAX_SCALE / Math.max(MIN_SCALE, axisBase);
+	const factor = Math.min(
+		max,
+		Math.max(min, (size + sign * travel * (centre ? 2 : 1)) / size)
+	);
+	const grown = size * factor - size;
+	const frac = horizontal ? finite(origin?.x, 0.5) : finite(origin?.y, 1);
+	const along = centre
+		? (frac - 0.5) * grown
+		: sign > 0
+		? frac * grown
+		: -(1 - frac) * grown;
+	const local = horizontal ? {x: along, y: 0} : {x: 0, y: along};
+	const shift = options.rot
+		? rotatePoint(local, {x: 0, y: 0}, options.rot)
+		: local;
+
+	return {
+		stretch: horizontal
+			? {x: axisBase * factor, y: base.y}
+			: {x: base.x, y: axisBase * factor},
+		shift
+	};
+}
+
+// ---------------------------------------------------------------------------
 // Rotate handle
 // ---------------------------------------------------------------------------
 
