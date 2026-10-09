@@ -49,9 +49,14 @@ Always deploy. "Done" = live on https://twine-ig.tmpx.space, bundle hash checked
 
 "Make a demo" = a `DEMO <name>` story on the **live store**
 (https://twine-story-store.tmpx.space), playable in the deployed app. Never just a
-zip, a doc or a fixture. Upload story + assets through the store API (`twine-cli new`
-/ `put`, `PUT /api/v1/stories/{id}/assets/{assetId}` + manifest). Existing `DEMO …`
-stories there show the shape. Deploy the app first so the demo runs on the new code.
+zip, a doc or a fixture. Deploy the app first so the demo runs on the new code.
+
+1. Story: `PUT /api/v1/stories/{id}` `{client, story}`. Existing `DEMO …` stories show the
+   shape. Old manifest too (`PUT …/assets/{assetId}` + `PUT …/assets`) — twine-cli lints
+   from it.
+2. Art: shared library, else the app draws placeholders. Dir with `story.json`,
+   `assets.json`, `blobs-by-id/<a_id>.png` → `node scripts/lib-import-legacy.mjs <dir>`.
+3. `twine-cli lint <ref>` clean. Open it in the deployed app, check out, play, screenshot.
 
 ## Tests
 
