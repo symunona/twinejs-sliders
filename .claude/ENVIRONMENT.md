@@ -68,6 +68,11 @@ npm run deploy-cloudflare rebuild            # force
   top-level source directory must be added to `BUILD_INPUTS`** or it is invisible to the
   check and ships stale.
 - Deploy from a clean worktree at the pushed head — the script builds the WORKING TREE.
+- Stamp: `dist/.deploy-cloudflare-build-stamp`, per checkout. Was in shared
+  `node_modules/.cache` until 2026-10-09 → worktree deploy stamped main checkout's stale
+  `dist/web` → next deploy shipped a 9-day-old bundle.
+- After deploy, verify: `curl -s https://twine-ig.tmpx.space/ | grep -o 'index-[^"]*js'`
+  must match the new `dist/web/index.html`. A later deploy by anyone can overwrite yours.
 - One refresh is enough now. If it ever needs more, suspect the service worker's precache
   and `navigateFallback`, not Cloudflare.
 

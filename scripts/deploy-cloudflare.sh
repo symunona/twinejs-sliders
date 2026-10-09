@@ -87,9 +87,13 @@ BUILD_INPUTS=(
 	vite.config.mts tsconfig.json tsconfig.electron.json
 )
 
-# The stamp lives outside dist/ so it is never uploaded, and the build output is
-# checked separately — a wiped dist with a surviving stamp must still rebuild.
-STAMP_FILE="$REPO_ROOT/node_modules/.cache/deploy-cloudflare-build-stamp"
+# The stamp lives in dist/, next to dist/web but outside it, so it is never
+# uploaded, and the build output is checked separately — a wiped dist/web with a
+# surviving stamp must still rebuild. It must belong to the same checkout as the
+# dist/web it vouches for: under node_modules it was shared by every worktree that
+# symlinks node_modules, so a worktree's build stamped the main checkout's stale
+# dist/web as current and the next deploy from there shipped a 9-day-old bundle.
+STAMP_FILE="$REPO_ROOT/dist/.deploy-cloudflare-build-stamp"
 
 # One hash over the content of every build input. Untracked files count (a new
 # source file is usually the whole point of the deploy); ignored ones do not.

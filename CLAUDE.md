@@ -43,6 +43,16 @@ short keyword summary title
 - changes in list or short prose, caveman style
 ```
 
+Always deploy. "Done" = live on https://twine-ig.tmpx.space, bundle hash checked.
+
+## Demos
+
+"Make a demo" = a `DEMO <name>` story on the **live store**
+(https://twine-story-store.tmpx.space), playable in the deployed app. Never just a
+zip, a doc or a fixture. Upload story + assets through the store API (`twine-cli new`
+/ `put`, `PUT /api/v1/stories/{id}/assets/{assetId}` + manifest). Existing `DEMO …`
+stories there show the shape. Deploy the app first so the demo runs on the new code.
+
 ## Tests
 
 One jest at a time on this box — `pgrep -af 'bin/jest'`, then the flock. Never `npm test`.
