@@ -106,6 +106,9 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// the chord is the shifted one. The bare `l` is the key that actually gets used, in the
 	// same family as `f` and `k` above.
 	'scene.toggleLock': {bindings: ['l', 'mod+shift+l']},
+	// Layers. Inkscape's `mod+shift+l` is the lock's already, so the panel takes the
+	// shifted bare key beside it -- the same family as `f` / `shift+f`.
+	'scene.layersPanel': {bindings: ['shift+l']},
 	'scene.walkHere': {bindings: ['w']},
 
 	// Visual editor. The nudges take the arrow keys back off the scrubber while something

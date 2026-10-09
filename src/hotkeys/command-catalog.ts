@@ -113,6 +113,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'scene.play', scope: 'scene-preview'},
 	{id: 'scene.fullScreen', scope: 'scene-preview'},
 	{id: 'scene.toggleLock', scope: 'scene-preview'},
+	{id: 'scene.layersPanel', scope: 'scene-preview'},
 	{id: 'scene.walkHere', scope: 'scene-preview'},
 	{id: 'scene.deselect', scope: 'scene-preview'},
 

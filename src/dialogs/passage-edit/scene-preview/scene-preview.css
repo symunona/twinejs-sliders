@@ -124,6 +124,21 @@
 	position: absolute;
 }
 
+/* The layers panel takes the right edge of the view. The viewport and the selection row
+   give it up rather than sit under it, so the stage refits (the zoom hook watches the
+   viewport's size) instead of the panel covering whatever stands on that side. */
+.scene-preview .scene-stage-view {
+	/* A share of the view, capped: a fixed 220px took half of a narrow dialog and left the
+	   stage a thumbnail. The panel and the viewport's `right` are both absolute in this
+	   view, so the percentage means the same width for both. */
+	--layers-panel-width: clamp(140px, 36%, 220px);
+}
+
+.scene-preview .scene-stage-view.with-layers .scene-stage-viewport,
+.scene-preview .scene-stage-view.with-layers .scene-preview-selection {
+	right: var(--layers-panel-width);
+}
+
 .scene-preview .scene-stage-canvas {
 	display: flex;
 	flex-grow: 1;

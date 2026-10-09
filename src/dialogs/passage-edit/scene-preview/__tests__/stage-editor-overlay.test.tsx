@@ -115,6 +115,15 @@ describe('hitTargets()', () => {
 			'mira'
 		]);
 	});
+
+	// The layers panel's eye draws it at opacity 0; a press there must reach what is behind.
+	it('leaves out an entity hidden in the editor', () => {
+		expect(
+			hitTargets(stage, id => RECTS[id], undefined, new Set(['candle'])).map(
+				t => t.id
+			)
+		).toEqual(['mira']);
+	});
 });
 
 describe('<StageEditorOverlay>', () => {

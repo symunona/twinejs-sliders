@@ -9,6 +9,7 @@ import {
 	IconLockOpen,
 	IconPlayerPause,
 	IconPlayerPlay,
+	IconStack2,
 	IconTimeline,
 	IconVolume,
 	IconVolumeOff,
@@ -67,6 +68,8 @@ import {requestAssetFocus} from '../../sliders-assets/focus-request';
 import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
 import {useDialogsContext} from '../../context';
 import {useStoryLaunch} from '../../../store/use-story-launch';
+import {zResetBlocks} from './layer-order';
+import {LayersPanel, useLayersPanelOpen} from './layers-panel';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
@@ -82,10 +85,12 @@ import {useStageSelection} from './use-stage-selection';
 import {
 	applyCameraPatch,
 	applyStagePatch,
+	buildWriteEdits,
 	cameraAgrees,
 	insertedBeatCount,
 	isOwnOrigin,
 	planEntityWrite,
+	previewEdits,
 	settlePatch,
 	useScenePatch,
 	writeSceneEdits,
@@ -245,6 +250,9 @@ const TIMELINE_LABELS_KEY = 'sliders.preview.timelineLabels';
 /** Stable identity, so the timeline's memo does not rebuild on every parse. */
 const EMPTY_BEATS: Beat[] = [];
 
+/** Stable identity for the same reason: `drawnStage` memoises on the set. */
+const NOTHING_HIDDEN: ReadonlySet<EntityId> = new Set();
+
 /** Arrow-key nudge, in scene units. Shift multiplies it. */
 const NUDGE_STEP = 0.01;
 const NUDGE_SHIFT_MULTIPLIER = 10;
@@ -350,6 +358,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [timelineLabels, setTimelineLabels] = React.useState(
 		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) === 'true'
 	);
+	const [layersOpen, toggleLayers] = useLayersPanelOpen();
+	/**
+	 * Entities the author hid from the editor stage with the layers panel's eye.
+	 *
+	 * Session state and nothing more: not a pref, not a patch, never a write. It is the
+	 * author looking past a sprite, which the scene has no opinion on. Dropped with the
+	 * passage, because ids are per scene and a `mira` hidden in one passage is not a promise
+	 * about the next one's.
+	 */
+	const [hidden, setHidden] = React.useState<ReadonlySet<EntityId>>(
+		() => new Set()
+	);
+	/**
+	 * What the stage actually leaves out. Nothing in full screen: that is the reader's view,
+	 * and a reader sees every sprite the scene puts there. The set itself is kept, so coming
+	 * back out finds the author's hides where they left them.
+	 */
+	const shownHidden = fullScreen ? NOTHING_HIDDEN : hidden;
 	const [beat, setBeat] = React.useState(0);
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
 	const [playing, setPlaying] = React.useState(false);
@@ -1124,38 +1150,65 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			? stage.entities?.[tracePreview.id]
 			: undefined;
 
-		if (!(posePreview !== null && previewId && entity) && !traced) {
+		if (
+			!(posePreview !== null && previewId && entity) &&
+			!traced &&
+			shownHidden.size === 0
+		) {
 			return stage;
 		}
 
 		const entities = {...stage.entities};
 
-		if (posePreview !== null && previewId && entity) {
+		// Hidden is drawn at opacity 0 rather than dropped: the sprite keeps its box, so its
+		// `of:` children, its selection outline and the renderer's own enter/exit bookkeeping
+		// all carry on as if nothing happened — and showing it again is a style change, not a
+		// sprite being created. The overlay is told separately so a press goes through it.
+		for (const id of shownHidden) {
+			const shown = entities[id];
+
+			// Steps too: the renderer lets a step's own `opacity:` win over the entity's while
+			// it plays, so a hidden sprite with a fading cycle would blink back in.
+			if (shown) {
+				entities[id] = {
+					...shown,
+					opacity: 0,
+					steps: shown.steps?.map(step => ({...step, opacity: 0}))
+				};
+			}
+		}
+
+		// Both previews below start from `entities`, not `stage`, so they are copies of what is
+		// drawn — a hidden sprite stays hidden while its pose menu is hovered or it is traced.
+		const previewed = previewId ? entities[previewId] : undefined;
+		const drawnTrace = tracePreview ? entities[tracePreview.id] : undefined;
+
+		if (posePreview !== null && previewId && previewed) {
 			// One pose, as the menu will write it: a scene step list would otherwise keep
 			// drawing over the pose being asked about.
 			entities[previewId] = {
-				...entity,
+				...previewed,
 				pose: posePreview || undefined,
 				steps: undefined,
-				opacity: entity.opacity * POSE_PREVIEW_OPACITY
+				opacity: previewed.opacity * POSE_PREVIEW_OPACITY
 			};
 		}
 
 		// Appended last so it wins a z tie against the sprite it is a copy of: the two
 		// overlap whenever the move was a small one, and the preview is the thing being
 		// asked about.
-		if (tracePreview && traced) {
+		if (tracePreview && drawnTrace) {
 			entities[TRACE_PREVIEW_ID] = {
-				...traced,
+				...drawnTrace,
 				at: tracePreview.at,
 				id: TRACE_PREVIEW_ID,
-				opacity: traced.opacity * POSE_PREVIEW_OPACITY,
+				opacity: drawnTrace.opacity * POSE_PREVIEW_OPACITY,
 				scale: tracePreview.scale
 			};
 		}
 
 		return {...stage, entities};
-	}, [posePreview, previewId, stage, tracePreview]);
+	}, [posePreview, previewId, shownHidden, stage, tracePreview]);
 
 	/**
 	 * Walk-here, laid over what is drawn and nothing else: the overlay, the selection and
@@ -1291,6 +1344,18 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		});
 	}
 
+	const toggleHidden = React.useCallback((id: EntityId) => {
+		setHidden(current => {
+			const next = new Set(current);
+
+			if (!next.delete(id)) {
+				next.add(id);
+			}
+
+			return next;
+		});
+	}, []);
+
 	function toggleLock() {
 		setLocked(value => {
 			window.localStorage.setItem(LOCKED_KEY, String(!value));
@@ -1377,6 +1442,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 		setPlaying(p => !p);
 	}
+
+	// Same set back when there is nothing to drop — always so on mount — so arriving costs
+	// no render and no `drawnStage` rebuild.
+	React.useEffect(
+		() => setHidden(current => (current.size === 0 ? current : new Set())),
+		[passageId]
+	);
 
 	// Arriving at a passage stands on state 0, so a first drag edits the scene's defaults.
 	useArrivalBeat(passageId, setBeat);
@@ -1544,6 +1616,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		id: 'scene.toggleLock',
 		label: t('hotkeys.commands.scene.toggleLock'),
 		run: toggleLock,
+		scope: 'scene-preview'
+	});
+
+	// A view toggle, so it survives the lock like the grid does.
+	useCommand({
+		id: 'scene.layersPanel',
+		label: t('hotkeys.commands.scene.layersPanel'),
+		run: toggleLayers,
 		scope: 'scene-preview'
 	});
 
@@ -1716,6 +1796,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={grid}
 			/>
+			{/* With the grid: another way of reading the stage, and like the grid it
+			    writes nothing by being open. */}
+			<IconButton
+				commandId="scene.layersPanel"
+				icon={<IconStack2 />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.layers.toggle')}
+				onClick={toggleLayers}
+				selectable
+				selected={layersOpen}
+			/>
 			{/* Next to the grid: both are "how this preview behaves for me", not
 			    anything the scene says. A click is also the user gesture the
 			    browser wants before it will play anything, so the button that
@@ -1822,6 +1913,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			editable={editable}
 			focusRequest={focusRequest}
 			grid={grid}
+			hidden={shownHidden}
 			origStage={origStage}
 			prevStage={prevStage}
 			onAdvance={canAdvance ? advanceAsReader : undefined}
@@ -1921,16 +2013,65 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		</StageEditorOverlay>
 	);
 
+	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
+	const showLayers = layersOpen && !fullScreen;
+	/**
+	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
+	 * (`buildWriteEdits` on the same context `commit` builds) so the panel can never offer a
+	 * button the write then ignores. Only while the panel is up: each pinned row is one
+	 * look at the block text.
+	 */
+	const zResetBlocksShown = React.useMemo(() => {
+		if (!showLayers) {
+			return undefined;
+		}
+
+		const context = block && {
+			beat,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: parse.result?.scene
+		};
+
+		// The parsed stage, not `localStage`: the answer is about the text, and a drag
+		// patch moving under the pointer would otherwise re-ask it on every frame.
+		return zResetBlocks(
+			parsedStage,
+			parse.result?.scene,
+			beat,
+			parse.states[0],
+			writes =>
+				!!context &&
+				previewEdits(context.blockText, buildWriteEdits(context, writes)) !==
+					context.blockText
+		);
+	}, [beat, block, parse.result, parse.states, parsedStage, showLayers]);
+
 	// The overlay scrolls inside the viewport when the view is zoomed in. The selection
 	// row sits outside that scroll, over the viewport, so it stays where the author can
 	// reach it however far the stage has been scrolled.
 	const stageBody = (
-		<div className="scene-stage-view">
+		<div className={classNames('scene-stage-view', {'with-layers': showLayers})}>
 			<div className="scene-stage-viewport" ref={setViewport}>
 				<div className="scene-stage-canvas" style={viewZoom.canvasStyle}>
 					{stageOverlay}
 				</div>
 			</div>
+			{showLayers && (
+				<LayersPanel
+					editable={editable}
+					hidden={hidden}
+					onCommit={commit}
+					onSelect={select}
+					onToggleHidden={toggleHidden}
+					resetBlocks={zResetBlocksShown}
+					selection={selection}
+					// Authored, not `stage`: resolving drops `of:`, which is what indents a
+					// child row. Same beat, same patch, same ids, kinds and z as `stage` —
+					// `layer-order` resolves `at` itself to rank by the drawn y.
+					stage={localStage}
+				/>
+			)}
 			<StageSelectionControls
 				assets={assets}
 				editable={editable}

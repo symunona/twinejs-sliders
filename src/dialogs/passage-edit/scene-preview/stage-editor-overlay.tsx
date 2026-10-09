@@ -295,6 +295,11 @@ export interface StageEditorOverlayProps {
 	 * passage text. A new `seq` is a new request.
 	 */
 	focusRequest?: {id: EntityId; seq: number};
+	/**
+	 * Entities the layers panel's eye hid from the editor. Drawn at opacity 0, so a press
+	 * there must reach whatever stands behind rather than grab a sprite nobody can see.
+	 */
+	hidden?: ReadonlySet<EntityId>;
 }
 
 /**
@@ -311,7 +316,9 @@ export function hitTargets(
 	 * Where a tilted sprite pivots, MOUNT px. Optional: a caller with no stage box has no
 	 * pivot to give, and `hitTest` then treats the rect as the axis-aligned box it is.
 	 */
-	pivotOf?: (entity: StageEntity) => Vec2 | undefined
+	pivotOf?: (entity: StageEntity) => Vec2 | undefined,
+	/** Hidden in the editor: no press, hover or double click may land on these. */
+	hidden?: ReadonlySet<EntityId>
 ): HitTarget[] {
 	const targets: HitTarget[] = [];
 	const ids = Object.keys(stage?.entities ?? {});
@@ -331,8 +338,10 @@ export function hitTargets(
 		}
 
 		// `locked:` is the author saying "never pick this up by pointer". The caret still
-		// selects it, which is how it gets unlocked again.
-		if (entity.locked) {
+		// selects it, which is how it gets unlocked again. A sprite hidden in the editor is
+		// the same answer for a different reason: it is not there to be pressed. The layers
+		// panel still selects both.
+		if (entity.locked || hidden?.has(entity.id)) {
 			continue;
 		}
 
@@ -410,6 +419,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		editable,
 		focusRequest,
 		grid,
+		hidden,
 		onAdvance,
 		onCameraPatch,
 		onCancel,
@@ -571,9 +581,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			hitTargets(
 				stage,
 				id => rects.get(id),
-				entity => (box ? originPoint(box, camera, entity) : undefined)
+				entity => (box ? originPoint(box, camera, entity) : undefined),
+				hidden
 			),
-		[box, camera, rects, stage]
+		[box, camera, hidden, rects, stage]
 	);
 	const targetsRef = React.useRef(targets);
 
