@@ -1726,6 +1726,42 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		scope: 'scene-preview'
 	});
 
+	// Above the no-scene return: hooks must run on every render, or a passage gaining its
+	// [scene] block crashes the dialog (React #310).
+	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
+	const showLayers = layersOpen && !fullScreen;
+	/**
+	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
+	 * (`buildWriteEdits` on the same context `commit` builds) so the panel can never offer a
+	 * button the write then ignores. Only while the panel is up: each pinned row is one
+	 * look at the block text.
+	 */
+	const zResetBlocksShown = React.useMemo(() => {
+		if (!showLayers) {
+			return undefined;
+		}
+
+		const context = block && {
+			beat,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: parse.result?.scene
+		};
+
+		// The parsed stage, not `localStage`: the answer is about the text, and a drag
+		// patch moving under the pointer would otherwise re-ask it on every frame.
+		return zResetBlocks(
+			parsedStage,
+			parse.result?.scene,
+			beat,
+			parse.states[0],
+			writes =>
+				!!context &&
+				previewEdits(context.blockText, buildWriteEdits(context, writes)) !==
+					context.blockText
+		);
+	}, [beat, block, parse.result, parse.states, parsedStage, showLayers]);
+
 	if (!parse.hasScene) {
 		return null;
 	}
@@ -2013,39 +2049,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		</StageEditorOverlay>
 	);
 
-	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
-	const showLayers = layersOpen && !fullScreen;
-	/**
-	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
-	 * (`buildWriteEdits` on the same context `commit` builds) so the panel can never offer a
-	 * button the write then ignores. Only while the panel is up: each pinned row is one
-	 * look at the block text.
-	 */
-	const zResetBlocksShown = React.useMemo(() => {
-		if (!showLayers) {
-			return undefined;
-		}
-
-		const context = block && {
-			beat,
-			blockOffset: block.offset,
-			blockText: block.text,
-			scene: parse.result?.scene
-		};
-
-		// The parsed stage, not `localStage`: the answer is about the text, and a drag
-		// patch moving under the pointer would otherwise re-ask it on every frame.
-		return zResetBlocks(
-			parsedStage,
-			parse.result?.scene,
-			beat,
-			parse.states[0],
-			writes =>
-				!!context &&
-				previewEdits(context.blockText, buildWriteEdits(context, writes)) !==
-					context.blockText
-		);
-	}, [beat, block, parse.result, parse.states, parsedStage, showLayers]);
 
 	// The overlay scrolls inside the viewport when the view is zoomed in. The selection
 	// row sits outside that scroll, over the viewport, so it stays where the author can
