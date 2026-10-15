@@ -86,7 +86,7 @@ import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
-import {useActiveBeatMark} from './use-active-beat-mark';
+import {beatLines, useActiveBeatMark} from './use-active-beat-mark';
 import {useRequestedBeat} from './preview-beat-request';
 import {useArrivalBeat} from './use-arrival-beat';
 import {useStageSelection} from './use-stage-selection';
@@ -403,6 +403,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const shownHidden = fullScreen ? NOTHING_HIDDEN : hidden;
 	const [beat, setBeat] = React.useState(0);
+	/** The beat picked on a picture, held until the passage editor it opened arrives. */
+	const pendingBeat = React.useRef<number>();
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
@@ -796,10 +798,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// Reaching for a beat is reaching for its text, and the text is only writable through
 	// the passage's CodeMirror -- so a beat picked on a picture opens the passage.
 	const needEditor = React.useCallback(() => {
-		if (!editor) {
-			onNeedEditor?.();
+		if (!editor && onNeedEditor) {
+			pendingBeat.current = beat;
+			onNeedEditor();
 		}
-	}, [editor, onNeedEditor]);
+	}, [beat, editor, onNeedEditor]);
 	const handleSelectBeat = React.useCallback(() => {
 		clear();
 		setBeatPanelOpen(true);
@@ -1356,6 +1359,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				return t('dialogs.passageEdit.scenePreview.grade.targetEntry');
 		}
 	}, [beat, parse.result, selection, stage, t]);
+
+	// The editor a beat pick opened has arrived. Its caret starts outside the beats, and the
+	// caret drives the scrubber, so left alone it would throw the author back to the
+	// arrival state. Put the caret on the picked beat instead: caret and scrubber agree.
+	React.useEffect(() => {
+		const wanted = pendingBeat.current;
+
+		if (!editor || wanted === undefined) {
+			return;
+		}
+
+		pendingBeat.current = undefined;
+
+		const span = wanted > 0 ? parse.result?.beatSpans?.[wanted - 1] : undefined;
+		const line = span
+			? beatLines(span, block?.lineOffset ?? 0, editor.lineCount())[0]
+			: undefined;
+
+		if (line !== undefined) {
+			editor.setCursor({ch: 0, line});
+		}
+
+		setBeat(wanted);
+	}, [block, editor, parse.result]);
 
 	// The beat on screen, lit up in the text the author is typing in.
 	useActiveBeatMark(
