@@ -423,6 +423,29 @@ describe('buildWriteEdit()', () => {
 		).toContain('bg: tavern-night');
 	});
 
+	it('adds music: from a sound drop beside the other atmosphere keys', () => {
+		const after = apply(passage, {formatted: 'rain', sceneKey: 'music'});
+
+		// Spec 02's key order: after the entity maps, before `beats:`.
+		expect(after).toContain('  candle: {at: 0.1, scale: 0.6}\nmusic: rain\nbeats:');
+	});
+
+	it('replaces a music: value whole, keyed block map included', () => {
+		const keyed = [
+			'[scene]',
+			'music:',
+			'  mellow: {id: x, loop: true}',
+			'  drums: drum-loop@0.3',
+			'beats:',
+			'  - box: "Hi."'
+		].join('\n');
+		const after = apply(keyed, {formatted: 'rain', sceneKey: 'music'});
+
+		expect(after).toMatch(/^music: rain\nbeats:/);
+		expect(after).not.toContain('mellow');
+		expect(after).not.toContain('drums');
+	});
+
 	it('removes a top-level scene key when the value goes away', () => {
 		const withCamera = ['[scene]', 'camera: {zoom: 2}', 'cast:', '  mira: {at: 0}'].join(
 			'\n'

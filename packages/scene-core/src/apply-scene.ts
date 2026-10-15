@@ -19,6 +19,7 @@ import {
 	materialize,
 	mergePatch
 } from './stage';
+import {applyMusic} from './music';
 
 /**
  * Merge a scene onto a base stage.
@@ -68,16 +69,23 @@ export function applyScene(base: Stage, scene: Scene): Stage {
 
 	// --- music ---------------------------------------------------------------
 	// Three states, not two: absent inherits (a snapshot starts empty, so there it means
-	// silence), `null` is `music: ~` and silences a patch's inherited bed, a value plays.
-	// Same shape as `bg`.
+	// silence), `null` is `music: ~` and silences a patch's inherited tracks, a value is
+	// laid over them by key. Same shape as `bg`, and the same `applyMusic` a beat uses.
 	//
 	// So a scene that wants music says so, every time, even mid-chapter. That looks like
-	// repetition and is not: `diffStages` compares id AND volume, so re-declaring the same
-	// track emits no transition and the bed plays straight through the passage change. The
-	// alternative — music that carries over silently — cannot work, because the editor
-	// previews ONE passage and would have no way to know what was playing before it.
-	if (scene.music !== undefined) {
-		out.music = scene.music === null ? undefined : {...scene.music};
+	// repetition and is not: the deck diffs by key AND id, so re-declaring the same track
+	// plays it straight through the passage change. The alternative — state that carries
+	// over from the previous passage — cannot work, because the editor previews ONE passage
+	// and would have no way to know what was playing before it. Carry is the PLAYER's job.
+	//
+	// Take 0: a `restart: true` up here restarts on every entry (the deck forgets takes per
+	// passage), which is the point of writing it at the top.
+	const music = applyMusic(out.music, scene.music, 0);
+
+	if (music) {
+		out.music = music;
+	} else {
+		delete out.music;
 	}
 
 	// --- entities -----------------------------------------------------------

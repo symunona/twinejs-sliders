@@ -269,6 +269,33 @@ describe('collectAssetRefs', () => {
 		expect(refs.autoRefs).toEqual(['lamp']);
 	});
 
+	it('collects every keyed music track, at the top and on beats', () => {
+		const refs = collectPassageRefs(
+			[
+				'[scene]',
+				'music:',
+				'  mellow: {id: strings, loop: true}',
+				'  drums: drum-loop@0.3',
+				'  wind: {volume: 0.2}', // a patch names no file
+				'  rain: ~',
+				'beats:',
+				'  - music: thunder-bed',
+				'  - mira: {say: "Hush.", music: {choir: {id: choir-pad}}}',
+				'  - box: {text: "…", music: {id: outro}}',
+				'  - sfx: door'
+			].join('\n')
+		);
+
+		expect(refs.soundRefs).toEqual([
+			'choir-pad',
+			'door',
+			'drum-loop',
+			'outro',
+			'strings',
+			'thunder-bed'
+		]);
+	});
+
 	it('returns empty buckets for a story with no scenes', () => {
 		expect(collectAssetRefs(storyOf(['one', 'two']))).toEqual({
 			assetRefs: [],

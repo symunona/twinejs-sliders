@@ -21,6 +21,9 @@ export const TOP_LEVEL_ORDER = [
 	'props',
 	'entities',
 	'fx',
+	// After `fx:`: both are the scene's atmosphere, and a dropped audio file (scene preview)
+	// is what usually adds this key, so it should land beside the other mood line.
+	'music',
 	'beats',
 	'links'
 ] as const;
@@ -32,7 +35,8 @@ export const BEAT_COMMANDS = [
 	'fx',
 	'sfx',
 	'mark',
-	'bg'
+	'bg',
+	'music'
 ] as const;
 
 /**

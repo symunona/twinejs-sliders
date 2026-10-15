@@ -15,11 +15,11 @@ import type {
 	Stage,
 	StageEntity,
 	StageFx,
-	StageSound,
 	Transition,
 	TransitionKind,
 	Vec2
 } from '@sliders/scene-types';
+import {cloneMusic, sameMusic} from './music';
 
 /** Seconds. Deliberately in one place so a renderer or theme can override them. */
 export const DEFAULT_DURATIONS: Record<Transition['kind'], number> = {
@@ -280,30 +280,20 @@ export function diffStages(prev: Stage, next: Stage): Transition[] {
 		});
 	}
 
-	// The bed. Compared by id AND volume, so turning the same track down is a transition and
-	// re-declaring the same track at the same volume is not — walking from scene to scene
-	// under one piece of music must not restart it.
-	if (!sameSound(prev.music, next.music)) {
+	// The tracks. Compared in full, by key, so turning one down is a transition and
+	// re-declaring the same tracks the same way is not — walking from scene to scene under
+	// one piece of music must not restart it. One transition for all tracks: the deck diffs
+	// track by track itself, and each track's own `fade:` times it, not `duration`.
+	if (!sameMusic(prev.music, next.music)) {
 		out.push({
 			duration: DEFAULT_DURATIONS.music,
-			from: prev.music ? {...prev.music} : undefined,
+			from: cloneMusic(prev.music),
 			kind: 'music',
-			to: next.music ? {...next.music} : undefined
+			to: cloneMusic(next.music)
 		});
 	}
 
 	return out;
-}
-
-function sameSound(
-	a: StageSound | undefined,
-	b: StageSound | undefined
-): boolean {
-	if (!a || !b) {
-		return a === b;
-	}
-
-	return a.id === b.id && a.amount === b.amount;
 }
 
 /**

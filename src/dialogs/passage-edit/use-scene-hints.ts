@@ -24,7 +24,9 @@ import {
 	ENTITY_KEYS,
 	LINK_KEYS,
 	LINK_ENTITY_KEYS,
+	LOOP_KEYS,
 	MOTION_KEYS,
+	MUSIC_KEYS,
 	SAY_KEYS,
 	TOP_LEVEL_KEYS,
 	parseScene,
@@ -78,6 +80,19 @@ const BEAT_COMMAND_NAMES = [...BEAT_COMMAND_KEYS];
  */
 const SCALAR_BEAT_COMMANDS: readonly string[] = ['wait', 'fx', 'sfx', 'mark'];
 
+/**
+ * The keys of ONE music track: a single long form (`music: {id: rain, …}`) or a keyed
+ * entry (`mellow: {id: x, …}`). `stop-other-tracks` is left out of the entry list because
+ * it belongs to the map holding the tracks, never to a track — the parser would read it as
+ * a track param it does not have.
+ */
+const MUSIC_TRACK_KEYS: readonly string[] = MUSIC_KEYS.filter(
+	key => key !== 'stop-other-tracks'
+);
+
+/** Keys whose value is a yes/no inside a music map. */
+const MUSIC_FLAG_KEYS: readonly string[] = ['loop', 'restart'];
+
 /** What the cursor is sitting in, and therefore what to offer. */
 export type HintSlot =
 	| {kind: 'bg'}
@@ -125,6 +140,12 @@ export type HintSlot =
 	| {kind: 'linkTarget'; links: readonly string[]}
 	/** `highlight:` — a glow colour the renderer ships, or any token the story paints. */
 	| {kind: 'highlight'}
+	/**
+	 * A closed list of literal words for one value: `stop-other-tracks: all`, `loop:
+	 * true`. `id` names the MRU bucket. Not `keys`: picking one writes the word, not a key
+	 * and its colon.
+	 */
+	| {kind: 'values'; id: string; names: readonly string[]}
 	/**
 	 * Key position in a map whose schema is known: the scene root, an entity, a
 	 * `bubble:`, a link. `id` only names the MRU bucket.
@@ -424,6 +445,17 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'bg':
 			return keys('bg', BG_KEYS);
 
+		// `music: {` — the single long form's keys, `stop-other-tracks` among them. A keyed
+		// map's own key is a track name the author makes up, so there is nothing to offer
+		// for it beyond these; the entries below the track names get `MUSIC_TRACK_KEYS`.
+		case 'music':
+			return keys('music', MUSIC_KEYS);
+
+		// `loop: {from: 2s, to: 14s}` — a loop section. Only music has a `loop:` map; an
+		// entity's is `poseLoop:`.
+		case 'loop':
+			return keys('loop', LOOP_KEYS);
+
 		// An entity's `link:` written long: `link: {to: Cellar, if: has_key}`. Not the
 		// `links:` block's own keys — a door has no icon and no transition of its own.
 		case 'link':
@@ -479,6 +511,10 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 	switch (parent) {
 		case 'links':
 			return keys('link', LINK_KEYS);
+
+		// A keyed track: `music: {mellow: {` — one track's keys.
+		case 'music':
+			return keys('musicTrack', MUSIC_TRACK_KEYS);
 
 		case 'cast':
 		case 'props':
@@ -724,8 +760,21 @@ export function sceneHintContext(
 	if (key !== undefined) {
 		// The key alone is not always enough: `fx:` is a stage effect at the top of a scene
 		// and a backdrop MOTION inside a `bg:` map, and `id:` names whatever map it is in.
-		const owner = (): string | undefined =>
-			[...flow.owners, ...enclosingKeys(lines, blockStart, cursor.line)][0];
+		const owners = (): string[] => [
+			...flow.owners,
+			...enclosingKeys(lines, blockStart, cursor.line)
+		];
+		const owner = (): string | undefined => owners()[0];
+		/**
+		 * The cursor's value is one track's: in the single long form (`music: {id: |`) or
+		 * in a keyed entry (`music: {mellow: {id: |`). Not inside a `loop:` map, whose
+		 * `from:`/`to:` are seconds.
+		 */
+		const inMusicTrack = (): boolean => {
+			const [first, second] = owners();
+
+			return first === 'music' || (second === 'music' && first !== 'loop');
+		};
 
 		const valueHint = ((): SceneHintContext | undefined => {
 			// Before the switch, and the only slot that has to be: inside an `ease:` map
@@ -734,6 +783,21 @@ export function sceneHintContext(
 			// level out. Asking the key first would offer backdrop names for `ease: {bg: }`.
 			if (owner() === 'ease') {
 				return found({kind: 'ease'});
+			}
+
+			// Inside a music map, before the switch for the same reason: `stop-other-tracks`
+			// and the flags mean nothing anywhere else, and a KEYED map's keys are track names
+			// the author made up — `mellow: |` wants a sound whatever the word is.
+			if (key === 'stop-other-tracks') {
+				return found({id: 'stopOthers', kind: 'values', names: ['all']});
+			}
+
+			if (MUSIC_FLAG_KEYS.includes(key) && inMusicTrack()) {
+				return found({id: 'flag', kind: 'values', names: ['true', 'false']});
+			}
+
+			if (owner() === 'music' && !(MUSIC_KEYS as readonly string[]).includes(key)) {
+				return found({kind: 'sound'});
 			}
 
 			switch (key) {
@@ -755,7 +819,7 @@ export function sceneHintContext(
 						? found({kind: 'bg'})
 						: owner() === 'motion'
 						? found({kind: 'bgFx'})
-						: owner() === 'music' || owner() === 'sfx'
+						: owner() === 'sfx' || inMusicTrack()
 						? found({kind: 'sound'})
 						: undefined;
 
@@ -909,6 +973,9 @@ function slotKey(slot: HintSlot): string {
 		case 'keys':
 			return `keys:${slot.id}`;
 
+		case 'values':
+			return `values:${slot.id}`;
+
 		default:
 			return slot.kind;
 	}
@@ -972,6 +1039,10 @@ function namesForSlot(
 
 		case 'highlight':
 			return [...HIGHLIGHT_TOKENS];
+
+		// Their own order: `all` alone, `true` before `false`.
+		case 'values':
+			return [...slot.names];
 
 		case 'props':
 			return assetNames(all, ['object', 'fx']);
@@ -1118,7 +1189,8 @@ const BEAT_SCAFFOLDS: Record<string, {prefix: string; value: string; suffix: str
 	sfx: {prefix: ': ', suffix: '', value: ''},
 	wait: {prefix: ': ', suffix: '', value: '1'},
 	// Same as `sfx:`: the name is the author's own art, so there is nothing to pre-select.
-	bg: {prefix: ': ', suffix: '', value: ''}
+	bg: {prefix: ': ', suffix: '', value: ''},
+	music: {prefix: ': ', suffix: '', value: ''}
 };
 
 const SAY_SCAFFOLD = {prefix: ': "', suffix: '"', value: ''};

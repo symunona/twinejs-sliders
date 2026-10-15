@@ -254,14 +254,15 @@ export interface EntityStructWrite {
 }
 
 /**
- * A top-level scene key — `bg:` from a background drop, `camera:` from a pan or zoom.
+ * A top-level scene key — `bg:` from a background drop, `music:` from a sound file drop,
+ * `camera:` from a pan or zoom.
  *
  * The value arrives already formatted because the two keys serialize differently and the
  * rules that decide their shape (a camera at identity is REMOVED, not written out) belong
  * with the gestures, not with the splicer.
  */
 export interface SceneKeyWrite {
-	sceneKey: 'bg' | 'camera';
+	sceneKey: 'bg' | 'camera' | 'music';
 	/** Formatted YAML. `undefined` REMOVES the key. */
 	formatted?: string;
 }

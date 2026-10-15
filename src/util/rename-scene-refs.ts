@@ -7,7 +7,7 @@
  * |---|---|---|
  * | `rename-scene-targets.ts` | a passage | `from:`, `links:`, `link:` |
  * | `rename-scene-character.ts` | a character id | entity keys, `ref:`, `of:`, beat speakers |
- * | this one | an asset name | the above PLUS `bg:`, `fx:`, `music:`, `sfx:` |
+ * | this one | an asset name | the above PLUS `bg:`, `fx:`, `music:` (keyed tracks too), `sfx:` |
  *
  * Asset names and character ids share ONE namespace (spec 03) and a `props:` entry key
  * doubles as its `ref:`, so renaming a piece of art moves an entity id as surely as
@@ -28,6 +28,7 @@
 import {isMap, isScalar, isSeq, parseDocument} from 'yaml';
 import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {extractSceneBlock} from '@sliders/scene-index';
+import {MUSIC_KEYS} from '@sliders/scene-schema';
 import {renameSceneCharacter} from './rename-scene-character';
 import {scalarText} from './rename-scene-targets';
 
@@ -126,6 +127,43 @@ function renameSound(value: unknown, ctx: Ctx, flow: boolean): void {
 	}
 }
 
+/**
+ * The keys that make a `music:` map the SINGLE long form (`{id: rain, volume: 0.4}`)
+ * rather than a keyed map of tracks. `stop-other-tracks` is legal in both, so it decides
+ * nothing. Read off the parser's own list, so a new track param cannot be mistaken for a
+ * track name here.
+ */
+const MUSIC_TRACK_PARAMS: readonly string[] = MUSIC_KEYS.filter(
+	key => key !== 'stop-other-tracks'
+);
+
+/**
+ * `music: rain@0.4`, `music: {id: rain}`, or the keyed map of tracks:
+ * `music: {mellow: {id: x}, drums: drum-loop@0.3, wind: {volume: 0.2}, rain: ~}`.
+ *
+ * In a keyed map the KEY is the author's track name, never an asset, and so is anything
+ * `stop-other-tracks:` lists; only each entry's value can name a sound.
+ */
+function renameMusic(value: unknown, ctx: Ctx, flow: boolean): void {
+	if (!isMap(value)) {
+		renameToken(value, ctx, flow);
+		return;
+	}
+
+	const pairs = pairsOf(value);
+
+	if (pairs.some(pair => MUSIC_TRACK_PARAMS.includes(keyName(pair) ?? ''))) {
+		renameIdKey(value, ctx);
+		return;
+	}
+
+	for (const pair of pairs) {
+		if (keyName(pair) !== 'stop-other-tracks') {
+			renameSound(pair.value, ctx, !!(value as YAMLMap).flow);
+		}
+	}
+}
+
 /** Every art-key edit one block needs. */
 function artEdits(blockText: string, ctx: Ctx): Edit[] {
 	// Same YAML version the scene parser uses, so this module and the preview never
@@ -148,7 +186,7 @@ function artEdits(blockText: string, ctx: Ctx): Edit[] {
 				break;
 
 			case 'music':
-				renameSound(pair.value, ctx, false);
+				renameMusic(pair.value, ctx, false);
 				break;
 
 			case 'fx':
@@ -173,9 +211,10 @@ function artEdits(blockText: string, ctx: Ctx): Edit[] {
 }
 
 /**
- * One beat. `bg:` and `sfx:` sit on the beat BASE, so they are a beat of their own
- * (`- sfx: door-slam`) or ride on a speaker's body (`- mira: {say: …, bg: street}`) — both
- * spellings, or an author who writes the compact one keeps a dead reference.
+ * One beat. `bg:`, `sfx:` and `music:` sit on the beat BASE, so they are a beat of their
+ * own (`- sfx: door-slam`) or ride on a body (`- mira: {say: …, bg: street}`, `- box:
+ * {text: …, music: rain}`) — every spelling, or an author who writes the compact one keeps
+ * a dead reference.
  */
 function beatEdits(item: unknown, ctx: Ctx): void {
 	const flow = !!(item as YAMLMap)?.flow;
@@ -191,21 +230,28 @@ function beatEdits(item: unknown, ctx: Ctx): void {
 				renameSound(pair.value, ctx, flow);
 				break;
 
+			case 'music':
+				renameMusic(pair.value, ctx, flow);
+				break;
+
 			case 'wait':
 			case 'mark':
-			case 'box':
 				break;
 
 			default:
-				// A speaker line, whose body can carry a `bg:` or `sfx:` of its own. Its
-				// `ref:` and the key itself belong to `renameSceneCharacter`.
+				// A speaker line or a `box:` map, whose body can carry a `bg:`, `sfx:` or
+				// `music:` of its own. A speaker's `ref:` and the key itself belong to
+				// `renameSceneCharacter`; a box's `text:` is prose.
 				for (const bodyPair of pairsOf(pair.value)) {
 					const key = keyName(bodyPair);
+					const bodyFlow = !!(pair.value as YAMLMap).flow;
 
 					if (key === 'bg') {
-						renameBg(bodyPair.value, ctx, !!(pair.value as YAMLMap).flow);
+						renameBg(bodyPair.value, ctx, bodyFlow);
 					} else if (key === 'sfx') {
-						renameSound(bodyPair.value, ctx, !!(pair.value as YAMLMap).flow);
+						renameSound(bodyPair.value, ctx, bodyFlow);
+					} else if (key === 'music') {
+						renameMusic(bodyPair.value, ctx, bodyFlow);
 					}
 				}
 				break;

@@ -167,6 +167,7 @@ links:
 | `cast` | map of id → entity | characters |
 | `props` | map of id → entity | objects |
 | `fx` | seq | `name@amount` or `{id, …}` |
+| `music` | sound name, map, or `~` | what plays. Single track or keyed parallel tracks. NOT inherited from the previous passage. See Music. |
 | `beats` | seq | the timeline |
 | `links` | map of name → props | link targets + props |
 | `linkList` | map | where the link list draws, and what its entries inherit. Absent = Chapbook links under the stage. |
@@ -231,6 +232,58 @@ beat keeps the new backdrop, and the scrubber stepping back shows the old one. N
 inside `cast:`/`props:`/`entities:`: a backdrop belongs to the stage, not to whoever is
 standing on it. The three scalar commands (`wait`, `fx`, `mark`) have no body map, so they
 cannot carry one.
+
+### Music — `music:`
+
+```yaml
+music: rain                    # track 'main', loop: true, volume 1
+music: rain@0.4                # same, volume 0.4
+music: {id: rain, volume: 0.4, loop: false, fade: 3s, start: 2s, restart: true}
+music: ~                       # everything stops
+music:                         # keyed = parallel tracks
+  mellow: {id: strings, volume: 0.5, loop: {from: 2s, to: 14s}, fade: 2s}
+  drums: drum-loop@0.3         # scalar = id@volume
+  wind: {volume: 0.2}          # no id = PATCH the running 'wind'
+  rain: ~                      # stop that track
+  stop-other-tracks: all       # or [a, b], or one name
+```
+
+Keys (`MUSIC_KEYS`), same for the single long form and each keyed entry:
+
+| Key | Value | Default |
+|---|---|---|
+| `id` | sound name | absent = patch running track of that key. None running = no-op. |
+| `volume` | 0..1 | 1. `NOT amount:` (parser hints). |
+| `loop` | `true` · `false` · N · `{from, to}` | single form `true`, keyed entry `false` |
+| `fade` | seconds: `2s`, `500ms`, `2` | 1.5s (`MUSIC_DEFAULT_FADE`). Fade in, out, volume ramp. `0` = cut. |
+| `start` | seconds | 0. Where playback begins. |
+| `restart` | bool | false. `true` = start over even if same id already plays. |
+| `stop-other-tracks` | `all` · `[a, b]` · `a` | — . Map level, beside the tracks. Stops tracks NOT named in this `music:`. |
+
+| Rule | |
+|---|---|
+| Single vs keyed | map with `id:` = single. No `id:` but a track param (`volume`/`loop`/`fade`/`start`/`restart`) = single missing id → error. Else keyed. |
+| Single form | track key `main` (`MUSIC_MAIN_TRACK`). |
+| Track names | any key except `stop-other-tracks`. |
+| `loop: N` | total plays, positive int. `1` = `false`. `0`/negative = error. |
+| `loop: {from, to}` | `from` ≥ 0, `to` > `from`. Intro plays once, `from`..`to` repeats. No `to` = to end of file. |
+| Untouched tracks | keep playing. Only named keys change, unless `stop-other-tracks`. |
+| Same key + same id | keeps playing (no restart), new volume/loop/fade apply. Different id = crossfade. |
+| Inheritance | `from:` patches inherit. Previous PASSAGE does not: no `music:` and no `from:` = silence. Carry happens at playback — same key + same id in the next passage plays straight through. |
+| Preview | muted by default. Speaker button. Spec 13. |
+| Drop | sound file on the preview stage → uploaded, scene `music: <name>` replaced/added. No menu. |
+
+On beats, like `bg:` — state, scrubber re-derives it:
+
+```yaml
+beats:
+  - music: {drums: ~}                                  # a beat of its own
+  - mira: {say: "Quiet.", music: {mellow: {volume: 0.2}}}   # riding on a line
+  - box: {text: "Later.", music: {id: chase, stop-other-tracks: all}}
+  - music: ~                                           # all off
+```
+
+`sfx:` unchanged: one-shot, `id`/`volume` only.
 
 ### Entity keys
 
@@ -546,6 +599,9 @@ No parallax. A plane does not counter-translate with the camera (yet).
 | `- wait: 0.5` | pause, seconds |
 | `- fx: thunder` | fire an effect |
 | `- mark: tense` | name this state so `from:` can target it. Renders nothing. |
+| `- sfx: door` | one-shot sound |
+| `- bg: cellar` | cut the backdrop. See above. |
+| `- music: …` | change the music from here on. See Music. |
 | `- bob: {say: "…", if: x}` / `- wait: 1` + `if: x` on the next line | beat plays only when `x` holds. See Conditions. |
 
 ### Inline marks

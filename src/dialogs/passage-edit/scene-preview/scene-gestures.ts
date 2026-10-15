@@ -268,6 +268,19 @@ export function assetDropWrites(
 	];
 }
 
+/**
+ * What a sound FILE dropped on the stage writes: the scene's own `music:`, replaced whole.
+ *
+ * Scene top, not a beat: a drop is "this scene sounds like this", and the scrubber's
+ * position is incidental to that. Replaced rather than merged into a keyed map, because the
+ * author who drops one file means "this one" — a second track is a deliberate thing typed
+ * by hand, and guessing a key for it would invent a name they never chose. The single form
+ * is the bed (`MUSIC_MAIN_TRACK`, looping), which is what a dropped file is nine times in ten.
+ */
+export function musicDropWrites(name: string): SceneWrite[] {
+	return [{formatted: formatValue('music', name), sceneKey: 'music'}];
+}
+
 // ---------------------------------------------------------------------------
 // camera
 // ---------------------------------------------------------------------------

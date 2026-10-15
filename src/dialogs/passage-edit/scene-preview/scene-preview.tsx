@@ -46,6 +46,7 @@ import {useUndoableStoriesContext} from '../../../store/undoable-stories';
 import {storyColors} from '../../../util/story-colors';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
+import {isAudioFile} from '@sliders/asset-store';
 import type {AssetDragPayload} from './asset-drag';
 import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatPanel} from './beat-panel';
@@ -59,6 +60,7 @@ import {
 	deleteWrites,
 	flipWrites,
 	lockWrites,
+	musicDropWrites,
 	unstretchWrites,
 	poseWrite,
 	zWrites
@@ -851,21 +853,73 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const textRef = React.useRef(text);
 	const dropAssetRef = React.useRef(handleDropAsset);
+	const dropCommitRef = React.useRef(commit);
 
 	textRef.current = text;
 	dropAssetRef.current = handleDropAsset;
+	dropCommitRef.current = commit;
 
 	/**
-	 * Image files dragged onto the stage from outside the app.
+	 * Sound files dropped on the stage: uploaded, and the LAST one becomes the scene's
+	 * `music:` (replacing whatever was there, adding the key when absent).
 	 *
-	 * A file says nothing about its role, so the drop only collects it and opens the menu
-	 * (`drop-menu.tsx`); `runDropChoice` below does the work once the author has said what
-	 * the image is. The cast is read here rather than subscribed to, because the "poses
-	 * of…" branch is the only thing that needs it and a preview that is always mounted
-	 * should not hold the whole library open to answer a question nobody asked.
+	 * No menu. A picture can be a backdrop, a prop, a character or a pose, so the author is
+	 * asked; a sound has exactly one place on a stage, and asking would be a menu of one.
+	 * The menu's `bg` branch used to catch audio — `putAsset` stored it as a sound, from the
+	 * bytes, and then `bg:` was written pointing at it: a backdrop with nothing to draw.
+	 *
+	 * Every file is uploaded, the way a multi-file `bg` drop uploads them all: they were
+	 * dropped, they belong in the library. One write, one undo step, `DROP_ORIGIN` like
+	 * every other drop.
+	 */
+	const dropSounds = React.useCallback(
+		async (files: File[]) => {
+			try {
+				const uploaded = await Promise.all(
+					files.map(file => store.putAsset(file, {kind: 'sound'}))
+				);
+				const last = uploaded[uploaded.length - 1];
+
+				if (last) {
+					dropCommitRef.current(musicDropWrites(last.meta.name), DROP_ORIGIN);
+				}
+			} catch (error) {
+				console.error('Could not add a dropped sound to the library', error);
+			}
+
+			assets.invalidate?.();
+			refreshAssetLibrary();
+		},
+		[assets, store]
+	);
+
+	/**
+	 * Image and sound files dragged onto the stage from outside the app.
+	 *
+	 * Sounds are told apart by their BYTES (`isAudioFile`, the upload pipeline's own rule)
+	 * and go straight to `dropSounds`. A picture says nothing about its role, so the rest
+	 * only open the menu (`drop-menu.tsx`); `runDropChoice` below does the work once the
+	 * author has said what the image is. The cast is read here rather than subscribed to,
+	 * because the "poses of…" branch is the only thing that needs it and a preview that is
+	 * always mounted should not hold the whole library open to answer a question nobody
+	 * asked.
 	 */
 	const handleDropFiles = React.useCallback(
-		async (files: File[], at: Vec2, point: Vec2) => {
+		async (dropped: File[], at: Vec2, point: Vec2) => {
+			const audio = await Promise.all(dropped.map(file => isAudioFile(file)));
+			const sounds = dropped.filter((_, index) => audio[index]);
+			const files = dropped.filter((_, index) => !audio[index]);
+
+			if (sounds.length > 0) {
+				// Not awaited: the menu for the pictures in the same drop should not wait on
+				// an upload. Both write through refs, so neither clobbers the other's text.
+				void dropSounds(sounds);
+			}
+
+			if (files.length === 0) {
+				return;
+			}
+
 			let characters: Character[] = [];
 
 			try {
@@ -876,7 +930,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 			setDropRequest({at, characters, files, point});
 		},
-		[store]
+		[dropSounds, store]
 	);
 
 	/**

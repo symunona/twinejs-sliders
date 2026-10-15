@@ -39,6 +39,19 @@ describe('patchSceneText', () => {
 		);
 	});
 
+	it('writes a keyed music map as one flow line that parses back', () => {
+		const result = patchSceneText(
+			PASSAGE,
+			'music:\n  mellow: {id: strings, loop: {from: 2s, to: 14s}, fade: 2s}\n  rain: ~'
+		);
+
+		expect(result.error).toBeUndefined();
+		expect(result.text).toContain(
+			'music: {mellow: {id: strings, loop: {from: 2s, to: 14s}, fade: 2s}, rain: ~}'
+		);
+		expect(result.changed).toEqual(['music']);
+	});
+
 	it('writes one key of one cast entry without touching its siblings', () => {
 		const result = patchSceneText(PASSAGE, 'cast:\n  mara: {at: [0.4, 0.9]}');
 

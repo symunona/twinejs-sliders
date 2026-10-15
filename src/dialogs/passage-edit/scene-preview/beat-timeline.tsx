@@ -18,7 +18,7 @@
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import type {Beat} from '@sliders/scene-types';
+import type {Beat, MusicSpec} from '@sliders/scene-types';
 import {beatHoldMs} from './beat-hold';
 import {LabelLayout, LEADER_SLACK, placeLabels} from './beat-label-layout';
 import './beat-timeline.css';
@@ -408,9 +408,27 @@ function labelParts(
 			// `bg` like `fx` and `wait`: the YAML keyword the author typed, not a locale
 			// string. `~` is what they typed to take the backdrop away.
 			return {dur, text: beat.bg ?? '~', who: 'bg'};
+		case 'music':
+			// Two notes where `sfx` has one: a one-shot and a track that keeps going are
+			// different things, and the strip is where an author scans for which is which.
+			return {dur, text: musicLabel(beat.music), who: '\u266b'};
 		default:
 			return {dur, text: beat.name, who: '\u2316'};
 	}
+}
+
+/**
+ * What a `- music:` beat changes, in the words the author typed: the ids it starts, the
+ * track key for a patch (`wind`), `key ~` for a stop, `~` for everything off.
+ */
+function musicLabel(spec: MusicSpec | null): string {
+	if (!spec) {
+		return '~';
+	}
+
+	return Object.entries(spec.tracks)
+		.map(([key, entry]) => (entry === null ? `${key} ~` : entry.id ?? key))
+		.join(', ');
 }
 
 /**

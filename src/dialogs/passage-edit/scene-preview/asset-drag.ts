@@ -66,6 +66,21 @@ function isImageFile(file: File): boolean {
 }
 
 /**
+ * Sound types the stage will take off the desktop. Same matching as images: the MIME type,
+ * or the extension when the OS gave none (Linux file managers often hand `.ogg` and `.m4a`
+ * over untyped). The bytes are what finally decide — `isAudioFile` in the drop handler —
+ * this only decides whether the file is worth reading at all.
+ */
+const AUDIO_EXTENSIONS = /\.(mp3|ogg|oga|opus|wav|flac|m4a|aac)$/i;
+
+function isSoundFile(file: File): boolean {
+	return (
+		file.type.startsWith('audio/') ||
+		(!file.type && AUDIO_EXTENSIONS.test(file.name))
+	);
+}
+
+/**
  * Is this drag carrying files from outside the app?
  *
  * `dragover` refuses to hand over the files themselves, so — exactly as with our own MIME —
@@ -75,13 +90,21 @@ export function isFileDrag(types: readonly string[] | undefined): boolean {
 	return !!types && Array.prototype.includes.call(types, 'Files');
 }
 
-/** The dropped images, in drop order. Empty when the drag carried none. */
-export function imageFilesFrom(dataTransfer: DataTransfer | null): File[] {
+/**
+ * The dropped images and sounds, in drop order. Empty when the drag carried neither.
+ *
+ * Sounds ride along so the drop handler can send them to `music:` (no menu: a sound has
+ * one place to go). Filtering them out here was what left an audio drop with nowhere to
+ * land but the picture menu.
+ */
+export function stageFilesFrom(dataTransfer: DataTransfer | null): File[] {
 	if (!dataTransfer) {
 		return [];
 	}
 
-	return Array.from(dataTransfer.files ?? []).filter(isImageFile);
+	return Array.from(dataTransfer.files ?? []).filter(
+		file => isImageFile(file) || isSoundFile(file)
+	);
 }
 
 /** The payload, or undefined for anything that is not ours or has been mangled. */

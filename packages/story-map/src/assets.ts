@@ -15,8 +15,19 @@
  */
 
 import {splitSceneRef} from '@sliders/scene-index';
-import type {AssetId, Character, EntityPatchBody, Scene} from '@sliders/scene-types';
-import {poseAssets, splitPoseImage, upgradeCharacter} from '@sliders/scene-types';
+import type {
+	AssetId,
+	Character,
+	EntityPatchBody,
+	MusicSpec,
+	Scene
+} from '@sliders/scene-types';
+import {
+	MUSIC_MAIN_TRACK,
+	poseAssets,
+	splitPoseImage,
+	upgradeCharacter
+} from '@sliders/scene-types';
 import type {AssetMetaRow, Manifest} from './types';
 
 /**
@@ -279,6 +290,27 @@ export function resolveSceneAssets(
 		out.push(row);
 	}
 
+	/**
+	 * One row per track that names a file. `via` reads `music:` for the single form (track
+	 * `MUSIC_MAIN_TRACK`, the old one-bed shape, so old output keeps its label) and
+	 * `music/<track>:` for a keyed one. A patch (`wind: {volume: 0.2}`) or a stop names no
+	 * file and has no row.
+	 */
+	function pushMusic(
+		spec: MusicSpec | null | undefined,
+		prefix: string,
+		inherited: boolean
+	): void {
+		for (const [track, entry] of Object.entries(spec?.tracks ?? {})) {
+			if (entry?.id) {
+				const via =
+					track === MUSIC_MAIN_TRACK ? 'music:' : `music/${track}:`;
+
+				push(rowFor(catalog, entry.id, prefix + via, 'music', inherited, 'sound'));
+			}
+		}
+	}
+
 	function walk(current: Scene, inherited: boolean): void {
 		// 1 — bg. `null` is a patch clearing an inherited backdrop, not a reference.
 		const bg = current.bg;
@@ -315,14 +347,14 @@ export function resolveSceneAssets(
 					)
 				);
 			}
+
+			pushMusic(beat.music, `beats/${beat.index} `, inherited);
 		}
 
-		// 1c — the bed. Unlike `fx:`, a sound name is always a reference to an asset: there
-		// is no renderer-owned sound the manifest is allowed not to know about, so a miss
-		// here is a missing asset and not a shader token.
-		if (current.music) {
-			push(rowFor(catalog, current.music.id, 'music:', 'music', inherited, 'sound'));
-		}
+		// 1c — the music, every keyed track. Unlike `fx:`, a sound name is always a
+		// reference to an asset: there is no renderer-owned sound the manifest is allowed
+		// not to know about, so a miss here is a missing asset and not a shader token.
+		pushMusic(current.music, '', inherited);
 
 		for (const [id, patch] of Object.entries(current.entities ?? {})) {
 			if (patch === null) {

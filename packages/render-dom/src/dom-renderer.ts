@@ -104,6 +104,17 @@ export interface DomRendererOptions {
 	 * navigate that could drift apart.
 	 */
 	onLink?: LinkHandler;
+	/**
+	 * A deck to play through instead of building one. SHARED, not owned: the renderer never
+	 * stops it on `destroy()` and never pushes its own muted default into it — only an
+	 * explicit `setMuted()` reaches it.
+	 *
+	 * The player passes one deck to every passage's renderer (`format/src/runtime/sliders/
+	 * player-deck.ts`), because a renderer lives exactly as long as one passage and music
+	 * has to outlive it: an owned deck stopped on every link click, which is why a chapter
+	 * of scenes that all said `music: rain` used to restart the rain on every page.
+	 */
+	deck?: SoundDeck;
 }
 
 /** Everything the renderer remembers about one on-screen entity. */
@@ -308,6 +319,8 @@ export class DomRenderer implements Renderer {
 	 * should not create audio machinery to hold nothing.
 	 */
 	private deck?: SoundDeck;
+	/** The shared deck's unsubscribe from refusals. Only set while one is in use. */
+	private unlistenDeck?: () => void;
 	private mutedWanted = true;
 	private blockedSound = false;
 	private cues = 0;
@@ -473,7 +486,9 @@ export class DomRenderer implements Renderer {
 		this.syncBgFx(stage.bgFx);
 		this.syncEntities(resolved, durations);
 		this.syncFx(stage.fx ?? []);
-		this.syncMusic(stage.music, durations.duration('music'));
+		// No duration: each track carries its own `fade`, so the music transition is a
+		// signal that something changed and nothing more.
+		this.syncMusic(stage.music);
 		this.syncCamera(durations.duration('camera'), durations.ease('camera'));
 
 		this.notify();
@@ -529,7 +544,15 @@ export class DomRenderer implements Renderer {
 		// Before anything else: a stage that is going away must not be heard from again, and
 		// an <audio> element is not attached to the DOM this tears down, so removing the
 		// root would not stop it.
-		this.deck?.stop();
+		// A SHARED deck is the exception: it belongs to whoever passed it in and is meant to
+		// outlive this renderer (the player's next passage carries the music on).
+		if (this.opts.deck) {
+			this.unlistenDeck?.();
+			this.unlistenDeck = undefined;
+		} else {
+			this.deck?.stop();
+		}
+
 		this.deck = undefined;
 		this.blockedSound = false;
 		this.observer?.disconnect();
@@ -2105,13 +2128,16 @@ export class DomRenderer implements Renderer {
 			return undefined;
 		}
 
-		if (!this.deck) {
+		if (!this.deck && this.opts.deck) {
+			// Shared: listen, but leave its mute alone. The deck may already be unmuted by the
+			// previous passage's gesture, and pushing this renderer's muted default into it
+			// would silence the music every time the reader turned a page.
+			this.deck = this.opts.deck;
+			this.unlistenDeck = this.deck.addBlockedListener(this.onDeckBlocked);
+		} else if (!this.deck) {
 			this.deck = new SoundDeck({
 				doc: this.doc,
-				onBlocked: () => {
-					this.blockedSound = true;
-					this.notify();
-				}
+				onBlocked: this.onDeckBlocked
 			});
 			this.deck.setMuted(this.mutedWanted);
 		}
@@ -2120,27 +2146,47 @@ export class DomRenderer implements Renderer {
 		return this.deck;
 	}
 
-	private syncMusic(music: Stage['music'], duration: number): void {
+	private onDeckBlocked = () => {
+		this.blockedSound = true;
+		this.notify();
+	};
+
+	private syncMusic(music: Stage['music']): void {
+		const ids = Object.values(music ?? {})
+			.map(track => track?.id)
+			.filter(Boolean);
+
 		// What the stage BELIEVES is playing, on the root element. The deck's <audio>
 		// elements are deliberately detached, so this attribute is the only thing a test —
 		// or a story's own CSS — can see; without it, "is the bed running" is unanswerable
 		// from outside. Set even while muted: it says what the scene asks for, not what a
-		// speaker is doing.
+		// speaker is doing. Ids space-joined in key order, so a single track reads as its
+		// bare id, as it always has, and `[data-music~=rain]` matches one of several.
 		if (this.rootEl) {
-			if (music) {
-				this.rootEl.dataset.music = music.id;
+			if (ids.length > 0) {
+				this.rootEl.dataset.music = ids.join(' ');
 			} else {
 				delete this.rootEl.dataset.music;
 			}
 		}
 
 		// Nothing playing and nothing asked for is the common case, and building a deck for
-		// it would mean every silent scene in the editor carrying audio machinery.
-		if (!music && !this.deck) {
+		// it would mean every silent scene in the editor carrying audio machinery. A shared
+		// deck always hears it: silence here is how the player fades out the last passage's
+		// music.
+		if (ids.length === 0 && !this.deck && !this.opts.deck) {
 			return;
 		}
 
-		void this.soundDeck()?.music(music, duration);
+		void this.soundDeck()?.music(music);
+	}
+
+	/**
+	 * A new passage starts on this deck: forget held takes, so a scene-top `restart: true`
+	 * restarts on every entry (`SoundDeck.newScene`). Call before the first `apply()`.
+	 */
+	newScene(): void {
+		(this.deck ?? this.opts.deck)?.newScene();
 	}
 
 	/** Fire a one-shot. See `Renderer.cue` for why this is not part of `apply()`. */
@@ -2173,12 +2219,13 @@ export class DomRenderer implements Renderer {
 			this.blockedSound = false;
 		}
 
-		this.deck?.setMuted(muted);
+		// Shared: an explicit call is the only way this renderer touches the deck's mute.
+		(this.deck ?? this.opts.deck)?.setMuted(muted);
 
 		// A stage muted before its first apply() has no deck yet; one built later reads
 		// `mutedWanted`. Unmuting, though, means the author wants to hear what is already on
 		// stage, so the bed has to be started rather than waited for.
-		if (!muted && !this.deck) {
+		if (!muted && !this.deck && !this.opts.deck) {
 			this.soundDeck();
 		}
 	}

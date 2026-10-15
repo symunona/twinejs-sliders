@@ -21,6 +21,8 @@ import {
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	LOOP_KEYS,
+	MUSIC_KEYS,
 	SAY_KEYS,
 	TOP_LEVEL_KEYS
 } from '@sliders/scene-schema';
@@ -37,6 +39,8 @@ import {
 	ENTITY_FITS,
 	FIT_Z,
 	GRADE_KEYS,
+	MUSIC_DEFAULT_FADE,
+	MUSIC_MAIN_TRACK,
 	POSE_LOOPS,
 	LAYERS,
 	SCENE_LOCKS,
@@ -71,8 +75,7 @@ const TOP_LEVEL_HELP: KeyHelp<typeof TOP_LEVEL_KEYS> = {
 	links: 'Ways out of the scene. In a scene passage these are the ONLY ways out.',
 	linkList:
 		'Draws those ways out INSIDE the stage box instead of in a list under it. Writing the key at all is the switch — every key in it is optional. at: [x, y] is the list’s centre and w:/h: its size, all fractions of the stage box measured from its top left, the way a bubble’s at: is and not the way an entity’s is. as: is a token your stylesheet paints. show: auto | always | never overrules the story-wide sliders.showLinks, and auto is the standing rule: the list stays hidden while the beats already offer the reader something to click. icon: and transition: are defaults each entry may override.',
-	music:
-		'The bed: one sound, looping, by asset name. music: rain@0.4 turns it down, music: ~ is silence. Say it in every scene that wants it — the same track at the same volume plays straight through a passage change without restarting.',
+	music: `What plays, by sound name. music: rain loops it (volume 1), music: rain@0.4 turns it down, music: ~ stops everything. A map of names is parallel tracks: music: {mellow: {id: strings, loop: true}, drums: drum-loop@0.3} — those do NOT loop unless told to. Not inherited from the passage before: say it in every scene that wants it, and the same track under the same name plays straight through a passage change without restarting. Keys under Stage ▸ Music.`,
 	locked: `What the visual editor must not let a gesture change here: true for the whole stage, or a list — ${SCENE_LOCKS.join(
 		', '
 	)}. An editor hint only; the player ignores it. Use it on a shot that is already framed, where grabbing empty ground would pan it by accident.`,
@@ -117,6 +120,32 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	z: 'Draw order for the whole stage. Higher is nearer. Otherwise depth comes from y.'
 };
 
+/**
+ * One table for the single long form and for each keyed entry: they take the same keys,
+ * bar `stop-other-tracks`, which belongs to the map holding the tracks.
+ */
+const MUSIC_HELP: KeyHelp<typeof MUSIC_KEYS> = {
+	fade: `Seconds to fade in, fade out and ramp a volume change: fade: 2s, fade: 500ms, fade: 0 cuts. Default ${MUSIC_DEFAULT_FADE}s.`,
+	id: `The sound, by name. Without id: an entry PATCHES the running track of that name — wind: {volume: 0.2} turns wind down, and does nothing if wind is not playing. The short form music: rain is the track called ${MUSIC_MAIN_TRACK}.`,
+	loop: `true loops forever, false plays once and stops, a number is how many plays in all (loop: 3). {${LOOP_KEYS.join(
+		', '
+	)}} loops a section: play from the start, and on reaching to: (or the end) jump back to from: — loop: {from: 2s, to: 14s} plays the intro once. Default: true for music: rain, false for a keyed track.`,
+	restart: 'true starts the track over even when it is already playing. Otherwise the same sound under the same track name keeps going.',
+	start: 'Seconds into the file to begin at: start: 12s.',
+	'stop-other-tracks':
+		'all stops every track this music: does not name. A list (or one name) stops just those: stop-other-tracks: [drums, wind]. Sits beside the tracks, not inside one.',
+	volume: '0 to 1. rain@0.4 is the short way.'
+};
+
+const MUSIC_SAMPLE = `music:                      # parallel tracks, by a name you choose
+  mellow: {id: strings, loop: true, fade: 3s}
+  drums: drum-loop@0.3
+beats:
+  - mira: "Listen."
+  - music: {drums: ~}                    # stop one track
+  - mira: {say: "Quiet now.", music: {mellow: {volume: 0.2}}}
+  - music: {id: chase, stop-other-tracks: all}   # one track, the rest stop`;
+
 const CAMERA_HELP: KeyHelp<typeof CAMERA_KEYS> = {
 	at: 'Where the camera looks, in the same coordinates entities use.',
 	zoom: '1 is the whole stage. Above 1 moves in.'
@@ -139,6 +168,9 @@ const DUR_HELP =
 const BG_BEAT_HELP =
 	'Change the backdrop from this beat on, by asset name, or bg: ~ to take it away. Takes the same long form the scene\u2019s own bg: does, so a cut can add or drop a motion. It is stage state: every later beat keeps it, and the scrubber stepping back shows the old one.';
 
+const MUSIC_BEAT_HELP =
+	'Change the music from this beat on: same forms as the scene\u2019s music:. Tracks it does not name keep playing; music: ~ stops them all. State, like bg: \u2014 the scrubber stepping back plays what was playing there.';
+
 const SFX_HELP =
 	'Fire a sound once, as this beat arrives, by asset name. sfx: door@0.5 turns it down. For a sound that keeps playing, use the scene’s music: instead.';
 
@@ -147,6 +179,7 @@ const BEAT_HELP: KeyHelp<typeof BEAT_COMMAND_KEYS> = {
 	box: 'Narration, with nobody speaking.',
 	fx: 'Fire an effect for this beat.',
 	mark: 'Name this state so another scene can start from: it. Draws nothing.',
+	music: MUSIC_BEAT_HELP,
 	sfx: SFX_HELP,
 	wait: 'Pause, in seconds.'
 };
@@ -164,6 +197,7 @@ const BOX_HELP: KeyHelp<typeof BOX_KEYS> = {
 	dur: DUR_HELP,
 	ease: EASE_HELP,
 	if: 'Only play this box when the condition holds — box: {text: "…", if: has_key}. Same as if: beside box:.',
+	music: MUSIC_BEAT_HELP,
 	sfx: SFX_HELP,
 	text: 'The narration itself. box: "…" is the short way of writing this.'
 };
@@ -172,6 +206,7 @@ const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
 	bg: BG_BEAT_HELP,
 	dur: DUR_HELP,
 	ease: EASE_HELP,
+	music: MUSIC_BEAT_HELP,
 	sfx: SFX_HELP
 };
 
@@ -372,6 +407,16 @@ export const SceneHelpDialog: React.FC<DialogComponentProps> = props => {
 						<h3>Camera</h3>
 						<KeyTable keys={CAMERA_KEYS} help={CAMERA_HELP} />
 						<Sample>{`camera: {at: [0, 0], zoom: 1}`}</Sample>
+						<h3>Music</h3>
+						<p>
+							<code>music: rain</code> is one looping track.{' '}
+							<code>music: {'{'}id: rain, …{'}'}</code> is the same with
+							these keys. A map of your own names is parallel tracks, each
+							taking them too. Dropping a sound file on the preview writes{' '}
+							<code>music:</code> for you.
+						</p>
+						<KeyTable keys={MUSIC_KEYS} help={MUSIC_HELP} />
+						<Sample>{MUSIC_SAMPLE}</Sample>
 					</TabPanel>
 
 					<TabPanel>

@@ -22,6 +22,7 @@
     {"feature": "In-stage link list drawn by a linkList: block", "find": "sliders-linklist"},
     {"feature": "Glitch effect channel-split filters", "find": "sliders-fx-chan-a"},
     {"feature": "Scene transitions hooked into Chapbook's page-transition", "find": "before the new stage was drawn"},
-    {"feature": "Entity motion: (parallax layers) drawn by the art and its twin", "find": "sliders-entity-art-tile"}
+    {"feature": "Entity motion: (parallax layers) drawn by the art and its twin", "find": "sliders-entity-art-tile"},
+    {"feature": "Player-level sound deck: music carries across passages", "find": "slidersPlayerDeck"}
   ]
 }

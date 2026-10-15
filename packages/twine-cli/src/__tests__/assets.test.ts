@@ -215,6 +215,33 @@ beats:
 		expect(rows.filter(row => row.id === 'a_slam')).toHaveLength(1);
 	});
 
+	it('reaches every keyed music track, at the top and on beats', async () => {
+		const rows = resolveSceneAssets(
+			scene(
+				`music:
+  bed: {id: tavern-loop, loop: true}
+  wind: {volume: 0.2}
+  rain: ~
+beats:
+  - music: {stinger: no-such-sting}
+  - mira: {say: "Oh.", music: door-slam}
+`
+			),
+			await catalog()
+		);
+		const byVia = new Map(rows.map(row => [row.via, row]));
+
+		expect(byVia.get('music/bed:')).toMatchObject({id: 'a_bed', kind: 'sound'});
+		expect(byVia.get('beats/1 music:')).toMatchObject({id: 'a_slam', kind: 'sound'});
+		// A miss on a beat is as unknown as a miss at the top.
+		expect(byVia.get('beats/0 music/stinger:')).toMatchObject({
+			name: 'no-such-sting',
+			present: 'unknown'
+		});
+		// A patch and a stop name no file.
+		expect(rows.filter(row => row.key === 'music')).toHaveLength(3);
+	});
+
 	it('calls an unknown sound missing, unlike an fx token', async () => {
 		const rows = resolveSceneAssets(
 			scene('music: no-such-bed\nfx: [rain@0.6]\n'),

@@ -15,6 +15,7 @@ import type {
 	StageFx,
 	Vec2
 } from '@sliders/scene-types';
+import {cloneMusic} from './music';
 
 /** Defaults applied whenever a patch declares an entity that did not exist before. */
 export const ENTITY_DEFAULTS = {
@@ -69,7 +70,7 @@ export function cloneStage(stage: Stage): Stage {
 		camera: cloneCamera(stage.camera),
 		entities,
 		fx: cloneFx(stage.fx),
-		...(stage.music ? {music: {...stage.music}} : {})
+		...(stage.music ? {music: cloneMusic(stage.music)} : {})
 	};
 }
 

@@ -27,6 +27,7 @@ import {
 	LAYERS,
 	LAYER_BASELINE,
 	LAYER_Z,
+	MUSIC_MAIN_TRACK,
 	POSE_LOOPS,
 	SCENE_LOCKS,
 	easeValue,
@@ -52,6 +53,9 @@ import {
 	type Layer,
 	type LinkListShow,
 	type LinkListStyle,
+	type MusicEntry,
+	type MusicLoop,
+	type MusicSpec,
 	type ParseResult,
 	type PoseLoop,
 	type Scene,
@@ -69,7 +73,7 @@ import {
 	type Vec2
 } from '@sliders/scene-types';
 import {RaggedBlockLine, raggedBlockLines} from './block-scalar';
-import {keyFix} from './levenshtein';
+import {keyFix, nearestKey} from './levenshtein';
 import {scanWikiLinks} from './links';
 
 export const TOP_LEVEL_KEYS = [
@@ -162,7 +166,8 @@ export const BEAT_COMMAND_KEYS = [
 	'fx',
 	'sfx',
 	'mark',
-	'bg'
+	'bg',
+	'music'
 ] as const;
 
 /** Keys accepted inside a `box:` map. The scalar form `box: "text"` stays the short way. */
@@ -174,6 +179,7 @@ export const BOX_KEYS = [
 	'ease',
 	'sfx',
 	'bg',
+	'music',
 	'if'
 ] as const;
 
@@ -190,12 +196,33 @@ export const SAY_KEYS = ['say', 'as', 'bubble'] as const;
  *
  * Not `BEAT_KEYS`: that name is already a local in the format's `scene-mode.ts`.
  */
-export const BEAT_BODY_KEYS = ['dur', 'ease', 'sfx', 'bg'] as const;
+export const BEAT_BODY_KEYS = ['dur', 'ease', 'sfx', 'bg', 'music'] as const;
 
 export const CAMERA_KEYS = ['at', 'zoom'] as const;
 
-/** Keys inside the long form of a `music:` or `sfx:` entry. */
+/** Keys inside the long form of an `sfx:` entry. */
 export const SOUND_KEYS = ['id', 'volume'] as const;
+
+/**
+ * Keys inside the long form of a `music:` value, and of one track in a keyed `music:` map.
+ *
+ * `stop-other-tracks` is the one that belongs to the whole `music:` value rather than to a
+ * track, and it is RESERVED as a track name: in a keyed map it is the only key that is not
+ * a track. Listed here anyway, because to the author it is one more thing `music:` takes,
+ * and Scene Help and the completion hints read this one list.
+ */
+export const MUSIC_KEYS = [
+	'id',
+	'volume',
+	'loop',
+	'fade',
+	'start',
+	'restart',
+	'stop-other-tracks'
+] as const;
+
+/** Keys inside a loop section, `loop: {from: 2s, to: 14s}`. */
+export const LOOP_KEYS = ['from', 'to'] as const;
 
 /**
  * Keys inside the long form of a `bg:` entry — `bg: {id: cellar, fx: parallax_left}`.
@@ -1134,6 +1161,8 @@ interface EntityBody {
 	sfx?: StageSound;
 	/** From `bg:`. Only a beat can carry it: `cast:` names the backdrop at the top. */
 	bg?: ParsedBg;
+	/** From `music:`. Only a beat can carry it, for the reason `bg` can. `null` = `music: ~`. */
+	music?: MusicSpec | null;
 	/** Where `of:` was written, so a cycle found after the whole block is read can point at it. */
 	ofNode?: unknown;
 	/**
@@ -1154,9 +1183,25 @@ function parseSeconds(
 	ctx: Ctx,
 	node: unknown,
 	key: string,
-	zeroHint: string
+	zeroHint: string,
+	options: {
+		/**
+		 * Also take CSS's `2s` / `500ms`. Music's keys only, for now: a track's `fade:` and
+		 * `start:` are copied out of an audio editor that shows milliseconds, and the unit
+		 * in the value is what stops `start: 1500` meaning 25 minutes. `dur:` stays a bare
+		 * number until there is a reason to open it up everywhere at once.
+		 */
+		units?: boolean;
+		/**
+		 * A position in a file rather than a hold. Four minutes into a track is ordinary, so
+		 * the seconds-vs-milliseconds warning would fire on every honest value.
+		 */
+		long?: boolean;
+	} = {}
 ): number | undefined {
-	const seconds = asNumber(ctx, node, key);
+	const seconds = options.units
+		? asTime(ctx, node, key)
+		: asNumber(ctx, node, key);
 
 	if (seconds === undefined) {
 		return undefined;
@@ -1169,7 +1214,7 @@ function parseSeconds(
 		return undefined;
 	}
 
-	if (seconds > MAX_DUR) {
+	if (!options.long && seconds > MAX_DUR) {
 		addError(
 			ctx,
 			'bad-value',
@@ -1180,6 +1225,34 @@ function parseSeconds(
 	}
 
 	return seconds;
+}
+
+/** `2s`, `500ms`, `1.5` (seconds) — or `-1s`, which `parseSeconds` then refuses by name. */
+const TIME_PATTERN = /^\s*(-?(?:\d+(?:\.\d*)?|\.\d+))\s*(s|ms)\s*$/i;
+
+/**
+ * A number of seconds, bare or with a CSS unit. Any sign: `parseSeconds` owns the range, so
+ * a negative says "not a length of time" rather than "not a number".
+ */
+function asTime(ctx: Ctx, node: unknown, what: string): number | undefined {
+	const value = scalarValue(node);
+
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return value;
+	}
+
+	const match = typeof value === 'string' ? TIME_PATTERN.exec(value) : null;
+
+	if (match) {
+		const amount = Number(match[1]);
+
+		return match[2].toLowerCase() === 'ms' ? amount / 1000 : amount;
+	}
+
+	addError(ctx, 'bad-value', `${what} must be a length of time.`, node, {
+		hint: `${what}: 2s, 500ms, or a bare number of seconds.`
+	});
+	return undefined;
 }
 
 /**
@@ -2061,6 +2134,18 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'music': {
+				if (!allowSay) {
+					addError(ctx, 'unknown-key', `Unknown key 'music'.`, pair.key, {
+						hint: 'music: is the whole stage\'s, so it belongs at the top of the scene or on a beat.'
+					});
+					break;
+				}
+
+				body.music = parseMusicNode(ctx, pair.value, 'music');
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, valid)
@@ -2332,6 +2417,443 @@ function parseSoundNode(
 		node
 	);
 	return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Music
+// ---------------------------------------------------------------------------
+
+/** Reserved in a keyed map: the one key there that is not a track name. */
+const STOP_OTHERS = 'stop-other-tracks';
+
+/** The `music:` keys that belong to one track — everything but `stop-other-tracks`. */
+const TRACK_KEYS: readonly string[] = MUSIC_KEYS.filter(key => key !== STOP_OTHERS);
+
+/**
+ * `music:` — the single form (`rain`, `rain@0.4`, `{id: rain, …}`), a keyed map of
+ * parallel tracks, or `~`. One parser for the scene top, `- music:` and a `music:` riding
+ * on a beat body, the way `parseBgNode` is one parser for every `bg:`.
+ *
+ * `null` is `music: ~` (everything stops), `undefined` is "said nothing usable" — already
+ * reported, and the caller leaves its slot empty exactly as it would for an absent key.
+ *
+ * The single form is the old one-bed grammar, kept to its old meaning: it writes the track
+ * `MUSIC_MAIN_TRACK` and LOOPS unless told otherwise, because a bed that stopped after one
+ * play would silently change every story written before tracks existed. A keyed entry
+ * defaults to playing once instead — `applyMusic` owns that default, the parser only
+ * stamps the single form's `loop: true` onto it.
+ */
+function parseMusicNode(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): MusicSpec | null | undefined {
+	if (isNullNode(node)) {
+		return null;
+	}
+
+	if (isScalar(node)) {
+		const entry = parseMusicEntry(ctx, node, label, true);
+
+		return entry ? {tracks: {[MUSIC_MAIN_TRACK]: entry}} : undefined;
+	}
+
+	if (!isMap(node)) {
+		addError(
+			ctx,
+			'bad-value',
+			`${label}: must be a sound's name, e.g. \`${label}: rain\` or \`${label}: rain@0.4\`.`,
+			node,
+			{hint: `Parallel tracks are a map: ${label}: {rain: rain-loop, wind: wind@0.3}`}
+		);
+		return undefined;
+	}
+
+	const pairs = (node as YAMLMap).items as Pair<unknown, unknown>[];
+	const names = pairs.map(keyName);
+
+	// The single form is told apart by its keys, not its shape: `{id: rain}` names a sound,
+	// and so does `{volume: 0.4}` — a single form that forgot its id, which deserves "needs
+	// an id" rather than a silent track called `volume`. `amount` counts too, so `fx:`'s
+	// spelling still reaches the hint that sends it to `volume`.
+	const single = names.some(
+		name =>
+			name !== undefined &&
+			(TRACK_KEYS.includes(name) || name === 'amount')
+	);
+
+	if (single) {
+		let stopOthers: MusicSpec['stopOthers'];
+		const own = pairs.filter(pair => {
+			if (keyName(pair) !== STOP_OTHERS) {
+				return true;
+			}
+
+			stopOthers = parseStopOthers(ctx, pair.value, label);
+			return false;
+		});
+		const entry = parseMusicMap(ctx, own, node, label, true);
+
+		return entry
+			? {
+					tracks: {[MUSIC_MAIN_TRACK]: entry},
+					...(stopOthers ? {stopOthers} : {})
+			  }
+			: undefined;
+	}
+
+	const spec: MusicSpec = {tracks: {}};
+
+	for (const pair of pairs) {
+		const name = keyName(pair);
+
+		if (name === undefined) {
+			addError(ctx, 'bad-value', 'A track name must be plain text.', pair.key);
+			continue;
+		}
+
+		if (name === STOP_OTHERS) {
+			const stopOthers = parseStopOthers(ctx, pair.value, label);
+
+			if (stopOthers) {
+				spec.stopOthers = stopOthers;
+			}
+
+			continue;
+		}
+
+		// Any name is a legal track, so a misspelt `stop-other-tracks` would otherwise be a
+		// track called `stop-others` playing a sound called `all` — inaudible, and wrong.
+		if (/^stop[-_ ]?other/i.test(name) || nearestKey(name, [STOP_OTHERS])) {
+			addError(ctx, 'unknown-key', `Unknown key '${name}'.`, pair.key, {
+				fix: {label: `Change '${name}' to '${STOP_OTHERS}'`, replaces: name, text: STOP_OTHERS},
+				hint: `Did you mean '${STOP_OTHERS}'?`
+			});
+			continue;
+		}
+
+		if (isNullNode(pair.value)) {
+			spec.tracks[name] = null;
+			continue;
+		}
+
+		const entry = parseMusicEntry(ctx, pair.value, `${label} ${name}`, false);
+
+		if (entry) {
+			spec.tracks[name] = entry;
+		}
+	}
+
+	return spec;
+}
+
+/**
+ * One track: `rain`, `rain@0.4` or `{id: …, volume: …, loop: …}`. `single` is the old
+ * one-bed form, which needs an id and loops by default; a keyed entry may leave the id out
+ * to PATCH the track already running under its key.
+ */
+function parseMusicEntry(
+	ctx: Ctx,
+	node: unknown,
+	label: string,
+	single: boolean
+): MusicEntry | undefined {
+	if (isScalar(node)) {
+		// asSourceString, not asString: a sound file called `04.mp3` is an asset named `04`,
+		// and the YAML core schema would hand back the number 4 (see the `to: 04` note).
+		const token = asSourceString(ctx, node, label);
+
+		if (token === undefined) {
+			return undefined;
+		}
+
+		const value = scalarValue(node);
+
+		// `wind: 0.2` reads as "wind at 0.2" and plays a sound called `0.2`. A whole number
+		// stays a name (`04`), a fraction almost never is one.
+		if (!single && typeof value === 'number' && !Number.isInteger(value)) {
+			addError(ctx, 'bad-value', `${label}: plays a sound named '${token}'.`, node, {
+				hint: `For a volume, ${label.split(' ').pop()}: {volume: ${token}}.`,
+				severity: 'warning'
+			});
+		}
+
+		const {amount, id} = parseFxToken(token);
+
+		return {amount, id, ...(single ? {loop: true} : {})};
+	}
+
+	if (isMap(node)) {
+		return parseMusicMap(
+			ctx,
+			(node as YAMLMap).items as Pair<unknown, unknown>[],
+			node,
+			label,
+			single
+		);
+	}
+
+	addError(
+		ctx,
+		'bad-value',
+		`${label}: must be a sound's name or a map, e.g. \`rain@0.4\` or \`{id: rain, loop: true}\`.`,
+		node
+	);
+	return undefined;
+}
+
+/** The long form of one track. `pairs` rather than the map, so the single form can drop `stop-other-tracks` first. */
+function parseMusicMap(
+	ctx: Ctx,
+	pairs: Pair<unknown, unknown>[],
+	node: unknown,
+	label: string,
+	single: boolean
+): MusicEntry | undefined {
+	const entry: MusicEntry = {};
+
+	for (const pair of pairs) {
+		const key = keyName(pair);
+
+		switch (key) {
+			case undefined:
+				addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+				break;
+
+			case 'id': {
+				const id = asSourceString(ctx, pair.value, `${label} id`);
+
+				if (id !== undefined) {
+					entry.id = id;
+				}
+
+				break;
+			}
+
+			case 'volume': {
+				const amount = asNumber(ctx, pair.value, `${label} volume`);
+
+				if (amount !== undefined) {
+					entry.amount = amount;
+				}
+
+				break;
+			}
+
+			case 'amount':
+				// The one wrong guess worth predicting: `fx:` spells this `amount`, and
+				// levenshtein is nowhere near close enough to suggest `volume` for it.
+				addError(ctx, 'unknown-key', `Unknown key 'amount'.`, pair.key, {
+					fix: {label: `Change 'amount' to 'volume'`, replaces: 'amount', text: 'volume'},
+					hint: `A sound's is spelled volume: — ${label.split(' ')[0]}: {id: …, volume: 0.4}.`
+				});
+				break;
+
+			case 'loop': {
+				const loop = parseLoop(ctx, pair.value, `${label} loop`);
+
+				if (loop !== undefined) {
+					entry.loop = loop;
+				}
+
+				break;
+			}
+
+			case 'fade': {
+				const fade = parseSeconds(ctx, pair.value, 'fade', 'fade: 0 cuts.', {
+					units: true
+				});
+
+				if (fade !== undefined) {
+					entry.fade = fade;
+				}
+
+				break;
+			}
+
+			case 'start': {
+				const start = parseSeconds(
+					ctx,
+					pair.value,
+					'start',
+					'start: 0 is the top of the file.',
+					{long: true, units: true}
+				);
+
+				if (start !== undefined) {
+					entry.start = start;
+				}
+
+				break;
+			}
+
+			case 'restart': {
+				const restart = asBoolean(ctx, pair.value, `${label} restart`);
+
+				if (restart !== undefined) {
+					entry.restart = restart;
+				}
+
+				break;
+			}
+
+			case STOP_OTHERS:
+				// Only reachable inside one track of a keyed map: the single form takes it
+				// out before it gets here.
+				addError(ctx, 'unknown-key', `Unknown key '${STOP_OTHERS}'.`, pair.key, {
+					hint: `${STOP_OTHERS}: belongs to the whole ${label.split(' ')[0]}: map, beside the tracks.`
+				});
+				break;
+
+			default:
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+					...keyFix(key, MUSIC_KEYS)
+				});
+		}
+	}
+
+	if (single && entry.id === undefined) {
+		addError(ctx, 'bad-value', `A ${label} entry needs an id.`, node, {
+			hint: `${label}: {id: rain, volume: 0.4}`
+		});
+		return undefined;
+	}
+
+	// The single form keeps the old bed's meaning: it loops unless it says otherwise.
+	if (single && entry.loop === undefined) {
+		entry.loop = true;
+	}
+
+	return entry;
+}
+
+/**
+ * `loop:` — `true`/`false`, a count of plays, or a section `{from: 2s, to: 14s}`.
+ *
+ * `1` is accepted and is `false`: "play once" is what it says, and storing it as a number
+ * would give the deck two spellings of one behaviour to keep in step.
+ */
+function parseLoop(ctx: Ctx, node: unknown, what: string): MusicLoop | undefined {
+	const hint = 'loop: true, false, a number of plays (3), or a section {from: 2s, to: 14s}.';
+
+	if (isMap(node)) {
+		let from: number | undefined;
+		let to: number | undefined;
+		let toNode: unknown;
+
+		for (const pair of (node as YAMLMap).items as Pair<unknown, unknown>[]) {
+			const key = keyName(pair);
+
+			if (key === 'from') {
+				from = parseSeconds(ctx, pair.value, 'from', 'from: 0 is the top of the file.', {
+					long: true,
+					units: true
+				});
+			} else if (key === 'to') {
+				to = parseSeconds(ctx, pair.value, 'to', 'to: is where the section ends.', {
+					long: true,
+					units: true
+				});
+				toNode = pair.value;
+			} else if (key !== undefined) {
+				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
+					...keyFix(key, LOOP_KEYS)
+				});
+			}
+		}
+
+		// No `from:` loops the whole file after the intro the author did not mark — the
+		// same as the top of the file, so 0 is the honest reading rather than an error.
+		const start = from ?? 0;
+
+		if (to !== undefined && to <= start) {
+			addError(ctx, 'bad-value', `A loop section must end after it starts.`, toNode, {
+				hint: `to: ${to}s is not after from: ${start}s.`
+			});
+			return undefined;
+		}
+
+		return to === undefined ? {from: start} : {from: start, to};
+	}
+
+	const value = scalarValue(node);
+
+	if (typeof value === 'boolean') {
+		return value;
+	}
+
+	if (typeof value === 'number') {
+		if (!Number.isInteger(value) || value < 1) {
+			addError(ctx, 'bad-value', `${what} of ${value} is not a number of plays.`, node, {
+				hint
+			});
+			return undefined;
+		}
+
+		return value === 1 ? false : value;
+	}
+
+	addError(ctx, 'bad-value', `${what} must be true, false, a count or a section.`, node, {
+		hint
+	});
+	return undefined;
+}
+
+/**
+ * `stop-other-tracks: all`, a list of track names, or one name. `false` is accepted as "no",
+ * since it is what the author would write to turn a copied line off; `true` is the obvious
+ * guess at `all` and is pointed at it rather than read as a track called `true`.
+ */
+function parseStopOthers(
+	ctx: Ctx,
+	node: unknown,
+	label: string
+): MusicSpec['stopOthers'] | undefined {
+	const value = scalarValue(node);
+
+	if (value === false) {
+		return undefined;
+	}
+
+	if (value === true) {
+		addError(ctx, 'bad-value', `${STOP_OTHERS}: true names no track.`, node, {
+			fix: {label: `Change 'true' to 'all'`, replaces: 'true', text: 'all'},
+			hint: `${STOP_OTHERS}: all stops every track this ${label}: does not name.`
+		});
+		return undefined;
+	}
+
+	if (isSeq(node)) {
+		const names: string[] = [];
+
+		for (const item of (node as YAMLSeq).items) {
+			const name = asSourceString(ctx, item, STOP_OTHERS);
+
+			if (name !== undefined) {
+				names.push(name);
+			}
+		}
+
+		return names.length > 0 ? names : undefined;
+	}
+
+	const name = asSourceString(ctx, node, STOP_OTHERS);
+
+	if (name === undefined) {
+		return undefined;
+	}
+
+	return name === 'all' ? 'all' : [name];
+}
+
+/**
+ * The `music` a beat carries, spread into the beat object. `null` is `music: ~` and must
+ * survive, which is why this is not the usual `...(x ? {x} : {})` — see `bgFields`.
+ */
+function musicFields(
+	music: MusicSpec | null | undefined
+): {music?: MusicSpec | null} {
+	return music === undefined ? {} : {music};
 }
 
 // ---------------------------------------------------------------------------
@@ -2629,6 +3151,7 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 	let ease: BeatEase | undefined;
 	let sfx: StageSound | undefined;
 	let bg: ParsedBg | undefined;
+	let music: MusicSpec | null | undefined;
 	let cond: string | undefined;
 
 	for (const pair of map.items as Pair<unknown, unknown>[]) {
@@ -2683,6 +3206,11 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 				break;
 			}
 
+			case 'music': {
+				music = parseMusicNode(ctx, pair.value, 'music');
+				break;
+			}
+
 			default:
 				addError(ctx, 'unknown-key', `Unknown key '${key}'.`, pair.key, {
 					...keyFix(key, BOX_KEYS)
@@ -2707,7 +3235,8 @@ function parseBoxMap(ctx: Ctx, map: YAMLMap, index: number): Beat | undefined {
 		...(ease !== undefined ? {ease} : {}),
 		...(sfx ? {sfx} : {}),
 		...(cond !== undefined ? {if: cond} : {}),
-		...bgFields(bg)
+		...bgFields(bg),
+		...musicFields(music)
 	};
 }
 
@@ -2765,6 +3294,12 @@ function parseBeat(
 			return bg === undefined
 				? undefined
 				: {index, kind: 'bg', bg: bg.id, ...(bg.fx ? {bgFx: bg.fx} : {})};
+		}
+
+		case 'music': {
+			const music = parseMusicNode(ctx, pair.value, 'music');
+
+			return music === undefined ? undefined : {index, kind: 'music', music};
 		}
 
 		default: {
@@ -2827,6 +3362,7 @@ function parseBeat(
 						...(body.ease !== undefined ? {ease: body.ease} : {}),
 						...(body.sfx ? {sfx: body.sfx} : {}),
 						...bgFields(body.bg),
+						...musicFields(body.music),
 						...(body.if !== undefined ? {if: body.if} : {})
 					};
 				}
@@ -2854,6 +3390,11 @@ function parseBeat(
 										body.bg.id ?? '~'
 									}\` as its own beat.`
 							  }
+							: body.music !== undefined
+							? {
+									// Music is the stage's too: it plays under whoever stands there.
+									hint: 'Music needs no speaker: write `- music: …` as its own beat.'
+							  }
 							: body.dur !== undefined
 							? {hint: 'dur: times a beat, it cannot be the whole of one.'}
 							: body.ease !== undefined
@@ -2876,6 +3417,7 @@ function parseBeat(
 					...(body.ease !== undefined ? {ease: body.ease} : {}),
 					...(body.sfx ? {sfx: body.sfx} : {}),
 					...bgFields(body.bg),
+					...musicFields(body.music),
 					...(body.if !== undefined ? {if: body.if} : {})
 				};
 			}
@@ -3481,13 +4023,13 @@ function parseSceneDoc(text: string): ParseResult {
 			case 'music': {
 				// `music: ~` is silence stated out loud, the same shape `bg: ~` has. Under
 				// `from:` it is the only way to turn an inherited bed off, since an absent
-				// key there means inherit.
-				if (isNullNode(pair.value)) {
-					scene.music = null;
-					break;
+				// key there means inherit. `parseMusicNode` hands it back as `null`.
+				const music = parseMusicNode(ctx, pair.value, 'music');
+
+				if (music !== undefined) {
+					scene.music = music;
 				}
 
-				scene.music = parseSoundNode(ctx, pair.value, 'music');
 				break;
 			}
 

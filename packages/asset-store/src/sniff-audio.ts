@@ -10,6 +10,8 @@
  * The browser decides what it can actually play. We only decide what this is.
  */
 
+import {blobBytes} from './blob-bytes';
+
 export type SniffedAudioFormat = 'mp3' | 'ogg' | 'wav' | 'm4a' | 'flac';
 
 export interface AudioSniffResult {
@@ -102,6 +104,29 @@ export function sniffAudio(
 /** True when a MIME type names a sound, whatever the bytes turned out to be. */
 export function isAudioMime(mime: string | undefined): boolean {
 	return !!mime && mime.startsWith('audio/');
+}
+
+/** Enough header for every signature `sniffAudio` checks — `ftyp`'s brand ends at byte 11. */
+const AUDIO_HEADER_BYTES = 16;
+
+/**
+ * Is this file a sound? Same rule `prepareUpload` applies (bytes first, MIME as the
+ * fallback), so a caller that has to decide BEFORE uploading — the scene preview's file
+ * drop, which sends audio straight to `music:` instead of asking what the picture is —
+ * decides exactly as the upload will. Reads the header only, never the whole file.
+ */
+export async function isAudioFile(file: Blob): Promise<boolean> {
+	try {
+		const header = await blobBytes(file.slice(0, AUDIO_HEADER_BYTES));
+
+		if (sniffAudio(header)) {
+			return true;
+		}
+	} catch (error) {
+		console.warn('Could not read a dropped file header', error);
+	}
+
+	return isAudioMime(file.type);
 }
 
 /**

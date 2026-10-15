@@ -93,4 +93,18 @@ describe('formatValue', () => {
 	it('writes null as the tilde spec 02 uses for removal', () => {
 		expect(formatValue('at', null)).toBe('~');
 	});
+
+	it('writes any other map as one flow map, nested maps flowed too', () => {
+		// Block style here would put `mellow:` on a line of its own after `music: `.
+		expect(
+			formatValue('music', {
+				mellow: {id: 'rain', loop: {from: 2, to: 14}, volume: 0.5},
+				rain: null,
+				'stop-other-tracks': ['a', 'b'],
+				skipped: undefined
+			})
+		).toBe(
+			'{mellow: {id: rain, loop: {from: 2, to: 14}, volume: 0.5}, rain: ~, stop-other-tracks: [a, b]}'
+		);
+	});
 });

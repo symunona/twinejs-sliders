@@ -56,6 +56,34 @@ describe('renameSceneRefs', () => {
 		);
 	});
 
+	it('renames inside keyed music maps and beat music, never a track name', () => {
+		const text = scene(
+			'music:',
+			'  candle: {id: candle, loop: true}',
+			'  drums: candle@0.3',
+			'  wind: {volume: 0.2}',
+			'  stop-other-tracks: [candle]',
+			'beats:',
+			'  - music: {candle: ~, solo: {id: candle, fade: 2s}}',
+			'  - mira: {say: "Hm.", music: candle@0.5}',
+			'  - box: {text: "candle", music: {id: candle, volume: 0.4}, sfx: candle}'
+		);
+
+		expect(renameSceneRefs(text, 'candle', 'lantern')).toBe(
+			scene(
+				'music:',
+				'  candle: {id: lantern, loop: true}',
+				'  drums: lantern@0.3',
+				'  wind: {volume: 0.2}',
+				'  stop-other-tracks: [candle]',
+				'beats:',
+				'  - music: {candle: ~, solo: {id: lantern, fade: 2s}}',
+				'  - mira: {say: "Hm.", music: lantern@0.5}',
+				'  - box: {text: "candle", music: {id: lantern, volume: 0.4}, sfx: lantern}'
+			)
+		);
+	});
+
 	/** The entry key IS the ref, so the id moves with the art--and so does everything
 	    addressing that id. This half is `renameSceneCharacter`'s. */
 	it('moves an entity id that was standing in for the ref', () => {
@@ -163,7 +191,15 @@ describe('renameSceneRefs', () => {
 			scene('beats:', '  - bg: candle'),
 			scene('beats:', '  - fx: candle@0.3'),
 			scene('beats:', '  - mira: {say: "Hm.", bg: candle}'),
-			scene('beats:', '  - mira: {say: "Hm.", sfx: candle}')
+			scene('beats:', '  - mira: {say: "Hm.", sfx: candle}'),
+			scene('music: {id: candle, volume: 0.4}'),
+			scene('music:', '  bed: {id: candle, loop: true}', '  drums: x@0.3'),
+			scene('music: {bed: candle@0.2}'),
+			scene('beats:', '  - music: candle'),
+			scene('beats:', '  - music: {bed: {id: candle}}'),
+			scene('beats:', '  - mira: {say: "Hm.", music: candle}'),
+			scene('beats:', '  - box: {text: "Hm.", music: {bed: candle}}'),
+			scene('beats:', '  - box: {text: "Hm.", sfx: candle}')
 		];
 
 		it.each(blocks)('rewrites every ref in %#', block => {

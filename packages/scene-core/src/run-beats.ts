@@ -8,6 +8,7 @@
  */
 
 import type {Beat, Stage} from '@sliders/scene-types';
+import {applyMusic} from './music';
 import {cloneStage, mergePatch, upsertFx} from './stage';
 
 /** Apply one beat to a stage in place. The stage must already be a private clone. */
@@ -22,6 +23,20 @@ function applyBeat(stage: Stage, beat: Beat): void {
 	if (beat.bg !== undefined) {
 		stage.bg = beat.bg ?? undefined;
 		stage.bgFx = beat.bgFx ? {...beat.bgFx} : undefined;
+	}
+
+	// Same reasoning, same place: `music:` rides on any beat, and is state. Scrubbing to
+	// beat `i` replays every change up to it, so what plays there is re-derived, never
+	// remembered. The take is the beat's own slot, so a `restart: true` here restarts once
+	// when the scrubber or the reader arrives — and not again while later beats play on.
+	if (beat.music !== undefined) {
+		const music = applyMusic(stage.music, beat.music, beat.index + 1);
+
+		if (music) {
+			stage.music = music;
+		} else {
+			delete stage.music;
+		}
 	}
 
 	switch (beat.kind) {
@@ -58,8 +73,9 @@ function applyBeat(stage: Stage, beat: Beat): void {
 		case 'mark':
 		case 'sfx':
 		case 'bg':
-			// Timeline-only -- `bg` included, since the backdrop it names was already applied
-			// above. The stage is otherwise unchanged, but the state still gets its own slot
+		case 'music':
+			// Timeline-only -- `bg` and `music` included, since what they name was already
+			// applied above. The stage is otherwise unchanged, but the state still gets its own slot
 			// so `@mark` can name it and the scrubber can step onto it.
 			//
 			// `sfx` belongs here rather than with `fx` because firing a sound is an EVENT:

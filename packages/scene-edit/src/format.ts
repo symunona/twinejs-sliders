@@ -174,5 +174,36 @@ export function formatValue(
 		return `{${parts.join(', ')}}`;
 	}
 
+	if (isPlainObject(value)) {
+		return formatFlowMap(value as Record<string, unknown>);
+	}
+
 	return formatScalar(value);
+}
+
+/**
+ * Any other map, as ONE flow map, nested maps and lists flowed too.
+ *
+ * `formatScalar` hands a map to `stringify`, which writes BLOCK style: `music: {mellow:
+ * {id: x}}` came back as `mellow:\n  id: x`, and spliced after `music: ` that is a parse
+ * error. Reachable from the voice tools' `patch_scene` (`music:`, `bg:` long forms) and
+ * from a beat key holding a map. Keys go out in the caller's order and `undefined` leaves
+ * a key out, the same rule every other writer here follows.
+ */
+function formatFlowMap(value: Record<string, unknown>): string {
+	const parts = Object.entries(value)
+		.filter(([, item]) => item !== undefined)
+		.map(([key, item]) => `${formatScalar(key)}: ${formatFlowItem(item)}`);
+
+	return `{${parts.join(', ')}}`;
+}
+
+function formatFlowItem(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map(formatFlowItem).join(', ')}]`;
+	}
+
+	return isPlainObject(value)
+		? formatFlowMap(value as Record<string, unknown>)
+		: formatScalar(value);
 }

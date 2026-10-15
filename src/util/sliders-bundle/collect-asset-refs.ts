@@ -10,7 +10,7 @@
 
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
-import type {SceneStep, Scene} from '@sliders/scene-types';
+import type {MusicSpec, SceneStep, Scene} from '@sliders/scene-types';
 import type {SceneAssetRefs} from './bundle.types';
 import type {Story} from '../../store/stories';
 
@@ -87,6 +87,16 @@ function addPoses(
 	}
 }
 
+/**
+ * Every sound a `music:` names, keyed tracks included. A patch entry (`wind: {volume:
+ * 0.2}`) names no file — it turns down whatever `wind` is — and a stop names nothing.
+ */
+function addMusic(sets: RefSets, spec: MusicSpec | null | undefined): void {
+	for (const entry of Object.values(spec?.tracks ?? {})) {
+		add(sets.soundRefs, entry?.id);
+	}
+}
+
 function addScene(sets: RefSets, scene: Scene): void {
 	// `bg: ~` means "removed" under `from:`, and removal names nothing.
 	add(sets.assetRefs, scene.bg);
@@ -113,9 +123,7 @@ function addScene(sets: RefSets, scene: Scene): void {
 		add(sets.fxRefs, fx.id);
 	}
 
-	if (scene.music) {
-		add(sets.soundRefs, scene.music.id);
-	}
+	addMusic(sets, scene.music);
 
 	for (const beat of scene.beats) {
 		// On every kind, not inside the switch: `sfx:` rides on a line and on a stage move
@@ -123,6 +131,10 @@ function addScene(sets: RefSets, scene: Scene): void {
 		if (beat.sfx) {
 			add(sets.soundRefs, beat.sfx.id);
 		}
+
+		// A music change too, from `- music:` or riding on a line: state like `bg:`, on the
+		// beat base.
+		addMusic(sets, beat.music);
 
 		// Likewise a backdrop cut, and it is never optional: a beat that names one asked
 		// for it out loud, unlike the scene's `id:`-derived default.

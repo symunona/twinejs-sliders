@@ -26,10 +26,10 @@ import type {
 import {rotatePoint, sortByZ} from '@sliders/render-dom';
 import type {DomRenderer, Rect, StageBox} from '@sliders/render-dom';
 import {
-	imageFilesFrom,
 	isAssetDrag,
 	isFileDrag,
-	readAssetDragData
+	readAssetDragData,
+	stageFilesFrom
 } from './asset-drag';
 import type {AssetDragPayload} from './asset-drag';
 import {cameraWrite, panCamera, wheelZoomFactor, zoomCamera} from './scene-gestures';
@@ -229,8 +229,8 @@ export interface StageEditorOverlayProps {
 	/** A tile from the asset panel landed on the stage, at this scene position. */
 	onDropAsset?: (payload: AssetDragPayload, at: Vec2) => void;
 	/**
-	 * Image FILES landed on the stage — dragged in from the desktop rather than from the
-	 * asset panel. They have to be uploaded before anything can be written, which is why
+	 * Image or sound FILES landed on the stage — dragged in from the desktop rather than from
+	 * the asset panel. They have to be uploaded before anything can be written, which is why
 	 * this is a separate door from `onDropAsset` rather than a payload variant.
 	 *
 	 * `point` is the same place in CLIENT coordinates. It is passed as well as the scene
@@ -1193,10 +1193,10 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		}
 
 		const payload = readAssetDragData(event.dataTransfer);
-		// Images dragged in from the desktop, a file manager, or another tab. Only read when
-		// the drag is not one of ours: a panel tile also sets `text/plain`, and a browser
-		// that decided to synthesize a file out of that would place the wrong thing.
-		const files = payload ? [] : imageFilesFrom(event.dataTransfer);
+		// Images and sounds dragged in from the desktop, a file manager, or another tab. Read
+		// only when the drag is not one of ours: a panel tile also sets `text/plain`, and a
+		// browser that decided to synthesize a file out of that would place the wrong thing.
+		const files = payload ? [] : stageFilesFrom(event.dataTransfer);
 
 		if (!payload && files.length === 0) {
 			return;

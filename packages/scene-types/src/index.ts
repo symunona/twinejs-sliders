@@ -337,6 +337,78 @@ export interface StageSound {
 	amount: number;
 }
 
+/**
+ * How a music track repeats.
+ *
+ * - `false` plays once and stops at the end.
+ * - `true` loops forever.
+ * - a number is how many times it plays IN TOTAL (`3` = once, then twice more).
+ * - `{from, to}` is a loop SECTION, in seconds: play from the start (or `start:`), and each
+ *   time `to` is reached (or the file ends, when `to` is absent) jump back to `from`.
+ *   Forever. The intro plays once, the body repeats — the usual game-music shape.
+ */
+export type MusicLoop = boolean | number | {from: number; to?: number};
+
+/** The track name a single-form `music:` (`music: rain`, `music: {id: rain}`) lives under. */
+export const MUSIC_MAIN_TRACK = 'main';
+
+/** Fade in, fade out and volume change of a track that does not say `fade:`. Seconds. */
+export const MUSIC_DEFAULT_FADE = 1.5;
+
+/**
+ * One playing track, as stage STATE. Fully resolved: every default filled in, so the deck
+ * never has to know the parse-time rules.
+ */
+export interface MusicTrack {
+	id: string;
+	/** Volume 0..1. */
+	amount: number;
+	loop: MusicLoop;
+	/** Seconds. Fade in on start, fade out on stop, ramp on a volume change. 0 = cut. */
+	fade: number;
+	/** Seconds into the file playback begins at. Absent = 0. */
+	start?: number;
+	/**
+	 * Set by an explicit `restart: true`. The deck restarts a track whose `take` differs from
+	 * the take it is playing; same id with the same (or no) take keeps playing untouched.
+	 * Scene top = 0, beat `i` = `i + 1`. A new passage forgets takes (`SoundDeck.newScene`).
+	 */
+	take?: number;
+}
+
+/** Stage music: parallel tracks by key. Empty or absent = silence. */
+export type StageMusic = Record<string, MusicTrack>;
+
+/**
+ * One entry of a `music:` map, as PARSED. Absent fields mean different things by form:
+ *
+ * - `id` present = a REDEFINITION. Absent fields take their defaults. Same id as the
+ *   running track keeps playing (no restart) with the new params.
+ * - `id` absent = a PATCH over the running track under the same key (`mellow: {volume:
+ *   0.2}`). No running track = nothing happens.
+ */
+export interface MusicEntry {
+	id?: string;
+	amount?: number;
+	loop?: MusicLoop;
+	fade?: number;
+	start?: number;
+	restart?: boolean;
+}
+
+/**
+ * What `music:` parses to, at the scene top or on a beat. Applied the same way in both
+ * places (`applyMusic` in scene-core): keys named here are set / patched / stopped (`null`
+ * = `key: ~`), every other running track is untouched unless `stopOthers` says otherwise.
+ *
+ * `music: ~` is not a `MusicSpec` but `null`: everything stops.
+ */
+export interface MusicSpec {
+	tracks: Record<string, MusicEntry | null>;
+	/** `stop-other-tracks:` — `'all'` stops every track not named in `tracks`. */
+	stopOthers?: 'all' | string[];
+}
+
 export interface Camera {
 	at: Vec2;
 	zoom: number;
@@ -413,8 +485,11 @@ export interface Stage {
 	 * backwards must not stack a second copy — both fall out of asking "what should be
 	 * playing now" instead of "what just happened". One-shot sounds are the opposite thing
 	 * and live on a beat (`BeatBase.sfx`).
+	 *
+	 * Keyed parallel tracks (`StageMusic`). A single-form `music: rain` is the track
+	 * `MUSIC_MAIN_TRACK`.
 	 */
-	music?: StageSound;
+	music?: StageMusic;
 }
 
 export function emptyStage(): Stage {
@@ -433,7 +508,8 @@ export type BeatKind =
 	| 'sfx'
 	| 'mark'
 	| 'set'
-	| 'bg';
+	| 'bg'
+	| 'music';
 
 export interface BeatBase {
 	kind: BeatKind;
@@ -484,6 +560,12 @@ export interface BeatBase {
 	bg?: AssetId | null;
 	/** The motion for that backdrop. Absent CLEARS an inherited one — see `applyBeat`. */
 	bgFx?: StageBgFx;
+	/**
+	 * Music change from this beat on. State, like `bg`: `runBeats` replays it, so a scrubber
+	 * stepping back re-derives what was playing. `null` = `music: ~`, everything stops.
+	 * `- music: …` is the beat whose only job is this, `kind: 'music'`.
+	 */
+	music?: MusicSpec | null;
 	/**
 	 * How this beat's stage changes move — the companion to `dur:`, which says how long.
 	 *
@@ -784,6 +866,12 @@ export interface SetBeat extends BeatBase {
 	patch: EntityPatchBody;
 }
 
+/** `- music: …` — a beat whose whole job is a music change. The change is `music`. */
+export interface MusicBeat extends BeatBase {
+	kind: 'music';
+	music: MusicSpec | null;
+}
+
 export type Beat =
 	| SayBeat
 	| BoxBeat
@@ -792,7 +880,8 @@ export type Beat =
 	| SfxBeat
 	| MarkBeat
 	| SetBeat
-	| BgBeat;
+	| BgBeat
+	| MusicBeat;
 
 // ---------------------------------------------------------------------------
 // Links (D3)
@@ -953,7 +1042,7 @@ export interface Scene {
 	 * be able to say, since an absent key there means "inherit" (spec 02's merge flip). It
 	 * reads exactly like `bg: ~`, which is the point.
 	 */
-	music?: StageSound | null;
+	music?: MusicSpec | null;
 	beats: Beat[];
 	links: Record<string, SceneLink>;
 	/** Set only when the scene wrote a `linkList:` block. See `LinkListStyle`. */

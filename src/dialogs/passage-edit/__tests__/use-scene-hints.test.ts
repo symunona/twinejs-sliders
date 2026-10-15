@@ -6,7 +6,9 @@ import {
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	LOOP_KEYS,
 	MOTION_KEYS,
+	MUSIC_KEYS,
 	SAY_KEYS
 } from '@sliders/scene-schema';
 import {EASE_KINDS} from '@sliders/scene-types';
@@ -454,6 +456,89 @@ describe('sceneHintContext()', () => {
 				contextAt('[scene]\ncast:\n  mira: {pose: [{name: a, ease: |}]}')
 			).toMatchObject({slot: {kind: 'ease'}});
 		});
+	});
+});
+
+describe('music completions', () => {
+	const trackKeys = MUSIC_KEYS.filter(key => key !== 'stop-other-tracks');
+
+	it('offers the music keys inside music: {', () => {
+		expect(contextAt('[scene]\nmusic: {|')).toMatchObject({
+			slot: {id: 'music', kind: 'keys', names: MUSIC_KEYS}
+		});
+		expect(contextAt('[scene]\nbeats:\n  - music: {|')).toMatchObject({
+			slot: {id: 'music', kind: 'keys', names: MUSIC_KEYS}
+		});
+	});
+
+	it('offers one track\'s keys in a keyed entry, flow and block form', () => {
+		expect(contextAt('[scene]\nmusic: {mellow: {id: x, |}}')).toMatchObject({
+			slot: {id: 'musicTrack', kind: 'keys', names: trackKeys}
+		});
+		expect(contextAt('[scene]\nmusic:\n  mellow:\n    |')).toMatchObject({
+			slot: {id: 'musicTrack', kind: 'keys', names: trackKeys}
+		});
+	});
+
+	it('offers the loop section keys inside loop: {', () => {
+		expect(contextAt('[scene]\nmusic: {id: x, loop: {|}}')).toMatchObject({
+			slot: {id: 'loop', kind: 'keys', names: LOOP_KEYS}
+		});
+	});
+
+	it('offers sounds for a keyed entry and for id:, at any depth', () => {
+		expect(contextAt('[scene]\nmusic:\n  mellow: ra|')).toMatchObject({
+			slot: {kind: 'sound'},
+			typed: 'ra'
+		});
+		expect(contextAt('[scene]\nmusic: {drums: |}')).toMatchObject({
+			slot: {kind: 'sound'}
+		});
+		expect(contextAt('[scene]\nmusic: {id: |}')).toMatchObject({
+			slot: {kind: 'sound'}
+		});
+		expect(contextAt('[scene]\nmusic: {mellow: {id: |}}')).toMatchObject({
+			slot: {kind: 'sound'}
+		});
+		expect(contextAt('[scene]\nmusic:\n  mellow:\n    id: |')).toMatchObject({
+			slot: {kind: 'sound'}
+		});
+	});
+
+	it('offers nothing for a music param value that is a number', () => {
+		expect(contextAt('[scene]\nmusic: {id: x, volume: |}')).toBeUndefined();
+		expect(contextAt('[scene]\nmusic: {id: x, loop: {from: |}}')).toBeUndefined();
+	});
+
+	it('offers all for stop-other-tracks:', () => {
+		expect(contextAt('[scene]\nmusic:\n  stop-other-tracks: |')).toMatchObject({
+			slot: {id: 'stopOthers', kind: 'values', names: ['all']}
+		});
+	});
+
+	it('offers true/false for loop: and restart: in a track', () => {
+		expect(contextAt('[scene]\nmusic: {id: x, loop: |}')).toMatchObject({
+			slot: {kind: 'values', names: ['true', 'false']}
+		});
+		expect(contextAt('[scene]\nmusic: {mellow: {id: x, restart: |}}')).toMatchObject({
+			slot: {kind: 'values', names: ['true', 'false']}
+		});
+	});
+
+	it('offers sounds for music: as a beat and on a beat body', () => {
+		expect(contextAt('[scene]\nbeats:\n  - music: |')).toMatchObject({
+			slot: {kind: 'sound'}
+		});
+		expect(
+			contextAt('[scene]\nbeats:\n  - mira: {say: "Hi", music: |}')
+		).toMatchObject({slot: {kind: 'sound'}});
+	});
+
+	it('offers music among a beat body\'s keys', () => {
+		const context = contextAt('[scene]\nbeats:\n  - mira: {say: "Hi", |}');
+
+		expect(context?.slot).toMatchObject({kind: 'keys'});
+		expect((context?.slot as {names: readonly string[]}).names).toContain('music');
 	});
 });
 

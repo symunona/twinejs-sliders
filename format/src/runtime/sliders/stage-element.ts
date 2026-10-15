@@ -47,6 +47,7 @@ import {
 } from './config';
 import {currentPassage, resumeAtEnd} from './history';
 import {holdLinkList, holdLinkListAgain, releaseLinkList} from './link-list';
+import {claimDeck, releaseDeck} from './player-deck';
 import {stageFrom} from './scene-graph';
 import {takeStartBeat} from './start-beat';
 import {setLinkTransition} from './transitions';
@@ -299,6 +300,14 @@ export class SlidersStage extends CustomElement {
 		this.scene = payload.scene;
 		this.links = payload.links ?? {};
 
+		// Before the first `await`: the outgoing stage may already have released the deck,
+		// and its grace timer must find this claim or the music fades out under a scene
+		// that wants it. `newScene` forgets the last passage's takes, so a scene-top
+		// `restart: true` restarts here while a plain same-id track plays straight through.
+		const deck = claimDeck(this);
+
+		deck.newScene();
+
 		// The list under the stage waits for the beats to finish. A scene with NO beats is
 		// never held: there is nothing to spoil and nothing to wait for, so it keeps drawing
 		// the list the moment the passage renders. Done before the first `await`, and
@@ -319,6 +328,9 @@ export class SlidersStage extends CustomElement {
 		this.states = runBeats(entry, payload.scene.beats ?? []);
 		this.beatIndex = 0;
 		this.renderer = new DomRenderer({
+			// The player's deck, shared by every passage (`player-deck.ts`), so music carries
+			// across a page turn instead of dying with this renderer.
+			deck,
 			guides: Boolean(get('config.testing')),
 			onLink: this.followLink
 		});
@@ -435,6 +447,9 @@ export class SlidersStage extends CustomElement {
 		this.dialogue?.destroy();
 		this.linkListLayer?.destroy();
 		this.renderer?.destroy();
+		// The renderer let go of the deck without stopping it. Whether the music goes too is
+		// decided by the NEXT passage: a stage claims it back within the grace, prose does not.
+		releaseDeck(this);
 		this.dialogue = undefined;
 		this.linkListLayer = undefined;
 		this.renderer = undefined;

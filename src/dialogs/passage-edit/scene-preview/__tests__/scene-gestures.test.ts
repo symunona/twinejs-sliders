@@ -7,6 +7,7 @@ import {
 	deleteWrites,
 	flipWrites,
 	formatCamera,
+	musicDropWrites,
 	poseWrite,
 	panCamera,
 	uniqueEntityId,
@@ -119,6 +120,19 @@ describe('uniqueEntityId()', () => {
 	it('numbers from 2, and skips numbers already taken', () => {
 		expect(uniqueEntityId('mira', ['mira'])).toBe('mira-2');
 		expect(uniqueEntityId('mira', ['mira', 'mira-2'])).toBe('mira-3');
+	});
+});
+
+describe('musicDropWrites()', () => {
+	it('writes the scene-top music: with the sound NAME', () => {
+		expect(musicDropWrites('rain-heavy')).toEqual([
+			{formatted: 'rain-heavy', sceneKey: 'music'}
+		]);
+	});
+
+	it('quotes a name YAML would read as something else', () => {
+		expect(musicDropWrites('yes')).toEqual([{formatted: 'yes', sceneKey: 'music'}]);
+		expect(musicDropWrites('1.5')).toEqual([{formatted: '"1.5"', sceneKey: 'music'}]);
 	});
 });
 
