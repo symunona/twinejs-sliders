@@ -1369,8 +1369,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * Never in full screen. That is reading mode — a tap anywhere steps forward — and the
 	 * bubble frame would swallow every tap that landed on the words.
 	 */
+	// On a picture the bubble is still a target: pressing it opens the passage, and the
+	// press itself writes nothing (no editor yet, so the commit is a no-op).
+	const bubblePickable = editable || (!editor && !!onNeedEditor && !locked);
 	const bubbleBeat =
-		editable &&
+		bubblePickable &&
 		!fullScreen &&
 		(shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
 			? beat - 1
@@ -2097,12 +2100,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			    would jump on the very click that selected a sprite. A click on the
 			    stage selects, so full screen moved to a double click; the bar button
 			    above is still the keyboard-accessible path. */}
-			{/* On a picture the bubble is still a target: pressing it opens the passage,
-			    and the press itself writes nothing (no editor yet, so the commit is a
-			    no-op). */}
 			<BubbleEditor
 				beat={bubbleBeat}
-				editable={editable || (!editor && !!onNeedEditor && !locked)}
+				editable={bubblePickable}
 				onCommit={handleBubbleCommit}
 				onDraft={setBubbleDraft}
 				onEditText={handleEditBeatText}
