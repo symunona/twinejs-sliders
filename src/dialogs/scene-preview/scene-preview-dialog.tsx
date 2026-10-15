@@ -35,7 +35,8 @@ export interface ScenePreviewDialogProps extends DialogComponentProps {
  * It shows whichever passage the author is working in: the passage editor at the front of
  * the dialog stack if one is open, and otherwise the single passage selected on the map.
  * The fallback has no CodeMirror to write through, so it is a picture -- every gesture is
- * a text edit (spec 07), and there is no text to edit without an editor.
+ * a text edit (spec 07), and there is no text to edit without an editor. Picking a beat
+ * on it opens the passage's editor, which then publishes itself and makes it writable.
  */
 export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	stackToBottom?: boolean;
@@ -83,6 +84,15 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			}
 		},
 		[dialogsDispatch, story]
+	);
+
+	/** Beat picked on the map's passage: open it, so the beat panel has text to write. */
+	const handleNeedEditor = React.useMemo(
+		() =>
+			fallback
+				? () => dialogsDispatch(addPassageEditors(story.id, [fallback.id]))
+				: undefined,
+		[dialogsDispatch, fallback, story.id]
 	);
 
 	useCommand({
@@ -197,6 +207,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					editor={source?.editor}
 					fullScreen={fullScreen}
 					onFullScreenChange={setFullScreen}
+					onNeedEditor={handleNeedEditor}
 					onOpenPassage={source?.onOpenPassage ?? handleOpenPassage}
 					parse={parse}
 					passageId={source?.passageId ?? fallback?.id}

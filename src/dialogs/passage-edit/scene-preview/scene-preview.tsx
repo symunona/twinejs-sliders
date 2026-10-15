@@ -152,6 +152,12 @@ export interface ScenePreviewProps {
 	 */
 	onOpenPassage?: (name: string) => void;
 	/**
+	 * Asked for when the author reaches for a beat and there is no `editor`: opens the
+	 * passage's editor, whose CodeMirror then arrives as `editor` and makes the beat panel
+	 * writable. Absent means a picture stays a picture.
+	 */
+	onNeedEditor?: () => void;
+	/**
 	 * Which passage the scene on screen came from. Only identity matters: it is how the
 	 * preview tells "the author moved to another passage" from "the author is typing",
 	 * and the first tells the scrubber to go back to the scene's opening beat.
@@ -316,6 +322,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	editor,
 	fullScreen,
 	onFullScreenChange,
+	onNeedEditor,
 	onOpenPassage,
 	parse,
 	passageId,
@@ -786,14 +793,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		},
 		[beat, commit]
 	);
+	// Reaching for a beat is reaching for its text, and the text is only writable through
+	// the passage's CodeMirror -- so a beat picked on a picture opens the passage.
+	const needEditor = React.useCallback(() => {
+		if (!editor) {
+			onNeedEditor?.();
+		}
+	}, [editor, onNeedEditor]);
 	const handleSelectBeat = React.useCallback(() => {
 		clear();
 		setBeatPanelOpen(true);
-	}, [clear]);
+		needEditor();
+	}, [clear, needEditor]);
 	const handleEditBeatText = React.useCallback(() => {
 		setBeatPanelOpen(true);
 		setBeatTextFocus(value => value + 1);
-	}, []);
+		needEditor();
+	}, [needEditor]);
 
 	/** A gesture was abandoned: neither optimistic value has text coming to replace it. */
 	const handleCancel = React.useCallback(() => {
@@ -1911,7 +1927,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				icon={<IconMessage2 />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.beatPanel')}
-				onClick={() => setBeatPanelOpen(value => !value)}
+				onClick={() => {
+					if (!beatPanelOpen) {
+						needEditor();
+					}
+
+					setBeatPanelOpen(!beatPanelOpen);
+				}}
 				selectable
 				selected={beatPanelOpen}
 			/>
