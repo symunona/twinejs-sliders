@@ -175,15 +175,6 @@ describe('<BeatProps> persistence', () => {
 		);
 	});
 
-	// The row is no longer drawn on the stage it edits, so it has to name the moment itself.
-	it('names the beat it is editing', () => {
-		const {container} = renderProps(say(), true, {beatCount: 5, beatNumber: 3});
-
-		expect(
-			container.querySelector('.scene-preview-beat-props-which')
-		).toHaveTextContent('dialogs.passageEdit.beatProps.beat');
-	});
-
 	it('draws nothing in a passage whose scene has no beats', () => {
 		renderProps(undefined, true, {beatCount: 0, beatNumber: 0});
 		expect(screen.queryByTestId('scene-preview-beat-props')).toBeNull();
@@ -522,5 +513,81 @@ describe('<BeatProps> bubble size', () => {
 
 		fireEvent.blur(sizeField());
 		expect(onSetBubble).not.toHaveBeenCalled();
+	});
+});
+
+describe('<BeatProps> rows', () => {
+	it('says what each key falls back to', () => {
+		renderProps(say(), true, {inherited: {as: 'comic', bg: '#112233'}});
+
+		expect(screen.getByTestId('beat-prop-as')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.defaultIs comic'
+		);
+		expect(screen.getByTestId('beat-prop-bg')).toHaveTextContent('#112233');
+		expect(screen.getByTestId('beat-prop-place')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.builtIn'
+		);
+	});
+
+	it('highlights a key the beat sets to something other than its default', () => {
+		renderProps(sayStyled({as: 'shout', place: 'top'}), true, {
+			inherited: {as: 'comic', place: 'top'}
+		});
+
+		expect(screen.getByTestId('beat-prop-as')).toHaveClass('overridden');
+		// Stated, but the same as the default: nothing to point out.
+		expect(screen.getByTestId('beat-prop-place')).not.toHaveClass('overridden');
+		expect(screen.getByTestId('beat-prop-font')).not.toHaveClass('overridden');
+	});
+
+	it('highlights a timed beat', () => {
+		renderProps(say(2));
+		expect(screen.getByTestId('beat-prop-dur')).toHaveClass('overridden');
+	});
+
+	it('resets a key to its default with the X', () => {
+		const {onSetBubble, onSetKey} = renderProps(
+			{...sayStyled({color: '#ff0000'}), dur: 2, ease: 'linear'} as Beat
+		);
+
+		fireEvent.click(
+			within(screen.getByTestId('beat-prop-color')).getByRole('button', {
+				name: 'dialogs.passageEdit.beatProps.reset'
+			})
+		);
+		expect(onSetBubble).toHaveBeenCalledWith('color', null);
+
+		fireEvent.click(
+			within(screen.getByTestId('beat-prop-dur')).getByRole('button', {
+				name: 'dialogs.passageEdit.beatProps.reset'
+			})
+		);
+		expect(onSetKey).toHaveBeenCalledWith('dur', null);
+
+		fireEvent.click(
+			within(screen.getByTestId('beat-prop-ease')).getByRole('button', {
+				name: 'dialogs.passageEdit.beatProps.reset'
+			})
+		);
+		expect(onSetKey).toHaveBeenCalledWith('ease', null);
+	});
+
+	it('leaves the X dead on a key the beat does not state', () => {
+		renderProps(say());
+
+		expect(
+			within(screen.getByTestId('beat-prop-as')).getByRole('button', {
+				name: 'dialogs.passageEdit.beatProps.reset'
+			})
+		).toBeDisabled();
+	});
+
+	it('explains timing on the help mark', () => {
+		renderProps(say());
+
+		expect(screen.getByTestId('beat-props-timing-help')).toHaveAttribute(
+			'title',
+			'dialogs.passageEdit.beatProps.timingHelp'
+		);
 	});
 });

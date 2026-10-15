@@ -78,6 +78,12 @@ export const Z_ORIGIN = '+sliders-z';
 export const CAMERA_ORIGIN = '+sliders-camera';
 
 /**
+ * The beat panel's text box, written live as the author types. Merged like a nudge burst:
+ * a sentence typed in one go is one undo step, not one per throttled write.
+ */
+export const TYPE_ORIGIN = '+sliders-type';
+
+/**
  * A Fix button on a scene error. One click, one undo entry — each fix is a separate guess
  * the author accepted, and merging two of them would make the first unreviewable.
  */

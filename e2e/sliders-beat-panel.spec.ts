@@ -10,8 +10,9 @@ import {
 
 /**
  * The beat panel beside the stage: a press on the bubble opens it, a double click focuses
- * its text box, the box writes the beat's words back into the YAML, and the defaults button
- * writes the start passage's vars -- and nothing else.
+ * its text box, the box writes the beat's words back into the YAML live as they are typed
+ * (Ctrl+B for bold), each prop row shows its default and resets with its X, and the
+ * defaults button writes the start passage's vars -- and nothing else.
  */
 
 const START = 'Once upon a time.';
@@ -95,11 +96,46 @@ test('beat panel: pick the bubble, edit its words, hand its style to the story',
 	await bubble.dblclick();
 	await expect(text).toBeFocused();
 
-	await text.fill('Goodbye now.');
+	// Live: the YAML follows the typing, no blur or Enter needed.
+	await text.press('Control+a');
+	await text.pressSequentially('Goodbye now.', {delay: 40});
+	await expect(text).toBeFocused();
+	await expect
+		.poll(() => cmText(page))
+		.toContain(
+			'  - mira: {say: "Goodbye now.", bubble: {as: comic, font: bangers}}'
+		);
+
+	// Ctrl+B around the word under the caret.
+	await text.press('Home');
+	await text.press('Control+b');
+	await expect(text).toHaveValue('**Goodbye** now.');
+	await expect
+		.poll(() => cmText(page))
+		.toContain(
+			'  - mira: {say: "**Goodbye** now.", bubble: {as: comic, font: bangers}}'
+		);
+	await text.press('Control+b');
+	await expect(text).toHaveValue('Goodbye now.');
 	await text.press('Enter');
 	await expect
 		.poll(() => cmText(page))
-		.toContain('  - mira: {say: "Goodbye now.", bubble: {as: comic, font: bangers}}');
+		.toContain(
+			'  - mira: {say: "Goodbye now.", bubble: {as: comic, font: bangers}}'
+		);
+
+	// Rows: the stated style is highlighted, an unstated one shows its default.
+	const asRow = panel.getByTestId('beat-prop-as');
+
+	await expect(asRow).toHaveClass(/overridden/);
+	await expect(panel.getByTestId('beat-prop-place')).toContainText(
+		'Default: built-in'
+	);
+	await expect(panel.getByTestId('beat-props-timing-help')).toHaveAttribute(
+		'title',
+		/Hold: how long this beat stays/
+	);
+	await page.screenshot({path: '/root/tmp/beat-panel-rows.png'});
 	expect(await cmText(page)).toContain('  - mira: "Second line."');
 
 	const sceneBefore = await cmText(page);
@@ -126,6 +162,15 @@ test('beat panel: pick the bubble, edit its words, hand its style to the story',
 		.poll(() => storedText(page, 'Untitled Passage 1'))
 		.toBe(sceneBefore);
 	await page.screenshot({path: '/root/tmp/beat-panel-defaults.png'});
+
+	// Now the story says comic: the beat's own `as` is no longer an override, and its X
+	// takes the key off the beat.
+	await expect(asRow).not.toHaveClass(/overridden/);
+	await expect(asRow).toContainText('Default: comic');
+	await asRow.getByRole('button', {name: 'Reset Style to default'}).click();
+	await expect
+		.poll(() => cmText(page))
+		.toContain('  - mira: {say: "Goodbye now.", bubble: {font: bangers}}');
 
 	// The X gives the slot back.
 	await panel.getByRole('button', {name: 'Close'}).click();

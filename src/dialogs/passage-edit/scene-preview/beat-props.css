@@ -1,110 +1,182 @@
 @import '../../../styles/colors.css';
 
-/* A row in the flow under the timeline, NOT an overlay on the stage.
-   
-   It used to be absolutely placed at the bottom of the stage, mirroring
-   `.scene-preview-selection` at the top. Two reasons that was wrong, and both of them are
-   about this row being different in kind from that one. The selection row speaks for a
-   sprite, so it is only ever wanted while a sprite is held and it has to get out of the
-   way; this row speaks for the beat the scrubber is parked on, and the scrubber is always
-   parked somewhere, so there is nothing for it to get out of the way of. And a translucent
-   white band over black art turns `--white-translucent` select fills and
-   `--light-gray-translucent` select borders into mid-grey on mid-grey: the dropdowns were
-   live the whole time and looked disabled, especially beside a Hold field that really is.
-   
-   On the toolbar's own surface they are the same controls as everywhere else in the app. */
+/* The beat panel's props: a column of groups, each a grid of label | control | reset. */
 .scene-preview-beat-props {
-	align-items: center;
-	background: var(--white);
-	border-top: 1px solid var(--light-gray-translucent);
 	display: flex;
-	/* Wraps rather than scrolls: a docked stage is narrow and the second line costs the
-	   stage a few pixels once, not on every scrub. */
-	flex-wrap: wrap;
-	/* Whatever lands in it, it is chrome above the stage and never grows a scrollbar. */
-	flex-shrink: 0;
-	gap: 6px;
-	/* One control tall, plus this box's own 2px padding twice and its 1px rule — stated
-	   rather than left to whatever is inside, so the note state and the control state come
-	   out at exactly the same height. Left to the content it was 40px on a `- wait:` beat
-	   and 45px on a beat with a Hold field, and the stage under it jumped five pixels every
-	   time the scrubber crossed one. */
-	min-height: calc(var(--control-height) + 5px);
-	padding: 2px 4px;
+	flex-direction: column;
+	gap: 12px;
 }
 
-/* Which moment these controls edit. The row is no longer drawn on the stage it belongs to,
-   so the connection back to the timeline marker above has to be written down. */
-.scene-preview-beat-props-which {
-	color: var(--dark-gray);
-	flex-shrink: 0;
-	font-size: 85%;
-	font-variant-numeric: tabular-nums;
-	text-transform: uppercase;
-}
-
-/* Why this beat has nothing to set. Takes the place of the controls rather than of the
-   row: the row keeping its height is the whole point of it being here. */
+/* Why this beat has nothing to set. */
 .scene-preview-beat-props-none {
 	color: var(--dark-gray);
 	font-size: 85%;
 }
 
-/* Seconds are two or three characters; a full-width text input here would crowd out the
-   two selects beside it on a docked stage. */
-.scene-preview-beat-props-dur input {
-	width: 5em;
-}
-
-/* A multiplier is one or three characters and it carries spinner arrows, so it needs a
-   little more room than the Hold field and nothing like a full-width input. */
-.scene-preview-beat-props-size input {
-	width: 5.5em;
-}
-
-/* In the row the groups arrange nothing: their controls flow as if ungrouped. */
-.scene-preview-beat-props.row .scene-preview-beat-props-group {
-	display: contents;
-}
-
-/* The beat panel beside the stage: one control per line, labels in a column. */
-.scene-preview-beat-props.panel {
-	align-items: stretch;
-	border-top: none;
-	flex-direction: column;
-	flex-wrap: nowrap;
-	gap: 10px;
-	min-height: 0;
-	padding: 0;
-}
-
-.scene-preview-beat-props.panel .scene-preview-beat-props-group {
+.scene-preview-beat-props-group {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 2px;
 }
 
 .scene-preview-beat-props-heading {
+	align-items: center;
 	border-bottom: 1px solid var(--faint-gray);
 	color: var(--dark-gray);
+	display: flex;
 	font-size: 80%;
 	font-weight: bold;
+	gap: 4px;
 	letter-spacing: 0.04em;
-	margin: 0;
+	margin: 0 0 2px;
 	padding-bottom: 2px;
 	text-transform: uppercase;
 }
 
-/* Label left, control right, every row the same split. */
-.scene-preview-beat-props.panel label,
-.scene-preview-beat-props.panel .scene-preview-beat-props-group > span {
-	align-items: center;
-	display: flex;
-	justify-content: space-between;
-	gap: 6px;
+.beat-prop-help {
+	cursor: help;
+	display: inline-flex;
 }
 
-.scene-preview-beat-props.panel .scene-preview-beat-props-dur input,
-.scene-preview-beat-props.panel .scene-preview-beat-props-size input {
-	width: 6em;
+.beat-prop-help svg {
+	height: 14px;
+	width: 14px;
+}
+
+/*
+ * Every row the same three columns, so labels, controls and X buttons line up down the
+ * whole panel. The fallback line sits under the control, in its column.
+ */
+.beat-prop-row {
+	align-items: center;
+	border-left: 2px solid transparent;
+	border-radius: 2px;
+	column-gap: 6px;
+	display: grid;
+	grid-template-columns: 4.5em minmax(0, 1fr) 22px;
+	padding: 2px 2px 2px 4px;
+}
+
+/* The beat says something its defaults do not. */
+.beat-prop-row.overridden {
+	background: var(--faint-blue);
+	border-left-color: var(--blue);
+}
+
+.beat-prop-row.overridden .beat-prop-label {
+	color: var(--blue);
+	font-weight: bold;
+}
+
+.beat-prop-label {
+	font-size: 90%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.beat-prop-control {
+	align-items: center;
+	display: flex;
+	gap: 4px;
+	min-width: 0;
+}
+
+/* The row's label says it; the control's own label stays for screen readers only. */
+.beat-prop-control .text-select-label,
+.beat-prop-control .text-input-label,
+.beat-prop-control .preview-select-label,
+.beat-prop-control .bubble-color-control-label {
+	clip: rect(0 0 0 0);
+	height: 1px;
+	overflow: hidden;
+	position: absolute;
+	white-space: nowrap;
+	width: 1px;
+}
+
+/* The row's X resets the colour, so the control's own clear button would be a second one. */
+.beat-prop-control .bubble-color-control-clear {
+	display: none;
+}
+
+.beat-prop-control .bubble-color-control-well {
+	margin-left: 0;
+}
+
+/* Selects fill the column, so every dropdown edge lines up. */
+.beat-prop-control .text-select,
+.beat-prop-control .text-select label,
+.beat-prop-control .text-select-control,
+.beat-prop-control .preview-select,
+.beat-prop-control .preview-select-button {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+}
+
+.beat-prop-control select {
+	width: 100%;
+}
+
+.scene-preview-beat-props-dur input,
+.scene-preview-beat-props-size input {
+	width: 5em;
+}
+
+.beat-prop-unit {
+	color: var(--dark-gray);
+	font-size: 85%;
+}
+
+.beat-prop-reset {
+	align-items: center;
+	background: none;
+	border: none;
+	border-radius: 2px;
+	color: var(--dark-gray);
+	cursor: pointer;
+	display: inline-flex;
+	height: 22px;
+	justify-content: center;
+	padding: 0;
+	width: 22px;
+}
+
+.beat-prop-reset:hover:not(:disabled) {
+	background: var(--light-gray-translucent);
+	color: var(--black);
+}
+
+.beat-prop-reset:disabled {
+	cursor: default;
+	opacity: 0.25;
+}
+
+.beat-prop-reset svg {
+	height: 14px;
+	width: 14px;
+}
+
+.beat-prop-default {
+	align-items: center;
+	color: var(--dark-gray);
+	display: flex;
+	font-size: 75%;
+	gap: 4px;
+	grid-column: 2 / 4;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.beat-prop-chip {
+	background: var(--swatch);
+	border: 1px solid var(--light-gray);
+	border-radius: 2px;
+	display: inline-block;
+	flex-shrink: 0;
+	height: 10px;
+	width: 10px;
 }

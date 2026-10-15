@@ -105,6 +105,7 @@ import {
 	DRAG_ORIGIN,
 	DROP_ORIGIN,
 	EDIT_ORIGIN,
+	TYPE_ORIGIN,
 	NUDGE_ORIGIN,
 	PATCH_TIMEOUT_MS,
 	Z_ORIGIN,
@@ -773,11 +774,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[beat, commit]
 	);
 
-	/** The beat panel's text box. Same address and origin as the other beat writes. */
+	/** The beat panel's text box. Live writes while typing merge into one undo step. */
 	const handleBeatText = React.useCallback(
-		(text: string) => {
+		(text: string, live?: boolean) => {
 			if (beat > 0) {
-				commit([{beat: beat - 1, beatText: text}], EDIT_ORIGIN);
+				commit(
+					[{beat: beat - 1, beatText: text}],
+					live ? TYPE_ORIGIN : EDIT_ORIGIN
+				);
 			}
 		},
 		[beat, commit]

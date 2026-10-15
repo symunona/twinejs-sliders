@@ -1,26 +1,19 @@
 /**
  * The beat on screen, editable — timing and bubble style, without going to the YAML.
  *
- * The sibling of `StageSelectionControls`, but deliberately NOT built like it. That row is
- * about whatever sprite is selected, so it floats over the stage and comes and goes with the
- * selection. This one is about the MOMENT the scrubber stands on, and the scrubber always
- * stands somewhere — so it is a persistent row in the flow, directly under the timeline that
- * chooses the beat, rather than an overlay at the far end of the stage.
+ * Lives in the beat panel beside the stage (`beat-panel.tsx`). One grid, three columns:
+ * label, control, reset. Every row says what it falls back to underneath ("Default: …") and
+ * is highlighted when the beat states something else, so an author can tell at a glance
+ * which keys this one line overrides. The X removes the beat's own key, i.e. back to default.
  *
- * Two things that cost the author, both fixed by being here rather than there. Over the
- * stage, the row was painted on `--white-translucent` above black art, with selects whose
- * own fill and border are translucent too: mid-grey label text on a mid-grey band, no
- * visible control edge, sitting next to a Hold field that genuinely IS disabled. The whole
- * strip read as greyed out even though the dropdowns worked. And it vanished on any beat
- * with no body map, so the controls moved out from under the pointer as the author scrubbed.
- *
- * So it now keeps its place for the whole scene and says why it has nothing to offer when it
- * has nothing to offer. Only the keys a beat can actually carry are ever offered: `dur:` on
- * anything with a body map, and the bubble keys only where there is a line to paint. A
- * `- wait:` / `- fx:` / `- mark:` beat gets a note instead, because the parser will not take
- * a `dur:` there (they are scalars with no body map, and `wait` already IS a duration).
+ * Only the keys a beat can actually carry are offered: `dur:` on anything with a body map,
+ * and the bubble keys only where there is a line to paint. A `- wait:` / `- fx:` /
+ * `- mark:` beat gets a note instead, because the parser will not take a `dur:` there
+ * (they are scalars with no body map, and `wait` already IS a duration).
  */
 
+import {IconHelp, IconX} from '@tabler/icons';
+import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {
@@ -89,11 +82,6 @@ export interface BeatPropsProps {
 	autoAdvanceMs?: number;
 	/** Colours the story already uses, offered beside each colour well. */
 	storyColors?: string[];
-	/**
-	 * `panel` is the beat panel beside the stage: one control per line, grouped under
-	 * Timing and Bubble headings, and no beat number -- the panel's own title says it.
-	 */
-	layout?: 'row' | 'panel';
 }
 
 /** The empty option: "whatever the character or the renderer already says". */
@@ -162,6 +150,72 @@ function emptyReasonKey(
 		: 'dialogs.passageEdit.beatProps.noneCommand';
 }
 
+interface PropRowProps {
+	children: React.ReactNode;
+	label: React.ReactNode;
+	/** What the row falls back to with nothing stated. Absent hides the line. */
+	fallback?: React.ReactNode;
+	/** The beat states a value that is not the fallback: highlight the row. */
+	overridden?: boolean;
+	/** Removes the beat's own key. Absent: no reset. Disabled while nothing is stated. */
+	onReset?: () => void;
+	stated?: boolean;
+	resetLabel: string;
+	testId?: string;
+}
+
+/** One line of the grid: label, control, reset; the fallback under the control. */
+const PropRow: React.FC<PropRowProps> = ({
+	children,
+	fallback,
+	label,
+	onReset,
+	overridden,
+	resetLabel,
+	stated,
+	testId
+}) => (
+	<div
+		className={classNames('beat-prop-row', {overridden})}
+		data-overridden={overridden ? 'true' : undefined}
+		data-testid={testId}
+	>
+		<span aria-hidden className="beat-prop-label">
+			{label}
+		</span>
+		<div className="beat-prop-control">{children}</div>
+		{onReset ? (
+			<button
+				aria-label={resetLabel}
+				className="beat-prop-reset"
+				disabled={!stated}
+				onClick={onReset}
+				title={resetLabel}
+				type="button"
+			>
+				<IconX />
+			</button>
+		) : (
+			<span />
+		)}
+		{fallback !== undefined && (
+			<span className="beat-prop-default">{fallback}</span>
+		)}
+	</div>
+);
+
+/** A colour as a little chip and its spelling, for a fallback line. */
+const ColorChip: React.FC<{value: string}> = ({value}) => (
+	<>
+		<span
+			aria-hidden
+			className="beat-prop-chip"
+			style={{['--swatch' as string]: value}}
+		/>
+		{value}
+	</>
+);
+
 export const BeatProps: React.FC<BeatPropsProps> = ({
 	autoAdvanceMs,
 	beat,
@@ -169,7 +223,6 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	beatNumber,
 	editable,
 	inherited,
-	layout = 'row',
 	onSetKey,
 	onSetBubble,
 	storyColors
@@ -313,19 +366,42 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 		setSizeDraft(undefined);
 	}
 
+	const label = (key: string) => t(`dialogs.passageEdit.beatProps.${key}`);
+	const resetLabel = (key: string) =>
+		t('dialogs.passageEdit.beatProps.reset', {name: label(key)});
+	/** "Default: …", the built-in word when no layer above the beat says anything. */
+	const fallback = (value: React.ReactNode) => (
+		<>
+			{t('dialogs.passageEdit.beatProps.defaultIs')}{' '}
+			{value === undefined || value === null || value === ''
+				? t('dialogs.passageEdit.beatProps.builtIn')
+				: value}
+		</>
+	);
+	/** The props every bubble row shares: stated, overridden, reset, fallback. */
+	const bubbleRow = (key: keyof BubbleStyle, shown?: React.ReactNode) => {
+		const own = style?.[key];
+		const above = inherited?.[key];
+
+		return {
+			fallback: fallback(
+				shown ?? (above === undefined ? undefined : String(above))
+			),
+			label: label(key),
+			onReset: () => onSetBubble(key, null),
+			overridden: own !== undefined && own !== above,
+			resetLabel: resetLabel(key),
+			stated: own !== undefined
+		};
+	};
+	const colorRow = (key: 'color' | 'bg' | 'accent') =>
+		bubbleRow(
+			key,
+			inherited?.[key] ? <ColorChip value={inherited[key] as string} /> : undefined
+		);
+
 	return (
-		<div
-			className={`scene-preview-beat-props ${layout}`}
-			data-testid="scene-preview-beat-props"
-		>
-			{/* The row no longer sits on the thing it edits, so it has to name it. */}
-			{layout === 'row' && (
-				<span className="scene-preview-beat-props-which">
-					{beatNumber === 0
-						? t('dialogs.passageEdit.beatProps.arrival')
-						: t('dialogs.passageEdit.beatProps.beat', {number: beatNumber})}
-				</span>
-			)}
+		<div className="scene-preview-beat-props" data-testid="scene-preview-beat-props">
 			{emptyKey ? (
 				<span
 					className="scene-preview-beat-props-none"
@@ -335,284 +411,296 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 				</span>
 			) : (
 				<>
-					{/* Groups are `display: contents` in the row, so they only arrange the
-					    panel. */}
 					<div className="scene-preview-beat-props-group">
-						{layout === 'panel' && (
-							<h4 className="scene-preview-beat-props-heading">
-								{t('dialogs.passageEdit.beatProps.timing')}
-							</h4>
-						)}
+						<h4 className="scene-preview-beat-props-heading">
+							{label('timing')}
+							<span
+								aria-label={t('dialogs.passageEdit.beatProps.timingHelp')}
+								className="beat-prop-help"
+								data-testid="beat-props-timing-help"
+								role="img"
+								tabIndex={0}
+								title={t('dialogs.passageEdit.beatProps.timingHelp')}
+							>
+								<IconHelp />
+							</span>
+						</h4>
 						{speaks(beat) && (
 							// Only where there is a line to hold on. A stage-only `set` beat's
 							// `dur` is how long its movement TAKES, not how long the reader
 							// looks at it, so "advance automatically" is not a question that
 							// beat can answer.
-							<CheckboxButton
-								label={t('dialogs.passageEdit.beatProps.auto')}
-								// The short word is all the row has room for -- the sentence
-								// pushed Style and Place onto a second line on a docked stage.
-								tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
-								onChange={next =>
-									// Unchecking has to leave a number behind, or the box the
-									// author just enabled would be empty and mean the thing
-									// they turned off.
-									onSetKey(
-										'dur',
-										next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
-									)
-								}
-								value={auto}
-							/>
-						)}
-						<TextSelect
-							onChange={event => {
-								// The map form is a readout, not a value to write back.
-								if (event.target.value === PER_KIND) {
-									return;
-								}
-
-								onSetKey('ease', event.target.value || null);
-							}}
-							options={[
-								{
-									label: t('dialogs.passageEdit.beatProps.inherit'),
-									value: INHERIT
-								},
-								...(ease === PER_KIND
-									? [
-											{
-												label: t('dialogs.passageEdit.beatProps.easePerKind'),
-												value: PER_KIND
-											}
-									  ]
-									: []),
-								...EASE_NAMES.map(name => ({label: name, value: name}))
-							]}
-							value={ease}
-						>
-							{t('dialogs.passageEdit.beatProps.ease')}
-						</TextSelect>
-						<span
-							className="scene-preview-beat-props-dur"
-							// On the wrapper, not the input: a disabled input is inert to the
-							// pointer, so a title on it never opens.
-							title={
-								holdDisabled
-									? t('dialogs.passageEdit.beatProps.durDisabled')
-									: undefined
-							}
-						>
-							<TextInput
-								disabled={holdDisabled}
-								onChange={event => setDraft(event.target.value)}
-								onBlur={commitDur}
-								onKeyDown={event => {
-									if (event.key === 'Enter') {
-										commitDur();
-									}
-
-									if (event.key === 'Escape') {
-										setDraft(undefined);
-									}
-								}}
-								type="number"
-								value={dur}
+							<PropRow
+								label={label('auto')}
+								overridden={!auto}
+								resetLabel={resetLabel('dur')}
+								testId="beat-prop-auto"
 							>
-								{t('dialogs.passageEdit.beatProps.dur')}
-							</TextInput>
-						</span>
+								<CheckboxButton
+									// The row's label already says Auto; the box says the rest.
+									iconOnly
+									label={label('auto')}
+									tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
+									onChange={next =>
+										// Unchecking has to leave a number behind, or the box the
+										// author just enabled would be empty and mean the thing
+										// they turned off.
+										onSetKey(
+											'dur',
+											next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
+										)
+									}
+									value={auto}
+								/>
+							</PropRow>
+						)}
+						<PropRow
+							fallback={fallback(
+								speaks(beat)
+									? t('dialogs.passageEdit.beatProps.autoFallback', {
+											seconds: defaultHold(autoAdvanceMs)
+									  })
+									: undefined
+							)}
+							label={label('dur')}
+							onReset={() => onSetKey('dur', null)}
+							overridden={!auto}
+							resetLabel={resetLabel('dur')}
+							stated={!auto}
+							testId="beat-prop-dur"
+						>
+							<span
+								className="scene-preview-beat-props-dur"
+								// On the wrapper, not the input: a disabled input is inert to the
+								// pointer, so a title on it never opens.
+								title={
+									holdDisabled
+										? t('dialogs.passageEdit.beatProps.durDisabled')
+										: undefined
+								}
+							>
+								<TextInput
+									disabled={holdDisabled}
+									onChange={event => setDraft(event.target.value)}
+									onBlur={commitDur}
+									onKeyDown={event => {
+										if (event.key === 'Enter') {
+											commitDur();
+										}
+
+										if (event.key === 'Escape') {
+											setDraft(undefined);
+										}
+									}}
+									placeholder={
+										speaks(beat) ? String(defaultHold(autoAdvanceMs)) : undefined
+									}
+									type="number"
+									value={dur}
+								>
+									{label('dur')}
+								</TextInput>
+							</span>
+							<span className="beat-prop-unit">s</span>
+						</PropRow>
+						<PropRow
+							fallback={fallback(undefined)}
+							label={label('ease')}
+							onReset={() => onSetKey('ease', null)}
+							overridden={beat?.ease !== undefined}
+							resetLabel={resetLabel('ease')}
+							stated={beat?.ease !== undefined}
+							testId="beat-prop-ease"
+						>
+							<TextSelect
+								onChange={event => {
+									// The map form is a readout, not a value to write back.
+									if (event.target.value === PER_KIND) {
+										return;
+									}
+
+									onSetKey('ease', event.target.value || null);
+								}}
+								options={[
+									{label: label('inherit'), value: INHERIT},
+									...(ease === PER_KIND
+										? [{label: label('easePerKind'), value: PER_KIND}]
+										: []),
+									...EASE_NAMES.map(name => ({label: name, value: name}))
+								]}
+								value={ease}
+							>
+								{label('ease')}
+							</TextSelect>
+						</PropRow>
 					</div>
 					{speaks(beat) && (
 						<div className="scene-preview-beat-props-group">
-							{layout === 'panel' && (
-								<h4 className="scene-preview-beat-props-heading">
-									{t('dialogs.passageEdit.beatProps.bubble')}
-								</h4>
-							)}
+							<h4 className="scene-preview-beat-props-heading">
+								{label('bubble')}
+							</h4>
+							<PropRow {...bubbleRow('as')} testId="beat-prop-as">
+								{/*
+									A PreviewSelect, not a TextSelect: `as:` names a PICTURE, and
+									seven lowercase words is a list an author has to try rather
+									than read. Its colours are the ones this beat will actually be
+									drawn in, so the shapes preview against the fill and stroke in
+									force here and not against the factory white.
+								*/}
+								<PreviewSelect
+									onChange={value => onSetBubble('as', value || null)}
+									options={bubbleStyleOptions({
+										colors: {
+											accent: merged.accent,
+											bg: merged.bg,
+											color: merged.color,
+											font: merged.font
+										},
+										emptyDetail: inherited?.as,
+										emptyLabel: label('inherit'),
+										// What the default actually means here, drawn. The colour
+										// keys only: `inherited` is a whole BubbleStyle and
+										// spreading it would hand the swatch an `at:` and a `w:`.
+										emptyPreview: (
+											<BubbleStyleSwatch
+												accent={inherited?.accent}
+												bg={inherited?.bg}
+												color={inherited?.color}
+												font={inherited?.font}
+												token={inherited?.as ?? ''}
+											/>
+										)
+									})}
+									value={style?.as ?? INHERIT}
+								>
+									{label('as')}
+								</PreviewSelect>
+							</PropRow>
+							<PropRow {...bubbleRow('font')} testId="beat-prop-font">
+								<PreviewSelect
+									onChange={value => onSetBubble('font', value || null)}
+									options={bubbleFontOptions({
+										current: style?.font,
+										customLabel: label('fontCustom'),
+										emptyLabel: label('inherit'),
+										emptyPreview: (
+											<BubbleFontSwatch
+												label={label('fontSample')}
+												stack={bubbleFontStack(inherited?.font)}
+											/>
+										)
+									})}
+									searchable
+									value={style?.font ?? INHERIT}
+								>
+									{label('font')}
+								</PreviewSelect>
+							</PropRow>
 							{/*
-								A PreviewSelect, not a TextSelect: `as:` names a PICTURE, and
-								seven lowercase words is a list an author has to try rather
-								than read. Shapes lead the list — see `bubbleStyleOptions`.
-
-								Its colours are the ones this beat will actually be drawn in,
-								merged the same way the renderer merges them, so the shapes
-								are previewed against the fill and stroke in force here and
-								not against the factory white.
+								Text, fill, stroke — in that order, because a fill and a stroke
+								are only right or wrong relative to the words on them. No
+								free-text field: a hand-written `rgba(…)` is a story-wide
+								decision far more often than a one-line one, and lives in the
+								YAML or the Defaults dialog.
 							*/}
-							<PreviewSelect
-								onChange={value => onSetBubble('as', value || null)}
-								options={bubbleStyleOptions({
-									colors: {
-										accent: merged.accent,
-										bg: merged.bg,
-										color: merged.color,
-										font: merged.font
-									},
-									emptyDetail: inherited?.as,
-									emptyLabel: t('dialogs.passageEdit.beatProps.inherit'),
-									// What the dash actually means here, drawn.
-									emptyPreview: (
-										// The colour keys only. `inherited` is a whole
-										// BubbleStyle and spreading it would hand the swatch
-										// an `at:` and a `w:` it has no box to apply them to.
-										<BubbleStyleSwatch
-											accent={inherited?.accent}
-											bg={inherited?.bg}
-											color={inherited?.color}
-											font={inherited?.font}
-											token={inherited?.as ?? ''}
-										/>
-									)
-								})}
-								value={style?.as ?? INHERIT}
-							>
-								{t('dialogs.passageEdit.beatProps.as')}
-							</PreviewSelect>
-							<PreviewSelect
-								onChange={value => onSetBubble('font', value || null)}
-								options={bubbleFontOptions({
-									current: style?.font,
-									customLabel: t('dialogs.passageEdit.beatProps.fontCustom'),
-									emptyLabel: t('dialogs.passageEdit.beatProps.inherit'),
-									emptyPreview: (
-										<BubbleFontSwatch
-											label={t('dialogs.passageEdit.beatProps.fontSample')}
-											stack={bubbleFontStack(inherited?.font)}
-										/>
-									)
-								})}
-								searchable
-								value={style?.font ?? INHERIT}
-							>
-								{t('dialogs.passageEdit.beatProps.font')}
-							</PreviewSelect>
-							{/*
-								Text, fill, stroke — in that order, because a fill and a
-								stroke are only right or wrong relative to the words on them.
-
-								No free-text field on any of the three, unlike the Defaults
-								dialog: the beat row is already the widest thing in the panel,
-								and a hand-written `rgba(…)` is a story-wide decision far more
-								often than a one-line one. An author who needs one on a single
-								beat writes it in the YAML, where every other exotic value
-								lives.
-							*/}
-							<BubbleColorControl
-								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
-								swatches={storyColors}
-								swatchesLabel={t('dialogs.passageEdit.beatProps.storyColors')}
-								onChange={value => onSetBubble('color', value ?? null)}
-								value={style?.color}
-							>
-								{t('dialogs.passageEdit.beatProps.color')}
-							</BubbleColorControl>
-							<BubbleColorControl
-								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
-								swatches={storyColors}
-								swatchesLabel={t('dialogs.passageEdit.beatProps.storyColors')}
-								onChange={value => onSetBubble('bg', value ?? null)}
-								value={style?.bg}
-							>
-								{t('dialogs.passageEdit.beatProps.bg')}
-							</BubbleColorControl>
-							<BubbleColorControl
-								clearLabel={t('dialogs.passageEdit.beatProps.clearColor')}
-								swatches={storyColors}
-								swatchesLabel={t('dialogs.passageEdit.beatProps.storyColors')}
-								onChange={value => onSetBubble('accent', value ?? null)}
-								value={style?.accent}
-							>
-								{t('dialogs.passageEdit.beatProps.accent')}
-							</BubbleColorControl>
-							<TextSelect
-								onChange={event =>
-									onSetBubble('place', event.target.value || null)
-								}
-								options={[
-									{
-										label: t('dialogs.passageEdit.beatProps.inherit'),
-										value: INHERIT
-									},
-									...BUBBLE_PLACES.map(place => ({label: place, value: place}))
-								]}
-								value={style?.place ?? INHERIT}
-							>
-								{t('dialogs.passageEdit.beatProps.place')}
-							</TextSelect>
-							<TextSelect
-								onChange={event =>
-									onSetBubble('sizing', event.target.value || null)
-								}
-								options={[
-									{
-										label: t('dialogs.passageEdit.beatProps.inherit'),
-										value: INHERIT
-									},
-									...BUBBLE_SIZINGS.map(sizing => ({
-										label: sizing,
-										value: sizing
-									}))
-								]}
-								value={style?.sizing ?? INHERIT}
-							>
-								{t('dialogs.passageEdit.beatProps.sizing')}
-							</TextSelect>
+							{(['color', 'bg', 'accent'] as const).map(key => (
+								<PropRow {...colorRow(key)} key={key} testId={`beat-prop-${key}`}>
+									<BubbleColorControl
+										clearLabel={label('clearColor')}
+										swatches={storyColors}
+										swatchesLabel={label('storyColors')}
+										onChange={value => onSetBubble(key, value ?? null)}
+										value={style?.[key]}
+									>
+										{label(key)}
+									</BubbleColorControl>
+								</PropRow>
+							))}
+							<PropRow {...bubbleRow('place')} testId="beat-prop-place">
+								<TextSelect
+									onChange={event =>
+										onSetBubble('place', event.target.value || null)
+									}
+									options={[
+										{label: label('inherit'), value: INHERIT},
+										...BUBBLE_PLACES.map(place => ({label: place, value: place}))
+									]}
+									value={style?.place ?? INHERIT}
+								>
+									{label('place')}
+								</TextSelect>
+							</PropRow>
+							<PropRow {...bubbleRow('sizing')} testId="beat-prop-sizing">
+								<TextSelect
+									onChange={event =>
+										onSetBubble('sizing', event.target.value || null)
+									}
+									options={[
+										{label: label('inherit'), value: INHERIT},
+										...BUBBLE_SIZINGS.map(sizing => ({
+											label: sizing,
+											value: sizing
+										}))
+									]}
+									value={style?.sizing ?? INHERIT}
+								>
+									{label('sizing')}
+								</TextSelect>
+							</PropRow>
 							{manual && (
 								/*
-									Only beside a `manual` box, and directly after the select
-									that made it one, so the pair reads as the one decision it
-									is: the author stated the rectangle, and this is the type
-									they are setting inside it.
-
-									The arrows are the whole control. `size` is a multiplier,
-									so the useful move is almost always "a bit bigger" rather
-									than a number an author could name, and a step of a tenth
-									makes that a press.
+									Only beside a `manual` box, directly after the select that made
+									it one: the author stated the rectangle, and this is the type
+									they set inside it. The arrows are the whole control -- `size`
+									is a multiplier, so the move is "a bit bigger", a tenth a press.
 								*/
-								<span className="scene-preview-beat-props-size">
-									<TextInput
-										min={SIZE_MIN}
-										onChange={event => commitSize(event.target.value)}
-										onBlur={clearSize}
-										onKeyDown={event => {
-											if (event.key === 'Enter') {
-												clearSize();
-											}
+								<PropRow
+									{...bubbleRow('size', String(inherited?.size ?? 1))}
+									testId="beat-prop-size"
+								>
+									<span className="scene-preview-beat-props-size">
+										<TextInput
+											min={SIZE_MIN}
+											onChange={event => commitSize(event.target.value)}
+											onBlur={clearSize}
+											onKeyDown={event => {
+												if (event.key === 'Enter') {
+													clearSize();
+												}
 
-											if (event.key === 'Escape') {
-												setSizeDraft(undefined);
-											}
-										}}
-										// What the box would be drawn at if it said nothing:
-										// the scene's own multiplier, or the plain stage size.
-										placeholder={String(inherited?.size ?? 1)}
-										step={SIZE_STEP}
-										type="number"
-										value={size}
-									>
-										{t('dialogs.passageEdit.beatProps.size')}
-									</TextInput>
-								</span>
+												if (event.key === 'Escape') {
+													setSizeDraft(undefined);
+												}
+											}}
+											// What the box would be drawn at if it said nothing:
+											// the scene's own multiplier, or the plain stage size.
+											placeholder={String(inherited?.size ?? 1)}
+											step={SIZE_STEP}
+											type="number"
+											value={size}
+										>
+											{label('size')}
+										</TextInput>
+									</span>
+								</PropRow>
 							)}
-							<TextSelect
-								onChange={event =>
-									onSetBubble('anchor', event.target.value || null)
-								}
-								options={[
-									{
-										label: t('dialogs.passageEdit.beatProps.inherit'),
-										value: INHERIT
-									},
-									...BUBBLE_ANCHORS.map(anchor => ({
-										label: anchor,
-										value: anchor
-									}))
-								]}
-								value={style?.anchor ?? INHERIT}
-							>
-								{t('dialogs.passageEdit.beatProps.anchor')}
-							</TextSelect>
+							<PropRow {...bubbleRow('anchor')} testId="beat-prop-anchor">
+								<TextSelect
+									onChange={event =>
+										onSetBubble('anchor', event.target.value || null)
+									}
+									options={[
+										{label: label('inherit'), value: INHERIT},
+										...BUBBLE_ANCHORS.map(anchor => ({
+											label: anchor,
+											value: anchor
+										}))
+									]}
+									value={style?.anchor ?? INHERIT}
+								>
+									{label('anchor')}
+								</TextSelect>
+							</PropRow>
 						</div>
 					)}
 				</>

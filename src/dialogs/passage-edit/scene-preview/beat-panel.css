@@ -64,7 +64,9 @@
 .beat-panel-text textarea {
 	box-sizing: border-box;
 	font: inherit;
-	min-height: 4.5em;
+	line-height: 1.35;
+	min-height: 8.5em;
+	padding: 4px 6px;
 	resize: vertical;
 	width: 100%;
 }

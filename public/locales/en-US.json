@@ -556,7 +556,7 @@
 				"durDisabled": "Auto is on, so this beat rides the scene's pace. Turn Auto off to hold it for a set time.",
 				"ease": "Ease",
 				"easePerKind": "Per kind…",
-				"inherit": "—",
+				"inherit": "Default",
 				"noneArrival": "The stage before the first beat \u2014 nothing to time here. Pick a beat above.",
 				"noneCommand": "This beat carries no timing or bubble of its own.",
 				"noneWait": "A wait beat is already a duration \u2014 set it in the passage text.",
@@ -576,6 +576,11 @@
 				"timing": "Timing",
 				"bubble": "Bubble",
 				"makeDefault": "Make beat styles default for project",
+				"autoFallback": "Auto — {{seconds}} s",
+				"builtIn": "built-in",
+				"defaultIs": "Default:",
+				"reset": "Reset {{name}} to default",
+				"timingHelp": "Hold: how long this beat stays before the next. Auto (no Hold of its own) advances at the scene's autoAdvance pace, or the reader's if the scene sets none. A number holds that many seconds. On a stage-only beat, Hold is how long its movement takes. Ease: the curve of any movement this beat starts; Default uses the scene's or the built-in curve.",
 				"makeDefaultPrompt": "Write this beat's bubble style (style, font, colours, sizing, anchor, size) into the start passage as the story's defaults? No beat or passage is changed."
 			},
 			"scenePreview": {

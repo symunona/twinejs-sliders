@@ -1,7 +1,7 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import * as React from 'react';
 import type {Beat} from '@sliders/scene-types';
-import {BeatPanel, BeatPanelProps} from '../beat-panel';
+import {BeatPanel, BeatPanelProps, TEXT_WRITE_MS} from '../beat-panel';
 
 const SAY: Beat = {
 	index: 0,
@@ -41,7 +41,9 @@ describe('BeatPanel', () => {
 		const props = screen.getByTestId('scene-preview-beat-props');
 
 		expect(text.value).toBe('Hello.');
-		expect(props).toHaveClass('panel');
+		expect(
+			screen.getByText('dialogs.passageEdit.beatProps.beat')
+		).toBeInTheDocument();
 		// Text box first, props below it.
 		expect(
 			text.compareDocumentPosition(props) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -54,32 +56,95 @@ describe('BeatPanel', () => {
 		).toBeInTheDocument();
 	});
 
-	it('writes the words on blur, only when they changed', () => {
-		const {onSetText} = renderPanel();
-		const text = screen.getByTestId('beat-panel-text');
+	describe('typing', () => {
+		beforeEach(() => jest.useFakeTimers());
+		afterEach(() => jest.useRealTimers());
 
-		fireEvent.blur(text);
-		expect(onSetText).not.toHaveBeenCalled();
+		it('writes live as the author types, throttled, marked live', () => {
+			const {onSetText} = renderPanel();
+			const text = screen.getByTestId('beat-panel-text');
 
-		fireEvent.change(text, {target: {value: 'Goodbye.'}});
-		fireEvent.blur(text);
-		expect(onSetText).toHaveBeenCalledWith('Goodbye.');
-	});
+			fireEvent.change(text, {target: {value: 'H'}});
+			fireEvent.change(text, {target: {value: 'Hi'}});
+			fireEvent.change(text, {target: {value: 'Hi!'}});
+			expect(onSetText).not.toHaveBeenCalled();
 
-	it('writes on Enter, keeps Shift+Enter, reverts on Escape', () => {
-		const {onSetText} = renderPanel();
-		const text = screen.getByTestId('beat-panel-text') as HTMLTextAreaElement;
+			jest.advanceTimersByTime(TEXT_WRITE_MS);
+			expect(onSetText).toHaveBeenCalledTimes(1);
+			expect(onSetText).toHaveBeenCalledWith('Hi!', true);
 
-		fireEvent.change(text, {target: {value: 'Nope.'}});
-		fireEvent.keyDown(text, {key: 'Escape'});
-		expect(text.value).toBe('Hello.');
+			fireEvent.change(text, {target: {value: 'Hi!!'}});
+			jest.advanceTimersByTime(TEXT_WRITE_MS);
+			expect(onSetText).toHaveBeenCalledTimes(2);
+			expect(onSetText).toHaveBeenLastCalledWith('Hi!!', true);
+		});
 
-		fireEvent.change(text, {target: {value: 'Two'}});
-		fireEvent.keyDown(text, {key: 'Enter', shiftKey: true});
-		expect(onSetText).not.toHaveBeenCalled();
+		it('keeps the typed text while its own write is on the way back', () => {
+			const {view} = renderPanel();
+			const text = screen.getByTestId('beat-panel-text') as HTMLTextAreaElement;
 
-		fireEvent.keyDown(text, {key: 'Enter'});
-		expect(onSetText).toHaveBeenCalledWith('Two');
+			text.focus();
+			fireEvent.change(text, {target: {value: 'Hello there'}});
+			// The write lands with fewer characters than are now in the box.
+			view.rerender(
+				<BeatPanel
+					beat={{...SAY, text: 'Hello th'}}
+					beatCount={2}
+					beatNumber={1}
+					editable
+					onClose={jest.fn()}
+					onSetBubble={jest.fn()}
+					onSetKey={jest.fn()}
+					onSetText={jest.fn()}
+				/>
+			);
+			expect(text.value).toBe('Hello there');
+		});
+
+		it('writes nothing on blur when nothing changed, at once when it did', () => {
+			const {onSetText} = renderPanel();
+			const text = screen.getByTestId('beat-panel-text');
+
+			fireEvent.blur(text);
+			expect(onSetText).not.toHaveBeenCalled();
+
+			fireEvent.change(text, {target: {value: 'Goodbye.'}});
+			fireEvent.blur(text);
+			expect(onSetText).toHaveBeenCalledWith('Goodbye.', true);
+		});
+
+		it('writes on Enter, keeps Shift+Enter, reverts on Escape', () => {
+			const {onSetText} = renderPanel();
+			const text = screen.getByTestId('beat-panel-text') as HTMLTextAreaElement;
+
+			fireEvent.focus(text);
+			fireEvent.change(text, {target: {value: 'Two'}});
+			fireEvent.keyDown(text, {key: 'Enter', shiftKey: true});
+			expect(onSetText).not.toHaveBeenCalled();
+
+			fireEvent.keyDown(text, {key: 'Enter'});
+			expect(onSetText).toHaveBeenLastCalledWith('Two', true);
+
+			fireEvent.keyDown(text, {key: 'Escape'});
+			expect(text.value).toBe('Hello.');
+			expect(onSetText).toHaveBeenLastCalledWith('Hello.', true);
+		});
+
+		it('toggles bold on Ctrl+B and italic on Ctrl+I around the selection', () => {
+			const {onSetText} = renderPanel();
+			const text = screen.getByTestId('beat-panel-text') as HTMLTextAreaElement;
+
+			text.setSelectionRange(0, 5);
+			fireEvent.keyDown(text, {ctrlKey: true, key: 'b'});
+			expect(text.value).toBe('**Hello**.');
+			expect([text.selectionStart, text.selectionEnd]).toEqual([2, 7]);
+
+			fireEvent.keyDown(text, {ctrlKey: true, key: 'i'});
+			expect(text.value).toBe('**_Hello_**.');
+
+			jest.advanceTimersByTime(TEXT_WRITE_MS);
+			expect(onSetText).toHaveBeenLastCalledWith('**_Hello_**.', true);
+		});
 	});
 
 	it('focuses the text box when asked', () => {
