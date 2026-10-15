@@ -571,10 +571,16 @@
 				"fontSample": "Abc",
 				"size": "Size",
 				"sizing": "Sizing",
-				"storyColors": "Colours used in this story"
+				"storyColors": "Colours used in this story",
+				"text": "Text",
+				"timing": "Timing",
+				"bubble": "Bubble",
+				"makeDefault": "Make beat styles default for project",
+				"makeDefaultPrompt": "Write this beat's bubble style (style, font, colours, sizing, anchor, size) into the start passage as the story's defaults? No beat or passage is changed."
 			},
 			"scenePreview": {
 				"title": "Scene Editor",
+				"beatPanel": "Beat panel: the beat on screen — its words, timing and bubble",
 				"errorCount": "{{count}} error",
 				"errorCount_plural": "{{count}} errors",
 				"warningCount": "{{count}} warning",

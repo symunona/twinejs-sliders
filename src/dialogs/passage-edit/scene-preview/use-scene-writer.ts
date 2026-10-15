@@ -23,6 +23,7 @@ import {
 	removeSceneKey,
 	setBeatBubble,
 	setBeatKey,
+	setBeatText,
 	setEntityKey,
 	setSceneKey
 } from '@sliders/scene-edit';
@@ -289,8 +290,21 @@ export interface BeatKeyWrite {
 	value: unknown;
 }
 
+/**
+ * The words of one dialogue or narration beat, from the beat panel's text box.
+ *
+ * Its own write rather than a `BeatKeyWrite` of `say`: the words live under a different key
+ * per beat kind (`say:`, `text:`, or the beat's scalar itself), and setting `say` on a box
+ * would write a key the parser refuses.
+ */
+export interface BeatTextWrite {
+	beat: number;
+	beatText: string;
+}
+
 export type SceneWrite =
 	| BeatKeyWrite
+	| BeatTextWrite
 	| BubbleWrite
 	| EntityKeyWrite
 	| EntityStructWrite
@@ -306,6 +320,10 @@ export function isBubbleWrite(write: SceneWrite): write is BubbleWrite {
 
 export function isBeatKeyWrite(write: SceneWrite): write is BeatKeyWrite {
 	return 'beatKey' in write;
+}
+
+export function isBeatTextWrite(write: SceneWrite): write is BeatTextWrite {
+	return 'beatText' in write;
 }
 
 export function isStructWrite(write: SceneWrite): write is EntityStructWrite {
@@ -438,6 +456,10 @@ export function buildWriteEdit(
 		);
 	}
 
+	if (isBeatTextWrite(write)) {
+		return setBeatText(context.blockText, write.beat, write.beatText);
+	}
+
 	if (isBubbleWrite(write)) {
 		return setBeatBubble(context.blockText, write.beat, write.bubble);
 	}
@@ -482,6 +504,7 @@ export function buildWriteEdits(
 	for (const write of writes) {
 		if (
 			!isBeatKeyWrite(write) &&
+			!isBeatTextWrite(write) &&
 			!isBubbleWrite(write) &&
 			isStructWrite(write) &&
 			write.struct === 'remove'
@@ -492,6 +515,7 @@ export function buildWriteEdits(
 
 		if (
 			!isBeatKeyWrite(write) &&
+			!isBeatTextWrite(write) &&
 			!isBubbleWrite(write) &&
 			!isSceneKeyWrite(write) &&
 			!isStructWrite(write)
@@ -557,6 +581,7 @@ export function insertedBeatCount(
 	for (const write of writes) {
 		if (
 			isBeatKeyWrite(write) ||
+			isBeatTextWrite(write) ||
 			isBubbleWrite(write) ||
 			isSceneKeyWrite(write) ||
 			isStructWrite(write)

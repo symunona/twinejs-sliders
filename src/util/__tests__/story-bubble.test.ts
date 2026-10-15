@@ -1,7 +1,9 @@
 import {
+	beatStyleForDefaults,
 	scanVars,
 	storyBubbleDefaults,
 	varValue,
+	withBeatStyleDefaults,
 	writeStoryBubbleVars
 } from '../story-bubble';
 
@@ -125,6 +127,50 @@ describe('writeStoryBubbleVars', () => {
 			font: 'Bangers, cursive',
 			sizing: 'absolute',
 			w: 0.5
+		});
+	});
+});
+
+describe('beat style as story defaults', () => {
+	it('hands up style keys only, never where or how big one bubble is', () => {
+		expect(
+			beatStyleForDefaults({
+				as: 'comic',
+				at: {x: 0.2, y: 0.3},
+				bg: '#fff',
+				font: 'bangers',
+				h: 0.2,
+				place: 'top',
+				w: 0.4
+			})
+		).toEqual({as: 'comic', bg: '#fff', font: 'bangers'});
+		expect(beatStyleForDefaults({w: 0.4})).toBeUndefined();
+		expect(beatStyleForDefaults(undefined)).toBeUndefined();
+	});
+
+	it('lays the beat over the story, keeping what the beat is silent about', () => {
+		expect(
+			withBeatStyleDefaults({as: 'shard', color: '#000'}, {as: 'comic'})
+		).toEqual({as: 'comic', color: '#000'});
+	});
+
+	it('writes into the start passage vars and leaves the body alone', () => {
+		const start = "mood: 'grim'\n--\nOnce upon a time.\n";
+		const out = writeStoryBubbleVars(
+			start,
+			withBeatStyleDefaults(storyBubbleDefaults(passage(start)), {
+				as: 'comic',
+				font: 'bangers',
+				w: 0.5
+			})
+		);
+
+		expect(out).toBe(
+			"mood: 'grim'\nsliders.bubble.as: \"comic\"\nsliders.bubble.font: \"bangers\"\n--\nOnce upon a time.\n"
+		);
+		expect(storyBubbleDefaults(passage(out))).toEqual({
+			as: 'comic',
+			font: 'bangers'
 		});
 	});
 });

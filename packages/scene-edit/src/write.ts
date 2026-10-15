@@ -1081,6 +1081,88 @@ export function setBeatKey(
 	]);
 }
 
+/**
+ * Rewrite the words of one dialogue or narration beat — the beat panel's text box.
+ *
+ * Tier 1 only: the scalar holding the words is spliced and nothing else, so a beat's keys,
+ * comments and flow-vs-block shape all stay as they were. The quote style is the author's
+ * too: `'single'` stays single, `"double"` stays double and a `|` block stays a block,
+ * re-indented to where its old lines sat. A plain scalar is re-quoted only if the new words
+ * need it. Words that cannot live in the old style (a newline in a quoted one) fall back to
+ * double quotes, the one inline form that holds anything.
+ *
+ * `- mira: "…"` and `- box: "…"` are the words themselves; the map forms keep them under
+ * `say:` and `text:`. Any other beat has no words, and undefined comes back.
+ */
+export function setBeatText(
+	text: string,
+	index: number,
+	value: string
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+	const beat = parsed && locateBeat(parsed, index);
+
+	if (!beat) {
+		return undefined;
+	}
+
+	let node: unknown = beat.pair.value;
+
+	if (isMap(node)) {
+		const pair = findPair(node as YAMLMap, beat.key === 'box' ? 'text' : 'say');
+
+		node = pair?.value;
+	}
+
+	const range = rangeOf(node);
+
+	if (!isScalar(node) || typeof (node as Scalar).value !== 'string' || !range) {
+		return undefined;
+	}
+
+	const scalar = node as Scalar;
+
+	if (scalar.value === value) {
+		return undefined;
+	}
+
+	if (
+		(scalar.type === 'BLOCK_LITERAL' || scalar.type === 'BLOCK_FOLDED') &&
+		value !== ''
+	) {
+		// A block scalar's range runs over its trailing newline; that newline is the line
+		// break before the next beat, so the splice stops short of it.
+		const to = trimEnd(text, range[1], range[0]);
+		const old = text.slice(range[0], to).split('\n');
+		const indent =
+			old.slice(1).find(line => line.trim() !== '')?.match(/^ */)?.[0] ??
+			indentAt(text, range[0]) + '    ';
+		const clip = value.endsWith('\n');
+		const lines = (clip ? value.slice(0, -1) : value)
+			.split('\n')
+			.map(line => (line === '' ? '' : indent + line));
+
+		return {
+			from: range[0],
+			insert: `${clip ? '|' : '|-'}\n${lines.join('\n')}`,
+			to
+		};
+	}
+
+	const multiline = /[\n\r]/.test(value);
+	let insert: string;
+
+	if (scalar.type === 'QUOTE_SINGLE' && !multiline) {
+		insert = `'${value.replace(/'/g, "''")}'`;
+	} else if (scalar.type === 'QUOTE_DOUBLE' || multiline) {
+		insert = JSON.stringify(value);
+	} else {
+		insert = formatValue('say', value);
+	}
+
+	return {from: range[0], insert, to: range[1]};
+}
+
 function formatBubbleMap(
 	entries: readonly (readonly [string, unknown])[]
 ): string {

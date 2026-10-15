@@ -151,3 +151,49 @@ export function writeStoryBubbleVars(
 
 	return [...vars, VARS_SEPARATOR, ...body].join('\n');
 }
+
+/**
+ * The bubble keys a beat can hand up to the story as its look. Style only: `w`/`h` are
+ * the size of ONE bubble, `at`/`tail`/`place` where it hangs, and a story-wide default
+ * that parked every line in that spot would be unusable.
+ */
+export const BEAT_DEFAULT_KEYS = [
+	'as',
+	'anchor',
+	'sizing',
+	'bg',
+	'accent',
+	'color',
+	'font',
+	'size'
+] as const;
+
+/** What "make this beat's style the story's" would hand up. Undefined when nothing. */
+export function beatStyleForDefaults(
+	style: BubbleStyle | undefined
+): BubbleStyle | undefined {
+	const out: Record<string, unknown> = {};
+
+	for (const key of BEAT_DEFAULT_KEYS) {
+		const value = style?.[key];
+
+		if (value !== undefined && value !== '') {
+			out[key] = value;
+		}
+	}
+
+	return Object.keys(out).length > 0 ? (out as BubbleStyle) : undefined;
+}
+
+/**
+ * The story's defaults with a beat's style laid over them, key by key.
+ *
+ * A key the beat does not state keeps the story's value: the author asked to make what
+ * THIS beat says the default, not to forget everything it is silent about.
+ */
+export function withBeatStyleDefaults(
+	current: BubbleStyle | undefined,
+	style: BubbleStyle | undefined
+): BubbleStyle {
+	return {...current, ...beatStyleForDefaults(style)};
+}

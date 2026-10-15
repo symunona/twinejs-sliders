@@ -16,6 +16,7 @@ import {
 	PATCH_TIMEOUT_MS,
 	insertedBeatCount,
 	planEntityWrite,
+	previewEdits,
 	settlePatch,
 	useScenePatch,
 	writeSceneEdits,
@@ -798,5 +799,42 @@ describe('writing onto the beat the scrubber is on', () => {
 
 		expect(out).toContain('  - candle: {at: 0.5}');
 		expect(out).not.toContain('props:');
+	});
+});
+
+describe('beat text write', () => {
+	function ctx(beat: number) {
+		const block = blockOf(passage);
+
+		return {
+			beat,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: sceneOf(passage)
+		};
+	}
+
+	it('rewrites the words of the beat it names, and nothing else', () => {
+		const context = ctx(2);
+		const writes: SceneWrite[] = [{beat: 1, beatText: 'Goodbye.'}];
+		const after = previewEdits(context.blockText, buildWriteEdits(context, writes));
+
+		expect(after).toContain('  - mira: "Goodbye."');
+		expect(after.replace('"Goodbye."', '"Hello."')).toBe(context.blockText);
+		expect(insertedBeatCount(context, writes)).toBe(0);
+	});
+
+	it('goes through the editor as one replaceRange', () => {
+		const editor = fakeEditor(passage);
+
+		expect(
+			writeSceneEdits(editor, ctx(2), [{beat: 1, beatText: 'Bye.'}], 'sliders-edit')
+		).toBe(true);
+		expect(editor.replaceRange).toHaveBeenCalledTimes(1);
+		expect(editor.replaceRange.mock.calls[0][0]).toBe('"Bye."');
+	});
+
+	it('writes nothing for a beat with no words', () => {
+		expect(buildWriteEdit(ctx(1), {beat: 0, beatText: 'x'})).toBeUndefined();
 	});
 });

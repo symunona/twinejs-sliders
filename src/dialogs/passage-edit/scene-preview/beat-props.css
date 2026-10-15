@@ -61,3 +61,50 @@
 .scene-preview-beat-props-size input {
 	width: 5.5em;
 }
+
+/* In the row the groups arrange nothing: their controls flow as if ungrouped. */
+.scene-preview-beat-props.row .scene-preview-beat-props-group {
+	display: contents;
+}
+
+/* The beat panel beside the stage: one control per line, labels in a column. */
+.scene-preview-beat-props.panel {
+	align-items: stretch;
+	border-top: none;
+	flex-direction: column;
+	flex-wrap: nowrap;
+	gap: 10px;
+	min-height: 0;
+	padding: 0;
+}
+
+.scene-preview-beat-props.panel .scene-preview-beat-props-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.scene-preview-beat-props-heading {
+	border-bottom: 1px solid var(--faint-gray);
+	color: var(--dark-gray);
+	font-size: 80%;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	margin: 0;
+	padding-bottom: 2px;
+	text-transform: uppercase;
+}
+
+/* Label left, control right, every row the same split. */
+.scene-preview-beat-props.panel label,
+.scene-preview-beat-props.panel .scene-preview-beat-props-group > span {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
+	gap: 6px;
+}
+
+.scene-preview-beat-props.panel .scene-preview-beat-props-dur input,
+.scene-preview-beat-props.panel .scene-preview-beat-props-size input {
+	width: 6em;
+}

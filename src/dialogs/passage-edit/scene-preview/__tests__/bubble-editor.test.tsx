@@ -47,6 +47,8 @@ interface SetupOptions {
 	sizing?: string;
 	anchorMode?: string;
 	anchor?: {x: number; y: number} | null;
+	onSelectBeat?: () => void;
+	onEditText?: () => void;
 }
 
 function setup(options: SetupOptions = {}) {
@@ -69,6 +71,8 @@ function setup(options: SetupOptions = {}) {
 				editable
 				onCommit={(_beat, geometry) => commits.push(geometry)}
 				onDraft={style => drafts.push(style)}
+				onEditText={options.onEditText}
+				onSelectBeat={options.onSelectBeat}
 				style={options.style}
 			/>
 		</div>
@@ -304,5 +308,25 @@ describe('BubbleEditor', () => {
 
 		// Cleared on release: the committed text is what paints from then on.
 		expect(drafts[drafts.length - 1]).toBeUndefined();
+	});
+});
+
+describe('BubbleEditor and the beat panel', () => {
+	it('a press on the bubble picks the beat, a double click asks for its words', async () => {
+		const onSelectBeat = jest.fn();
+		const onEditText = jest.fn();
+		const {view} = setup({onEditText, onSelectBeat});
+
+		await measured();
+
+		const body = view.container.querySelector('.scene-bubble-editor-body')!;
+
+		fireEvent(body, pointer('pointerdown', 400, 225));
+		fireEvent(window, pointer('pointerup', 400, 225));
+		expect(onSelectBeat).toHaveBeenCalledTimes(1);
+		expect(onEditText).not.toHaveBeenCalled();
+
+		fireEvent.doubleClick(body);
+		expect(onEditText).toHaveBeenCalledTimes(1);
 	});
 });

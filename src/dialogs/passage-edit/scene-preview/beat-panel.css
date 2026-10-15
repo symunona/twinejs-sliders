@@ -1,0 +1,76 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/metrics.css';
+
+/* The layers panel's slot: beside the stage, the view's own height, scrolling inside. */
+.beat-panel {
+	background: var(--white);
+	border-left: 1px solid var(--light-gray);
+	bottom: 0;
+	display: flex;
+	flex-direction: column;
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: var(--layers-panel-width);
+}
+
+.beat-panel-title {
+	align-items: center;
+	border-bottom: 1px solid var(--light-gray);
+	display: flex;
+	flex-shrink: 0;
+	font-size: 85%;
+	font-weight: bold;
+	justify-content: space-between;
+	padding: 0 0 0 8px;
+}
+
+/* `min-width: 0` or the ellipsis does nothing: a flex item will not shrink past its text. */
+.beat-panel-which {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.beat-panel-who {
+	color: var(--dark-gray);
+	font-weight: normal;
+}
+
+.beat-panel-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 10px;
+	overflow-y: auto;
+	padding: 6px 8px;
+}
+
+.beat-panel-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.beat-panel-text-label {
+	color: var(--dark-gray);
+	font-size: 80%;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.beat-panel-text textarea {
+	box-sizing: border-box;
+	font: inherit;
+	min-height: 4.5em;
+	resize: vertical;
+	width: 100%;
+}
+
+.beat-panel-footer {
+	border-top: 1px solid var(--light-gray);
+	flex-shrink: 0;
+	padding: 4px;
+}

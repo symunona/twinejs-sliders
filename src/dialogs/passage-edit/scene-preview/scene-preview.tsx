@@ -7,6 +7,7 @@ import {
 	IconGridDots,
 	IconLock,
 	IconLockOpen,
+	IconMessage2,
 	IconPlayerPause,
 	IconPlayerPlay,
 	IconStack2,
@@ -34,13 +35,20 @@ import {
 	Vec2
 } from '@sliders/scene-types';
 import {mergeBubbleStyle, parseLinkText} from '@sliders/render-dom';
-import {storyBubbleDefaults} from '../../../util/story-bubble';
+import {
+	beatStyleForDefaults,
+	storyBubbleDefaults,
+	withBeatStyleDefaults,
+	writeStoryBubbleVars
+} from '../../../util/story-bubble';
+import {updatePassage} from '../../../store/stories';
+import {useUndoableStoriesContext} from '../../../store/undoable-stories';
 import {storyColors} from '../../../util/story-colors';
 import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import type {AssetDragPayload} from './asset-drag';
 import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
-import {BeatProps} from './beat-props';
+import {BeatPanel} from './beat-panel';
 import {effectiveLocks, lockReason} from './scene-lock';
 import {useStageViewZoom} from './use-stage-view-zoom';
 import {BeatTimeline} from './beat-timeline';
@@ -359,6 +367,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) === 'true'
 	);
 	const [layersOpen, toggleLayers] = useLayersPanelOpen();
+	/**
+	 * The beat panel, in the layers panel's slot. Session state: opened by a press on the
+	 * bubble or the bar button, closed by its own X or the bar button. Not by selecting a
+	 * sprite -- the caret in a beat's line selects its speaker, and the panel must not shut
+	 * under an author typing there.
+	 */
+	const [beatPanelOpen, setBeatPanelOpen] = React.useState(false);
+	/** Bumped by a double click on the bubble: focus the panel's text box. */
+	const [beatTextFocus, setBeatTextFocus] = React.useState(0);
+	const {dispatch: storiesDispatch, stories} = useUndoableStoriesContext();
 	/**
 	 * Entities the author hid from the editor stage with the layers panel's eye.
 	 *
@@ -754,6 +772,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		},
 		[beat, commit]
 	);
+
+	/** The beat panel's text box. Same address and origin as the other beat writes. */
+	const handleBeatText = React.useCallback(
+		(text: string) => {
+			if (beat > 0) {
+				commit([{beat: beat - 1, beatText: text}], EDIT_ORIGIN);
+			}
+		},
+		[beat, commit]
+	);
+	const handleSelectBeat = React.useCallback(() => {
+		clear();
+		setBeatPanelOpen(true);
+	}, [clear]);
+	const handleEditBeatText = React.useCallback(() => {
+		setBeatPanelOpen(true);
+		setBeatTextFocus(value => value + 1);
+	}, []);
 
 	/** A gesture was abandoned: neither optimistic value has text coming to replace it. */
 	const handleCancel = React.useCallback(() => {
@@ -1729,7 +1765,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// Above the no-scene return: hooks must run on every render, or a passage gaining its
 	// [scene] block crashes the dialog (React #310).
 	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
-	const showLayers = layersOpen && !fullScreen;
+	const showBeatPanel = beatPanelOpen && !fullScreen;
+	// One slot: the beat panel, while open, stands where the layers panel would.
+	const showLayers = layersOpen && !fullScreen && !showBeatPanel;
 	/**
 	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
 	 * (`buildWriteEdits` on the same context `commit` builds) so the panel can never offer a
@@ -1775,6 +1813,37 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * way out steps into it, and one with several stops and lets the reader pick.
 	 */
 	const canAdvance = fullScreen && !beatHasLink && (beat < lastBeat || !!nextScene);
+
+	/**
+	 * "Make beat styles default for project": this beat's bubble style, laid over the
+	 * story's `sliders.bubble.*` vars in the start passage -- the same lines Story > Defaults
+	 * writes. Nothing else is touched: no beat, no scene, no other passage. Absent when the
+	 * beat states no style, or the story has no start passage to write into.
+	 */
+	const story = stories.find(candidate => candidate.id === storyId);
+	const startPassage = story?.passages.find(
+		passage => passage.id === story.startPassage
+	);
+	const beatStyle =
+		shownBeat?.kind === 'say' || shownBeat?.kind === 'box'
+			? shownBeat.style
+			: undefined;
+	const makeBeatStyleDefault =
+		story && startPassage && beatStyleForDefaults(beatStyle)
+			? () =>
+					storiesDispatch(
+						updatePassage(story, startPassage, {
+							text: writeStoryBubbleVars(
+								startPassage.text,
+								withBeatStyleDefaults(
+									storyBubbleDefaults(story.passages),
+									beatStyle
+								)
+							)
+						}),
+						'undoChange.editPassage'
+					)
+			: undefined;
 
 	const bar = (
 		<div className="scene-preview-bar">
@@ -1834,6 +1903,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			/>
 			{/* With the grid: another way of reading the stage, and like the grid it
 			    writes nothing by being open. */}
+			<IconButton
+				icon={<IconMessage2 />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.beatPanel')}
+				onClick={() => setBeatPanelOpen(value => !value)}
+				selectable
+				selected={beatPanelOpen}
+			/>
 			<IconButton
 				commandId="scene.layersPanel"
 				icon={<IconStack2 />}
@@ -1999,6 +2076,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				editable={editable}
 				onCommit={handleBubbleCommit}
 				onDraft={setBubbleDraft}
+				onEditText={handleEditBeatText}
+				onSelectBeat={handleSelectBeat}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
 			{/* A dropped file is not a background, an object, a cast member or a pose until
@@ -2054,7 +2133,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// row sits outside that scroll, over the viewport, so it stays where the author can
 	// reach it however far the stage has been scrolled.
 	const stageBody = (
-		<div className={classNames('scene-stage-view', {'with-layers': showLayers})}>
+		<div
+			className={classNames('scene-stage-view', {
+				'with-beat-panel': showBeatPanel,
+				'with-layers': showLayers || showBeatPanel
+			})}
+		>
 			<div className="scene-stage-viewport" ref={setViewport}>
 				<div className="scene-stage-canvas" style={viewZoom.canvasStyle}>
 					{stageOverlay}
@@ -2073,6 +2157,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					// child row. Same beat, same patch, same ids, kinds and z as `stage` —
 					// `layer-order` resolves `at` itself to rank by the drawn y.
 					stage={localStage}
+				/>
+			)}
+			{showBeatPanel && (
+				<BeatPanel
+					autoAdvanceMs={holdMs}
+					beat={shownBeat}
+					beatCount={beats.length}
+					beatNumber={beat}
+					editable={editable}
+					focusText={beatTextFocus}
+					inherited={bubbleDefaults}
+					onClose={() => setBeatPanelOpen(false)}
+					onMakeDefault={makeBeatStyleDefault}
+					onSetBubble={handleBeatBubble}
+					onSetKey={handleBeatKey}
+					onSetText={handleBeatText}
+					storyColors={swatches}
 				/>
 			)}
 			<StageSelectionControls
@@ -2128,21 +2229,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				beats={beats}
 				labels={timelineLabels}
 				onBeatChange={goToBeat}
-			/>
-			{/* Directly under the strip that chooses the beat, and above the stage rather
-			    than over it: these controls are wanted for as long as the scrubber is
-			    somewhere, which is always, so they hold their place for the whole scene
-			    instead of appearing and vanishing over the art as the author scrubs. */}
-			<BeatProps
-				autoAdvanceMs={holdMs}
-				beat={shownBeat}
-				beatCount={beats.length}
-				beatNumber={beat}
-				editable={editable}
-				inherited={bubbleDefaults}
-				onSetBubble={handleBeatBubble}
-				onSetKey={handleBeatKey}
-				storyColors={swatches}
 			/>
 			{stageBody}
 		</div>

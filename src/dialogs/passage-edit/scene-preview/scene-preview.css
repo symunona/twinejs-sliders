@@ -367,3 +367,8 @@
 	margin-top: 2px;
 	opacity: 0.8;
 }
+
+/* The beat panel holds a text box and a column of controls: give it more of the view. */
+.scene-preview .scene-stage-view.with-beat-panel {
+	--layers-panel-width: clamp(180px, 42%, 280px);
+}

@@ -52,9 +52,21 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 | Pose dropdown on selection | `pose:` |
 | Pan / scroll-zoom the stage | `camera:` |
 
+## Beat panel
+
+Right side, layers panel's slot (replaces it while open). Opens on: press on the bubble, or
+bar button. Closes on: its X, bar button. Not on sprite select — caret in a beat line selects
+the speaker.
+
+| Part | Writes |
+|---|---|
+| Text box (double click bubble = focus) | beat words: scalar, `say:` or `text:`, quote style kept. Blur / Enter. Shift+Enter = newline, Esc = revert |
+| Timing, Bubble groups | `dur:` `ease:` · `bubble:` keys on the beat |
+| "Make beat styles default for project" + confirm | `sliders.bubble.*` in START passage vars, beat's `as font color bg accent sizing anchor size` over existing. No `w h at tail place`. No beat, no other passage touched. Undoable. |
+
 ## What is NOT editable visually
 
-`beats` · `links` · `from` · `mark` · `id`.
+`beats` (structure; words and beat keys are, in the beat panel) · `links` · `from` · `mark` · `id`.
 
 These are prose and structure. Typing them is faster than any widget, and a beat editor is a
 whole second product. Selecting an entity **highlights its beat lines** in the text — that's

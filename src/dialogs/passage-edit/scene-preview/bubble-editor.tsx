@@ -38,6 +38,10 @@ export interface BubbleEditorProps {
 	/** Live geometry during a gesture. `undefined` clears it. */
 	onDraft: (style: BubbleStyle | undefined) => void;
 	onCommit: (beat: number, geometry: BubbleGeometry) => void;
+	/** A press on the bubble: the author picked this line, so the beat panel opens on it. */
+	onSelectBeat?: () => void;
+	/** A double click on the bubble: edit the words, in the beat panel's text box. */
+	onEditText?: () => void;
 }
 
 interface Rect {
@@ -202,6 +206,8 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 	editable,
 	onCommit,
 	onDraft,
+	onEditText,
+	onSelectBeat,
 	style
 }) => {
 	const {t} = useTranslation();
@@ -453,6 +459,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 		event.stopPropagation();
 		event.preventDefault();
 		setSelected(true);
+		onSelectBeat?.();
 
 		const rect = ref.current?.parentElement?.getBoundingClientRect();
 		const {bubble} = measured;
@@ -500,6 +507,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 					<div
 						aria-label={t('dialogs.passageEdit.scenePreview.moveBubble')}
 						className="scene-bubble-editor-body"
+						onDoubleClick={onEditText}
 						onPointerDown={event => begin(event, 'move')}
 						role="button"
 						tabIndex={-1}

@@ -89,6 +89,11 @@ export interface BeatPropsProps {
 	autoAdvanceMs?: number;
 	/** Colours the story already uses, offered beside each colour well. */
 	storyColors?: string[];
+	/**
+	 * `panel` is the beat panel beside the stage: one control per line, grouped under
+	 * Timing and Bubble headings, and no beat number -- the panel's own title says it.
+	 */
+	layout?: 'row' | 'panel';
 }
 
 /** The empty option: "whatever the character or the renderer already says". */
@@ -164,6 +169,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	beatNumber,
 	editable,
 	inherited,
+	layout = 'row',
 	onSetKey,
 	onSetBubble,
 	storyColors
@@ -308,13 +314,18 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	}
 
 	return (
-		<div className="scene-preview-beat-props" data-testid="scene-preview-beat-props">
+		<div
+			className={`scene-preview-beat-props ${layout}`}
+			data-testid="scene-preview-beat-props"
+		>
 			{/* The row no longer sits on the thing it edits, so it has to name it. */}
-			<span className="scene-preview-beat-props-which">
-				{beatNumber === 0
-					? t('dialogs.passageEdit.beatProps.arrival')
-					: t('dialogs.passageEdit.beatProps.beat', {number: beatNumber})}
-			</span>
+			{layout === 'row' && (
+				<span className="scene-preview-beat-props-which">
+					{beatNumber === 0
+						? t('dialogs.passageEdit.beatProps.arrival')
+						: t('dialogs.passageEdit.beatProps.beat', {number: beatNumber})}
+				</span>
+			)}
 			{emptyKey ? (
 				<span
 					className="scene-preview-beat-props-none"
@@ -324,87 +335,101 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 				</span>
 			) : (
 				<>
-					{speaks(beat) && (
-						// Only where there is a line to hold on. A stage-only `set` beat's
-						// `dur` is how long its movement TAKES, not how long the reader
-						// looks at it, so "advance automatically" is not a question that
-						// beat can answer.
-						<CheckboxButton
-							label={t('dialogs.passageEdit.beatProps.auto')}
-							// The short word is all the row has room for -- the sentence
-							// pushed Style and Place onto a second line on a docked stage.
-							tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
-							onChange={next =>
-								// Unchecking has to leave a number behind, or the box the
-								// author just enabled would be empty and mean the thing
-								// they turned off.
-								onSetKey(
-									'dur',
-									next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
-								)
-							}
-							value={auto}
-						/>
-					)}
-					<TextSelect
-						onChange={event => {
-							// The map form is a readout, not a value to write back.
-							if (event.target.value === PER_KIND) {
-								return;
-							}
-
-							onSetKey('ease', event.target.value || null);
-						}}
-						options={[
-							{
-								label: t('dialogs.passageEdit.beatProps.inherit'),
-								value: INHERIT
-							},
-							...(ease === PER_KIND
-								? [
-										{
-											label: t('dialogs.passageEdit.beatProps.easePerKind'),
-											value: PER_KIND
-										}
-								  ]
-								: []),
-							...EASE_NAMES.map(name => ({label: name, value: name}))
-						]}
-						value={ease}
-					>
-						{t('dialogs.passageEdit.beatProps.ease')}
-					</TextSelect>
-					<span
-						className="scene-preview-beat-props-dur"
-						// On the wrapper, not the input: a disabled input is inert to the
-						// pointer, so a title on it never opens.
-						title={
-							holdDisabled
-								? t('dialogs.passageEdit.beatProps.durDisabled')
-								: undefined
-						}
-					>
-						<TextInput
-							disabled={holdDisabled}
-							onChange={event => setDraft(event.target.value)}
-							onBlur={commitDur}
-							onKeyDown={event => {
-								if (event.key === 'Enter') {
-									commitDur();
+					{/* Groups are `display: contents` in the row, so they only arrange the
+					    panel. */}
+					<div className="scene-preview-beat-props-group">
+						{layout === 'panel' && (
+							<h4 className="scene-preview-beat-props-heading">
+								{t('dialogs.passageEdit.beatProps.timing')}
+							</h4>
+						)}
+						{speaks(beat) && (
+							// Only where there is a line to hold on. A stage-only `set` beat's
+							// `dur` is how long its movement TAKES, not how long the reader
+							// looks at it, so "advance automatically" is not a question that
+							// beat can answer.
+							<CheckboxButton
+								label={t('dialogs.passageEdit.beatProps.auto')}
+								// The short word is all the row has room for -- the sentence
+								// pushed Style and Place onto a second line on a docked stage.
+								tooltipLabel={t('dialogs.passageEdit.beatProps.autoDetail')}
+								onChange={next =>
+									// Unchecking has to leave a number behind, or the box the
+									// author just enabled would be empty and mean the thing
+									// they turned off.
+									onSetKey(
+										'dur',
+										next ? null : Number(dur.trim()) || defaultHold(autoAdvanceMs)
+									)
+								}
+								value={auto}
+							/>
+						)}
+						<TextSelect
+							onChange={event => {
+								// The map form is a readout, not a value to write back.
+								if (event.target.value === PER_KIND) {
+									return;
 								}
 
-								if (event.key === 'Escape') {
-									setDraft(undefined);
-								}
+								onSetKey('ease', event.target.value || null);
 							}}
-							type="number"
-							value={dur}
+							options={[
+								{
+									label: t('dialogs.passageEdit.beatProps.inherit'),
+									value: INHERIT
+								},
+								...(ease === PER_KIND
+									? [
+											{
+												label: t('dialogs.passageEdit.beatProps.easePerKind'),
+												value: PER_KIND
+											}
+									  ]
+									: []),
+								...EASE_NAMES.map(name => ({label: name, value: name}))
+							]}
+							value={ease}
 						>
-							{t('dialogs.passageEdit.beatProps.dur')}
-						</TextInput>
-					</span>
+							{t('dialogs.passageEdit.beatProps.ease')}
+						</TextSelect>
+						<span
+							className="scene-preview-beat-props-dur"
+							// On the wrapper, not the input: a disabled input is inert to the
+							// pointer, so a title on it never opens.
+							title={
+								holdDisabled
+									? t('dialogs.passageEdit.beatProps.durDisabled')
+									: undefined
+							}
+						>
+							<TextInput
+								disabled={holdDisabled}
+								onChange={event => setDraft(event.target.value)}
+								onBlur={commitDur}
+								onKeyDown={event => {
+									if (event.key === 'Enter') {
+										commitDur();
+									}
+
+									if (event.key === 'Escape') {
+										setDraft(undefined);
+									}
+								}}
+								type="number"
+								value={dur}
+							>
+								{t('dialogs.passageEdit.beatProps.dur')}
+							</TextInput>
+						</span>
+					</div>
 					{speaks(beat) && (
-						<>
+						<div className="scene-preview-beat-props-group">
+							{layout === 'panel' && (
+								<h4 className="scene-preview-beat-props-heading">
+									{t('dialogs.passageEdit.beatProps.bubble')}
+								</h4>
+							)}
 							{/*
 								A PreviewSelect, not a TextSelect: `as:` names a PICTURE, and
 								seven lowercase words is a list an author has to try rather
@@ -588,7 +613,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							>
 								{t('dialogs.passageEdit.beatProps.anchor')}
 							</TextSelect>
-						</>
+						</div>
 					)}
 				</>
 			)}
