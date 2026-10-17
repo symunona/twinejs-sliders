@@ -30,6 +30,7 @@ import timestring from 'timestring';
 import {createLoggers} from '../logger';
 import {get} from '../state';
 import {currentPassage, resumeAtEnd} from './history';
+import {preloading} from './preload';
 
 const {warn} = createLoggers('scene');
 
@@ -186,7 +187,8 @@ async function stagesReady(root: Element): Promise<void> {
 
 	window.clearTimeout(timer);
 
-	if (capped) {
+	// Behind the preload bar every stage waits for the art, and nobody sees the swap.
+	if (capped && !preloading()) {
 		warn(
 			`Scene transition went ahead before the new stage was drawn (${READY_CAP_MS}ms).`
 		);

@@ -146,3 +146,35 @@ body.sliders-cinema #page > error-handler.active {
 body.sliders-cinema #page > error-handler.active {
 	z-index: 400;
 }
+
+/*
+ * Preload: the page stays blank under a thin bar until every piece of art is local and the
+ * first scene is drawn (`preload.ts`). `visibility`, not `display`, so the stage still has a
+ * box to lay out and draw into behind it.
+ */
+html.sliders-preloading body > :not(.sliders-preload) {
+	visibility: hidden;
+}
+
+.sliders-preload {
+	position: fixed;
+	inset: 0 0 auto 0;
+	z-index: 100;
+	pointer-events: none;
+}
+
+.sliders-preload__fill {
+	height: 2px;
+	width: 0;
+	background: currentColor;
+	opacity: 0.6;
+	transition: width 0.15s linear;
+}
+
+.sliders-preload__label {
+	padding: 4px 8px;
+	font: 11px/1.2 system-ui, sans-serif;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	opacity: 0.6;
+}

@@ -12,6 +12,7 @@ import {defineElements} from '../util/custom-element';
 import {resetManifests} from './assets';
 import {slidersDefaults} from './config';
 import {initKeyboard} from './keyboard';
+import {preloadArt} from './preload';
 import {initSceneIndex} from './scene-graph';
 import {SlidersStage} from './stage-element';
 
@@ -21,6 +22,7 @@ export {sceneOnlyBlocks} from './scene-only';
 export function initSliders(): void {
 	setDefaults(slidersDefaults);
 	resetManifests();
+	preloadArt();
 	initSceneIndex();
 	defineElements({'sliders-stage': SlidersStage});
 	initKeyboard();
