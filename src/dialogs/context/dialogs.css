@@ -39,6 +39,20 @@
 	flex: 0;
 }
 
+/* Unmaximized, the slot is not a box at all: the card stays the flex child it always was.
+   That also means the slot cannot animate, so the open/close pop is handed to the card. */
+.dialogs > .dialog-slot:not(.maximized) {
+	display: contents;
+}
+
+.dialogs > .dialog-slot:not(.maximized).pop-enter-active > * {
+	animation: pop-in 0.2s;
+}
+
+.dialogs > .dialog-slot:not(.maximized).pop-exit-active > * {
+	animation: reverse pop-in 0.2s forwards;
+}
+
 .dialogs .maximized {
 	position: absolute;
 	top: 0;

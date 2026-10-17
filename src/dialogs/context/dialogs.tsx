@@ -1,3 +1,4 @@
+import classNames from 'classnames';
 import * as React from 'react';
 import {useScrollbarSize} from 'react-scrollbar-size';
 import {CSSTransition, TransitionGroup} from 'react-transition-group';
@@ -71,13 +72,18 @@ export const Dialogs: React.FC = () => {
 
 						return (
 							<DialogTransition key={index}>
-								{dialog.maximized ? (
-									<div className="maximized" style={maximizedStyle}>
-										<dialog.component {...dialog.props} {...managementProps} />
-									</div>
-								) : (
+								{/* Always the same wrapper, maximized or not. Swapping a bare
+								    component for one inside a <div> is a different tree to React,
+								    so it would unmount the dialog and lose everything it holds--
+								    the scene preview's selection, beat and panels among it. */}
+								<div
+									className={classNames('dialog-slot', {
+										maximized: dialog.maximized
+									})}
+									style={dialog.maximized ? maximizedStyle : undefined}
+								>
 									<dialog.component {...dialog.props} {...managementProps} />
-								)}
+								</div>
 							</DialogTransition>
 						);
 					})}

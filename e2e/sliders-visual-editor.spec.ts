@@ -291,6 +291,44 @@ test.describe('visual scene editor', () => {
 		expect(after.y).toEqual(before.y);
 	});
 
+	/**
+	 * Normal, maximized and full screen are three sizes of one preview, not three previews.
+	 * Maximize used to wrap the dialog in a new element, which React reads as a different
+	 * tree: the preview unmounted and came back with nothing selected.
+	 */
+	test('the selection survives maximize and full screen', async ({page}) => {
+		test.setTimeout(180000);
+		await openSceneEditor(page, 'Visual Editor Resize Keeps Selection ' + Date.now());
+
+		const mira = page.locator('.sliders-entity[data-entity-id="mira"]');
+
+		await mira.waitFor({timeout: 20000});
+
+		const sprite = (await mira.boundingBox())!;
+
+		await page.mouse.click(sprite.x + sprite.width / 2, sprite.y + sprite.height / 2);
+
+		const handles = page.locator('[data-handle]');
+		const preview = page.locator('.scene-preview-dialog');
+
+		await expect(handles).toHaveCount(9);
+		await preview.getByRole('button', {name: 'Maximize'}).click();
+		await expect(page.locator('.dialogs > .maximized .scene-preview-dialog')).toBeVisible();
+		await expect(handles).toHaveCount(9);
+		await page.getByRole('button', {name: 'Full screen'}).click();
+		await expect(page.locator('.scene-preview.full-screen')).toBeVisible();
+		await expect(handles).toHaveCount(9);
+		// The full screen preview has its own exit, beside the card's still-mounted one.
+		await page
+			.getByTestId('scene-preview')
+			.getByRole('button', {name: 'Full screen'})
+			.click();
+		await expect(page.locator('.scene-preview.full-screen')).toHaveCount(0);
+		await preview.getByRole('button', {name: 'Restore Size'}).click();
+		await expect(page.locator('.dialogs > .maximized')).toHaveCount(0);
+		await expect(handles).toHaveCount(9);
+	});
+
 	test('an image file dropped on the stage becomes a prop', async ({page}) => {
 		test.setTimeout(180000);
 		await openSceneEditor(page, 'Visual Editor File Drop ' + Date.now());

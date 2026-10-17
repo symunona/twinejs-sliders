@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import {axe} from 'jest-axe';
 import * as React from 'react';
 import {PrefsState} from '../../../store/prefs';
@@ -143,6 +143,39 @@ describe('<Dialogs>', () => {
 		});
 
 		expect(screen.getByTestId('mock-component').dataset.maximized).toBe('true');
+	});
+
+	it('keeps the dialog mounted, and its state, when it is maximized and back', () => {
+		const Counter: React.FC = () => {
+			const [count, setCount] = React.useState(0);
+
+			return <button onClick={() => setCount(count + 1)}>count {count}</button>;
+		};
+		const dialog = {
+			collapsed: false,
+			component: Counter,
+			highlighted: false,
+			maximized: false,
+			props: {}
+		};
+		const {rerender} = renderComponent({dialogs: [dialog]});
+		const withDialogs = (maximized: boolean) => (
+			<FakeStateProvider>
+				<DialogsContext.Provider
+					value={{dialogs: [{...dialog, maximized}], dispatch: jest.fn()}}
+				>
+					<Dialogs />
+				</DialogsContext.Provider>
+			</FakeStateProvider>
+		);
+
+		fireEvent.click(screen.getByText('count 0'));
+		rerender(withDialogs(true));
+		expect(screen.getByText('count 1')).toBeInTheDocument();
+		expect(document.querySelector('.dialogs > .maximized')).toBeInTheDocument();
+		rerender(withDialogs(false));
+		expect(screen.getByText('count 1')).toBeInTheDocument();
+		expect(document.querySelector('.dialogs > .maximized')).toBeNull();
 	});
 
 	// Using screen.debug() doesn't seem to show the padding-left style. Maybe a
