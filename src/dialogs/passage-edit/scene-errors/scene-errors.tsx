@@ -13,6 +13,11 @@ import {LinkTargetError} from '../scene-preview/validate-links';
 import './scene-errors.css';
 
 export interface SceneErrorsProps {
+	/**
+	 * Start open. The stage's error sidebar is itself the "show me" the author clicked, so
+	 * making them click the header again would be one click too many.
+	 */
+	defaultOpen?: boolean;
 	errors: LinkTargetError[];
 	/**
 	 * Applies an error's own mechanical repair. Absent when the passage is read-only.
@@ -40,12 +45,13 @@ export interface SceneErrorsProps {
  * what an author glances at — and opens on demand for the detail.
  */
 export const SceneErrors: React.FC<SceneErrorsProps> = ({
+	defaultOpen = false,
 	errors,
 	onApplyFix,
 	onCreatePassage,
 	onGoToLine
 }) => {
-	const [open, setOpen] = React.useState(false);
+	const [open, setOpen] = React.useState(defaultOpen);
 	const {t} = useTranslation();
 	const errorCount = errors.filter(one => one.severity === 'error').length;
 	const warningCount = errors.filter(one => one.severity === 'warning').length;

@@ -10,8 +10,15 @@ import {IconButton} from '../../components/control/icon-button';
 import {useCommand} from '../../hotkeys';
 import {useScenePreviewSource} from '../../routes/story-edit/scene-preview-source-context';
 import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
-import {passageMatchingName, storyWithId} from '../../store/stories';
-import {useUndoableStoriesContext} from '../../store/undoable-stories';
+import {
+	newPassagePositions,
+	passageMatchingName,
+	storyWithId
+} from '../../store/stories';
+import {
+	useCreateLinkedPassage,
+	useUndoableStoriesContext
+} from '../../store/undoable-stories';
 import {
 	usePassageDoc,
 	usePassageDocText,
@@ -102,6 +109,45 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			}
 		},
 		[dialogsDispatch, story]
+	);
+
+	/**
+	 * An error row in the sidebar: open this passage's `</>` editor with the caret on that
+	 * line. The caret goes on the Doc now -- headless is fine, the editor mounts on the
+	 * same Doc and finds it there. Focus has to wait for the view to exist.
+	 */
+	const focusPending = React.useRef(false);
+	const handleGoToLine = React.useCallback(
+		(line: number) => {
+			if (!handle || !passageId) {
+				return;
+			}
+
+			handle.doc.setCursor({ch: 0, line: line - 1});
+			dialogsDispatch(addPassageEditors(story.id, [passageId]));
+			focusPending.current = true;
+		},
+		[dialogsDispatch, handle, passageId, story.id]
+	);
+
+	React.useEffect(() => {
+		if (focusPending.current && view) {
+			focusPending.current = false;
+			view.focus();
+			view.scrollIntoView(null);
+		}
+	});
+
+	/** Same fix the passage editor offers under its text, placed the same way. */
+	const createLinkedPassage = useCreateLinkedPassage(story);
+	const passage = story.passages.find(candidate => candidate.id === passageId);
+	const handleCreatePassage = React.useCallback(
+		(name: string) => {
+			if (passage) {
+				createLinkedPassage(name, newPassagePositions(story, passage, 1)[0]);
+			}
+		},
+		[createLinkedPassage, passage, story]
 	);
 
 
@@ -222,6 +268,8 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					assets={assets}
 					barExtra={walkControls}
 					onWalkInfo={setWalkInfo}
+					onCreatePassage={handleCreatePassage}
+					onGoToLine={handleGoToLine}
 					walkHere={{on: walkOn, walker}}
 					doc={handle?.doc}
 					fullScreen={fullScreen}

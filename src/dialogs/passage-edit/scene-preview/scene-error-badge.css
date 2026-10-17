@@ -1,0 +1,153 @@
+/* Top-right of the stage, over the viewport and outside its scroll, so a zoomed-in view
+   never carries it away. Shifts left with the side panel, like the viewport does. */
+.scene-error-badge {
+	align-items: center;
+	background: rgba(16, 16, 20, 0.55);
+	border: none;
+	border-radius: 50%;
+	color: #fff;
+	cursor: pointer;
+	display: flex;
+	height: 30px;
+	justify-content: center;
+	padding: 0;
+	position: absolute;
+	right: 6px;
+	top: 6px;
+	width: 30px;
+	/* Over the selection row (4). */
+	z-index: 5;
+}
+
+.scene-preview .scene-stage-view.with-layers .scene-error-badge {
+	right: calc(var(--layers-panel-width) + 6px);
+}
+
+/* The selection row spans the same top edge: keep its controls clear of the badge. */
+.scene-preview .scene-preview-selection {
+	padding-right: 42px;
+}
+
+.scene-error-badge:hover,
+.scene-error-badge.open {
+	background: rgba(16, 16, 20, 0.85);
+}
+
+.scene-error-badge svg {
+	height: 18px;
+	width: 18px;
+}
+
+.scene-error-badge.clean {
+	color: #3ecf6a;
+}
+
+.scene-error-badge.errors {
+	color: #ff8080;
+}
+
+.scene-error-badge:not(.clean):not(.errors) {
+	color: #ffd04d;
+}
+
+.scene-error-badge-count {
+	border-radius: 8px;
+	bottom: -4px;
+	font-size: 10px;
+	font-weight: bold;
+	line-height: 14px;
+	min-width: 14px;
+	padding: 0 3px;
+	position: absolute;
+	text-align: center;
+}
+
+.scene-error-badge-count.errors {
+	background: #d32f2f;
+	color: #fff;
+	right: -4px;
+}
+
+.scene-error-badge-count.warnings {
+	background: #f5c400;
+	color: #222;
+	left: -4px;
+}
+
+/* The side slot, same box as the layers and beat panels. */
+.scene-error-panel {
+	background: var(--white);
+	border-left: 1px solid var(--light-gray);
+	bottom: 0;
+	display: flex;
+	flex-direction: column;
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: var(--layers-panel-width);
+}
+
+.scene-error-panel-title {
+	align-items: center;
+	border-bottom: 1px solid var(--light-gray);
+	display: flex;
+	flex-shrink: 0;
+	font-size: 85%;
+	font-weight: bold;
+	justify-content: space-between;
+	padding: 0 0 0 8px;
+}
+
+.scene-error-panel .scene-errors {
+	border-top: none;
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.scene-error-panel .scene-errors .scene-preview-errors {
+	flex: 1 1 auto;
+	max-height: none;
+}
+
+/* The panel's own title says what this is; the accordion header only earns its place
+   when there is nothing to list and it is the one line saying the scene is valid. */
+.scene-error-panel .scene-errors:not(.clean) .scene-errors-header {
+	display: none;
+}
+
+.scene-error-panel .scene-errors .scene-preview-errors {
+	border-top: none;
+	font-family: inherit;
+}
+
+/* Narrow column: line number in its own gutter, everything else stacked beside it,
+   buttons left-aligned under the message instead of shoved to an edge. */
+.scene-error-panel .scene-errors .scene-preview-errors li {
+	align-items: start;
+	border-bottom: 1px solid var(--light-gray);
+	display: grid;
+	gap: 2px 6px;
+	grid-template-columns: 2em minmax(0, 1fr);
+	padding: 4px 8px 4px 4px;
+}
+
+.scene-error-panel .scene-errors .scene-preview-errors li > :not(.line) {
+	grid-column: 2;
+}
+
+.scene-error-panel .scene-errors .scene-preview-errors .line {
+	grid-row: 1 / span 4;
+	min-width: 0;
+}
+
+.scene-error-panel .scene-errors .scene-preview-errors .scene-errors-fix,
+.scene-error-panel .scene-errors .scene-preview-errors .scene-errors-create {
+	justify-self: start;
+	margin-left: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

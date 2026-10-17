@@ -29,6 +29,7 @@ import {PassageRefSpan} from '../../util/passage-ref-spans';
 import {PassageText} from './passage-text';
 import {PassageToolbar} from './passage-toolbar';
 import {SceneErrors} from './scene-errors/scene-errors';
+import {applySceneFix} from './scene-errors/apply-scene-fix';
 import {useSceneErrorMarks} from './scene-errors/use-error-marks';
 import {useCtrlClickLinks} from './use-ctrl-click-links';
 import {
@@ -37,7 +38,6 @@ import {
 } from './scene-preview/prefill-links';
 import {insertSceneAutoAdvance} from './scene-preview/insert-scene-pref';
 import {useSceneParse} from './scene-preview/use-scene-parse';
-import {FIX_ORIGIN} from './scene-preview/use-scene-writer';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-source-context';
 import {PassageLockBanner} from './passage-lock-banner';
@@ -226,35 +226,14 @@ export const PassageEditContents: React.FC<
 		[createLinkedPassage, passage, story]
 	);
 
-	/**
-	 * Applies the mechanical repair an error carries.
-	 *
-	 * One `replaceRange`, so the fix is one undo entry, and guarded on the text still being
-	 * what the parse saw: `parse` is debounced, so between the error being computed and this
-	 * button being clicked the author may have typed over the very span it points at.
-	 * Refusing is the whole point of `fix.replaces` — a fix that splices its suggestion over
-	 * something else is worse than no button.
-	 */
+	/** See `applySceneFix`. Focus goes back to the text the author was typing in. */
 	const handleApplyFix = React.useCallback(
 		(fix: SceneFix) => {
 			const doc = handle?.doc;
 
-			if (!doc) {
-				return;
+			if (doc && applySceneFix(doc, fix)) {
+				cmEditor?.focus();
 			}
-
-			const from = {ch: fix.col - 1, line: fix.line - 1};
-			const to = {
-				ch: fix.endCol === undefined ? fix.col - 1 : fix.endCol - 1,
-				line: (fix.endLine ?? fix.line) - 1
-			};
-
-			if (doc.getRange(from, to) !== fix.replaces) {
-				return;
-			}
-
-			doc.replaceRange(fix.text, from, to, FIX_ORIGIN);
-			cmEditor?.focus();
 		},
 		[cmEditor, handle]
 	);

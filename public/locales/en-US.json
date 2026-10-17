@@ -630,6 +630,11 @@
 				"remove": "Remove from scene",
 				"zBack": "Send backward",
 				"zFront": "Bring forward",
+				"errorBadge": {
+					"none": "No errors",
+					"some": "Errors: {{errors}} · Warnings: {{warnings}}",
+					"title": "Problems"
+				},
 				"layers": {
 					"title": "Layers",
 					"toggle": "Layers: every entity on the stage, front first",

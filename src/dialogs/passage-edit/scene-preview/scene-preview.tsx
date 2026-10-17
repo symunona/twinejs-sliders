@@ -50,6 +50,8 @@ import {isAudioFile} from '@sliders/asset-store';
 import type {AssetDragPayload} from './asset-drag';
 import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatPanel} from './beat-panel';
+import {applySceneFix} from '../scene-errors/apply-scene-fix';
+import {SceneErrorBadge, SceneErrorPanel} from './scene-error-badge';
 import {effectiveLocks, lockReason} from './scene-lock';
 import {useStageViewZoom} from './use-stage-view-zoom';
 import {BeatTimeline} from './beat-timeline';
@@ -191,6 +193,16 @@ export interface ScenePreviewProps {
 	onWalkInfo?: (info: WalkHereInfo) => void;
 	/** The dialog's own controls, drawn in the bar beside the preview's. */
 	barExtra?: React.ReactNode;
+	/**
+	 * An error row in the stage's error sidebar was clicked: show that line of the passage
+	 * text. Absent means the rows go nowhere.
+	 */
+	onGoToLine?: (line: number) => void;
+	/**
+	 * An error names a passage the story does not have, and the author asked for it.
+	 * Offered only while the stage is writable.
+	 */
+	onCreatePassage?: (name: string) => void;
 }
 
 /**
@@ -337,7 +349,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	view,
 	walkHere: walkHereRequest,
 	onWalkInfo,
-	barExtra
+	barExtra,
+	onCreatePassage,
+	onGoToLine
 }) => {
 	const {t} = useTranslation();
 	const store = useAssetStore();
@@ -387,6 +401,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * under an author typing there.
 	 */
 	const [beatPanelOpen, setBeatPanelOpen] = React.useState(false);
+	/**
+	 * The error sidebar, opened by the badge in the stage's corner. Same slot again: the
+	 * last panel asked for wins, so opening this closes the beat panel and the reverse.
+	 */
+	const [errorsOpen, setErrorsOpen] = React.useState(false);
 	/** Bumped by a double click on the bubble: focus the panel's text box. */
 	const [beatTextFocus, setBeatTextFocus] = React.useState(0);
 	const {dispatch: storiesDispatch, stories} = useUndoableStoriesContext();
@@ -808,9 +827,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const handleSelectBeat = React.useCallback(() => {
 		clear();
 		setBeatPanelOpen(true);
+		setErrorsOpen(false);
 	}, [clear]);
 	const handleEditBeatText = React.useCallback(() => {
 		setBeatPanelOpen(true);
+		setErrorsOpen(false);
 		setBeatTextFocus(value => value + 1);
 	}, []);
 
@@ -1840,9 +1861,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// Above the no-scene return: hooks must run on every render, or a passage gaining its
 	// [scene] block crashes the dialog (React #310).
 	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
-	const showBeatPanel = beatPanelOpen && !fullScreen;
-	// One slot: the beat panel, while open, stands where the layers panel would.
-	const showLayers = layersOpen && !fullScreen && !showBeatPanel;
+	const showErrors = errorsOpen && !fullScreen;
+	const showBeatPanel = beatPanelOpen && !fullScreen && !showErrors;
+	// One slot: the beat panel or the error list, while open, stands where the layers
+	// panel would.
+	const showLayers = layersOpen && !fullScreen && !showBeatPanel && !showErrors;
 	/**
 	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
 	 * (`buildWriteEdits` on the same context `commit` builds) so the panel can never offer a
@@ -1982,7 +2005,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				icon={<IconMessage2 />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.beatPanel')}
-				onClick={() => setBeatPanelOpen(!beatPanelOpen)}
+				onClick={() => {
+					setBeatPanelOpen(!beatPanelOpen);
+					setErrorsOpen(false);
+				}}
 				selectable
 				selected={beatPanelOpen}
 			/>
@@ -2210,8 +2236,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const stageBody = (
 		<div
 			className={classNames('scene-stage-view', {
-				'with-beat-panel': showBeatPanel,
-				'with-layers': showLayers || showBeatPanel
+				'with-beat-panel': showBeatPanel || showErrors,
+				'with-layers': showLayers || showBeatPanel || showErrors
 			})}
 		>
 			<div className="scene-stage-viewport" ref={setViewport}>
@@ -2232,6 +2258,28 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					// child row. Same beat, same patch, same ids, kinds and z as `stage` —
 					// `layer-order` resolves `at` itself to rank by the drawn y.
 					stage={localStage}
+				/>
+			)}
+			{showErrors && (
+				<SceneErrorPanel
+					errors={parse.errors}
+					onApplyFix={
+						editable && doc ? fix => applySceneFix(doc, fix) : undefined
+					}
+					onClose={() => setErrorsOpen(false)}
+					onCreatePassage={editable ? onCreatePassage : undefined}
+					onGoToLine={onGoToLine}
+				/>
+			)}
+			{/* The reader's view has no problems to show. */}
+			{!fullScreen && (
+				<SceneErrorBadge
+					errors={parse.errors}
+					onToggle={() => {
+						setErrorsOpen(!errorsOpen);
+						setBeatPanelOpen(false);
+					}}
+					open={showErrors}
 				/>
 			)}
 			{showBeatPanel && (
