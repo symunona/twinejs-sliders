@@ -18,6 +18,7 @@ import {
 	expectSyncState,
 	ghostCard,
 	goToLibrary,
+	holdPassage,
 	newStory,
 	openPassageEditor,
 	passageCard,
@@ -113,7 +114,7 @@ test.describe('Presence and soft locks', () => {
 		const storyId = await shareStory(alice, bob, server);
 
 		await enterStory(alice.page, STORY);
-		await openPassageEditor(alice.page, PASSAGE);
+		await holdPassage(alice.page, PASSAGE);
 
 		await enterStory(bob.page, STORY);
 
@@ -158,7 +159,7 @@ test.describe('Presence and soft locks', () => {
 		const storyId = await shareStory(alice, bob, server);
 
 		await enterStory(alice.page, STORY);
-		await openPassageEditor(alice.page, PASSAGE);
+		await holdPassage(alice.page, PASSAGE);
 
 		await enterStory(bob.page, STORY);
 		await openPassageEditor(bob.page, PASSAGE);
@@ -198,7 +199,7 @@ test.describe('Presence and soft locks', () => {
 		await shareStory(alice, bob, server);
 
 		await enterStory(alice.page, STORY);
-		await openPassageEditor(alice.page, PASSAGE);
+		await holdPassage(alice.page, PASSAGE);
 
 		// Bob never opens a passage editor: the scene editor on the map's selection is
 		// a way of editing the passage too, and every stage gesture writes its text.
@@ -220,12 +221,14 @@ test.describe('Presence and soft locks', () => {
 			timeout: 20000
 		});
 
-		// Presence is a passage being open, not a steal: alice hears about bob once he
-		// is in the passage, which today means its editor.
-		await openPassageEditor(bob.page, PASSAGE);
+		// The hub only knows who is in a passage through `focus`. Taking the edit claims
+		// it, so alice hears about bob with no passage editor open on his side.
 		await expect(
 			alice.page.getByTestId('passage-shared-banner')
 		).toHaveAttribute('data-shared-with', /bob/, {timeout: 20000});
+
+		// Shared now: his passage editor opens writable.
+		await openPassageEditor(bob.page, PASSAGE);
 		expect(await editorIsReadOnly(bob.page)).toBe(false);
 	});
 
@@ -233,7 +236,7 @@ test.describe('Presence and soft locks', () => {
 		const storyId = await shareStory(alice, bob, server);
 
 		await enterStory(alice.page, STORY);
-		await openPassageEditor(alice.page, PASSAGE);
+		await holdPassage(alice.page, PASSAGE);
 
 		await enterStory(bob.page, STORY);
 		await openPassageEditor(bob.page, PASSAGE);

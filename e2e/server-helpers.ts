@@ -855,6 +855,23 @@ export async function openPassageEditor(
 }
 
 /**
+ * Open a passage AND hold it. The soft lock is claimed on the first write, not on open
+ * (opening to read must not lock anybody out), so this types a space and takes it back:
+ * one claim, no net change, nothing committed.
+ */
+export async function holdPassage(page: Page, name: string): Promise<void> {
+	await openPassageEditor(page, name);
+
+	const before = await editorText(page);
+
+	await page.locator('.CodeMirror textarea').first().click({force: true});
+	await page.keyboard.press('Control+End');
+	await page.keyboard.insertText(' ');
+	await page.keyboard.press('Backspace');
+	await expect.poll(() => editorText(page), {timeout: 10000}).toBe(before);
+}
+
+/**
  * A passage's text as it sits in `localStorage`, which is the store of record.
  *
  * The point of asking storage rather than the editor is story 12: when the server is
