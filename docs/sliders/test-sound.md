@@ -90,3 +90,50 @@ One row per case:
 |---|---|---|---|---|---|---|---|
 
 Plus: anything in the console that is not `[preload]`.
+
+### Run 2026-10-17, pandora
+
+Host: pandora, Ubuntu 24.04, GNOME Wayland, PipeWire, built-in speakers 60%. Pages M + P
+snapshots have `sliders-boot__play`. Harness: fresh profile per case, CDP (Chrome) / WebDriver
+BiDi (Firefox), debug on, `chapbook-*` cleared, Play clicked as a trusted input event.
+Sound = RMS of the default sink monitor (`parecord`) + hooked `<audio>` elements (`paused`,
+`currentTime`). Silence RMS 0. User confirmed hearing music by ear on #1 M.
+
+| # | browser + version | OS | expected | got | verdict line | sound heard | notes / screenshot |
+|---|---|---|---|---|---|---|---|
+| 1 M | Chrome 148.0.7778.215 | Ubuntu 24.04 Wayland | B | B. `Loading…` → `▶ Play` → click → scene | `autoplay — blocked (probe NotAllowedError)` | yes, by ear. Sink RMS 0 before click, 5240 after. Track playing, t 0.5→4.7 s | `test-sound-results/1-M-boot-loading.png`, `1-M-boot-armed.png` |
+| 1 P | Chrome 148 | same | no button | no button | none (no sound scene) | silent, as expected | — |
+| 2 M | Chrome 148, `--autoplay-policy=no-user-gesture-required` | same | A | **A, but disabled `Loading…` button flashed** during tier 0 (~100 ms) | `autoplay — allowed (probe)` | yes, no click. RMS 2390 pre, 5555 later | `2-M-boot-loading.png`. See mismatch 1 |
+| 2 P | Chrome 148, flag | same | no button | no button | none | silent | — |
+| 3 M | Chrome 148, `--kiosk` | same | record (likely B) | B | `autoplay — blocked (probe NotAllowedError)` | yes after click. RMS 0 → 5094 | `3-M-boot-armed.png` |
+| 3 P | Chrome 148, kiosk | same | no button | no button | none | silent | — |
+| 4 M | Chrome 148, kiosk + flag | same | A | **A, `Loading…` flashed** (same as 2 M) | `autoplay — allowed (probe)` | yes, no click. RMS 1370 pre, 5554 later | `4-M-boot-loading.png` |
+| 4 P | Chrome 148, kiosk + flag | same | no button | no button | none | silent | — |
+| 5 | Edge / Chromium | — | B / A | not run | — | — | Edge not installed. Chromium is a snap, snapd inactive on pandora → won't start |
+| 6 M | Firefox 158.0 (mozilla.org tarball) | same | B, `getAutoplayPolicy allowed-muted` | B. Button already `▶ Play` at first poll (tier 0 in <100 ms) | `autoplay — blocked (getAutoplayPolicy allowed-muted)` | yes after click. RMS 27 → 4718 | `6-M-boot-armed.png` |
+| 6 P | Firefox 158 | same | no button | no button | none | silent | — |
+| 7 M | Firefox 158, `media.autoplay.default=0` | same | A, `getAutoplayPolicy allowed` | A. No button seen | `autoplay — allowed (getAutoplayPolicy allowed)` | yes, no click. RMS 445 pre, 5200 later | 3× `scene: Could not preload …/pub/blobs/… (Error in input stream)` warn |
+| 7 P | Firefox 158, allow | same | no button | no button | none | silent | — |
+| 8–11 | Safari, iOS, Android | — | — | not run | — | — | Linux box |
+| 12 | P → M after click | — | record | not run | — | — | — |
+
+Firefox: snap dead (snapd inactive), used official tarball. Firefox not seen with a
+`Loading…` flash in 7 M; 0.25 s poll may miss it.
+
+Click stop (Chrome 148, M, `sliders.preload.delay=3000`): **pass**.
+- Play, beats clicked through, link `Out to the street` clicked at +7.0 s.
+- `html.sliders-nav-wait` on, spinner on the link, `aria-busy` 1. Shot: `CS-M-clickstop.png`.
+- `nav-wait — Street: 5 assets pending` +7003 → `tier-done t1` +9611 → `nav-go — Street` +9611.
+- Tiers: `t0` done +3042 → `reveal` +6064 → `t1` +9611. `t2` has 0 assets.
+- Music kept playing (RMS 5067).
+
+Console, not `[preload]`, every run:
+- `lookups: The trail variable has been set to a undefined, not an array.` (Chapbook, several per load).
+- Chrome: `401` on `https://twine-story-store.tmpx.space/favicon.ico`.
+- No exceptions, no error box, no beat ran before reveal.
+
+Mismatches vs doc:
+1. A cases (2 M, 4 M): doc says "No button at any point". Disabled `Loading…` button shows
+   while tier 0 loads, removed at reveal. Cause: `preload.ts:397` mounts boot when the first
+   scene has sound, before the autoplay verdict. Music still autoplays.
+2. No "no button AND silent" case. Every blocked case armed. Every allowed case made sound.
