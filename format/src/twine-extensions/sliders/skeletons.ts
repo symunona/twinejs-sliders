@@ -16,6 +16,14 @@ const OPEN = '\n[scene]\n';
 /** Closes it, so prose after the scene is prose again. */
 const CLOSE = '\n\n[continued]\n';
 
+/**
+ * "Insert Empty Scene": the block and nothing in it. The editor intercepts the command and
+ * writes its own copy with a `bg:` filled in (`src/dialogs/passage-edit/scene-preview/
+ * empty-scene.ts`), then opens the scene editor; this bare form is what any other host
+ * gets.
+ */
+export const EMPTY_SCENE = `${OPEN}${CLOSE}`;
+
 export const SCENE_SKELETON = `${OPEN}# Every key Sliders understands. Delete the ones you do not need.
 from: ~                         # inherit: Other Passage, Other Passage@enter, Other Passage@mark-name
 bg: backdrop-id                 # asset id, never a path

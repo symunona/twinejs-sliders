@@ -607,7 +607,7 @@ beats:
 						<p>
 							In a scene passage, a <code>[[link]]</code> written outside the
 							block is not drawn — every way out has to be in{' '}
-							<code>links:</code>. Insert Scene fills these in from the links the
+							<code>links:</code>. Full Skeleton fills these in from the links the
 							passage already had.
 						</p>
 						<h3>Write the target inline</h3>
@@ -626,7 +626,7 @@ beats:
 							section: <code>name: value</code> lines above a <code>--</code>{' '}
 							line at the top of a passage. A condition that names a variable no
 							passage sets is underlined as an error — including the one in the
-							Insert Scene example, until you set it or drop it.
+							Full Skeleton example, until you set it or drop it.
 						</p>
 						<Sample>{`has_weapon: true
 --
@@ -688,9 +688,13 @@ beats:
 						</table>
 						<Sample>{PATCH_SAMPLE}</Sample>
 						<p>
-							The toolbar writes these: <strong>Scene ▸ Overlay on …</strong>{' '}
+							The toolbar writes these: <strong>Scene ▸ From … (template)</strong>{' '}
 							inserts a patch pointing at the last scene you edited, and{' '}
-							<strong>Scene ▸ Insert Last Scene</strong> inserts a copy of it.
+							<strong>Scene ▸ Copy of Last Scene</strong> inserts a copy of it.
+							<strong> Scene ▸ Insert Empty Scene</strong> writes just the block
+							and a <code>bg:</code> (the last one this story used, else the first
+							backdrop in the library, else the DEMO pack&apos;s) and opens the
+							scene editor.
 						</p>
 					</TabPanel>
 				</Tabs>

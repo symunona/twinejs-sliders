@@ -77,7 +77,7 @@ test('scene help, prefilled links and unset variables', async ({page}) => {
 	// --- Insert Scene borrows the links the passage already has -------------
 	await openPassage(page, 'Untitled Passage');
 	await setPassageText(page, 'Go out to [[Street]] or [[Fight->Tavern Fight]].');
-	await sceneMenuItem(page, /^Insert Scene$/);
+	await sceneMenuItem(page, /^Full Skeleton \(every key\)$/);
 
 	const filled = await editorValue(page);
 
@@ -111,7 +111,7 @@ test('scene help, prefilled links and unset variables', async ({page}) => {
 	await closeDialogs(page);
 	await openPassage(page, 'Street');
 	await setPassageText(page, 'A wet street.');
-	await sceneMenuItem(page, /^Insert Scene$/);
+	await sceneMenuItem(page, /^Full Skeleton \(every key\)$/);
 
 	const street = await editorValue(page);
 

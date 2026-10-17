@@ -238,7 +238,7 @@
 				"name": "Name"
 			},
 			"sceneAutoAdvance": "New Scene Auto-Advance",
-			"sceneAutoAdvanceExplanation": "A template only. Insert Scene fills in the skeleton's autoAdvance: line with this, so a story with one pace does not retype it. It never changes how a scene already written plays, and the published story only ever reads the autoAdvance: in a scene's own text.",
+			"sceneAutoAdvanceExplanation": "A template only. Scene ▸ Full Skeleton fills in the skeleton's autoAdvance: line with this, so a story with one pace does not retype it. It never changes how a scene already written plays, and the published story only ever reads the autoAdvance: in a scene's own text.",
 			"sceneAutoAdvances": {
 				"click": "0s \u2014 wait for a click",
 				"reader": "Leave it to the reader",

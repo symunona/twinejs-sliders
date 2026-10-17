@@ -71,10 +71,10 @@ async function sceneMenuItem(page: Page, item: RegExp) {
 test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => {
 	await createStory(page, STORY_NAME);
 
-	// --- Insert Scene: the skeleton is the one place to learn the format ----
+	// --- Full Skeleton: the skeleton is the one place to learn the format ----
 	await openPassage(page, 'Untitled Passage');
 	await setPassageText(page, '');
-	await sceneMenuItem(page, /^Insert Scene$/);
+	await sceneMenuItem(page, /^Full Skeleton \(every key\)$/);
 
 	const skeleton = await editorValue(page);
 
@@ -103,7 +103,7 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 	await setPassageText(page, TAVERN_SCENE);
 	await waitForPassageSave();
 	await newPassage(page, 'Untitled Passage 1');
-	await sceneMenuItem(page, /^Insert Last Scene \(Untitled Passage\)$/);
+	await sceneMenuItem(page, /^Copy of Last Scene \(Untitled Passage\)$/);
 
 	const copied = await editorValue(page);
 
@@ -117,7 +117,7 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 	// --- Overlay: a patch that names the scene it builds on -----------------
 	// Pasting the copy was an edit, so the LAST scene is now Untitled Passage 1's.
 	await newPassage(page, 'Untitled Passage 2');
-	await sceneMenuItem(page, /^Overlay on 'Untitled Passage 1'$/);
+	await sceneMenuItem(page, /^From 'Untitled Passage 1' \(template\)$/);
 
 	const overlay = await editorValue(page);
 

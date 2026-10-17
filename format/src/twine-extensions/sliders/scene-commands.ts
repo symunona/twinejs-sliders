@@ -9,6 +9,7 @@ import {readLastScene} from './last-scene';
 import {
 	BEATS_SNIPPET,
 	CAST_SNIPPET,
+	EMPTY_SCENE,
 	LINKS_SNIPPET,
 	SCENE_SKELETON,
 	lastSceneSnippet,
@@ -17,6 +18,7 @@ import {
 
 /** Command name -> the text it inserts. */
 export const sceneInsertText = {
+	insertEmptyScene: EMPTY_SCENE,
 	insertScene: SCENE_SKELETON,
 	insertSceneBeats: BEATS_SNIPPET,
 	insertSceneCast: CAST_SNIPPET,

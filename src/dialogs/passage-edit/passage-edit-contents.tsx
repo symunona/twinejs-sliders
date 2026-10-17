@@ -37,6 +37,16 @@ import {
 	sceneLinkSeeds
 } from './scene-preview/prefill-links';
 import {insertSceneAutoAdvance} from './scene-preview/insert-scene-pref';
+import {
+	defaultSceneBg,
+	emptySceneText,
+	isEmptySceneCommand
+} from './scene-preview/empty-scene';
+import {libraryEngine} from '../../store/asset-library/engine-registry';
+import {
+	ScenePreviewDialog,
+	setScenePreviewDismissed
+} from '../scene-preview';
 import {useSceneParse} from './scene-preview/use-scene-parse';
 import {useLastSceneTracker} from './scene-preview/use-last-scene';
 import {usePublishScenePreview} from '../../routes/story-edit/scene-preview-source-context';
@@ -252,6 +262,44 @@ export const PassageEditContents: React.FC<
 		cmEditor
 	);
 
+	/**
+	 * Scene ▸ Insert Empty Scene: the bare block with a backdrop picked for it (see
+	 * `empty-scene.ts`), then the scene editor. Picking may create the DEMO pack, so it is
+	 * async; the block lands where the selection was when the item was clicked.
+	 */
+	function insertEmptyScene(editor: CodeMirror.Editor) {
+		const doc = editor.getDoc();
+		const from = doc.getCursor('from');
+		const to = doc.getCursor('to');
+		const selected = doc.getRange(from, to);
+
+		void (async () => {
+			let bg: string | undefined;
+
+			try {
+				bg = await defaultSceneBg(await libraryEngine(), story);
+			} catch (bgError) {
+				console.warn('Could not pick a backdrop for the empty scene', bgError);
+			}
+
+			const text = emptySceneText(bg);
+
+			if (editor.getDoc() === doc && doc.getRange(from, to) === selected) {
+				doc.replaceRange(text, from, to, '+input');
+			} else {
+				editor.getDoc().replaceSelection(text);
+			}
+
+			editor.focus();
+			setScenePreviewDismissed(false);
+			dialogsDispatch({
+				type: 'addDialog',
+				component: ScenePreviewDialog,
+				props: {storyId}
+			});
+		})();
+	}
+
 	function handleExecCommand(name: string) {
 		// A format toolbar command probably will affect the editor content. It
 		// appears that react-codemirror2 can't maintain the selection properly in
@@ -262,6 +310,11 @@ export const PassageEditContents: React.FC<
 
 		if (!cmEditor) {
 			throw new Error('No editor set');
+		}
+
+		if (isEmptySceneCommand(name)) {
+			insertEmptyScene(cmEditor);
+			return;
 		}
 
 		// "Insert Scene" drops a skeleton whose links: are a worked example. Point that

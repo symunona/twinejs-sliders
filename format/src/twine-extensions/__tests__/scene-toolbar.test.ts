@@ -63,10 +63,11 @@ describe('the toolbar', () => {
 
 	it('offers every scene command', () => {
 		expect(menus()[0].items.map(item => item.command)).toEqual([
-			'insertScene',
+			'insertEmptyScene',
 			'insertLastScene',
 			'insertLastSceneOverlay',
 			undefined,
+			'insertScene',
 			'insertSceneCast',
 			'insertSceneBeats',
 			'insertSceneLinks'
@@ -76,9 +77,9 @@ describe('the toolbar', () => {
 	it('disables the handoff items when the editor has stored nothing', () => {
 		const items = menus()[0].items;
 
-		expect(items[1]).toMatchObject({label: 'Insert Last Scene', disabled: true});
+		expect(items[1]).toMatchObject({label: 'Copy of Last Scene', disabled: true});
 		expect(items[2]).toMatchObject({
-			label: 'Overlay on Last Scene',
+			label: 'From Last Scene (template)',
 			disabled: true
 		});
 	});
@@ -89,11 +90,11 @@ describe('the toolbar', () => {
 		const items = menus()[0].items;
 
 		expect(items[1]).toMatchObject({
-			label: 'Insert Last Scene (Alley)',
+			label: 'Copy of Last Scene (Alley)',
 			disabled: false
 		});
 		expect(items[2]).toMatchObject({
-			label: "Overlay on 'Alley'",
+			label: "From 'Alley' (template)",
 			disabled: false
 		});
 	});
@@ -103,6 +104,7 @@ describe('the toolbar', () => {
 describe('the scene commands', () => {
 	it('are all present', () => {
 		for (const name of [
+			'insertEmptyScene',
 			'insertScene',
 			'insertLastScene',
 			'insertLastSceneOverlay',
@@ -114,6 +116,14 @@ describe('the scene commands', () => {
 				'function'
 			);
 		}
+	});
+
+	it('insert an empty scene: the block and nothing in it', () => {
+		const {editor, replaceSelection} = fakeEditor();
+
+		(commands as any).insertEmptyScene(editor);
+
+		expect(replaceSelection.mock.calls[0][0]).toBe('\n[scene]\n\n\n[continued]\n');
 	});
 
 	it('insert a skeleton that teaches every top-level key', () => {

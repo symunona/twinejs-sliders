@@ -12,6 +12,7 @@ export {SCENE_MENU_LABEL, sceneMenu} from './scene-toolbar';
 export {
 	BEATS_SNIPPET,
 	CAST_SNIPPET,
+	EMPTY_SCENE,
 	LINKS_SNIPPET,
 	SCENE_SKELETON,
 	lastSceneSnippet,

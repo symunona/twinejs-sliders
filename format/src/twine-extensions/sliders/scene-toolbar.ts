@@ -31,24 +31,25 @@ export function sceneMenu(icon: string, disabled: boolean) {
 		label: SCENE_MENU_LABEL,
 		disabled,
 		items: [
-			{type: 'button', label: 'Insert Scene', command: 'insertScene'},
+			{type: 'button', label: 'Insert Empty Scene', command: 'insertEmptyScene'},
 			{
 				type: 'button',
 				label: last
-					? `Insert Last Scene (${lastSceneLabel(last)})`
-					: 'Insert Last Scene',
+					? `Copy of Last Scene (${lastSceneLabel(last)})`
+					: 'Copy of Last Scene',
 				command: 'insertLastScene',
 				disabled: !last
 			},
 			{
 				type: 'button',
 				label: last?.passageName
-					? `Overlay on '${last.passageName}'`
-					: 'Overlay on Last Scene',
+					? `From '${last.passageName}' (template)`
+					: 'From Last Scene (template)',
 				command: 'insertLastSceneOverlay',
 				disabled: !last?.passageName
 			},
 			{type: 'separator'},
+			{type: 'button', label: 'Full Skeleton (every key)', command: 'insertScene'},
 			{type: 'button', label: 'Cast and Props', command: 'insertSceneCast'},
 			{type: 'button', label: 'Beats', command: 'insertSceneBeats'},
 			{type: 'button', label: 'Links', command: 'insertSceneLinks'}

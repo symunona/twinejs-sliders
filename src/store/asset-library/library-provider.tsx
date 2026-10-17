@@ -25,6 +25,7 @@ import {
 	reconnectLibrary,
 	setLibraryEngine
 } from './engine-registry';
+import {attachForNames} from './auto-attach';
 import {inertClock, OfflineTransport} from './offline-transport';
 import {
 	placeholderCollectionName,
@@ -211,6 +212,8 @@ export const LibraryProvider: React.FC<{children?: React.ReactNode}> = ({
 	const seen = React.useRef(new Map<string, Story>());
 	/** Story name last seen per story: a change renames its own collection. */
 	const names = React.useRef(new Map<string, string>());
+	/** `lastUpdate` last seen per story: a change is an edit, which may auto-attach. */
+	const updates = React.useRef(new Map<string, number>());
 	const timer = React.useRef<ReturnType<typeof setTimeout>>();
 
 	const schedule = React.useCallback(() => {
@@ -220,7 +223,12 @@ export const LibraryProvider: React.FC<{children?: React.ReactNode}> = ({
 
 		timer.current = setTimeout(() => {
 			timer.current = undefined;
-			void syncStories(storiesRef.current, seen.current, names.current);
+			void syncStories(
+				storiesRef.current,
+				seen.current,
+				names.current,
+				updates.current
+			);
 		}, LIBRARY_REFS_DEBOUNCE_MS);
 	}, []);
 
@@ -290,18 +298,48 @@ export function followStoryRename(
 	engine.updateCollection(own.id, {name: uniqueName(to, taken)});
 }
 
+/**
+ * Names a story's scenes write, minus `fx:` (slugs, not names). What auto-attach looks up.
+ */
+function sceneNames(story: Story): string[] {
+	const refs = collectAssetRefs(story);
+
+	return [
+		...refs.assetRefs,
+		...refs.characterRefs,
+		...(refs.autoRefs ?? []),
+		...(refs.soundRefs ?? [])
+	];
+}
+
 async function syncStories(
 	stories: readonly Story[],
 	seen: Map<string, Story>,
-	names: Map<string, string>
+	names: Map<string, string>,
+	updates: Map<string, number>
 ): Promise<void> {
 	const engine = await libraryEngine();
 
 	for (const story of stories) {
-		const binding = engine.binding(story.id);
 		const previousName = names.get(story.id);
+		const previousUpdate = updates.get(story.id);
+		const update = new Date(story.lastUpdate).getTime();
 
 		names.set(story.id, story.name);
+		updates.set(story.id, update);
+
+		// Art from an unattached pack, used in an edit made in this session: attach the
+		// pack. Only on an edit, never on first sight -- loading the app must not rebind
+		// every old story whose text happens to match a pack's names.
+		if (previousUpdate !== undefined && previousUpdate !== update) {
+			try {
+				attachForNames(engine, story.id, sceneNames(story), story.name);
+			} catch (error) {
+				console.warn('asset library: could not attach used collections', error);
+			}
+		}
+
+		const binding = engine.binding(story.id);
 
 		if (!binding) {
 			continue;
