@@ -787,7 +787,7 @@ panel, press lit icon again = back to default.
   bubble → no replay.
 - CSS animation on `scale` / `translate` + opacity. Layout owns `transform`, no fight.
 - Reduced motion → plain fade.
-- Editor: beat panel BUBBLE ▸ Enter (dropdown) + Enter length (s). Scene settings too.
+- Editor: beat panel BUBBLE ▸ Enter (dropdown) + Duration (s) under it. Scene settings too.
 
 ### Aimed tail
 
