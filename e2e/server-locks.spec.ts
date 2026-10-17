@@ -194,6 +194,41 @@ test.describe('Presence and soft locks', () => {
 			.toBe(false);
 	});
 
+	test('Scene editor obeys the lock', async ({alice, bob, server}) => {
+		await shareStory(alice, bob, server);
+
+		await enterStory(alice.page, STORY);
+		await openPassageEditor(alice.page, PASSAGE);
+
+		// Bob never opens a passage editor: the scene editor on the map's selection is
+		// a way of editing the passage too, and every stage gesture writes its text.
+		await enterStory(bob.page, STORY);
+		await bob.page.getByRole('button', {name: PASSAGE, exact: true}).click();
+		await bob.page.getByRole('tab', {name: 'Story'}).click();
+		await bob.page.getByRole('button', {name: 'Scene Editor'}).click();
+
+		const preview = bob.page.locator('.scene-preview-dialog');
+		const banner = preview.getByTestId('passage-lock-banner');
+
+		await expect(banner).toHaveAttribute('data-locked-by', 'alice', {
+			timeout: 20000
+		});
+
+		await banner.getByTestId('passage-lock-takeover').click();
+
+		await expect(preview.getByTestId('passage-shared-banner')).toBeVisible({
+			timeout: 20000
+		});
+
+		// Presence is a passage being open, not a steal: alice hears about bob once he
+		// is in the passage, which today means its editor.
+		await openPassageEditor(bob.page, PASSAGE);
+		await expect(
+			alice.page.getByTestId('passage-shared-banner')
+		).toHaveAttribute('data-shared-with', /bob/, {timeout: 20000});
+		expect(await editorIsReadOnly(bob.page)).toBe(false);
+	});
+
 	test('Take over', async ({alice, bob, server}) => {
 		const storyId = await shareStory(alice, bob, server);
 
