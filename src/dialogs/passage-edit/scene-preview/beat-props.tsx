@@ -82,6 +82,12 @@ export interface BeatPropsProps {
 	autoAdvanceMs?: number;
 	/** Colours the story already uses, offered beside each colour well. */
 	storyColors?: string[];
+	/**
+	 * Ids on stage in the state this beat is drawn in. Only the Anchor row reads it: a
+	 * speaker who is not here has nothing for the bubble to hang off. Absent = unknown,
+	 * which leaves the row enabled rather than guessing.
+	 */
+	stageIds?: readonly string[];
 }
 
 /** The empty option: "whatever the character or the renderer already says". */
@@ -120,6 +126,48 @@ function hasBody(beat: Beat | undefined): boolean {
 /** Beats with a line to paint, so bubble keys mean something. */
 function speaks(beat: Beat | undefined): boolean {
 	return beat?.kind === 'say' || beat?.kind === 'box';
+}
+
+/**
+ * Why `anchor:` cannot change anything on this beat, as a locale key — or `undefined` when
+ * it can.
+ *
+ * Matches `positionBubble`/`positionBox` in render-dom's `dialogue.ts`. A narration box
+ * never reads `anchor:`. A bubble's anchor is the speaker's `bubble` point or the beat's
+ * own `tail:`; with neither (speaker not on stage, or no such id) it is already a
+ * free-standing bubble, so `speaker` and `scene` have nothing between them to choose.
+ */
+export function anchorDisabledKey(
+	beat: Beat | undefined,
+	tail: BubbleStyle['tail'],
+	stageIds: readonly string[] | undefined
+): string | undefined {
+	if (beat?.kind === 'box') {
+		return 'dialogs.passageEdit.beatProps.anchorNarration';
+	}
+
+	if (beat?.kind !== 'say' || tail || !stageIds) {
+		return undefined;
+	}
+
+	return stageIds.includes(beat.who)
+		? undefined
+		: 'dialogs.passageEdit.beatProps.anchorOffStage';
+}
+
+/**
+ * What `size:` does on this beat that the row has to say out loud, as a locale key — or
+ * `undefined` when it is just a multiplier.
+ *
+ * Never a reason to grey the field out: `auto` and `manual` draw the words at
+ * `--sliders-bubble-size`, and `absolute`'s `fitText` scales its whole search window by it,
+ * so it sets how big a short line may grow (and how small a long one may shrink). That last
+ * one is not what an author expects of "fits the text", so it gets a note.
+ */
+export function sizeNoteKey(sizing: BubbleStyle['sizing']): string | undefined {
+	return sizing === 'absolute'
+		? 'dialogs.passageEdit.beatProps.sizeAbsolute'
+		: undefined;
 }
 
 function styleOf(beat: Beat | undefined): BubbleStyle | undefined {
@@ -162,13 +210,23 @@ interface PropRowProps {
 	stated?: boolean;
 	resetLabel: string;
 	testId?: string;
+	/**
+	 * Set when the control cannot change anything on this beat: the row greys out and says
+	 * why in place of its fallback. The reset stays live while a key is stated, so a dead
+	 * key can still be cleared out of the YAML.
+	 */
+	disabledReason?: string;
+	/** A line under the fallback, for a control whose effect needs explaining here. */
+	note?: string;
 }
 
 /** One line of the grid: label, control, reset; the fallback under the control. */
 const PropRow: React.FC<PropRowProps> = ({
 	children,
+	disabledReason,
 	fallback,
 	label,
+	note,
 	onReset,
 	overridden,
 	resetLabel,
@@ -176,7 +234,11 @@ const PropRow: React.FC<PropRowProps> = ({
 	testId
 }) => (
 	<div
-		className={classNames('beat-prop-row', {overridden})}
+		className={classNames('beat-prop-row', {
+			disabled: !!disabledReason,
+			overridden
+		})}
+		data-disabled={disabledReason ? 'true' : undefined}
 		data-overridden={overridden ? 'true' : undefined}
 		data-testid={testId}
 	>
@@ -198,8 +260,15 @@ const PropRow: React.FC<PropRowProps> = ({
 		) : (
 			<span />
 		)}
-		{fallback !== undefined && (
-			<span className="beat-prop-default">{fallback}</span>
+		{disabledReason ? (
+			<span className="beat-prop-default beat-prop-why">{disabledReason}</span>
+		) : (
+			fallback !== undefined && (
+				<span className="beat-prop-default">{fallback}</span>
+			)
+		)}
+		{note && !disabledReason && (
+			<span className="beat-prop-default beat-prop-why">{note}</span>
 		)}
 	</div>
 );
@@ -225,6 +294,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	inherited,
 	onSetKey,
 	onSetBubble,
+	stageIds,
 	storyColors
 }) => {
 	const {t} = useTranslation();
@@ -290,16 +360,13 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 */
 	const merged = {...inherited, ...style};
 	/**
-	 * Whether this beat's bubble is a hand-composed box whose type is still the scene's own
-	 * size — the one sizing where a multiplier is the author's to set.
-	 *
-	 * Read off the MERGED sizing, not the beat's own: a scene that says `sizing: manual`
-	 * once at the top draws every bubble that way, and the field has to be there for those
-	 * too. `absolute` scales the words to fill the box itself, so a multiplier there would
-	 * be a number that changes nothing, and `auto` grows the box to fit whatever size the
-	 * words are — there is no rectangle to set type against.
+	 * Anchor greys out where it cannot change anything; Size never does, it only explains
+	 * itself under `absolute`. Neither row is ever taken away: a control that vanishes when
+	 * another one changes reads as a bug. Both read the MERGED style — a scene that says
+	 * `sizing: absolute` or `tail:` once at the top draws every bubble that way.
 	 */
-	const manual = merged.sizing === 'manual';
+	const sizeNote = sizeNoteKey(merged.sizing);
+	const anchorOff = anchorDisabledKey(beat, merged.tail, stageIds);
 	const size =
 		sizeDraft ?? (style?.size === undefined ? '' : String(style.size));
 	const emptyKey = emptyReasonKey(beat, beatNumber);
@@ -649,59 +716,67 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 									{label('sizing')}
 								</PreviewSelect>
 							</PropRow>
-							{manual && (
-								/*
-									Only beside a `manual` box, directly after the select that made
-									it one: the author stated the rectangle, and this is the type
-									they set inside it. The arrows are the whole control -- `size`
-									is a multiplier, so the move is "a bit bigger", a tenth a press.
-								*/
-								<PropRow
-									{...bubbleRow('size', String(inherited?.size ?? 1))}
-									testId="beat-prop-size"
-								>
-									<span className="scene-preview-beat-props-size">
-										<TextInput
-											min={SIZE_MIN}
-											onChange={event => commitSize(event.target.value)}
-											onBlur={clearSize}
-											onKeyDown={event => {
-												if (event.key === 'Enter') {
-													clearSize();
-												}
+							{/*
+								Directly after the select that decides whether it means anything.
+								The arrows are the whole control -- `size` is a multiplier, so the
+								move is "a bit bigger", a tenth a press.
+							*/}
+							<PropRow
+								{...bubbleRow('size', String(inherited?.size ?? 1))}
+								note={sizeNote && t(sizeNote)}
+								testId="beat-prop-size"
+							>
+								<span className="scene-preview-beat-props-size">
+									<TextInput
+										min={SIZE_MIN}
+										onChange={event => commitSize(event.target.value)}
+										onBlur={clearSize}
+										onKeyDown={event => {
+											if (event.key === 'Enter') {
+												clearSize();
+											}
 
-												if (event.key === 'Escape') {
-													setSizeDraft(undefined);
-												}
-											}}
-											// What the box would be drawn at if it said nothing:
-											// the scene's own multiplier, or the plain stage size.
-											placeholder={String(inherited?.size ?? 1)}
-											step={SIZE_STEP}
-											type="number"
-											value={size}
-										>
-											{label('size')}
-										</TextInput>
-									</span>
-								</PropRow>
-							)}
-							<PropRow {...bubbleRow('anchor')} testId="beat-prop-anchor">
-								<TextSelect
-									onChange={event =>
-										onSetBubble('anchor', event.target.value || null)
-									}
-									options={[
-										{label: label('inherit'), value: INHERIT},
-										...BUBBLE_ANCHORS.map(anchor => ({
-											label: anchor,
-											value: anchor
-										}))
-									]}
-									value={style?.anchor ?? INHERIT}
+											if (event.key === 'Escape') {
+												setSizeDraft(undefined);
+											}
+										}}
+										// What the box would be drawn at if it said nothing:
+										// the scene's own multiplier, or the plain stage size.
+										placeholder={String(inherited?.size ?? 1)}
+										step={SIZE_STEP}
+										type="number"
+										value={size}
+									>
+										{label('size')}
+									</TextInput>
+								</span>
+							</PropRow>
+							<PropRow
+								{...bubbleRow('anchor')}
+								disabledReason={anchorOff && t(anchorOff)}
+								testId="beat-prop-anchor"
+							>
+								<span
+									className="beat-prop-disabled-wrap"
+									title={anchorOff && t(anchorOff)}
 								>
-									{label('anchor')}
-								</TextSelect>
+									<TextSelect
+										disabled={!!anchorOff}
+										onChange={event =>
+											onSetBubble('anchor', event.target.value || null)
+										}
+										options={[
+											{label: label('inherit'), value: INHERIT},
+											...BUBBLE_ANCHORS.map(anchor => ({
+												label: anchor,
+												value: anchor
+											}))
+										]}
+										value={style?.anchor ?? INHERIT}
+									>
+										{label('anchor')}
+									</TextSelect>
+								</span>
 							</PropRow>
 						</div>
 					)}

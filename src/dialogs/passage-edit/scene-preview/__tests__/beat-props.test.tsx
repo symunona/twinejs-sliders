@@ -2,7 +2,7 @@ import {fireEvent, render, screen, within} from '@testing-library/react';
 import * as React from 'react';
 import type {Beat, BubbleStyle, SayBeat} from '@sliders/scene-types';
 import {AUTO_ADVANCE_MS} from '../beat-hold';
-import {BeatProps} from '../beat-props';
+import {BeatProps, anchorDisabledKey, sizeNoteKey} from '../beat-props';
 
 function say(dur?: number): Beat {
 	return {
@@ -31,6 +31,7 @@ function renderProps(
 		beatCount?: number;
 		beatNumber?: number;
 		inherited?: BubbleStyle;
+		stageIds?: string[];
 	} = {}
 ) {
 	const onSetBubble = jest.fn();
@@ -47,6 +48,7 @@ function renderProps(
 			inherited={options.inherited}
 			onSetBubble={onSetBubble}
 			onSetKey={onSetKey}
+			stageIds={options.stageIds}
 		/>
 	);
 
@@ -54,7 +56,7 @@ function renderProps(
 }
 
 function hold() {
-	return screen.getByRole('spinbutton') as HTMLInputElement;
+	return screen.getAllByRole('spinbutton')[0] as HTMLInputElement;
 }
 
 describe('<BeatProps> auto-advance', () => {
@@ -415,11 +417,10 @@ describe('<BeatProps> bubble colours', () => {
 });
 
 /**
- * The type multiplier, offered only beside a `manual` box.
+ * The type multiplier. Always offered: every sizing draws the words at it.
  *
  * Found by position for the reason every other control here is: i18n is not initialised
- * under jest. Hold is the first spinbutton in the row and Size, when it is there at all, is
- * the second.
+ * under jest. Hold is the first spinbutton in the row and Size is the second.
  */
 function sizeField(): HTMLInputElement {
 	return screen.getAllByRole('spinbutton')[1] as HTMLInputElement;
@@ -427,29 +428,43 @@ function sizeField(): HTMLInputElement {
 
 describe('<BeatProps> bubble size', () => {
 	/*
-	 * `auto` grows the box to fit the words, so there is no rectangle to set type against,
-	 * and `absolute` scales the words to fill the box itself -- a multiplier there is a
-	 * number that changes nothing.
+	 * Never taken away and never greyed: `auto` and `manual` draw the words at the
+	 * multiplier, and `absolute` scales its fit window by it. A field that vanished when the
+	 * sizing changed read as a bug.
 	 */
-	it('is absent while the bubble sizes itself', () => {
+	it('is offered while the bubble sizes itself', () => {
 		renderProps(sayStyled({}));
-		expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+		expect(sizeField()).toBeEnabled();
 	});
 
-	it('is absent on an absolute box, which sizes its own type', () => {
+	it('is offered on an absolute box, with a note on what it does there', () => {
 		renderProps(sayStyled({sizing: 'absolute'}));
-		expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+		expect(sizeField()).toBeEnabled();
+		expect(screen.getByTestId('beat-prop-size')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.sizeAbsolute'
+		);
 	});
 
 	it('is offered on a manual box', () => {
 		renderProps(sayStyled({sizing: 'manual'}));
 		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+		expect(screen.getByTestId('beat-prop-size')).not.toHaveTextContent(
+			'dialogs.passageEdit.beatProps.sizeAbsolute'
+		);
 	});
 
-	// A scene that says `sizing: manual` once at the top draws every bubble that way.
-	it('is offered when the sizing is inherited rather than stated', () => {
-		renderProps(say(0.6), true, {inherited: {sizing: 'manual'}});
-		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+	// A scene that says `sizing: absolute` once at the top draws every bubble that way.
+	it('notes an absolute sizing inherited rather than stated', () => {
+		renderProps(say(0.6), true, {inherited: {sizing: 'absolute'}});
+		expect(screen.getByTestId('beat-prop-size')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.sizeAbsolute'
+		);
+	});
+
+	it('is offered on a narration box', () => {
+		renderProps({index: 0, kind: 'box', text: 'The candle gutters.'});
+		expect(screen.getByTestId('beat-prop-size')).toBeInTheDocument();
 	});
 
 	it('shows the multiplier the beat names', () => {
@@ -589,5 +604,102 @@ describe('<BeatProps> rows', () => {
 			'title',
 			'dialogs.passageEdit.beatProps.timingHelp'
 		);
+	});
+});
+
+/**
+ * `anchor:` only chooses between hanging off the speaker and hanging off nothing. Where
+ * there is no speaker point to hang off, the row stays but greys out, and says why.
+ */
+describe('<BeatProps> anchor', () => {
+	function anchorSelect() {
+		return within(screen.getByTestId('beat-prop-anchor')).getByRole(
+			'combobox'
+		) as HTMLSelectElement;
+	}
+
+	it('is live for a speaker on stage', () => {
+		renderProps(say(), true, {stageIds: ['mira']});
+		expect(anchorSelect()).toBeEnabled();
+		expect(screen.getByTestId('beat-prop-anchor')).not.toHaveAttribute(
+			'data-disabled'
+		);
+	});
+
+	it('greys out for a speaker who is not on stage, and says why', () => {
+		renderProps(say(), true, {stageIds: ['someone-else']});
+		expect(anchorSelect()).toBeDisabled();
+		expect(screen.getByTestId('beat-prop-anchor')).toHaveAttribute(
+			'data-disabled',
+			'true'
+		);
+		expect(screen.getByTestId('beat-prop-anchor')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.anchorOffStage'
+		);
+	});
+
+	it('greys out on a narration box', () => {
+		renderProps({index: 0, kind: 'box', text: 'The candle gutters.'}, true, {
+			stageIds: ['mira']
+		});
+		expect(anchorSelect()).toBeDisabled();
+		expect(screen.getByTestId('beat-prop-anchor')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.anchorNarration'
+		);
+	});
+
+	// A dead key the beat still states can be cleared out of the YAML.
+	it('keeps the reset live while a dead anchor is stated', () => {
+		const {onSetBubble} = renderProps(sayStyled({anchor: 'scene'}), true, {
+			stageIds: []
+		});
+		const reset = within(screen.getByTestId('beat-prop-anchor')).getByRole(
+			'button'
+		);
+
+		expect(reset).toBeEnabled();
+		fireEvent.click(reset);
+		expect(onSetBubble).toHaveBeenCalledWith('anchor', null);
+	});
+});
+
+describe('anchorDisabledKey', () => {
+	const mira: Beat = {index: 0, kind: 'say', text: 'hi', who: 'mira'};
+
+	it('is undefined for a speaker on stage', () => {
+		expect(anchorDisabledKey(mira, undefined, ['mira'])).toBeUndefined();
+	});
+
+	it('names an absent speaker', () => {
+		expect(anchorDisabledKey(mira, undefined, [])).toBe(
+			'dialogs.passageEdit.beatProps.anchorOffStage'
+		);
+	});
+
+	// `tail:` stands in for the speaker's point, so `anchor: scene` still drops it.
+	it('is undefined for an absent speaker whose tail aims somewhere', () => {
+		expect(anchorDisabledKey(mira, {x: 0.2, y: 0.5}, [])).toBeUndefined();
+	});
+
+	it('names a narration box', () => {
+		expect(
+			anchorDisabledKey({index: 0, kind: 'box', text: 'x'}, undefined, ['mira'])
+		).toBe('dialogs.passageEdit.beatProps.anchorNarration');
+	});
+
+	// No stage known: do not guess.
+	it('is undefined when the stage is unknown', () => {
+		expect(anchorDisabledKey(mira, undefined, undefined)).toBeUndefined();
+	});
+});
+
+describe('sizeNoteKey', () => {
+	it('notes absolute only', () => {
+		expect(sizeNoteKey('absolute')).toBe(
+			'dialogs.passageEdit.beatProps.sizeAbsolute'
+		);
+		expect(sizeNoteKey('manual')).toBeUndefined();
+		expect(sizeNoteKey('auto')).toBeUndefined();
+		expect(sizeNoteKey(undefined)).toBeUndefined();
 	});
 });

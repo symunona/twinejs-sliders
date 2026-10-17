@@ -2476,6 +2476,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					onSetBubble={handleBeatBubble}
 					onSetKey={handleBeatKey}
 					onSetText={handleBeatText}
+					stageIds={stageIds}
 					storyColors={swatches}
 				/>
 			),

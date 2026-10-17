@@ -68,6 +68,25 @@
 	font-weight: bold;
 }
 
+/*
+ * The control cannot change anything on this beat. Still there, so it does not seem to
+ * vanish; greyed, with the reason on the line under it.
+ */
+.beat-prop-row.disabled .beat-prop-label {
+	color: var(--dark-gray);
+	opacity: 0.6;
+}
+
+.beat-prop-row.disabled .beat-prop-control {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.beat-prop-default.beat-prop-why {
+	font-style: italic;
+	white-space: normal;
+}
+
 .beat-prop-label {
 	font-size: 90%;
 	overflow: hidden;
@@ -105,6 +124,7 @@
 }
 
 /* Selects fill the column, so every dropdown edge lines up. */
+.beat-prop-control .beat-prop-disabled-wrap,
 .beat-prop-control .text-select,
 .beat-prop-control .text-select label,
 .beat-prop-control .text-select-control,
