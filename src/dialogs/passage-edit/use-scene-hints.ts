@@ -37,6 +37,7 @@ import {
 	BG_MOTIONS,
 	BUBBLE_ALIGNS,
 	BUBBLE_ANCHORS,
+	BUBBLE_ENTERS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
@@ -136,6 +137,7 @@ export type HintSlot =
 	| {kind: 'sizing'}
 	| {kind: 'align'}
 	| {kind: 'valign'}
+	| {kind: 'bubbleEnter'}
 	/**
 	 * An entity's `link:`. The scene's own `links:` entry names lead, then every passage —
 	 * naming an entry is the spelling that inherits its `if:`, so it is the one worth
@@ -903,6 +905,9 @@ export function sceneHintContext(
 				case 'valign':
 					return found({kind: 'valign'});
 
+				case 'enter':
+					return found({kind: 'bubbleEnter'});
+
 				case 'ref': {
 					// `ref:` names a character under `cast:` and an asset under
 					// `props:`, so the block the entity lives in decides.
@@ -1117,6 +1122,9 @@ function namesForSlot(
 
 		case 'valign':
 			return [...BUBBLE_VALIGNS];
+
+		case 'bubbleEnter':
+			return [...BUBBLE_ENTERS];
 
 		case 'fx':
 			return [...FX_IDS];

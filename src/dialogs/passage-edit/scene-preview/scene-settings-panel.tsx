@@ -23,8 +23,10 @@ import {useTranslation} from 'react-i18next';
 import {
 	BG_MOTIONS,
 	BUBBLE_ANCHORS,
+	BUBBLE_ENTERS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
+	DEFAULT_BUBBLE_ENTER_DUR,
 	EASE_NAMES,
 	MUSIC_DEFAULT_FADE,
 	MUSIC_MAIN_TRACK,
@@ -47,8 +49,8 @@ import type {
 import {formatNumber, formatValue} from '@sliders/scene-edit';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {PreviewSelect} from '../../../components/control/preview-select';
-import {TextInput} from '../../../components/control/text-input';
 import {TextSelect} from '../../../components/control/text-select';
+import {NumberField} from './number-field';
 import {BubbleColorControl} from '../../bubble-style/bubble-color-control';
 import {
 	BubbleFontSwatch,
@@ -379,100 +381,6 @@ const SettingRow: React.FC<SettingRowProps> = ({
 		)}
 	</div>
 );
-
-interface NumberFieldProps {
-	label: string;
-	value: number | undefined;
-	/** Called with the new number, or `undefined` when the box was emptied. */
-	onCommit: (value: number | undefined) => void;
-	disabled?: boolean;
-	min?: number;
-	max?: number;
-	step?: number;
-	placeholder?: string;
-	unit?: string;
-}
-
-/**
- * A number box that writes on blur and Enter. Escape puts back what the text says.
- *
- * Refuses rather than writes what the parser would only reject back: not a number, or
- * outside `min`/`max`. An emptied box is a removal, not a zero.
- */
-const NumberField: React.FC<NumberFieldProps> = ({
-	disabled,
-	label,
-	max,
-	min,
-	onCommit,
-	placeholder,
-	step,
-	unit,
-	value
-}) => {
-	const [draft, setDraft] = React.useState<string>();
-	const shown = draft ?? (value === undefined ? '' : String(value));
-
-	// A reparse that changed the value under the box wins over a stale draft.
-	React.useEffect(() => setDraft(undefined), [value]);
-
-	function commit() {
-		setDraft(undefined);
-
-		const trimmed = shown.trim();
-
-		if (trimmed === '') {
-			if (value !== undefined) {
-				onCommit(undefined);
-			}
-
-			return;
-		}
-
-		const next = Number(trimmed);
-
-		if (
-			!Number.isFinite(next) ||
-			next === value ||
-			(min !== undefined && next < min) ||
-			(max !== undefined && next > max)
-		) {
-			return;
-		}
-
-		onCommit(next);
-	}
-
-	return (
-		<>
-			<span className="scene-settings-number">
-				<TextInput
-					disabled={disabled}
-					max={max}
-					min={min}
-					onBlur={commit}
-					onChange={event => setDraft(event.target.value)}
-					onKeyDown={event => {
-						if (event.key === 'Enter') {
-							commit();
-						}
-
-						if (event.key === 'Escape') {
-							setDraft(undefined);
-						}
-					}}
-					placeholder={placeholder}
-					step={step}
-					type="number"
-					value={shown}
-				>
-					{label}
-				</TextInput>
-			</span>
-			{unit && <span className="beat-prop-unit">{unit}</span>}
-		</>
-	);
-};
 
 /** A loop as one dropdown value. Counts and sections are a readout. */
 function loopChoice(loop: MusicLoop | undefined, single: boolean): string {
@@ -1200,7 +1108,8 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 					[
 						['place', BUBBLE_PLACES],
 						['sizing', undefined],
-						['anchor', BUBBLE_ANCHORS]
+						['anchor', BUBBLE_ANCHORS],
+						['enter', BUBBLE_ENTERS]
 					] as const
 				).map(([name, values]) =>
 					values === undefined ? (
@@ -1236,6 +1145,17 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 						</SettingRow>
 					)
 				)}
+				<SettingRow {...bubbleRow('enterDur')}>
+					<NumberField
+						label={label('bubble_enterDur')}
+						min={0}
+						onCommit={value => setBubble('enterDur', value ?? null)}
+						placeholder={String(DEFAULT_BUBBLE_ENTER_DUR)}
+						step={0.05}
+						unit="s"
+						value={bubble.enterDur}
+					/>
+				</SettingRow>
 			</div>
 
 			<div className="scene-preview-beat-props-group">

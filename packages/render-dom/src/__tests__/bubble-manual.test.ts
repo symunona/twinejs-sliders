@@ -142,6 +142,48 @@ describe('align: / valign:', () => {
 	});
 });
 
+describe('enter:', () => {
+	it('fades in by default, once', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.say('mira', 'Hello.');
+
+		const bubble = mount.querySelector('.sliders-bubble') as HTMLElement;
+
+		expect(bubble.dataset.enter).toBe('fade');
+		expect(bubble.style.getPropertyValue('--sliders-enter-dur')).toBe('0.2s');
+
+		// Same speaker, next line: the bubble stays, nothing replays.
+		dialogue.say('mira', 'Again.', {style: {enter: 'pop'}});
+		expect(bubble.dataset.enter).toBe('fade');
+	});
+
+	it('takes the named animation and length', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.say('mira', 'Boo!', {style: {enter: 'pop', enterDur: 0.5}});
+
+		const bubble = mount.querySelector('.sliders-bubble') as HTMLElement;
+
+		expect(bubble.dataset.enter).toBe('pop');
+		expect(bubble.style.getPropertyValue('--sliders-enter-dur')).toBe('0.5s');
+	});
+
+	it('none and 0 are instant', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.say('mira', 'Hi.', {style: {enter: 'none'}});
+		expect(
+			(mount.querySelector('.sliders-bubble') as HTMLElement).dataset.enter
+		).toBeUndefined();
+
+		dialogue.setBox('Later.', {enterDur: 0});
+		expect(
+			(mount.querySelector('.sliders-box') as HTMLElement).dataset.enter
+		).toBeUndefined();
+	});
+});
+
 describe('tail:', () => {
 	it('aims the tail at the stage point instead of at the speaker', () => {
 		const {mount, dialogue} = setup(() => ({x: 1500, y: 800}));

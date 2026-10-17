@@ -675,6 +675,8 @@ Two keys on a say beat, and the same two inside a `box:` map:
 | `h` | height, fraction of the stage height. `absolute` / `manual` only. |
 | `align` | words across the box: `left` · `centre` · `right`. Unset = left (`narrator` box centres). |
 | `valign` | words down the box: `top` (default) · `middle` · `bottom`. Only a fixed box (`absolute` / `manual`) has room. |
+| `enter` | how the bubble arrives: `fade` (default) · `none` · `pop` · `rise` · `drop` · `zoom`. Once, on appear. |
+| `enterDur` | enter length, seconds. Default `0.2`. `0` = instant. |
 | `bg` `accent` `color` `font` `size` | one-off overrides. `bg`/`accent` are the pair a drawn shape paints with. |
 
 ### Four layers, widest first
@@ -684,7 +686,7 @@ about:
 
 | Layer | Written as |
 |---|---|
-| story | `sliders.bubble.as`, `.font`, `.color`, `.bg`, `.accent`, `.sizing`, `.align`, `.valign`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
+| story | `sliders.bubble.as`, `.font`, `.color`, `.bg`, `.accent`, `.sizing`, `.align`, `.valign`, `.enter`, `.enterDur`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
 | scene | `bubble: {…}` at the top of the scene |
 | character | the character's own `bubble:` in the library |
 | beat | `as:` / `bubble:` on the line |
@@ -774,6 +776,18 @@ or bottom edge, carrying the width the bubble already had across:
 them; auto box is as tall as its words, so nothing to move. `centre` spelled like
 `place: centre`; `center` = error with hint. Editor: Align / V-align icon rows in beat
 panel, press lit icon again = back to default.
+
+### Enter animation
+
+```yaml
+- mira: {say: "Boo!", bubble: {enter: pop, enterDur: 0.35}}
+```
+
+- Plays once, when bubble / narration box appears. Same speaker's next line keeps the
+  bubble → no replay.
+- CSS animation on `scale` / `translate` + opacity. Layout owns `transform`, no fight.
+- Reduced motion → plain fade.
+- Editor: beat panel BUBBLE ▸ Enter (dropdown) + Enter length (s). Scene settings too.
 
 ### Aimed tail
 

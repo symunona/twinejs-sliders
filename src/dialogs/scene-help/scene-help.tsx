@@ -31,6 +31,7 @@ import {
 	BUBBLE_KEYS,
 	BUBBLE_ANCHORS,
 	BUBBLE_ALIGNS,
+	BUBBLE_ENTERS,
 	BUBBLE_VALIGNS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
@@ -229,6 +230,11 @@ const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
 	at:
 		'[x, y] — the bubble\'s centre, as fractions of the stage box from its top left. Wins over place:. This is what dragging a bubble in the preview writes.',
 	bg: 'Background colour. Any CSS colour.',
+	enter: `How the bubble arrives: ${BUBBLE_ENTERS.join(
+		', '
+	)}. Default fade. Played once, when the bubble appears.`,
+	enterDur:
+		'Seconds the enter animation takes. Default 0.2. 0 or enter: none = instant.',
 	color: 'Text colour.',
 	font: 'Font family, e.g. Georgia, serif.',
 	place: `Where the bubble sits: ${BUBBLE_PLACES.join(

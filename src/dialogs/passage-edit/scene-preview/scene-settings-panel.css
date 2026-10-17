@@ -14,10 +14,6 @@
 	grid-template-columns: 5.5em minmax(0, 1fr) 22px;
 }
 
-.scene-settings-number input {
-	width: 5em;
-}
-
 /* One keyed music track: its name row, then its params, set in a little. */
 .scene-settings-track {
 	border-left: 1px solid var(--faint-gray);

@@ -15,6 +15,7 @@ import {parseCondition} from './condition';
 import {
 	BUBBLE_ALIGNS,
 	BUBBLE_ANCHORS,
+	BUBBLE_ENTERS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_SIZINGS,
@@ -39,6 +40,7 @@ import {
 	type Beat,
 	type BeatEase,
 	type BubbleAnchor,
+	type BubbleEnter,
 	type BubblePlace,
 	type BubbleSizing,
 	type BubbleAlign,
@@ -1067,6 +1069,46 @@ function parseBubbleStyle(
 				}
 
 				style.valign = valign as BubbleValign;
+				break;
+			}
+
+			case 'enter': {
+				const enter = asString(ctx, pair.value, 'enter');
+
+				if (enter === undefined) {
+					break;
+				}
+
+				if (!(BUBBLE_ENTERS as readonly string[]).includes(enter)) {
+					addError(ctx, 'bad-value', `Unknown enter '${enter}'.`, pair.value, {
+						hint: `enter: is one of ${BUBBLE_ENTERS.join(', ')}. Default fade.`
+					});
+					break;
+				}
+
+				style.enter = enter as BubbleEnter;
+				break;
+			}
+
+			case 'enterDur': {
+				const seconds = asNumber(ctx, pair.value, 'enterDur');
+
+				if (seconds === undefined) {
+					break;
+				}
+
+				if (seconds < 0) {
+					addError(
+						ctx,
+						'bad-value',
+						`enterDur of ${seconds} is not a length of time.`,
+						pair.value,
+						{hint: 'enterDur: is the seconds the enter animation takes, e.g. 0.3.'}
+					);
+					break;
+				}
+
+				style.enterDur = seconds;
 				break;
 			}
 

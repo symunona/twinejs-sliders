@@ -11,7 +11,7 @@
  */
 
 import type {BubblePlace, BubbleStyle, EntityId, Vec2} from '@sliders/scene-types';
-import {bubbleFontStack} from '@sliders/scene-types';
+import {bubbleFontStack, DEFAULT_BUBBLE_ENTER_DUR} from '@sliders/scene-types';
 import type {BubblePadding, BubbleSide} from './bubble-shapes';
 import {bubbleShape, hashSeed, isBubbleShape} from './bubble-shapes';
 import type {StageBox} from './coords';
@@ -223,6 +223,8 @@ export class DialogueLayer {
 
 			let rec = this.bubbles.get(spec.who);
 
+			const fresh = !rec;
+
 			if (!rec) {
 				rec = this.createBubble(spec);
 				this.bubbles.set(spec.who, rec);
@@ -230,6 +232,10 @@ export class DialogueLayer {
 
 			rec.spec = spec;
 			this.renderBubbleContent(rec);
+
+			if (fresh) {
+				applyEnter(rec.el, spec.style);
+			}
 		}
 
 		for (const [who, rec] of this.bubbles) {
@@ -267,7 +273,7 @@ export class DialogueLayer {
 			this.boxBody.className = 'sliders-box-body';
 			this.boxEl.appendChild(this.boxBody);
 			this.rootEl.appendChild(this.boxEl);
-			this.fadeIn(this.boxEl);
+			applyEnter(this.boxEl, style);
 		}
 
 		this.boxStyle = style;
@@ -769,7 +775,6 @@ export class DialogueLayer {
 
 		el.append(shape, body, tail);
 		this.rootEl!.appendChild(el);
-		this.fadeIn(el);
 
 		return {el, body, tail, shape, spec};
 	}
@@ -838,12 +843,6 @@ export class DialogueLayer {
 			a.textContent = node.name;
 			target.appendChild(a);
 		}
-	}
-
-	private fadeIn(el: HTMLElement): void {
-		el.dataset.entering = 'true';
-		void el.offsetWidth;
-		el.dataset.entering = 'false';
 	}
 
 	private handleClick = (event: MouseEvent): void => {
@@ -931,6 +930,26 @@ export function applyStyleAttributes(
 	// itself. One call so the two spellings cannot diverge (`bubble-fonts.ts`).
 	setVar(el, '--sliders-bubble-font', bubbleFontStack(style?.font));
 	setVar(el, '--sliders-bubble-size', style?.size ? `${style.size}em` : undefined);
+}
+
+/**
+ * Start the enter animation. Called once, when the element is created: a later line that
+ * keeps the same bubble never replays it, which is why this is not part of
+ * `applyStyleAttributes`. A CSS animation, not a transition, so it needs no forced reflow
+ * and uses `scale`/`translate`, never `transform` — the layout owns that one.
+ */
+export function applyEnter(el: HTMLElement, style: BubbleStyle | undefined): void {
+	const enter = style?.enter ?? 'fade';
+	const dur = style?.enterDur ?? DEFAULT_BUBBLE_ENTER_DUR;
+
+	if (enter === 'none' || !(dur > 0)) {
+		delete el.dataset.enter;
+		el.style.removeProperty('--sliders-enter-dur');
+		return;
+	}
+
+	el.dataset.enter = enter;
+	el.style.setProperty('--sliders-enter-dur', `${dur}s`);
 }
 
 function setVar(el: HTMLElement, name: string, value: string | undefined): void {

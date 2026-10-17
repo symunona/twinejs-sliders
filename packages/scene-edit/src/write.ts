@@ -790,6 +790,8 @@ export const BUBBLE_KEY_ORDER = [
 	'h',
 	'align',
 	'valign',
+	'enter',
+	'enterDur',
 	'bg',
 	'accent',
 	'color',
@@ -820,6 +822,10 @@ export interface BubbleGeometry {
 	align?: string | null;
 	/** `top` · `middle` · `bottom`. */
 	valign?: string | null;
+	/** Enter animation: `fade` · `none` · `pop` · … */
+	enter?: string | null;
+	/** Enter animation length, seconds. */
+	enterDur?: number | null;
 	/** Fill. Any CSS colour — a drawn shape fills itself with it. */
 	bg?: string | null;
 	/** A drawn shape's outline, slab or highlight. Meaningless to the CSS presets. */

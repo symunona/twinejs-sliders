@@ -92,6 +92,24 @@ describe('bubble: on a beat', () => {
 		expect(errors[0].code).toBe('bad-value');
 	});
 
+	it('takes enter and enterDur', () => {
+		const {scene, errors} = parseScene(
+			BEAT('{say: "Hi.", bubble: {enter: pop, enterDur: 0.35}}')
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({style: {enter: 'pop', enterDur: 0.35}});
+	});
+
+	it('refuses an enter it does not know, and a negative length', () => {
+		const {errors} = parseScene(
+			BEAT('{say: "Hi.", bubble: {enter: wobble, enterDur: -1}}')
+		);
+
+		expect(errors.map(error => error.code)).toEqual(['bad-value', 'bad-value']);
+		expect(errors[0].hint).toContain('pop');
+	});
+
 	it('refuses an anchor it does not know', () => {
 		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {anchor: stage}}'));
 

@@ -36,6 +36,8 @@ export const STORY_BUBBLE_KEYS = [
 	'h',
 	'align',
 	'valign',
+	'enter',
+	'enterDur',
 	'bg',
 	'accent',
 	'color',
@@ -50,7 +52,7 @@ export function storyBubbleVar(key: StoryBubbleKey): string {
 }
 
 /** The keys that are numbers when they arrive, whatever a vars line happens to say. */
-const NUMERIC: ReadonlySet<string> = new Set(['w', 'h', 'size']);
+const NUMERIC: ReadonlySet<string> = new Set(['w', 'h', 'size', 'enterDur']);
 
 /**
  * Collect the story defaults out of anything that can answer "what is this variable?".

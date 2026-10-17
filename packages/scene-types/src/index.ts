@@ -715,6 +715,21 @@ export const BUBBLE_VALIGNS = ['top', 'middle', 'bottom'] as const;
 export type BubbleValign = (typeof BUBBLE_VALIGNS)[number];
 
 /**
+ * How a bubble (or narration box) arrives. Played once, when the element appears; a line
+ * that keeps the same speaker's bubble on screen does not replay it.
+ *
+ * `fade` is the default. `none` is instant. The rest fade too, plus a move:
+ * `pop` grows from small with an overshoot, `rise` comes up from below, `drop` down from
+ * above, `zoom` shrinks in from large.
+ */
+export const BUBBLE_ENTERS = ['fade', 'none', 'pop', 'rise', 'drop', 'zoom'] as const;
+
+export type BubbleEnter = (typeof BUBBLE_ENTERS)[number];
+
+/** Seconds an enter animation takes when `enterDur` is unset. */
+export const DEFAULT_BUBBLE_ENTER_DUR = 0.2;
+
+/**
  * Where a bubble sits when it is not hanging off its speaker.
  *
  * `auto` is the default and the only one that follows a character: the bubble hangs off
@@ -749,6 +764,8 @@ export const BUBBLE_KEYS = [
 	'h',
 	'align',
 	'valign',
+	'enter',
+	'enterDur',
 	'bg',
 	'accent',
 	'color',
@@ -814,6 +831,10 @@ export interface BubbleStyle {
 	align?: BubbleAlign;
 	/** Text alignment down the box. Means something only when the box is taller than the words. */
 	valign?: BubbleValign;
+	/** Enter animation. Default `fade`. */
+	enter?: BubbleEnter;
+	/** Enter animation length, seconds. Default `DEFAULT_BUBBLE_ENTER_DUR`. */
+	enterDur?: number;
 	/** Background colour. Any CSS colour. A drawn shape fills itself with it. */
 	bg?: string;
 	/**

@@ -425,7 +425,7 @@ describe('<BeatProps> bubble colours', () => {
  * The type multiplier. Always offered: every sizing draws the words at it.
  *
  * Found by position for the reason every other control here is: i18n is not initialised
- * under jest. Hold is the first spinbutton in the row and Size is the second.
+ * under jest. Hold is the first spinbutton in the row and Size is the second (Enter length the third).
  */
 function sizeField(): HTMLInputElement {
 	return screen.getAllByRole('spinbutton')[1] as HTMLInputElement;
@@ -439,7 +439,7 @@ describe('<BeatProps> bubble size', () => {
 	 */
 	it('is offered while the bubble sizes itself', () => {
 		renderProps(sayStyled({}));
-		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
 		expect(sizeField()).toBeEnabled();
 	});
 
@@ -453,7 +453,7 @@ describe('<BeatProps> bubble size', () => {
 
 	it('is offered on a manual box', () => {
 		renderProps(sayStyled({sizing: 'manual'}));
-		expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+		expect(screen.getAllByRole('spinbutton')).toHaveLength(3);
 		expect(screen.getByTestId('beat-prop-size')).not.toHaveTextContent(
 			'dialogs.passageEdit.beatProps.sizeAbsolute'
 		);
@@ -801,5 +801,47 @@ describe('valignNoteKey', () => {
 		);
 		expect(valignNoteKey('absolute')).toBeUndefined();
 		expect(valignNoteKey('manual')).toBeUndefined();
+	});
+});
+
+describe('<BeatProps> enter animation', () => {
+	const key = (name: string) => `dialogs.passageEdit.beatProps.${name}`;
+	const enterSelect = () =>
+		within(screen.getByTestId('beat-prop-enter')).getByRole(
+			'combobox'
+		) as HTMLSelectElement;
+	const enterDurField = () =>
+		within(screen.getByTestId('beat-prop-enterDur')).getByRole(
+			'spinbutton'
+		) as HTMLInputElement;
+
+	it('defaults to fade', () => {
+		renderProps(sayStyled({}));
+		expect(enterSelect().value).toBe('');
+		expect(screen.getByTestId('beat-prop-enter')).toHaveTextContent('fade');
+		expect(enterDurField().placeholder).toBe('0.2');
+	});
+
+	it('writes the picked animation', () => {
+		const {onSetBubble} = renderProps(sayStyled({}));
+
+		fireEvent.change(enterSelect(), {target: {value: 'pop'}});
+		expect(onSetBubble).toHaveBeenCalledWith('enter', 'pop');
+	});
+
+	it('writes the length on blur', () => {
+		const {onSetBubble} = renderProps(sayStyled({enter: 'rise'}));
+
+		fireEvent.change(enterDurField(), {target: {value: '0.4'}});
+		fireEvent.blur(enterDurField());
+		expect(onSetBubble).toHaveBeenCalledWith('enterDur', 0.4);
+	});
+
+	it('greys the length out when enter is none', () => {
+		renderProps(sayStyled({enter: 'none'}));
+		expect(enterDurField()).toBeDisabled();
+		expect(screen.getByTestId('beat-prop-enterDur')).toHaveTextContent(
+			key('enterNone')
+		);
 	});
 });

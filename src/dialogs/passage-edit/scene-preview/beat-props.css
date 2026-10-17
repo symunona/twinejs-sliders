@@ -140,6 +140,10 @@
 }
 
 .scene-preview-beat-props-dur input,
+.scene-settings-number input {
+	width: 5em;
+}
+
 .scene-preview-beat-props-size input {
 	width: 5em;
 }

@@ -568,12 +568,64 @@ export const DIALOGUE_CSS = `
 	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 	pointer-events: auto;
 	white-space: pre-wrap;
-	opacity: 1;
 	/* Follows the speaker when a move transition slides them across the stage. */
-	transition: opacity 0.18s ease, transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+	transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.sliders-bubble[data-entering='true'] { opacity: 0; }
+/* Enter animation (\`enter:\` / \`enterDur:\`), set once on creation by applyEnter. Moves
+   with scale/translate only: the layout owns transform. */
+.sliders-bubble[data-enter],
+.sliders-box[data-enter] {
+	animation-duration: var(--sliders-enter-dur, 0.2s);
+	animation-fill-mode: both;
+	animation-timing-function: ease-out;
+}
+
+.sliders-bubble[data-enter='fade'],
+.sliders-box[data-enter='fade'] { animation-name: sliders-enter-fade; }
+.sliders-bubble[data-enter='pop'],
+.sliders-box[data-enter='pop'] {
+	animation-name: sliders-enter-pop;
+	animation-timing-function: linear;
+}
+.sliders-bubble[data-enter='rise'],
+.sliders-box[data-enter='rise'] { animation-name: sliders-enter-rise; }
+.sliders-bubble[data-enter='drop'],
+.sliders-box[data-enter='drop'] { animation-name: sliders-enter-drop; }
+.sliders-bubble[data-enter='zoom'],
+.sliders-box[data-enter='zoom'] { animation-name: sliders-enter-zoom; }
+
+@keyframes sliders-enter-fade {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+@keyframes sliders-enter-pop {
+	0% { opacity: 0; scale: 0.4; }
+	60% { opacity: 1; scale: 1.08; }
+	80% { scale: 0.97; }
+	100% { opacity: 1; scale: 1; }
+}
+
+@keyframes sliders-enter-rise {
+	from { opacity: 0; translate: 0 0.8em; }
+	to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes sliders-enter-drop {
+	from { opacity: 0; translate: 0 -0.8em; }
+	to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes sliders-enter-zoom {
+	from { opacity: 0; scale: 1.3; }
+	to { opacity: 1; scale: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sliders-bubble[data-enter],
+	.sliders-box[data-enter] { animation-name: sliders-enter-fade; }
+}
 
 /* A drawn shape REPLACES the box: no fill, no rounding, no shadow, no CSS tail. The
    padding it needs is written inline by the dialogue layer, because only the shape knows
@@ -700,11 +752,7 @@ export const DIALOGUE_CSS = `
 	font-size: var(--sliders-bubble-size, 1em);
 	pointer-events: auto;
 	white-space: pre-wrap;
-	opacity: 1;
-	transition: opacity 0.18s ease;
 }
-
-.sliders-box[data-entering='true'] { opacity: 0; }
 
 /* -------------------------------------------------------------------------
    Presets — what \`as:\` names. A token with no rule here is not an error: it

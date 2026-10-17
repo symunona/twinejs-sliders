@@ -27,7 +27,9 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {
 	BUBBLE_ANCHORS,
+	BUBBLE_ENTERS,
 	BUBBLE_PLACES,
+	DEFAULT_BUBBLE_ENTER_DUR,
 	EASE_NAMES,
 	bubbleFontStack
 } from '@sliders/scene-types';
@@ -37,6 +39,7 @@ import {IconButton} from '../../../components/control/icon-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
 import {TextInput} from '../../../components/control/text-input';
 import {TextSelect} from '../../../components/control/text-select';
+import {NumberField} from './number-field';
 import {PreviewSelect} from '../../../components/control/preview-select';
 import {BubbleColorControl} from '../../bubble-style/bubble-color-control';
 import {bubbleSizingOptions} from '../../bubble-style/bubble-sizing';
@@ -447,6 +450,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	const sizeNote = sizeNoteKey(merged.sizing);
 	const valignNote = valignNoteKey(merged.sizing);
 	const anchorOff = anchorDisabledKey(beat, merged.tail, stageIds);
+	const enterOff = merged.enter === 'none';
 	const size =
 		sizeDraft ?? (style?.size === undefined ? '' : String(style.size));
 	const emptyKey = emptyReasonKey(beat, beatNumber);
@@ -885,6 +889,44 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 										{label('anchor')}
 									</TextSelect>
 								</span>
+							</PropRow>
+							<PropRow
+								{...bubbleRow('enter', inherited?.enter ?? 'fade')}
+								testId="beat-prop-enter"
+							>
+								<TextSelect
+									onChange={event =>
+										onSetBubble('enter', event.target.value || null)
+									}
+									options={[
+										{label: label('inherit'), value: INHERIT},
+										...BUBBLE_ENTERS.map(enter => ({label: enter, value: enter}))
+									]}
+									value={style?.enter ?? INHERIT}
+								>
+									{label('enter')}
+								</TextSelect>
+							</PropRow>
+							<PropRow
+								{...bubbleRow(
+									'enterDur',
+									`${inherited?.enterDur ?? DEFAULT_BUBBLE_ENTER_DUR} s`
+								)}
+								disabledReason={enterOff ? label('enterNone') : undefined}
+								testId="beat-prop-enterDur"
+							>
+								<NumberField
+									disabled={enterOff}
+									label={label('enterDur')}
+									min={0}
+									onCommit={value => onSetBubble('enterDur', value ?? null)}
+									placeholder={String(
+										inherited?.enterDur ?? DEFAULT_BUBBLE_ENTER_DUR
+									)}
+									step={0.05}
+									unit="s"
+									value={style?.enterDur}
+								/>
 							</PropRow>
 						</div>
 					)}
