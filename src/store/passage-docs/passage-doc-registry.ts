@@ -167,7 +167,6 @@ export class PassageDocRegistry {
 
 		const text = this.deps.storeText(storyId, passageId) ?? '';
 		const doc = new CodeMirror.Doc(text) as LiveDoc;
-		const registry = this;
 		const entry: Entry = {
 			claim: () => this.claim(entry),
 			claimed: false,
@@ -197,16 +196,16 @@ export class PassageDocRegistry {
 
 		// Headless, CodeMirror delivers Doc events on a zero timeout; with a view attached,
 		// at the end of the operation. Either way, read the Doc, not the change.
-		function handleChange(
+		const handleChange = (
 			_doc: CodeMirror.Doc,
 			change: CodeMirror.EditorChange
-		) {
+		) => {
 			if (change.origin !== STORE_ORIGIN) {
-				registry.localWrite(entry);
+				this.localWrite(entry);
 			}
 
 			entry.notify();
-		}
+		};
 
 		doc.on('change', handleChange);
 		this.entries.set(key(storyId, passageId), entry);
