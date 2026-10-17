@@ -13,10 +13,12 @@ import {LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument} from 'yaml'
 import type {Pair, Scalar, YAMLMap, YAMLSeq} from 'yaml';
 import {parseCondition} from './condition';
 import {
+	BUBBLE_ALIGNS,
 	BUBBLE_ANCHORS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_SIZINGS,
+	BUBBLE_VALIGNS,
 	EASE_KINDS,
 	EASE_NAMES,
 	ENTITY_FITS,
@@ -39,6 +41,8 @@ import {
 	type BubbleAnchor,
 	type BubblePlace,
 	type BubbleSizing,
+	type BubbleAlign,
+	type BubbleValign,
 	type BubbleStyle,
 	type Camera,
 	type EntityFit,
@@ -1021,6 +1025,48 @@ function parseBubbleStyle(
 				}
 
 				style.sizing = sizing as BubbleSizing;
+				break;
+			}
+
+			case 'align': {
+				const align = asString(ctx, pair.value, 'align');
+
+				if (align === undefined) {
+					break;
+				}
+
+				if (!(BUBBLE_ALIGNS as readonly string[]).includes(align)) {
+					addError(ctx, 'bad-value', `Unknown align '${align}'.`, pair.value, {
+						hint:
+							`align: is one of ${BUBBLE_ALIGNS.join(', ')}` +
+							(align === 'center'
+								? " — spelled 'centre', like place: centre."
+								: '.')
+					});
+					break;
+				}
+
+				style.align = align as BubbleAlign;
+				break;
+			}
+
+			case 'valign': {
+				const valign = asString(ctx, pair.value, 'valign');
+
+				if (valign === undefined) {
+					break;
+				}
+
+				if (!(BUBBLE_VALIGNS as readonly string[]).includes(valign)) {
+					addError(ctx, 'bad-value', `Unknown valign '${valign}'.`, pair.value, {
+						hint:
+							`valign: is one of ${BUBBLE_VALIGNS.join(', ')}. ` +
+							'Only a box taller than its words (sizing: absolute or manual) has room to move them.'
+					});
+					break;
+				}
+
+				style.valign = valign as BubbleValign;
 				break;
 			}
 

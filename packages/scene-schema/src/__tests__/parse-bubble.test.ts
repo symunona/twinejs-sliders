@@ -54,6 +54,44 @@ describe('bubble: on a beat', () => {
 		expect(errors[0].message).toContain('fixed');
 	});
 
+	it('takes align and valign', () => {
+		const {scene, errors} = parseScene(
+			BEAT(
+				'{say: "Hi.", bubble: {sizing: manual, align: right, valign: bottom}}'
+			)
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.beats[0]).toMatchObject({
+			style: {sizing: 'manual', align: 'right', valign: 'bottom'}
+		});
+	});
+
+	it('takes align on a narration box and on the scene bubble', () => {
+		const {scene, errors} = parseScene(
+			'bubble: {align: centre, valign: middle}\nbeats:\n  - box: {text: "Later.", bubble: {align: left}}'
+		);
+
+		expect(errors).toEqual([]);
+		expect(scene.bubble).toEqual({align: 'centre', valign: 'middle'});
+		expect(scene.beats[0]).toMatchObject({style: {align: 'left'}});
+	});
+
+	it('refuses an align it does not know, and names the spelling for center', () => {
+		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {align: center}}'));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe('bad-value');
+		expect(errors[0].hint).toContain('centre');
+	});
+
+	it('refuses a valign it does not know', () => {
+		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {valign: centre}}'));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe('bad-value');
+	});
+
 	it('refuses an anchor it does not know', () => {
 		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {anchor: stage}}'));
 

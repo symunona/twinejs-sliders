@@ -161,6 +161,8 @@ export const BEAT_DEFAULT_KEYS = [
 	'as',
 	'anchor',
 	'sizing',
+	'align',
+	'valign',
 	'bg',
 	'accent',
 	'color',

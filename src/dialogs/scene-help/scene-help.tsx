@@ -30,6 +30,8 @@ import {
 	BG_MOTIONS,
 	BUBBLE_KEYS,
 	BUBBLE_ANCHORS,
+	BUBBLE_ALIGNS,
+	BUBBLE_VALIGNS,
 	BUBBLE_PLACES,
 	BUBBLE_PRESETS,
 	BUBBLE_SHAPES,
@@ -211,6 +213,9 @@ const BEAT_BODY_HELP: KeyHelp<typeof BEAT_BODY_KEYS> = {
 };
 
 const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
+	align: `Where the words sit across the box: ${BUBBLE_ALIGNS.join(
+		', '
+	)}. Unset = left, or what the style says (narrator centres).`,
 	accent:
 		'The second colour: a drawn style\u2019s outline, offset slab or highlight. The CSS presets have one surface and ignore it.',
 	anchor: `What the bubble hangs off: ${BUBBLE_ANCHORS.join(
@@ -236,6 +241,9 @@ const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
 	sizing: `How the box is decided: ${BUBBLE_SIZINGS.join(
 		', '
 	)}. auto snaps to the words and w: only caps the width. absolute fixes the box to w: x h: of the STAGE and scales the text to fit it, so every panel is composed at the same size whatever it says. manual fixes the same box and leaves the text its normal size — what resizing a bubble by its top or bottom edge writes.`,
+	valign: `Where the words sit down the box: ${BUBBLE_VALIGNS.join(
+		', '
+	)}. Only a box taller than its words has room to move them — sizing: absolute or manual. Unset = top.`,
 	w: 'Width, as a fraction of the stage width. The wrap cap under sizing: auto, the exact width under sizing: absolute and sizing: manual. Resizing a bubble in the preview writes this.'
 };
 

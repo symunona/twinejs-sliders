@@ -12,7 +12,16 @@
  * (they are scalars with no body map, and `wait` already IS a duration).
  */
 
-import {IconHelp, IconX} from '@tabler/icons';
+import {
+	IconAlignCenter,
+	IconAlignLeft,
+	IconAlignRight,
+	IconHelp,
+	IconLayoutAlignBottom,
+	IconLayoutAlignMiddle,
+	IconLayoutAlignTop,
+	IconX
+} from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -24,6 +33,7 @@ import {
 } from '@sliders/scene-types';
 import type {Beat, BubbleStyle} from '@sliders/scene-types';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
+import {IconButton} from '../../../components/control/icon-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
 import {TextInput} from '../../../components/control/text-input';
 import {TextSelect} from '../../../components/control/text-select';
@@ -101,6 +111,75 @@ const INHERIT = '';
  * a real name replaces the map, which is a deliberate choice made out loud.
  */
 const PER_KIND = '\u0000per-kind';
+
+/** The `align:` buttons, in the order they sit: icon, value, locale key. */
+const ALIGN_BUTTONS = [
+	{icon: <IconAlignLeft />, value: 'left', key: 'alignLeft'},
+	{icon: <IconAlignCenter />, value: 'centre', key: 'alignCentre'},
+	{icon: <IconAlignRight />, value: 'right', key: 'alignRight'}
+] as const;
+
+/** The `valign:` buttons. */
+const VALIGN_BUTTONS = [
+	{icon: <IconLayoutAlignTop />, value: 'top', key: 'valignTop'},
+	{icon: <IconLayoutAlignMiddle />, value: 'middle', key: 'valignMiddle'},
+	{icon: <IconLayoutAlignBottom />, value: 'bottom', key: 'valignBottom'}
+] as const;
+
+/**
+ * Why `valign:` has nothing to move on this beat, as a locale key — or `undefined` when it
+ * does. A note, never a disable: setting it first and sizing second is a fine order.
+ */
+export function valignNoteKey(
+	sizing: BubbleStyle['sizing']
+): string | undefined {
+	return sizing === 'absolute' || sizing === 'manual'
+		? undefined
+		: 'dialogs.passageEdit.beatProps.valignAuto';
+}
+
+interface IconChoiceProps {
+	buttons: ReadonlyArray<{icon: React.ReactNode; value: string; key: string}>;
+	label: string;
+	/** Button label by locale suffix. */
+	labelOf: (key: string) => string;
+	/** `null` = pressed the one already on: back to default. */
+	onChange: (value: string | null) => void;
+	/** The beat's own value. */
+	value?: string;
+	/** What the layers above say, drawn as a faint press so default is not a blank. */
+	inherited?: string;
+}
+
+/** A segmented row of icon-only toggles. Pressing the lit one clears it. */
+const IconChoice: React.FC<IconChoiceProps> = ({
+	buttons,
+	inherited,
+	label,
+	labelOf,
+	onChange,
+	value
+}) => (
+	<span aria-label={label} className="beat-prop-icon-choice" role="group">
+		{buttons.map(button => (
+			<span
+				className={classNames('beat-prop-icon-choice-item', {
+					inherited: value === undefined && inherited === button.value
+				})}
+				key={button.value}
+			>
+				<IconButton
+					icon={button.icon}
+					iconOnly
+					label={labelOf(button.key)}
+					onClick={() => onChange(value === button.value ? null : button.value)}
+					selectable
+					selected={value === button.value}
+				/>
+			</span>
+		))}
+	</span>
+);
 
 /**
  * What one press of the Size field's arrows is worth.
@@ -366,6 +445,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 * `sizing: absolute` or `tail:` once at the top draws every bubble that way.
 	 */
 	const sizeNote = sizeNoteKey(merged.sizing);
+	const valignNote = valignNoteKey(merged.sizing);
 	const anchorOff = anchorDisabledKey(beat, merged.tail, stageIds);
 	const size =
 		sizeDraft ?? (style?.size === undefined ? '' : String(style.size));
@@ -750,6 +830,34 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 										{label('size')}
 									</TextInput>
 								</span>
+							</PropRow>
+							{/*
+								Alignment after the size rows: valign only means something once
+								sizing has fixed the box.
+							*/}
+							<PropRow {...bubbleRow('align')} testId="beat-prop-align">
+								<IconChoice
+									buttons={ALIGN_BUTTONS}
+									inherited={inherited?.align}
+									label={label('align')}
+									labelOf={label}
+									onChange={value => onSetBubble('align', value)}
+									value={style?.align}
+								/>
+							</PropRow>
+							<PropRow
+								{...bubbleRow('valign')}
+								note={valignNote && t(valignNote)}
+								testId="beat-prop-valign"
+							>
+								<IconChoice
+									buttons={VALIGN_BUTTONS}
+									inherited={inherited?.valign}
+									label={label('valign')}
+									labelOf={label}
+									onChange={value => onSetBubble('valign', value)}
+									value={style?.valign}
+								/>
 							</PropRow>
 							<PropRow
 								{...bubbleRow('anchor')}

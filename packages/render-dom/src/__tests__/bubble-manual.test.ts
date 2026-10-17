@@ -106,6 +106,42 @@ describe('sizing: manual', () => {
 	});
 });
 
+describe('align: / valign:', () => {
+	it('lands on the bubble as data attributes the stylesheet paints', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.say('mira', 'Hello.', {
+			style: {sizing: 'manual', align: 'right', valign: 'bottom'}
+		});
+
+		const bubble = mount.querySelector('.sliders-bubble') as HTMLElement;
+
+		expect(bubble.dataset.align).toBe('right');
+		expect(bubble.dataset.valign).toBe('bottom');
+
+		dialogue.say('mira', 'Hello.', {style: {sizing: 'manual'}});
+
+		expect(bubble.dataset.align).toBeUndefined();
+		expect(bubble.dataset.valign).toBeUndefined();
+	});
+
+	it('reaches a narration box too', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.setBox('Later.', {
+			sizing: 'manual',
+			h: 0.3,
+			align: 'centre',
+			valign: 'middle'
+		});
+
+		const box = mount.querySelector('.sliders-box') as HTMLElement;
+
+		expect(box.dataset.align).toBe('centre');
+		expect(box.dataset.valign).toBe('middle');
+	});
+});
+
 describe('tail:', () => {
 	it('aims the tail at the stage point instead of at the speaker', () => {
 		const {mount, dialogue} = setup(() => ({x: 1500, y: 800}));

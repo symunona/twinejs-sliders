@@ -2,7 +2,12 @@ import {fireEvent, render, screen, within} from '@testing-library/react';
 import * as React from 'react';
 import type {Beat, BubbleStyle, SayBeat} from '@sliders/scene-types';
 import {AUTO_ADVANCE_MS} from '../beat-hold';
-import {BeatProps, anchorDisabledKey, sizeNoteKey} from '../beat-props';
+import {
+	BeatProps,
+	anchorDisabledKey,
+	sizeNoteKey,
+	valignNoteKey
+} from '../beat-props';
 
 function say(dur?: number): Beat {
 	return {
@@ -701,5 +706,100 @@ describe('sizeNoteKey', () => {
 		expect(sizeNoteKey('manual')).toBeUndefined();
 		expect(sizeNoteKey('auto')).toBeUndefined();
 		expect(sizeNoteKey(undefined)).toBeUndefined();
+	});
+});
+
+describe('<BeatProps> alignment', () => {
+	const key = (name: string) => `dialogs.passageEdit.beatProps.${name}`;
+	const button = (row: string, name: string) =>
+		within(screen.getByTestId(row)).getByRole('button', {name: key(name)});
+
+	it('offers three icon buttons per axis, none pressed by default', () => {
+		renderProps(sayStyled({}));
+
+		for (const name of ['alignLeft', 'alignCentre', 'alignRight']) {
+			expect(button('beat-prop-align', name)).toHaveAttribute(
+				'aria-pressed',
+				'false'
+			);
+		}
+
+		for (const name of ['valignTop', 'valignMiddle', 'valignBottom']) {
+			expect(button('beat-prop-valign', name)).toHaveAttribute(
+				'aria-pressed',
+				'false'
+			);
+		}
+	});
+
+	it('presses the value the beat states', () => {
+		renderProps(
+			sayStyled({align: 'right', valign: 'middle', sizing: 'manual'})
+		);
+
+		expect(button('beat-prop-align', 'alignRight')).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		expect(button('beat-prop-valign', 'valignMiddle')).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		expect(screen.getByTestId('beat-prop-align')).toHaveClass('overridden');
+	});
+
+	it('writes the pressed value', () => {
+		const {onSetBubble} = renderProps(sayStyled({}));
+
+		fireEvent.click(button('beat-prop-align', 'alignCentre'));
+		expect(onSetBubble).toHaveBeenCalledWith('align', 'centre');
+
+		fireEvent.click(button('beat-prop-valign', 'valignBottom'));
+		expect(onSetBubble).toHaveBeenCalledWith('valign', 'bottom');
+	});
+
+	it('clears the key when the pressed button is pressed again', () => {
+		const {onSetBubble} = renderProps(
+			sayStyled({align: 'left', valign: 'top'})
+		);
+
+		fireEvent.click(button('beat-prop-align', 'alignLeft'));
+		expect(onSetBubble).toHaveBeenCalledWith('align', null);
+
+		fireEvent.click(button('beat-prop-valign', 'valignTop'));
+		expect(onSetBubble).toHaveBeenCalledWith('valign', null);
+	});
+
+	it('notes valign has no room while the box follows the words', () => {
+		renderProps(sayStyled({}));
+		expect(screen.getByTestId('beat-prop-valign')).toHaveTextContent(
+			key('valignAuto')
+		);
+	});
+
+	it('drops the note once an inherited sizing fixes the box', () => {
+		renderProps(say(), true, {inherited: {sizing: 'absolute'}});
+		expect(screen.getByTestId('beat-prop-valign')).not.toHaveTextContent(
+			key('valignAuto')
+		);
+	});
+
+	it('is offered on a narration box', () => {
+		renderProps({index: 0, kind: 'box', text: 'Later.'});
+		expect(screen.getByTestId('beat-prop-align')).toBeInTheDocument();
+		expect(screen.getByTestId('beat-prop-valign')).toBeInTheDocument();
+	});
+});
+
+describe('valignNoteKey', () => {
+	it('notes every sizing that follows the words', () => {
+		expect(valignNoteKey(undefined)).toBe(
+			'dialogs.passageEdit.beatProps.valignAuto'
+		);
+		expect(valignNoteKey('auto')).toBe(
+			'dialogs.passageEdit.beatProps.valignAuto'
+		);
+		expect(valignNoteKey('absolute')).toBeUndefined();
+		expect(valignNoteKey('manual')).toBeUndefined();
 	});
 });

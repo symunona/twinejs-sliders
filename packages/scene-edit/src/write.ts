@@ -788,6 +788,8 @@ export const BUBBLE_KEY_ORDER = [
 	'tail',
 	'w',
 	'h',
+	'align',
+	'valign',
 	'bg',
 	'accent',
 	'color',
@@ -814,6 +816,10 @@ export interface BubbleGeometry {
 	anchor?: string | null;
 	/** `absolute` fixes the box and fits the text to it. */
 	sizing?: string | null;
+	/** `left` · `centre` · `right`. */
+	align?: string | null;
+	/** `top` · `middle` · `bottom`. */
+	valign?: string | null;
 	/** Fill. Any CSS colour — a drawn shape fills itself with it. */
 	bg?: string | null;
 	/** A drawn shape's outline, slab or highlight. Meaningless to the CSS presets. */

@@ -673,6 +673,8 @@ Two keys on a say beat, and the same two inside a `box:` map:
 | `tail` | `[x, y]`, where the tail points, as fractions of the stage box — instead of at the speaker. `anchor: scene` ignores it. |
 | `w` | width, fraction of the stage width. Wrap cap under `auto`, exact width under `absolute` / `manual`. |
 | `h` | height, fraction of the stage height. `absolute` / `manual` only. |
+| `align` | words across the box: `left` · `centre` · `right`. Unset = left (`narrator` box centres). |
+| `valign` | words down the box: `top` (default) · `middle` · `bottom`. Only a fixed box (`absolute` / `manual`) has room. |
 | `bg` `accent` `color` `font` `size` | one-off overrides. `bg`/`accent` are the pair a drawn shape paints with. |
 
 ### Four layers, widest first
@@ -682,7 +684,7 @@ about:
 
 | Layer | Written as |
 |---|---|
-| story | `sliders.bubble.as`, `.font`, `.color`, `.bg`, `.accent`, `.sizing`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
+| story | `sliders.bubble.as`, `.font`, `.color`, `.bg`, `.accent`, `.sizing`, `.align`, `.valign`, … in a vars section (the editor's Story ▸ Defaults writes them into the start passage) |
 | scene | `bubble: {…}` at the top of the scene |
 | character | the character's own `bubble:` in the library |
 | beat | `as:` / `bubble:` on the line |
@@ -761,6 +763,17 @@ or bottom edge, carrying the width the bubble already had across:
 | `auto` | follows the words | normal |
 | `absolute` | `w` x `h` | fitted to the box |
 | `manual` | `w` x `h` | normal, clipped |
+
+### Alignment
+
+```yaml
+- mira: {say: "Bottom right.", bubble: {sizing: manual, w: 0.4, h: 0.3, align: right, valign: bottom}}
+```
+
+`align:` = `text-align`, any box. `valign:` moves words + name down a box taller than
+them; auto box is as tall as its words, so nothing to move. `centre` spelled like
+`place: centre`; `center` = error with hint. Editor: Align / V-align icon rows in beat
+panel, press lit icon again = back to default.
 
 ### Aimed tail
 

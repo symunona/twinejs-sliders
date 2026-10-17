@@ -697,6 +697,24 @@ export const BUBBLE_ANCHORS = ['speaker', 'scene'] as const;
 export type BubbleAnchor = (typeof BUBBLE_ANCHORS)[number];
 
 /**
+ * Where the words sit across the bubble: `text-align`. Unset = the renderer's own default
+ * (left, except presets like `narrator` that centre themselves).
+ *
+ * `centre`, spelled like `place: centre`, so one scene does not need two spellings.
+ */
+export const BUBBLE_ALIGNS = ['left', 'centre', 'right'] as const;
+
+export type BubbleAlign = (typeof BUBBLE_ALIGNS)[number];
+
+/**
+ * Where the words sit DOWN the bubble. Only a box taller than its words has room to move
+ * them, i.e. `sizing: absolute` / `manual` (and a narration bar with `h:`). Unset = top.
+ */
+export const BUBBLE_VALIGNS = ['top', 'middle', 'bottom'] as const;
+
+export type BubbleValign = (typeof BUBBLE_VALIGNS)[number];
+
+/**
  * Where a bubble sits when it is not hanging off its speaker.
  *
  * `auto` is the default and the only one that follows a character: the bubble hangs off
@@ -729,6 +747,8 @@ export const BUBBLE_KEYS = [
 	'tail',
 	'w',
 	'h',
+	'align',
+	'valign',
 	'bg',
 	'accent',
 	'color',
@@ -790,6 +810,10 @@ export interface BubbleStyle {
 	 * auto means.
 	 */
 	h?: number;
+	/** Text alignment across the box. */
+	align?: BubbleAlign;
+	/** Text alignment down the box. Means something only when the box is taller than the words. */
+	valign?: BubbleValign;
 	/** Background colour. Any CSS colour. A drawn shape fills itself with it. */
 	bg?: string;
 	/**

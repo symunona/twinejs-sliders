@@ -781,6 +781,48 @@ export const DIALOGUE_CSS = `
 	right: auto;
 }
 
+/* align: — after the presets, so a narrator told \`align: left\` goes left. \`center\` too,
+   for a story var that bypassed the parser's spelling. */
+.sliders-bubble[data-align='left'],
+.sliders-box[data-align='left'] { text-align: left; }
+.sliders-bubble[data-align='centre'],
+.sliders-bubble[data-align='center'],
+.sliders-box[data-align='centre'],
+.sliders-box[data-align='center'] { text-align: center; }
+.sliders-bubble[data-align='right'],
+.sliders-box[data-align='right'] { text-align: right; }
+
+/* valign: only a fixed box is taller than its words. The bubble becomes a column and its
+   body stops filling it, so the words (and the name over them) slide down as one. The body
+   keeps its own clip and may still shrink: the fitter reads its scrollHeight, which is the
+   words either way. \`safe\` = words that overflow a manual box keep their first line. */
+.sliders-bubble[data-sizing='absolute'][data-valign],
+.sliders-bubble[data-sizing='manual'][data-valign],
+.sliders-box[data-sizing='absolute'][data-valign],
+.sliders-box[data-sizing='manual'][data-valign] {
+	display: flex;
+	flex-direction: column;
+}
+
+.sliders-bubble[data-sizing='absolute'][data-valign] .sliders-bubble-body,
+.sliders-bubble[data-sizing='manual'][data-valign] .sliders-bubble-body {
+	flex: 0 1 auto;
+	height: auto;
+	min-height: 0;
+}
+
+.sliders-bubble[data-valign='middle'],
+.sliders-box[data-valign='middle'] {
+	justify-content: center;
+	justify-content: safe center;
+}
+
+.sliders-bubble[data-valign='bottom'],
+.sliders-box[data-valign='bottom'] {
+	justify-content: flex-end;
+	justify-content: safe flex-end;
+}
+
 /*
  * ==highlight== in beat text. Translucent so it reads on a light bubble and on the dark
  * narration box alike, and the text keeps its own colour. \`--sliders-mark-bg\` to restyle.

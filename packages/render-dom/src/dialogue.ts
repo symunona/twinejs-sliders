@@ -912,6 +912,18 @@ export function applyStyleAttributes(
 		delete el.dataset.anchorMode;
 	}
 
+	if (style?.align) {
+		el.dataset.align = style.align;
+	} else {
+		delete el.dataset.align;
+	}
+
+	if (style?.valign) {
+		el.dataset.valign = style.valign;
+	} else {
+		delete el.dataset.valign;
+	}
+
 	setVar(el, '--sliders-bubble-bg', style?.bg);
 	setVar(el, '--sliders-bubble-color', style?.color);
 	// Expanded, not passed through: `font: bangers` is a catalogue TOKEN and CSS has never

@@ -34,6 +34,8 @@ export const STORY_BUBBLE_KEYS = [
 	'sizing',
 	'w',
 	'h',
+	'align',
+	'valign',
 	'bg',
 	'accent',
 	'color',
