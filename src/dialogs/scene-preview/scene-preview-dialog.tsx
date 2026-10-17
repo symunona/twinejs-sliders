@@ -9,10 +9,12 @@ import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
 import {useCommand} from '../../hotkeys';
 import {useScenePreviewSource} from '../../routes/story-edit/scene-preview-source-context';
+import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {passageMatchingName, storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {addPassageEditors, useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
+import {PassageLockBanner} from '../passage-edit/passage-lock-banner';
 import {ScenePreview} from '../passage-edit/scene-preview/scene-preview';
 import {usePreviewResolver} from '../passage-edit/scene-preview/use-preview-resolver';
 import {useSceneParse} from '../passage-edit/scene-preview/use-scene-parse';
@@ -68,6 +70,16 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	// Unconditional, because hooks are. Parsing nothing is cheap and returns the empty parse.
 	const fallbackParse = useSceneParse(fallback?.text ?? '', story.passages);
 	const parse = source?.parse ?? fallbackParse;
+	const passageId = source?.passageId ?? fallback?.id;
+	const {lock, stealPassage} = useServerSyncContext();
+	/**
+	 * The soft lock (spec 11), the same one the passage editor obeys. Every stage gesture is
+	 * a write to the passage text, so a passage somebody else holds is a picture here too
+	 * until the author takes the edit over. After a takeover the lock is `shared`: both
+	 * sides write, and the banner only says so.
+	 */
+	const passageLock = passageId ? lock(story.id, passageId) : undefined;
+	const heldByOther = !!passageLock && !passageLock.shared;
 
 	/**
 	 * Ctrl/cmd-click on a link inside a scene bubble, when the preview is showing a passage
@@ -199,6 +211,12 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					}
 				}}
 			>
+				{passageId && (
+					<PassageLockBanner
+						lock={passageLock}
+						onTakeOver={() => stealPassage(story.id, passageId)}
+					/>
+				)}
 				<ScenePreview
 					assets={assets}
 					barExtra={walkControls}
@@ -210,8 +228,9 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					onNeedEditor={handleNeedEditor}
 					onOpenPassage={source?.onOpenPassage ?? handleOpenPassage}
 					parse={parse}
-					passageId={source?.passageId ?? fallback?.id}
+					passageId={passageId}
 					passages={story.passages}
+					readOnly={heldByOther}
 					storyId={story.id}
 					stylesheet={story.stylesheet}
 					text={source?.text ?? fallback?.text ?? ''}

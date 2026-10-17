@@ -160,6 +160,12 @@ export interface ScenePreviewProps {
 	 */
 	onNeedEditor?: () => void;
 	/**
+	 * Somebody else holds the passage (spec 11 soft lock). The stage shows and selects, and
+	 * writes nothing -- undo included, since an undo is a write to their text too. Taking
+	 * the edit over is the dialog's banner, not a control here.
+	 */
+	readOnly?: boolean;
+	/**
 	 * Which passage the scene on screen came from. Only identity matters: it is how the
 	 * preview tells "the author moved to another passage" from "the author is typing",
 	 * and the first tells the scrubber to go back to the scene's opening beat.
@@ -329,6 +335,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	parse,
 	passageId,
 	passages,
+	readOnly,
 	storyId,
 	stylesheet,
 	text,
@@ -716,7 +723,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			// no longer exists.
 			const grew = context ? insertedBeatCount(context, writes) : 0;
 
-			if (!context || !writeSceneEdits(editor, context, writes, origin)) {
+			if (
+				readOnly ||
+				!context ||
+				!writeSceneEdits(editor, context, writes, origin)
+			) {
 				// Nowhere to write, or the write changed nothing: the optimistic patch has
 				// no text coming to replace it and must not stay on screen.
 				clearPatch();
@@ -743,6 +754,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			holdCamera,
 			holdPatch,
 			parse.result,
+			readOnly,
 			setCamera
 		]
 	);
@@ -1360,7 +1372,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * and look, write nothing" for the case where there is no CodeMirror at all, so the lock
 	 * reuses that path rather than inventing a second one the gestures would have to learn.
 	 */
-	const editable = !!editor && !locked;
+	const editable = !!editor && !locked && !readOnly;
 
 	/**
 	 * What a gesture on the selection will do to the file, when that is not simply "edit the
@@ -1850,7 +1862,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: !!editor,
+		enabled: !!editor && !readOnly,
 		id: 'scene.undo',
 		label: t('hotkeys.commands.scene.undo'),
 		run: () => editor?.undo(),
@@ -1859,7 +1871,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: !!editor,
+		enabled: !!editor && !readOnly,
 		id: 'scene.redo',
 		label: t('hotkeys.commands.scene.redo'),
 		run: () => editor?.redo(),
