@@ -147,6 +147,8 @@ export interface FakeServer {
 	): void;
 	/** The story as the server holds it, or undefined. */
 	stored(id: string): Story | undefined;
+	/** The last `putPlayer` HTML for a story, or undefined. */
+	player(id: string): string | undefined;
 	revOf(id: string): number;
 	deleted(id: string): boolean;
 	/** Every request any client has made, in order. For asserting what was NOT sent. */
@@ -157,7 +159,12 @@ export interface FakeServer {
 	 * The size is the whole reason the route exists, so a test can assert it rather than
 	 * assert that a PATCH merely happened.
 	 */
-	readonly patches: {id: string; by: string; patch: StoryPatch; bytes: number}[];
+	readonly patches: {
+		id: string;
+		by: string;
+		patch: StoryPatch;
+		bytes: number;
+	}[];
 	/** Make the next `count` requests fail as a network error. */
 	failNext(count: number, error?: ServerError): void;
 	/** Drop everything. */
@@ -167,6 +174,7 @@ export interface FakeServer {
 export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 	const now = options.now ?? (() => DEFAULT_NOW);
 	let stories = new Map<string, StoredStory>();
+	let players = new Map<string, string>();
 	const calls: {method: string; id?: string; by: string}[] = [];
 	const patches: {
 		id: string;
@@ -257,7 +265,9 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 			rev: entry.rev,
 			...(entry.currentMeta.label ? {label: entry.currentMeta.label} : {}),
 			...(entry.currentMeta.pinned ? {pinned: true} : {}),
-			...(entry.currentMeta.summary ? {summary: entry.currentMeta.summary} : {}),
+			...(entry.currentMeta.summary
+				? {summary: entry.currentMeta.summary}
+				: {}),
 			...(entry.currentRestoredFrom === undefined
 				? {}
 				: {restoredFrom: entry.currentRestoredFrom})
@@ -281,7 +291,9 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 			rev: entry.rev,
 			...(entry.currentMeta.label ? {label: entry.currentMeta.label} : {}),
 			...(entry.currentMeta.pinned ? {pinned: true} : {}),
-			...(entry.currentMeta.summary ? {summary: entry.currentMeta.summary} : {}),
+			...(entry.currentMeta.summary
+				? {summary: entry.currentMeta.summary}
+				: {}),
 			...(entry.currentRestoredFrom === undefined
 				? {}
 				: {restoredFrom: entry.currentRestoredFrom})
@@ -523,10 +535,7 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 				return onTheWire(require(id).body);
 			},
 
-			async restoreRevision(
-				id: string,
-				rev: number
-			): Promise<RestoreResponse> {
+			async restoreRevision(id: string, rev: number): Promise<RestoreResponse> {
 				record('restoreRevision', id);
 				maybeFail();
 
@@ -552,6 +561,13 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 				};
 			},
 
+			async putPlayer(id: string, html: string): Promise<void> {
+				record('putPlayer', id);
+				maybeFail();
+				require(id);
+				players.set(id, html);
+			},
+
 			async setRevisionMeta(
 				id: string,
 				rev: number,
@@ -566,10 +582,10 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 					(meta.label === undefined || meta.label === null) &&
 					(meta.pinned === undefined || meta.pinned === null)
 				) {
-					throw new ServerError(
-						'body must carry `label`, `pinned` or both',
-						{code: 'bad_request', status: 400}
-					);
+					throw new ServerError('body must carry `label`, `pinned` or both', {
+						code: 'bad_request',
+						status: 400
+					});
 				}
 
 				const entry = require(id);
@@ -639,8 +655,10 @@ export function fakeServer(options: FakeServerOptions = {}): FakeServer {
 			failureError = error;
 		},
 		patches,
+		player: id => players.get(id),
 		reset() {
 			stories = new Map();
+			players = new Map();
 			calls.length = 0;
 			patches.length = 0;
 			failures = 0;

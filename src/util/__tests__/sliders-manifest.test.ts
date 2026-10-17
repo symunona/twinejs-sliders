@@ -117,8 +117,7 @@ async function seed(): Promise<Seeded> {
 }
 
 function manifests(published: Story) {
-	const named = (name: string) =>
-		published.passages.find(p => p.name === name);
+	const named = (name: string) => published.passages.find(p => p.name === name);
 
 	return {
 		assets: JSON.parse(named(ASSETS_PASSAGE_NAME)?.text ?? 'null') as {
@@ -195,7 +194,22 @@ describe('withSlidersManifests', () => {
 		});
 		const {assets} = manifests(published);
 
-		expect(assets.urls[bg]).toMatch(/^data:image\/webp;base64,[A-Za-z0-9+/=]+$/);
+		expect(assets.urls[bg]).toMatch(
+			/^data:image\/webp;base64,[A-Za-z0-9+/=]+$/
+		);
+		expect(assets.urls['lighthouse-night']).toBe(assets.urls[bg]);
+	});
+
+	it('points at a remote url built from the blob hash when asked', async () => {
+		const {bg, store} = await seed();
+		const published = await withSlidersManifests(story([CLIFF]), store, {
+			urls: {remote: hash => `https://store.test/pub/blobs/${hash}`}
+		});
+		const {assets} = manifests(published);
+		const meta = assets.assets.find(m => m.id === bg)!;
+
+		expect(meta.hash).toBeTruthy();
+		expect(assets.urls[bg]).toBe(`https://store.test/pub/blobs/${meta.hash}`);
 		expect(assets.urls['lighthouse-night']).toBe(assets.urls[bg]);
 	});
 

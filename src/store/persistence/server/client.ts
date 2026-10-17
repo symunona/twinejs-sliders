@@ -115,14 +115,22 @@ export function apiBase(url: string): string {
 	return trimmed.endsWith(API_PATH) ? trimmed : `${trimmed}${API_PATH}`;
 }
 
+function serverRoot(url: string): string {
+	return apiBase(url).slice(0, -API_PATH.length);
+}
+
 /**
- * The unauthenticated link to a story's JSON on the server: `GET /pub/{id}` answers
- * anyone, no token. Hangs off the server root, not the API base.
+ * The unauthenticated link that plays a story: `GET /pub/{id}` answers the HTML last
+ * uploaded with `putPlayer`, to anyone, no token. Hangs off the server root, not the API
+ * base.
  */
 export function publicStoryUrl(url: string, storyId: string): string {
-	const root = apiBase(url).slice(0, -API_PATH.length);
+	return `${serverRoot(url)}/pub/${encodeURIComponent(storyId)}`;
+}
 
-	return `${root}/pub/${encodeURIComponent(storyId)}`;
+/** Where a public page fetches a library blob: `GET /pub/blobs/{sha}`, no token. */
+export function publicBlobUrl(url: string, sha: string): string {
+	return `${serverRoot(url)}/pub/blobs/${encodeURIComponent(sha)}`;
 }
 
 /**
@@ -238,6 +246,8 @@ export interface ServerClient {
 		rev: number,
 		meta: RevisionMetaRequest
 	): Promise<RevisionMetaResponse>;
+	/** Replaces the playable HTML `GET /pub/{id}` serves. */
+	putPlayer(id: string, html: string): Promise<void>;
 }
 
 class FetchServerClient implements ServerClient {
@@ -347,7 +357,8 @@ class FetchServerClient implements ServerClient {
 		}
 
 		const raw = (await response.json()) as
-			{story?: Story; rev?: number} | Story;
+			| {story?: Story; rev?: number}
+			| Story;
 		// The server may answer with the bare story or wrap it. Accept both rather than
 		// making a pull fail on a shape difference no one would guess at from a stack.
 		const wrapped = raw as {story?: Story; rev?: number};
@@ -468,6 +479,14 @@ class FetchServerClient implements ServerClient {
 		);
 
 		return (await response.json()) as RestoreResponse;
+	}
+
+	async putPlayer(id: string, html: string): Promise<void> {
+		await this.send(`/stories/${encodeURIComponent(id)}/player`, {
+			body: html,
+			headers: {'Content-Type': 'text/html; charset=utf-8'},
+			method: 'PUT'
+		});
 	}
 }
 

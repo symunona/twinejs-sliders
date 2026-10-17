@@ -1508,6 +1508,8 @@
 				"checkingOut": "Checking Out…",
 				"copyPublicUrl": "Copy Public URL",
 				"copyPublicUrlCopied": "Copied",
+				"copyPublicUrlFailed": "Publish Failed",
+				"copyPublicUrlPublishing": "Publishing…",
 				"ghostSize": "{{size}}",
 				"ghostUpdated": "Updated {{time}}",
 				"groupGhosts": "On server",

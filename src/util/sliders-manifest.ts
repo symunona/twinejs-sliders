@@ -39,8 +39,14 @@ export const MANIFEST_PASSAGE_TAG = 'sliders-manifest';
  *   downloaded file or an Electron scratch file loaded over `file:`. Spec 03 warns
  *   against base64 by default (33% overhead, nothing plays until it all downloads), which
  *   is exactly why this is a caller's choice and not a guess.
+ * - `{remote}` — a URL built from the blob's sha256 (`meta.hash`). The public player
+ *   (`GET /pub/{id}`) points at the server's open blob route this way: small HTML, art
+ *   fetched lazily and cached forever.
  */
-export type SlidersUrlFlavor = 'blob' | 'data';
+export type SlidersUrlFlavor =
+	| 'blob'
+	| 'data'
+	| {remote: (hash: string) => string};
 
 /** `btoa` on a 20 MB string is fine. `String.fromCharCode(...20M args)` blows the stack. */
 const BASE64_CHUNK = 0x8000;
@@ -66,6 +72,10 @@ async function assetUrl(
 ): Promise<string | undefined> {
 	if (flavor === 'blob') {
 		return store.url(meta.id);
+	}
+
+	if (typeof flavor === 'object') {
+		return meta.hash ? flavor.remote(meta.hash) : undefined;
 	}
 
 	const blob = await store.get(meta.id);

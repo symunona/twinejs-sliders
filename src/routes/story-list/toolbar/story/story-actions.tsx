@@ -22,7 +22,7 @@ export interface StoryActionsProps {
 export const StoryActions: React.FC<StoryActionsProps> = props => {
 	const {selectedStory} = props;
 	const {dispatch, stories} = useStoriesContext();
-	const {actions, index, records} = useServerSyncContext();
+	const {actions, client, index, records} = useServerSyncContext();
 	const record = selectedStory ? records[selectedStory.id] : undefined;
 	const existsOnServer =
 		!!selectedStory && index.some(entry => entry.id === selectedStory.id);
@@ -53,6 +53,7 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 			)}
 			<SyncStoryButton onSetSync={actions.setSync} story={selectedStory} />
 			<CopyPublicUrlButton
+				client={client}
 				existsOnServer={existsOnServer}
 				story={selectedStory}
 			/>

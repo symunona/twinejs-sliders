@@ -47,7 +47,7 @@ Flags override the environment, which overrides `.env`, which overrides the defa
 ## API
 
 Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` except
-`/health` and `GET /pub/{id}`. Errors are always `{"error":{"code":"…","message":"…"}}` with the codes from
+`/health` and `GET /pub/…`. Errors are always `{"error":{"code":"…","message":"…"}}` with the codes from
 `src/store/persistence/server/server.types.ts`.
 
 | Method | Path | Notes |
@@ -64,14 +64,21 @@ Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` excep
 | `GET` | `/stories/{id}/revisions/{rev}/assets` | the manifest as of that rev |
 | `POST` | `/stories/{id}/revisions/{rev}/label` | `{label?,pinned?}` → the row; not a story write |
 | `POST` | `/stories/{id}/restore` | `{"rev":N}` → `{id,rev,restoredFrom,missingAssets}` |
+| `PUT` | `/stories/{id}/player` | playable HTML for `GET /pub/{id}`; body ≤ `MAX_ASSET_BYTES` |
 | `GET`/`PUT` | `/stories/{id}/assets` | the manifest; own rev, own `If-Match` |
 | `POST` | `/stories/{id}/assets/diff` | → `{missing,present,stale}` |
 | `HEAD`/`GET`/`PUT`/`DELETE` | `/stories/{id}/assets/{assetId}` | bytes; `PUT` needs `X-Asset-Hash` |
 | `GET` | `/events` | websocket: change bus, presence, soft locks |
 
-`GET /pub/{id}` — outside `/api/v1`. Story JSON, no token, `Access-Control-Allow-Origin: *`,
-`ETag`. Open read link for demos; anyone with the id reads the story. Editor: story list →
-**Copy Public URL**.
+Public, outside `/api/v1`, no token, `Access-Control-Allow-Origin: *`:
+
+- `GET /pub/{id}` — plays the story. Serves last `PUT /stories/{id}/player` HTML. 404 until
+  first publish.
+- `GET /pub/blobs/{sha}` — library blob. Public player's art points here.
+
+Editor: story list → **Copy Public URL** = publish HTML snapshot (format inlined, art as
+`/pub/blobs/<sha>`) + upload + copy link. Snapshot: re-click after edits. Anyone with the id
+plays the story.
 
 Every request may carry `X-Client-Id` and `X-Client-Name`; the name is recorded as
 `lastClient` and against every revision. Missing name is stored as `unknown`.

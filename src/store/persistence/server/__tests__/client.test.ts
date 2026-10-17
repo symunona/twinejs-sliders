@@ -4,6 +4,7 @@ import {
 	createServerClient,
 	isServerError,
 	outgoingStory,
+	publicBlobUrl,
 	publicStoryUrl
 } from '../client';
 import {testStory} from '../test-fixtures';
@@ -50,8 +51,9 @@ describe('publicStoryUrl', () => {
 			'https://example.test/',
 			'https://example.test/api/v1'
 		]) {
-			expect(publicStoryUrl(url, 'a b')).toBe(
-				'https://example.test/pub/a%20b'
+			expect(publicStoryUrl(url, 'a b')).toBe('https://example.test/pub/a%20b');
+			expect(publicBlobUrl(url, 'abc')).toBe(
+				'https://example.test/pub/blobs/abc'
 			);
 		}
 	});
