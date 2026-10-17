@@ -11,7 +11,7 @@
 import {buildSceneIndex} from '@sliders/scene-index';
 import type {SceneIndex} from '@sliders/scene-index';
 import {emptyStage} from '@sliders/scene-types';
-import type {Stage} from '@sliders/scene-types';
+import type {Scene, Stage} from '@sliders/scene-types';
 import {createLoggers} from '../logger';
 import {passages} from '../story';
 
@@ -46,4 +46,9 @@ export function stageFrom(ref: string | undefined): Stage {
 	}
 
 	return index?.resolve(ref) ?? emptyStage();
+}
+
+/** A passage's scene as authored, before `from:` — what the preload plan walks. */
+export function sceneOf(passage: string): Scene | undefined {
+	return index?.scenes.get(passage)?.scene;
 }

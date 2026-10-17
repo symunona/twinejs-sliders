@@ -1,51 +1,54 @@
 /**
- * Fetch every piece of art the story names before showing anything.
+ * Download the story's art in priority order, and keep the reader from outrunning it.
  *
- * Images used to load as each scene asked for them, so a scene popped in piece by piece.
- * Now the page stays blank under a thin progress bar until every url in the manifest is
- * held locally as an object url, and the first scene is drawn and decoded behind it.
+ * 1. The page stays hidden under a thin progress bar while the art of the passage the
+ *    reader opens on (tier 0 of `preload-plan.ts`) downloads, and its scene draws and
+ *    decodes behind the bar.
+ * 2. Then the page shows and every other tier downloads in the background, nearest
+ *    passages first (`asset-loader.ts`).
+ * 3. A stage asking for a url the queue has not reached moves it to the front.
+ * 4. A click towards a passage whose art is not down yet waits for it: every link is
+ *    blocked, the clicked one shows a spinner, and the click goes through once the art
+ *    is local (or after `NAV_CAP_MS`, whatever arrived).
  *
- * Bytes are counted off the response stream. A response with no stream or no
- * `Content-Length` (data:, blob:) counts its manifest `bytes` when it completes.
+ * Every url is held as an object url once down, so a scene never pops in piece by piece.
+ * Bytes are counted off the response stream; a response with no `Content-Length` (data:,
+ * blob:) counts its manifest `bytes` when it completes.
+ *
+ * Debugger: `preload-debug.ts`.
  */
 
 import {createLoggers} from '../logger';
-import {holdUrls, manifestArt} from './assets';
+import {passageNamed, passages} from '../story';
+import {manifestArt, routeUrls} from './assets';
+import {AssetLoader} from './asset-loader';
+import {probeAutoplay} from './autoplay';
+import type {LoaderEntry} from './asset-loader';
+import {currentPassage} from './history';
+import {buildPreloadPlan} from './preload-plan';
+import type {PreloadPlan} from './preload-plan';
+import {mountPreloadDebug, preloadDebugOn, preloadDelay} from './preload-debug';
+import {sceneOf} from './scene-graph';
 
 const {warn} = createLoggers('scene');
 
 const CONCURRENCY = 6;
 const REVEAL_CAP_MS = 5000;
+/** Longest a click waits for its destination's art before going anyway. */
+export const NAV_CAP_MS = 20000;
 const LOADING_CLASS = 'sliders-preloading';
+const NAV_WAIT_CLASS = 'sliders-nav-wait';
+const LINK_LOADING_CLASS = 'sliders-link-loading';
+/** A click this recent is the one a stage link handler is answering. */
+const PRESS_FRESH_MS = 1000;
 
-interface Item {
-	url: string;
-	mime?: string;
-	expected: number;
-	loaded: number;
-}
-
-function collect(): Item[] {
-	const {urls, meta} = manifestArt();
-	const byUrl = new Map<string, Item>();
-
-	for (const [key, url] of Object.entries(urls)) {
-		if (typeof url !== 'string' || byUrl.has(url)) {
-			continue;
-		}
-
-		const found = meta(key);
-
-		byUrl.set(url, {
-			url,
-			mime: found?.mime,
-			expected: found?.bytes ?? 0,
-			loaded: 0
-		});
-	}
-
-	return [...byUrl.values()];
-}
+let loader: AssetLoader | undefined;
+let plan: PreloadPlan | undefined;
+let waiting = false;
+let pressed: {el: HTMLElement; at: number} | undefined;
+let bypass: Element | undefined;
+let revealed: Promise<void> = Promise.resolve();
+let soundAllowed = false;
 
 function megabytes(bytes: number): string {
 	return `${(bytes / 1e6).toFixed(1)} MB`;
@@ -84,7 +87,69 @@ function mountBar() {
 	};
 }
 
-async function fetchLocal(item: Item, progress: () => void): Promise<string> {
+/**
+ * The boot screen: the opening scene has sound and the browser will not play it until the
+ * reader interacts. Shown over the bar while the art loads; its button arms once the
+ * scene is ready, and that click is the gesture the sound deck needs.
+ */
+function mountBoot() {
+	const root = document.createElement('div');
+	const button = document.createElement('button');
+	let release!: () => void;
+	const clicked = new Promise<void>(resolve => (release = resolve));
+
+	root.className = 'sliders-boot';
+	button.type = 'button';
+	button.className = 'sliders-boot__play';
+	button.disabled = true;
+	button.textContent = 'Loading…';
+	button.setAttribute('aria-busy', 'true');
+	button.addEventListener('click', () => release());
+	root.append(button);
+	document.body.append(root);
+
+	return {
+		clicked,
+		arm() {
+			button.disabled = false;
+			button.textContent = '▶ Play';
+			button.removeAttribute('aria-busy');
+			button.focus();
+		},
+		remove() {
+			root.remove();
+		}
+	};
+}
+
+/**
+ * Settles when the page is shown — the bar gone and, when it was needed, the boot screen
+ * clicked. A stage starts its beats only then, or a timed beat runs out unseen.
+ */
+export function whenRevealed(): Promise<void> {
+	return revealed;
+}
+
+/** The browser plays sound without a gesture (kiosk, allow-listed site, earlier click). */
+export function autoplayAllowed(): boolean {
+	return soundAllowed;
+}
+
+function wait(ms: number): Promise<void> {
+	return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+/** The real download: the url's bytes into an object url. */
+export async function fetchLocal(
+	item: LoaderEntry,
+	progress: () => void
+): Promise<string> {
+	const delay = preloadDelay();
+
+	if (delay > 0) {
+		await wait(delay);
+	}
+
 	const response = await fetch(item.url);
 
 	if (!response.ok) {
@@ -126,34 +191,6 @@ async function fetchLocal(item: Item, progress: () => void): Promise<string> {
 	return URL.createObjectURL(blob);
 }
 
-async function fetchAll(
-	items: Item[],
-	progress: () => void
-): Promise<Map<string, string>> {
-	const local = new Map<string, string>();
-	const queue = [...items];
-
-	async function worker() {
-		for (let item = queue.shift(); item; item = queue.shift()) {
-			try {
-				local.set(item.url, await fetchLocal(item, progress));
-			} catch (error) {
-				warn(
-					`Could not preload ${item.url}, it will load when shown. (${
-						(error as Error).message
-					})`
-				);
-			}
-
-			item.loaded = item.expected;
-			progress();
-		}
-	}
-
-	await Promise.all(Array.from({length: CONCURRENCY}, worker));
-	return local;
-}
-
 function nextFrame(): Promise<void> {
 	return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
@@ -191,23 +228,257 @@ export function preloading(): boolean {
 	return document.documentElement.classList.contains(LOADING_CLASS);
 }
 
-/** Called once per page load, after the manifests are reset and before any stage mounts. */
-export function preloadArt(): void {
-	const items = collect();
+/** The urls a passage's scene draws that are not down yet. Empty before the plan. */
+export function pendingFor(passage: string): string[] {
+	const name = passageNamed(passage)?.name ?? passage;
+	const urls = plan?.byPassage.get(name) ?? [];
 
-	if (items.length === 0) {
+	return loader ? urls.filter(url => !loader!.isSettled(url)) : [];
+}
+
+/**
+ * Hold the reader at the link they clicked until `to`'s art is down. Every link is
+ * blocked meanwhile (`onClickCapture`), and `el` wears a spinner.
+ */
+async function hold(to: string, urls: string[], el?: HTMLElement): Promise<void> {
+	const root = document.documentElement;
+
+	waiting = true;
+	root.classList.add(NAV_WAIT_CLASS);
+	el?.classList.add(LINK_LOADING_CLASS);
+	el?.setAttribute('aria-busy', 'true');
+	loader?.emit({detail: `${to}: ${urls.length} assets pending`, type: 'nav-wait'});
+
+	let timer: number | undefined;
+
+	try {
+		await Promise.race([
+			Promise.all(urls.map(url => loader!.need(url, `click ${to}`))),
+			new Promise(resolve => {
+				timer = window.setTimeout(resolve, NAV_CAP_MS);
+			})
+		]);
+	} finally {
+		window.clearTimeout(timer);
+		waiting = false;
+		root.classList.remove(NAV_WAIT_CLASS);
+		el?.classList.remove(LINK_LOADING_CLASS);
+		el?.removeAttribute('aria-busy');
+		loader?.emit({detail: to, type: 'nav-go'});
+	}
+}
+
+/**
+ * The stage's own links (bubbles, entities, the in-stage list) go through here. `go`
+ * runs now when the art is down, after the wait when not, never while another wait runs.
+ */
+export function navigateWhenReady(to: string, go: () => void): void {
+	if (waiting) {
 		return;
 	}
 
+	const urls = pendingFor(to);
+
+	if (urls.length === 0) {
+		go();
+		return;
+	}
+
+	const fresh =
+		pressed && performance.now() - pressed.at < PRESS_FRESH_MS
+			? pressed.el
+			: undefined;
+
+	void hold(to, urls, fresh).then(go);
+}
+
+/**
+ * Capture phase on the document, so it runs before any link's own handler: Chapbook's
+ * `<passage-link>` calls `go()` in its own click listener and never asks anybody.
+ */
+function onClickCapture(event: MouseEvent): void {
+	const target = event.target as Element | null;
+
+	if (!target || target.closest('.sliders-preload-debug')) {
+		return;
+	}
+
+	if (waiting) {
+		event.stopImmediatePropagation();
+		event.preventDefault();
+		loader?.emit({type: 'nav-blocked'});
+		return;
+	}
+
+	pressed = {
+		at: performance.now(),
+		el: (target.closest(
+			'passage-link, button, a, [role="button"], [role="link"]'
+		) ?? target) as HTMLElement
+	};
+
+	const link = target.closest('passage-link');
+	const to = link?.getAttribute('to');
+
+	if (!link || !to || link === bypass) {
+		return;
+	}
+
+	const urls = pendingFor(to);
+
+	if (urls.length === 0) {
+		return;
+	}
+
+	event.stopImmediatePropagation();
+	event.preventDefault();
+	void hold(to, urls, link as HTMLElement).then(() => {
+		bypass = link;
+
+		try {
+			(link as HTMLElement).click();
+		} finally {
+			bypass = undefined;
+		}
+	});
+}
+
+async function plan0(): Promise<PreloadPlan> {
+	const {assets, characters, urls} = manifestArt();
+
+	return buildPreloadPlan({
+		assets,
+		characters,
+		passages: passages()
+			.filter(passage => passage.name)
+			.map(passage => ({name: passage.name!, text: passage.source})),
+		scenes: sceneOf,
+		start: currentPassage(),
+		urls
+	});
+}
+
+async function run(bar: ReturnType<typeof mountBar>): Promise<void> {
+	// After `init()` has finished: a save restored from storage moves the trail, and the
+	// passage it lands on is tier 0.
+	await Promise.resolve();
+	plan = await plan0();
+
+	for (const tier of plan.tiers) {
+		for (const asset of tier.assets) {
+			loader!.add(asset.url, {
+				bytes: asset.bytes,
+				label: asset.label,
+				mime: asset.mime,
+				tier: tier.depth
+			});
+		}
+	}
+
+	for (const [passage, urls] of plan.byPassage) {
+		for (const url of urls) {
+			const entry = loader!.entries.get(url);
+
+			if (entry && !entry.passages.includes(passage)) {
+				entry.passages.push(passage);
+			}
+		}
+	}
+
+	loader!.emit({
+		detail: `start "${plan.start}", ${plan.tiers
+			.map(t => `t${t.depth}${t.unreached ? '(unreached)' : ''}: ${t.passages.length}p/${t.assets.length}a`)
+			.join(', ')}`,
+		type: 'plan'
+	});
+
+	const first = plan.tiers[0]?.assets.map(a => a.url) ?? [];
+	const sound = plan.sound.has(plan.start);
+	const boot = sound ? mountBoot() : undefined;
+	const verdict = sound ? probeAutoplay() : undefined;
+
+	await loader!.allSettled(first);
+	await firstSceneDrawn();
+
+	if (verdict) {
+		const {answer, via} = await verdict;
+
+		soundAllowed = answer === 'allowed';
+		loader!.emit({detail: `${answer} (${via})`, type: 'autoplay'});
+
+		if (!soundAllowed) {
+			loader!.emit({type: 'boot-wait'});
+			boot!.arm();
+			await boot!.clicked;
+			loader!.emit({type: 'boot-click'});
+		}
+	}
+
+	boot?.remove();
+	bar.remove();
+	loader!.emit({type: 'reveal'});
+	loader!.open(Infinity);
+}
+
+/** Called once per page load, after the manifests are reset and before any stage mounts. */
+export function preloadArt(): void {
+	const {urls} = manifestArt();
+
+	loader = undefined;
+	plan = undefined;
+	soundAllowed = false;
+	revealed = Promise.resolve();
+
+	if (Object.keys(urls).length === 0) {
+		return;
+	}
+
+	const current = new AssetLoader({concurrency: CONCURRENCY, fetch: fetchLocal});
+
+	loader = current;
+	(window as {slidersPreload?: unknown}).slidersPreload = {
+		loader: current,
+		get plan() {
+			return plan;
+		}
+	};
+
+	current.subscribe(event => {
+		if (event.type === 'fail') {
+			warn(`Could not preload ${event.url}, it will load when shown. (${event.detail})`);
+		}
+	});
+	routeUrls((url, key) => current.need(url, `render ${key}`));
+	document.removeEventListener('click', onClickCapture, true);
+	document.addEventListener('click', onClickCapture, true);
+
+	if (preloadDebugOn()) {
+		mountPreloadDebug(current);
+	}
+
 	const bar = mountBar();
-	const progress = () =>
-		bar.update(
-			items.reduce((sum, item) => sum + item.loaded, 0),
-			items.reduce((sum, item) => sum + item.expected, 0)
+	const progress = () => {
+		if (!preloading()) {
+			return;
+		}
+
+		// The bar is the opening scene's art: tier 0, plus whatever a stage asked for.
+		const shown = [...current.entries.values()].filter(
+			entry => entry.tier === 0 || entry.urgent !== undefined
 		);
 
+		bar.update(
+			shown.reduce((sum, entry) => sum + entry.loaded, 0),
+			shown.reduce((sum, entry) => sum + entry.expected, 0)
+		);
+	};
+
+	current.progress = progress;
 	progress();
-	void holdUrls(fetchAll(items, progress))
-		.then(firstSceneDrawn)
-		.finally(() => bar.remove());
+	revealed = run(bar).catch(error => {
+		warn(`Preload stopped: ${(error as Error).message}. Art loads as it is shown.`);
+		document.querySelector('.sliders-boot')?.remove();
+		bar.remove();
+		current.open(Infinity);
+	});
 }

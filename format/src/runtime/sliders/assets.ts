@@ -36,7 +36,7 @@ interface Manifests {
 
 let manifests: Manifests | undefined;
 let stubs: ReturnType<typeof createStubResolver> | undefined;
-let urlsReady: Promise<void> = Promise.resolve();
+let urlSource: ((url: string, key: string) => Promise<string>) | undefined;
 
 function manifestJson(name: string): Record<string, unknown> | undefined {
 	const passage = passageNamed(name);
@@ -112,45 +112,32 @@ function stubResolver() {
 export function resetManifests(): void {
 	manifests = undefined;
 	stubs = undefined;
-	urlsReady = Promise.resolve();
+	urlSource = undefined;
 }
 
 /** The art the manifest points at: every key's url, and the meta behind each key. */
 export function manifestArt(): {
 	urls: Record<string, string>;
-	meta: (key: string) => AssetMeta | undefined;
+	assets: AssetMeta[];
+	characters: Character[];
 } {
-	const {assets, urls} = load();
-	const byKey = new Map<string, AssetMeta>();
+	const {assets, characters, urls} = load();
 
-	for (const meta of Object.values(assets)) {
-		byKey.set(meta.name, meta);
-		byKey.set(meta.id, meta);
-	}
-
-	return {urls, meta: key => byKey.get(key)};
+	return {
+		assets: Object.values(assets),
+		characters: Object.values(characters),
+		urls
+	};
 }
 
 /**
- * Hold every `url()` until `until` settles, then answer from the manifest as `swap`
- * rewrote it — the preloader hands each remote url's local copy back this way.
+ * Route every `url()` through `source` — the preloader's queue, which answers with the
+ * local copy once it is down and moves a url it has not reached yet to the front.
  */
-export function holdUrls(
-	until: Promise<Map<string, string>>
-): Promise<void> {
-	urlsReady = until.then(swap => {
-		const {urls} = load();
-
-		for (const [key, url] of Object.entries(urls)) {
-			const local = swap.get(url);
-
-			if (local) {
-				urls[key] = local;
-			}
-		}
-	});
-
-	return urlsReady;
+export function routeUrls(
+	source: (url: string, key: string) => Promise<string>
+): void {
+	urlSource = source;
 }
 
 export const manifestResolver = {
@@ -165,10 +152,12 @@ export const manifestResolver = {
 		return found ?? (load().empty ? stubResolver().meta(key) : undefined);
 	},
 	async url(key: string) {
-		await urlsReady;
-
 		const found = load().urls[key];
 
-		return found ?? (load().empty ? stubResolver().url(key) : undefined);
+		if (found !== undefined) {
+			return urlSource ? urlSource(found, key) : found;
+		}
+
+		return load().empty ? stubResolver().url(key) : undefined;
 	}
 };

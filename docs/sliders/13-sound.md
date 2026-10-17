@@ -116,6 +116,7 @@ bed, so the first sound begins on the reader's first tap instead of never.
 `navigator.userActivation.hasBeenActive` short-circuits it — activation is sticky per
 document, so a reader who clicked to get here has already paid. Listener is on `document`,
 not the stage: the first passage is often not a scene.
+Opening scene with sound: boot screen + autoplay probe, `18-player-loading.md`.
 
 ## Asset store
 

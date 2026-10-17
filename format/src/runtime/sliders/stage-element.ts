@@ -48,6 +48,7 @@ import {
 import {currentPassage, resumeAtEnd} from './history';
 import {holdLinkList, holdLinkListAgain, releaseLinkList} from './link-list';
 import {claimDeck, releaseDeck} from './player-deck';
+import {autoplayAllowed, navigateWhenReady, whenRevealed} from './preload';
 import {stageFrom} from './scene-graph';
 import {takeStartBeat} from './start-beat';
 import {setLinkTransition} from './transitions';
@@ -217,8 +218,11 @@ export class SlidersStage extends CustomElement {
 			return;
 		}
 
-		setLinkTransition(this.linkTransition(name));
-		go(to);
+		// Not before its art is down: the click waits on a spinner (`preload.ts`).
+		navigateWhenReady(to, () => {
+			setLinkTransition(this.linkTransition(name));
+			go(to);
+		});
 	};
 
 	/** A link's own `transition:`, else this scene's `linkList:` default. */
@@ -398,6 +402,19 @@ export class SlidersStage extends CustomElement {
 		if (resumeAtEnd(currentPassage())) {
 			void this.showStop(lastStop(this.stops()), true);
 			return;
+		}
+
+		// Behind the preload bar or the boot screen nothing plays: a timed beat would run
+		// out unseen. The browser may allow sound without a gesture (kiosk, allow-listed
+		// site); then nothing will ever unmute it but this.
+		await whenRevealed();
+
+		if (!this.isConnected) {
+			return;
+		}
+
+		if (autoplayAllowed()) {
+			this.unlockSound();
 		}
 
 		void this.play();

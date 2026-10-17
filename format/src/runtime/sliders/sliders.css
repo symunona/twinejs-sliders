@@ -152,7 +152,7 @@ body.sliders-cinema #page > error-handler.active {
  * first scene is drawn (`preload.ts`). `visibility`, not `display`, so the stage still has a
  * box to lay out and draw into behind it.
  */
-html.sliders-preloading body > :not(.sliders-preload) {
+html.sliders-preloading body > :not(.sliders-preload):not(.sliders-preload-debug):not(.sliders-boot) {
 	visibility: hidden;
 }
 
@@ -177,4 +177,106 @@ html.sliders-preloading body > :not(.sliders-preload) {
 	font-variant-numeric: tabular-nums;
 	text-align: right;
 	opacity: 0.6;
+}
+
+/*
+ * A click waiting for its destination's art (`preload.ts`): every link reads as busy, the
+ * clicked one spins.
+ */
+html.sliders-nav-wait passage-link,
+html.sliders-nav-wait sliders-stage {
+	cursor: progress;
+}
+html.sliders-nav-wait passage-link:not(.sliders-link-loading) {
+	opacity: 0.5;
+}
+.sliders-link-loading {
+	position: relative;
+}
+.sliders-link-loading::after {
+	content: '';
+	display: inline-block;
+	width: 0.8em;
+	height: 0.8em;
+	margin-left: 0.4em;
+	vertical-align: -0.1em;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: sliders-link-spin 0.7s linear infinite;
+}
+@keyframes sliders-link-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* `preload-debug.ts`, only with localStorage['sliders.preload.debug'] set. */
+.sliders-preload-debug {
+	position: fixed;
+	top: 28px;
+	right: 8px;
+	z-index: 2147483647;
+	width: min(560px, calc(100vw - 16px));
+	max-height: 45vh;
+	display: flex;
+	flex-direction: column;
+	background: rgba(0, 0, 0, 0.85);
+	color: #ddd;
+	font: 11px/1.35 ui-monospace, monospace;
+	border-radius: 4px;
+	visibility: visible;
+}
+.sliders-preload-debug pre {
+	margin: 0;
+	padding: 4px 8px;
+	overflow: auto;
+	white-space: pre;
+}
+.sliders-preload-debug__assets {
+	flex: 1 1 60%;
+	border-bottom: 1px solid #444;
+}
+.sliders-preload-debug__events {
+	flex: 1 1 40%;
+	color: #9cf;
+}
+.sliders-preload-debug__head {
+	padding: 4px 8px;
+	border-bottom: 1px solid #444;
+}
+.sliders-preload-debug__head button {
+	font: inherit;
+	color: inherit;
+	background: #333;
+	border: 0;
+	padding: 0 6px;
+	cursor: pointer;
+}
+.sliders-preload-debug--collapsed pre {
+	display: none;
+}
+
+/* The boot screen (`preload.ts`): the opening scene has sound, the browser wants a click. */
+.sliders-boot {
+	position: fixed;
+	inset: 0;
+	z-index: 99;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	visibility: visible;
+}
+.sliders-boot__play {
+	font: 600 1.25rem/1 system-ui, sans-serif;
+	padding: 0.9em 1.8em;
+	color: inherit;
+	background: transparent;
+	border: 2px solid currentColor;
+	border-radius: 999px;
+	cursor: pointer;
+}
+.sliders-boot__play:disabled {
+	opacity: 0.5;
+	cursor: progress;
 }

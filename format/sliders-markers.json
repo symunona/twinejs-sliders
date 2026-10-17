@@ -24,6 +24,9 @@
     {"feature": "Scene transitions hooked into Chapbook's page-transition", "find": "before the new stage was drawn"},
     {"feature": "Entity motion: (parallax layers) drawn by the art and its twin", "find": "sliders-entity-art-tile"},
     {"feature": "Player-level sound deck: music carries across passages", "find": "slidersPlayerDeck"},
-    {"feature": "Art preloaded behind a progress bar before the first scene shows", "find": "sliders-preloading"}
+    {"feature": "Art preloaded behind a progress bar before the first scene shows", "find": "sliders-preloading"},
+    {"feature": "Click waits for its destination's art (navigation stop)", "find": "sliders-nav-wait"},
+    {"feature": "Boot screen asks for a click when the opening scene has sound", "find": "sliders-boot__play"},
+    {"feature": "Preload debugger toggled from localStorage", "find": "sliders.preload.debug"}
   ]
 }

@@ -23,6 +23,7 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 15 | [voice-mode.md](15-voice-mode.md) | Talk to the story. Gemini Live, the tool runner, and the model's eyes. |
 | 16 | [seamless-loop.md](16-seamless-loop.md) | Folding a backdrop's far edge over its near one, either way, so `scroll_infinite_*` has art that tiles. |
 | 17 | [keyboard.md](17-keyboard.md) | Reading with the arrow keys: beats, passage history, choosing between links. |
+| 18 | [player-loading.md](18-player-loading.md) | Art priority tree, boot screen for sound, click stop, preload debugger. |
 
 ## Open bugs
 
