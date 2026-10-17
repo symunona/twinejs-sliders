@@ -3,6 +3,8 @@
 TwineJS fork. Adds the **Sliders** story format, a YAML scene editor, a character editor,
 an asset store and a sync server.
 
+sliders is main branch!
+
 Always communicate caveman: short, concise, to the point. Docs too.
 
 ## Read before you work
