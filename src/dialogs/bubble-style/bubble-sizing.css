@@ -1,0 +1,90 @@
+@import '../../styles/colors.css';
+@import '../../styles/metrics.css';
+@import '../../styles/typography.css';
+
+/*
+ * The stage, the speaker and the bubble are a PICTURE of the player and keep the
+ * renderer's own colours in both themes (letterbox fill, `#fdfdfb` bubble, `#14161c`
+ * ink) — the same call `.bubble-style-preview` makes. Only the devices and captions
+ * follow the editor's theme.
+ */
+
+.bubble-sizing-figure {
+	display: block;
+	height: auto;
+	width: 100%;
+}
+
+.bubble-sizing-device {
+	fill: var(--light-gray);
+	stroke: var(--dark-gray);
+	stroke-width: 0.8;
+}
+
+.bubble-sizing-notch {
+	fill: var(--dark-gray);
+}
+
+.bubble-sizing-stage {
+	fill: #11151f;
+}
+
+.bubble-sizing-ground {
+	stroke: #2a3142;
+	stroke-width: 0.6;
+}
+
+.bubble-sizing-speaker {
+	fill: #4a5470;
+}
+
+.bubble-sizing-bubble {
+	fill: #fdfdfb;
+}
+
+.bubble-sizing-word {
+	fill: #14161c;
+}
+
+/* Words the box cuts off, ghosted where they would have gone. */
+.bubble-sizing-ghost {
+	fill: none;
+	stroke: #ff7ab6;
+	stroke-dasharray: 0.8 0.6;
+	stroke-width: 0.5;
+}
+
+.bubble-sizing-cut {
+	stroke: #ff4f8b;
+	stroke-dasharray: 1.4 0.8;
+	stroke-width: 0.7;
+}
+
+.bubble-sizing-caption {
+	fill: var(--dark-gray);
+	font: 7px var(--font-system);
+}
+
+.bubble-sizing-explanation p {
+	margin: 0;
+}
+
+.bubble-sizing-explanation .bubble-sizing-figure {
+	margin-bottom: calc(var(--grid-size) / 2);
+}
+
+.bubble-sizing-explanation .bubble-sizing-note {
+	color: var(--dark-gray);
+	font-size: 85%;
+	margin-bottom: calc(var(--grid-size) / 4);
+}
+
+.bubble-sizing-title {
+	font-weight: 700;
+}
+
+.bubble-sizing-text {
+	color: var(--dark-gray);
+	font-size: 90%;
+	line-height: 1.35;
+}

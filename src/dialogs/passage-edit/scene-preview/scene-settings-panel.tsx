@@ -25,7 +25,6 @@ import {
 	BUBBLE_ANCHORS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
-	BUBBLE_SIZINGS,
 	EASE_NAMES,
 	MUSIC_DEFAULT_FADE,
 	MUSIC_MAIN_TRACK,
@@ -56,6 +55,7 @@ import {
 	bubbleFontOptions,
 	bubbleStyleOptions
 } from '../../bubble-style/bubble-previews';
+import {bubbleSizingOptions} from '../../bubble-style/bubble-sizing';
 import {useAssetLibrary} from '../../sliders-assets/asset-store-context';
 import {FX_IDS} from '../use-scene-hints';
 import type {SceneKeyWrite} from './use-scene-writer';
@@ -1195,29 +1195,47 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 						</BubbleColorControl>
 					</SettingRow>
 				))}
+				{/* Sizing sits between place and anchor, as in the beat row. */}
 				{(
 					[
 						['place', BUBBLE_PLACES],
-						['sizing', BUBBLE_SIZINGS],
+						['sizing', undefined],
 						['anchor', BUBBLE_ANCHORS]
 					] as const
-				).map(([name, values]) => (
-					<SettingRow {...bubbleRow(name)} key={name}>
-						<TextSelect
-							onChange={event => setBubble(name, event.target.value || null)}
-							options={[
-								unsetOption,
-								...(values as readonly string[]).map(value => ({
-									label: value,
-									value
-								}))
-							]}
-							value={(bubble[name] as string | undefined) ?? UNSET}
-						>
-							{label(`bubble_${name}`)}
-						</TextSelect>
-					</SettingRow>
-				))}
+				).map(([name, values]) =>
+					values === undefined ? (
+						<SettingRow {...bubbleRow(name)} key={name}>
+							<PreviewSelect
+								onChange={value => setBubble(name, value || null)}
+								options={bubbleSizingOptions({
+									emptyLabel: label('unset'),
+									emptyNote: t('components.bubbleSizing.storyDefault'),
+									emptyValue: UNSET,
+									t
+								})}
+								value={bubble.sizing ?? UNSET}
+							>
+								{label(`bubble_${name}`)}
+							</PreviewSelect>
+						</SettingRow>
+					) : (
+						<SettingRow {...bubbleRow(name)} key={name}>
+							<TextSelect
+								onChange={event => setBubble(name, event.target.value || null)}
+								options={[
+									unsetOption,
+									...(values as readonly string[]).map(value => ({
+										label: value,
+										value
+									}))
+								]}
+								value={(bubble[name] as string | undefined) ?? UNSET}
+							>
+								{label(`bubble_${name}`)}
+							</TextSelect>
+						</SettingRow>
+					)
+				)}
 			</div>
 
 			<div className="scene-preview-beat-props-group">

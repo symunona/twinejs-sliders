@@ -22,11 +22,9 @@
 
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {BUBBLE_SIZINGS} from '@sliders/scene-types';
 import type {BubbleStyle} from '@sliders/scene-types';
 import {CardContent} from '../../components/container/card';
 import {DialogCard} from '../../components/container/dialog-card';
-import {TextSelect} from '../../components/control/text-select';
 import {PreviewSelect} from '../../components/control/preview-select';
 import {
 	Story,
@@ -38,6 +36,7 @@ import {
 import {storyBubbleDefaults, writeStoryBubbleVars} from '../../util/story-bubble';
 import {DialogComponentProps} from '../dialogs.types';
 import {BubbleColorControl} from '../bubble-style/bubble-color-control';
+import {bubbleSizingOptions} from '../bubble-style/bubble-sizing';
 import {storyColors} from '../../util/story-colors';
 import {
 	BubbleFontSwatch,
@@ -204,20 +203,18 @@ export const StoryDefaults: React.FC<StoryDefaultsProps> = ({story}) => {
 				>
 					{t('dialogs.storyDefaults.accent')}
 				</BubbleColorControl>
-				<TextSelect
+				<PreviewSelect
 					disabled={disabled}
-					onChange={event => set('sizing', event.target.value || undefined)}
-					options={[
-						{label: t('dialogs.storyDefaults.none'), value: NONE},
-						...BUBBLE_SIZINGS.map(sizing => ({
-							label: t(`dialogs.storyDetails.bubbleSizing_${sizing}`),
-							value: sizing
-						}))
-					]}
+					onChange={value => set('sizing', value || undefined)}
+					options={bubbleSizingOptions({
+						emptyLabel: t('dialogs.storyDefaults.none'),
+						emptyValue: NONE,
+						t
+					})}
 					value={style.sizing ?? NONE}
 				>
 					{t('dialogs.storyDefaults.bubbleSizing')}
-				</TextSelect>
+				</PreviewSelect>
 			</div>
 			{/*
 				One bubble, painted with everything above at once.

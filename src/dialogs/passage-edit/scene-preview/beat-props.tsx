@@ -19,7 +19,6 @@ import {useTranslation} from 'react-i18next';
 import {
 	BUBBLE_ANCHORS,
 	BUBBLE_PLACES,
-	BUBBLE_SIZINGS,
 	EASE_NAMES,
 	bubbleFontStack
 } from '@sliders/scene-types';
@@ -30,6 +29,7 @@ import {TextInput} from '../../../components/control/text-input';
 import {TextSelect} from '../../../components/control/text-select';
 import {PreviewSelect} from '../../../components/control/preview-select';
 import {BubbleColorControl} from '../../bubble-style/bubble-color-control';
+import {bubbleSizingOptions} from '../../bubble-style/bubble-sizing';
 import {
 	BubbleFontSwatch,
 	BubbleStyleSwatch,
@@ -631,21 +631,23 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 								</TextSelect>
 							</PropRow>
 							<PropRow {...bubbleRow('sizing')} testId="beat-prop-sizing">
-								<TextSelect
-									onChange={event =>
-										onSetBubble('sizing', event.target.value || null)
-									}
-									options={[
-										{label: label('inherit'), value: INHERIT},
-										...BUBBLE_SIZINGS.map(sizing => ({
-											label: sizing,
-											value: sizing
-										}))
-									]}
+								{/*
+									Explained, not just named: what a sizing changes is how the
+									bubble answers a phone versus a desktop, and the pane beside
+									the list draws exactly that for the highlighted option.
+								*/}
+								<PreviewSelect
+									onChange={value => onSetBubble('sizing', value || null)}
+									options={bubbleSizingOptions({
+										emptyLabel: label('inherit'),
+										emptyValue: INHERIT,
+										inherited: inherited?.sizing,
+										t
+									})}
 									value={style?.sizing ?? INHERIT}
 								>
 									{label('sizing')}
-								</TextSelect>
+								</PreviewSelect>
 							</PropRow>
 							{manual && (
 								/*

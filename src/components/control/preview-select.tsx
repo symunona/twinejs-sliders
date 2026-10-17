@@ -17,6 +17,11 @@
  *   - Screen readers. `role="listbox"` over `role="option"` with `aria-selected`, and the
  *     button is `aria-haspopup="listbox"` with `aria-expanded`.
  *
+ * An option may also carry an `explanation` — a figure plus prose for what the choice DOES.
+ * Any option having one turns on a pane beside the list that shows the highlighted
+ * option's. That is the "explained select": for behaviours (`sizing:`) a thumbnail cannot
+ * carry. The highlighted option is `aria-describedby` the pane.
+ *
  * PORTALLED TO THE BODY, like `MenuButton` and for the same reason it documents at length:
  * this control's callers live inside `.dialog-transform-setter`, whose `transform` opens a
  * stacking context, so a list rendered in place paints under the full-screen scene editor
@@ -46,6 +51,15 @@ export interface PreviewSelectOption {
 	preview?: React.ReactNode;
 	/** A second line under the label. Never searched — it is commentary, not a name. */
 	detail?: string;
+	/**
+	 * A larger figure and prose for what choosing this option DOES, shown in a pane beside
+	 * the list while the option is highlighted (hover or arrows).
+	 *
+	 * For choices whose meaning is a behaviour rather than a look — `sizing:` changes how
+	 * a bubble responds to the screen, which no thumbnail can say. When no option carries
+	 * one, the list renders as it always has.
+	 */
+	explanation?: React.ReactNode;
 }
 
 export interface PreviewSelectProps {
@@ -128,6 +142,8 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 		() => (searchable ? options.filter(o => matches(o, query)) : options),
 		[options, query, searchable]
 	);
+	const explained = options.some(option => option.explanation !== undefined);
+	const explanation = shown[active]?.explanation;
 
 	/**
 	 * Opening lands the highlight on what is already chosen, so Enter is a no-op and the
@@ -307,7 +323,9 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 			{open &&
 				createPortal(
 					<div
-						className="preview-select-list"
+						className={classNames('preview-select-list', {
+							'has-explanation': explained
+						})}
 						ref={setListEl}
 						style={styles.popper}
 						{...attributes.popper}
@@ -327,54 +345,73 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 								value={query}
 							/>
 						)}
-						<div
-							aria-labelledby={`${id}-label`}
-							className="preview-select-options"
-							role="listbox"
-						>
-							{shown.length === 0 && (
-								<p className="preview-select-empty">
-									{t('components.previewSelect.noMatches')}
-								</p>
-							)}
-							{shown.map((option, index) => (
-								<div
-									aria-selected={option.value === value}
-									className={classNames('preview-select-option', {
-										active: index === active,
-										selected: option.value === value
-									})}
-									data-index={index}
-									data-value={option.value}
-									key={option.value}
-									// Committed on pointerdown, not click: the button loses
-									// focus the moment the pointer goes down, and a blur
-									// handler upstream can re-render the list out from under
-									// the click that would have followed.
-									onPointerDown={event => {
-										event.preventDefault();
-										commit(option.value);
-									}}
-									onPointerEnter={() => setActive(index)}
-									role="option"
-								>
-									{option.preview && (
-										<span className="preview-select-preview">
-											{option.preview}
-										</span>
-									)}
-									<span className="preview-select-option-text">
-										<span className="preview-select-option-label">
-											{option.label}
-										</span>
-										{option.detail && (
-											<span className="preview-select-option-detail">
-												{option.detail}
+						<div className="preview-select-body">
+							<div
+								aria-labelledby={`${id}-label`}
+								className="preview-select-options"
+								role="listbox"
+							>
+								{shown.length === 0 && (
+									<p className="preview-select-empty">
+										{t('components.previewSelect.noMatches')}
+									</p>
+								)}
+								{shown.map((option, index) => (
+									<div
+										aria-describedby={
+											explained && index === active
+												? `${id}-explanation`
+												: undefined
+										}
+										aria-selected={option.value === value}
+										className={classNames('preview-select-option', {
+											active: index === active,
+											selected: option.value === value
+										})}
+										data-index={index}
+										data-value={option.value}
+										key={option.value}
+										// Committed on pointerdown, not click: the button loses
+										// focus the moment the pointer goes down, and a blur
+										// handler upstream can re-render the list out from under
+										// the click that would have followed.
+										onPointerDown={event => {
+											event.preventDefault();
+											commit(option.value);
+										}}
+										onPointerEnter={() => setActive(index)}
+										role="option"
+									>
+										{option.preview && (
+											<span className="preview-select-preview">
+												{option.preview}
 											</span>
 										)}
-									</span>
+										<span className="preview-select-option-text">
+											<span className="preview-select-option-label">
+												{option.label}
+											</span>
+											{option.detail && (
+												<span className="preview-select-option-detail">
+													{option.detail}
+												</span>
+											)}
+										</span>
+									</div>
+								))}
+							</div>
+							{explained && (
+								// Follows the highlight, not the value: the question while the list
+								// is open is "what would THIS one do", asked by pointing at it.
+								<div
+									aria-live="polite"
+									className="preview-select-explanation"
+									data-testid="preview-select-explanation"
+									id={`${id}-explanation`}
+								>
+									{explanation}
 								</div>
-							))}
+							)}
 						</div>
 					</div>,
 					document.body

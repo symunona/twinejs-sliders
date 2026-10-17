@@ -190,6 +190,21 @@
 			"noMatches": "Nothing matches.",
 			"search": "Search"
 		},
+		"bubbleSizing": {
+			"absoluteDetail": "fixed box, text fitted to it",
+			"absoluteText": "The box is w \u00d7 h of the stage and the text is scaled until it fills the box. Every screen shows the same picture, only smaller or larger.",
+			"absoluteTitle": "Fixed box, text scales with the screen",
+			"autoDetail": "box fits the words",
+			"autoText": "Text stays the same size on every screen and the box grows around the words, up to 42% of the stage wide. On a phone the same line wraps more and covers more of the picture.",
+			"autoTitle": "Box follows the words",
+			"desktop": "Desktop",
+			"inherited": "Not set here, so {{value}} applies:",
+			"storyDefault": "Not set here, so the story default applies \u2014 auto unless Story \u25b8 Defaults says otherwise:",
+			"manualDetail": "fixed box, normal text",
+			"manualText": "The box is w \u00d7 h of the stage, but the text keeps its normal size. On a small screen the words may not fit, and what does not fit is cut off.",
+			"manualTitle": "Fixed box, text stays normal size",
+			"phone": "Phone"
+		},
 		"tagEditor": {
 			"alreadyExists": "A tag with this name already exists."
 		}
@@ -1227,9 +1242,6 @@
 			"bubbleNoStart": "Set a start passage to give this story bubble defaults \u2014 they are written as variables at the top of it.",
 			"bubbleNone": "\u2014",
 			"bubbleSizing": "Bubble sizing",
-			"bubbleSizing_auto": "auto \u2014 snap to the words",
-			"bubbleSizing_absolute": "absolute \u2014 fixed box, fitted text",
-			"bubbleSizing_manual": "manual \u2014 fixed box, normal text",
 			"bubbleStyle": "Bubble style",
 			"storyFormatExplanation": "What's a story format?",
 			"snapToGrid": "Snap To Grid",

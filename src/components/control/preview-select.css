@@ -115,9 +115,31 @@
 	outline: none;
 }
 
+/* Row: the options, then the explanation pane when there is one. `min-height: 0` so the
+   list's `max-height` reaches the options and they scroll instead of the list clipping. */
+.preview-select-body {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
 .preview-select-options {
+	flex: 1 1 auto;
+	min-width: 0;
 	overflow-y: auto;
 	padding: calc(var(--grid-size) / 4);
+}
+
+/* Fixed width, so the list does not jump sideways as the highlight walks from a short
+   explanation to a long one. */
+.preview-select-explanation {
+	border-left: 1px solid var(--light-gray-translucent);
+	box-sizing: border-box;
+	color: var(--black);
+	flex: none;
+	overflow-y: auto;
+	padding: var(--grid-size);
+	width: 360px;
 }
 
 .preview-select-option {
@@ -153,6 +175,11 @@
 .preview-select-option-detail {
 	color: var(--dark-gray);
 	font-size: 85%;
+}
+
+/* An explained list has room for its detail lines to stay on one line each. */
+.preview-select-list.has-explanation .preview-select-option-detail {
+	white-space: nowrap;
 }
 
 .preview-select-empty {

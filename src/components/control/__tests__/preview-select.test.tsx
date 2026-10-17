@@ -277,3 +277,44 @@ describe('PreviewSelect', () => {
 		).toHaveNoViolations();
 	});
 });
+
+describe('PreviewSelect explanation pane', () => {
+	const EXPLAINED = [
+		{label: 'One', value: 'one', explanation: <p>first does this</p>},
+		{label: 'Two', value: 'two', explanation: <p>second does that</p>}
+	];
+
+	it('has no pane when no option carries an explanation', () => {
+		renderComponent();
+		open();
+		expect(
+			screen.queryByTestId('preview-select-explanation')
+		).not.toBeInTheDocument();
+	});
+
+	it('shows the highlighted option and follows the arrows', () => {
+		renderComponent({options: EXPLAINED, value: 'one'});
+		open();
+
+		const pane = screen.getByTestId('preview-select-explanation');
+
+		expect(pane).toHaveTextContent('first does this');
+		fireEvent.keyDown(screen.getByRole('button'), {key: 'ArrowDown'});
+		expect(pane).toHaveTextContent('second does that');
+	});
+
+	it('describes the highlighted option by the pane', () => {
+		renderComponent({options: EXPLAINED, value: 'two'});
+		open();
+
+		const pane = screen.getByTestId('preview-select-explanation');
+
+		expect(screen.getByRole('option', {name: /Two/})).toHaveAttribute(
+			'aria-describedby',
+			pane.id
+		);
+		expect(screen.getByRole('option', {name: /One/})).not.toHaveAttribute(
+			'aria-describedby'
+		);
+	});
+});
