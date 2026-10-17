@@ -612,11 +612,9 @@ export function insertedBeatCount(
 }
 
 /**
- * One gesture must be one `replaceRange`, and not only for undo: the passage editor's
- * CodeMirror is CONTROLLED, and react-codemirror2 keeps exactly one deferred change at a
- * time — a second `replaceRange` in the same tick overwrites the first and the document is
- * only rescued by a whole-document `setValue`. `mergeEdits` re-inserts the text between two
- * edits unchanged, so a multi-select drag still restores in a single undo.
+ * One gesture must be one `replaceRange`: one undo step, and one change event for the
+ * registry to commit. `mergeEdits` re-inserts the text between two edits unchanged, so a
+ * multi-select drag still restores in a single undo.
  */
 
 /** What the block text becomes. Used to know when the parse has caught up. */
@@ -630,7 +628,7 @@ export function previewEdits(text: string, edits: TextEdit[]): string {
 // Putting it through CodeMirror
 // ---------------------------------------------------------------------------
 
-/** The slice of `CodeMirror.Editor` a write needs. Keeps the tests free of a real editor. */
+/** The slice of the passage Doc a write needs (`SceneDoc` satisfies it). */
 export interface WritableEditor {
 	posFromIndex(index: number): CodeMirror.Position;
 	replaceRange(

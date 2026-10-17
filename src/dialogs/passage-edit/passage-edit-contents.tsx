@@ -7,8 +7,7 @@ import {
 	newPassagePositions,
 	passageMatchingName,
 	passageWithId,
-	storyWithId,
-	updatePassage
+	storyWithId
 } from '../../store/stories';
 import {
 	formatWithNameAndVersion,
@@ -45,6 +44,7 @@ import {PassageLockBanner} from './passage-lock-banner';
 import {StoryFormatToolbar} from './story-format-toolbar';
 import './passage-edit-contents.css';
 import {usePrefsContext} from '../../store/prefs';
+import {usePassageDoc, usePassageDocText} from '../../store/passage-docs';
 
 export interface PassageEditContentsProps {
 	disabled?: boolean;
@@ -60,15 +60,17 @@ export const PassageEditContents: React.FC<
 		React.useState(true);
 	const [editorCrashed, setEditorCrashed] = React.useState(false);
 	const [cmEditor, setCmEditor] = React.useState<CodeMirror.Editor>();
-	// The store's copy of the text is a debounced second behind on purpose (see
-	// `PassageText`), which is fine for the story map and useless for the scene preview:
-	// a drag has to read the document the author is looking at.
-	const [liveText, setLiveText] = React.useState<string>();
+	/**
+	 * The passage's Doc, shared with the scene preview. The store's copy of the text is a
+	 * debounced second behind on purpose (the registry commits it), which is fine for the
+	 * story map and useless here: the parse reads the document the author is looking at.
+	 */
+	const handle = usePassageDoc(storyId, passageId);
+	const liveText = usePassageDocText(handle);
 	const {ErrorBoundary, error, reset: resetError} = useErrorBoundary();
 	const {prefs} = usePrefsContext();
-	const {blurPassage, focusPassage, lock, stealPassage} =
-		useServerSyncContext();
-	const {dispatch, stories} = useUndoableStoriesContext();
+	const {lock, stealPassage} = useServerSyncContext();
+	const {stories} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const assetStore = useAssetStore();
 	const {formats} = useStoryFormatsContext();
@@ -101,20 +103,10 @@ export const PassageEditContents: React.FC<
 	 */
 	const readOnly = disabled || (!!passageLock && !passageLock.shared);
 
-	useSceneErrorMarks(cmEditor, parse.errors);
+	useSceneErrorMarks(handle?.doc, cmEditor, parse.errors);
 
-	// Claim the passage while this editor is the one in front. Background cards in the
-	// stack are `disabled` and stay silent: claiming a lock on a passage the author is
-	// merely looking past would lock out someone who wants to work on it.
-	React.useEffect(() => {
-		if (disabled) {
-			return;
-		}
-
-		focusPassage(storyId, passageId);
-
-		return () => blurPassage(storyId, passageId);
-	}, [blurPassage, disabled, focusPassage, passageId, storyId]);
+	// The soft lock is claimed by the registry on the first local write, not here: opening
+	// a passage to read it must not lock out someone who wants to work on it.
 
 	// Keeps the story format's "Insert Last Scene" toolbar item pointed at
 	// whatever scene this author last worked on.
@@ -135,11 +127,6 @@ export const PassageEditContents: React.FC<
 			resetError();
 		}
 	}, [error, resetError, storyFormatExtensionsEnabled]);
-
-	// The store catching up drops the local override rather than trying to merge with it:
-	// after the debounced commit the two agree, and when the text changed from somewhere
-	// else entirely — find and replace, undo — the store is the one that is right.
-	React.useEffect(() => setLiveText(undefined), [passage.text]);
 
 	/**
 	 * Ctrl/cmd-click on a link, either in a scene bubble in the preview or on the link's own
@@ -250,7 +237,9 @@ export const PassageEditContents: React.FC<
 	 */
 	const handleApplyFix = React.useCallback(
 		(fix: SceneFix) => {
-			if (!cmEditor) {
+			const doc = handle?.doc;
+
+			if (!doc) {
 				return;
 			}
 
@@ -260,34 +249,28 @@ export const PassageEditContents: React.FC<
 				line: (fix.endLine ?? fix.line) - 1
 			};
 
-			if (cmEditor.getRange(from, to) !== fix.replaces) {
+			if (doc.getRange(from, to) !== fix.replaces) {
 				return;
 			}
 
-			cmEditor.replaceRange(fix.text, from, to, FIX_ORIGIN);
-			cmEditor.focus();
+			doc.replaceRange(fix.text, from, to, FIX_ORIGIN);
+			cmEditor?.focus();
 		},
-		[cmEditor]
+		[cmEditor, handle]
 	);
 
 	// The scene preview is a dialog of its own now, not a strip inside this one. All this
 	// editor does is offer what it is holding; the preview decides whose scene is on
 	// screen.
-	usePublishScenePreview({
-		disabled,
-		editor: cmEditor,
-		onOpenPassage: handleOpenPassage,
-		parse,
-		passageId,
-		storyId,
-		text: sceneText
-	});
-
-	const handlePassageTextChange = React.useCallback(
-		(text: string) => {
-			dispatch(updatePassage(story, passage, {text}));
+	usePublishScenePreview(
+		{
+			disabled,
+			onOpenPassage: handleOpenPassage,
+			parse,
+			passageId,
+			storyId
 		},
-		[dispatch, passage, story]
+		cmEditor
 	);
 
 	function handleExecCommand(name: string) {
@@ -357,27 +340,34 @@ export const PassageEditContents: React.FC<
 			{!disabled && (
 				<PassageLockBanner
 					lock={passageLock}
-					onTakeOver={() => stealPassage(storyId, passageId)}
+					onTakeOver={() => {
+						handle?.claim();
+						stealPassage(storyId, passageId);
+					}}
 				/>
 			)}
 			<ErrorBoundary>
-				<PassageText
-					disabled={readOnly}
-					onChange={handlePassageTextChange}
-					onEditorChange={setCmEditor}
-					onLiveChange={setLiveText}
-					passage={passage}
-					story={story}
-					storyFormat={storyFormat}
-					storyFormatExtensionsDisabled={!storyFormatExtensionsEnabled}
-				/>
+				{handle && (
+					<PassageText
+						disabled={readOnly}
+						handle={handle}
+						onEditorChange={setCmEditor}
+						passage={passage}
+						story={story}
+						storyFormat={storyFormat}
+						storyFormatExtensionsDisabled={!storyFormatExtensionsEnabled}
+					/>
+				)}
 			</ErrorBoundary>
 			{parse.hasScene && (
 				<SceneErrors
 					errors={parse.errors}
 					onApplyFix={readOnly ? undefined : handleApplyFix}
 					onCreatePassage={readOnly ? undefined : handleCreatePassage}
-					onGoToLine={line => cmEditor?.setCursor({ch: 0, line: line - 1})}
+					onGoToLine={line => {
+						(cmEditor ?? handle?.doc)?.setCursor({ch: 0, line: line - 1});
+						cmEditor?.focus();
+					}}
 				/>
 			)}
 		</div>

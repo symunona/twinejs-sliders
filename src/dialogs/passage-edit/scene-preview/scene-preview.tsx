@@ -88,7 +88,8 @@ import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
-import {beatLines, useActiveBeatMark} from './use-active-beat-mark';
+import {useActiveBeatMark} from './use-active-beat-mark';
+import type {SceneDoc} from '../../../store/passage-docs';
 import {useRequestedBeat} from './preview-beat-request';
 import {useArrivalBeat} from './use-arrival-beat';
 import {useStageSelection} from './use-stage-selection';
@@ -143,28 +144,23 @@ export interface ScenePreviewProps {
 	 */
 	stylesheet?: string;
 	/**
-	 * The passage's CodeMirror. Every visual edit is a text edit through this document and
-	 * never around it, so Twine's undo works for free (spec 07). Absent when the author
-	 * turned CodeMirror off in preferences: the stage is then selectable but read-only.
+	 * The passage's Doc, from the registry. Every visual edit is a text edit through this
+	 * document and never around it, so it shares one undo history with the `</>` view
+	 * (spec 07). Headless: no editor needs to be open. Absent means a picture.
 	 */
-	editor?: CodeMirror.Editor;
+	doc?: SceneDoc;
+	/** The `</>` view on `doc`, when open. Only the text's double click needs it. */
+	view?: CodeMirror.Editor;
+	/**
+	 * Somebody else holds this passage (spec 11 soft lock): look, write nothing. Separate
+	 * from the stage lock, which is the author's own choice.
+	 */
+	readOnly?: boolean;
 	/**
 	 * Ctrl/cmd-click on a `[[link]]` inside a bubble, with the passage the link points at.
 	 * Absent means the preview shows links but cannot open them.
 	 */
 	onOpenPassage?: (name: string) => void;
-	/**
-	 * Asked for when the author reaches for a beat and there is no `editor`: opens the
-	 * passage's editor, whose CodeMirror then arrives as `editor` and makes the beat panel
-	 * writable. Absent means a picture stays a picture.
-	 */
-	onNeedEditor?: () => void;
-	/**
-	 * Somebody else holds the passage (spec 11 soft lock). The stage shows and selects, and
-	 * writes nothing -- undo included, since an undo is a write to their text too. Taking
-	 * the edit over is the dialog's banner, not a control here.
-	 */
-	readOnly?: boolean;
 	/**
 	 * Which passage the scene on screen came from. Only identity matters: it is how the
 	 * preview tells "the author moved to another passage" from "the author is typing",
@@ -327,10 +323,9 @@ async function textChanged(
  */
 export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	assets,
-	editor,
+	doc,
 	fullScreen,
 	onFullScreenChange,
-	onNeedEditor,
 	onOpenPassage,
 	parse,
 	passageId,
@@ -339,6 +334,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	storyId,
 	stylesheet,
 	text,
+	view,
 	walkHere: walkHereRequest,
 	onWalkInfo,
 	barExtra
@@ -412,8 +408,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const shownHidden = fullScreen ? NOTHING_HIDDEN : hidden;
 	const [beat, setBeat] = React.useState(0);
-	/** The beat picked on a picture, held until the passage editor it opened arrives. */
-	const pendingBeat = React.useRef<number>();
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
@@ -582,14 +576,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const {clear, select, selection} = useStageSelection({
 		beatSpans: parse.result?.beatSpans,
 		block,
-		editor,
+		editor: doc,
 		enabled: true,
 		kindOf,
 		onCaretBeat: goToBeat,
 		onFocusEntity: id =>
 			setFocusRequest(current => ({id, seq: (current?.seq ?? 0) + 1})),
 		scene: parse.result?.scene,
-		stageIds
+		stageIds,
+		view
 	});
 
 
@@ -693,30 +688,31 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// Author typed, or hit undo, while a gesture was live: every offset the gesture holds
 	// now points into text that no longer exists.
 	React.useEffect(() => {
-		if (!editor) {
+		if (!doc) {
 			return;
 		}
 
-		const handler = (
-			_editor: CodeMirror.Editor,
-			change: CodeMirror.EditorChange
-		) => {
+		const handler = (_doc: CodeMirror.Doc, change: CodeMirror.EditorChange) => {
 			if (!isOwnOrigin(change.origin)) {
 				setSeal(value => value + 1);
 			}
 		};
 
-		editor.on('change', handler);
+		doc.on('change', handler);
 
-		return () => editor.off('change', handler);
-	}, [editor]);
+		return () => doc.off('change', handler);
+	}, [doc]);
 
 	const commit = React.useCallback(
 		(writes: SceneWrite[], origin: string) => {
-			const context = block && {
+			// Offsets from the Doc as it is NOW, not as of the last render: a headless Doc
+			// reports its change a tick late, and two writes in that tick would otherwise
+			// splice the second into text that is already gone.
+			const live = doc ? extractSceneBlock(doc.getValue()) : block;
+			const context = live && {
 				beat,
-				blockOffset: block.offset,
-				blockText: block.text,
+				blockOffset: live.offset,
+				blockText: live.text,
 				scene: parse.result?.scene
 			};
 			// Asked BEFORE the write, because afterwards the plan is a plan about text that
@@ -724,9 +720,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			const grew = context ? insertedBeatCount(context, writes) : 0;
 
 			if (
-				readOnly ||
 				!context ||
-				!writeSceneEdits(editor, context, writes, origin)
+				readOnly ||
+				!writeSceneEdits(doc, context, writes, origin)
 			) {
 				// Nowhere to write, or the write changed nothing: the optimistic patch has
 				// no text coming to replace it and must not stay on screen.
@@ -750,7 +746,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			beat,
 			block,
 			clearPatch,
-			editor,
+			doc,
 			holdCamera,
 			holdPatch,
 			parse.result,
@@ -809,24 +805,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		},
 		[beat, commit]
 	);
-	// Reaching for a beat is reaching for its text, and the text is only writable through
-	// the passage's CodeMirror -- so a beat picked on a picture opens the passage.
-	const needEditor = React.useCallback(() => {
-		if (!editor && onNeedEditor) {
-			pendingBeat.current = beat;
-			onNeedEditor();
-		}
-	}, [beat, editor, onNeedEditor]);
 	const handleSelectBeat = React.useCallback(() => {
 		clear();
 		setBeatPanelOpen(true);
-		needEditor();
-	}, [clear, needEditor]);
+	}, [clear]);
 	const handleEditBeatText = React.useCallback(() => {
 		setBeatPanelOpen(true);
 		setBeatTextFocus(value => value + 1);
-		needEditor();
-	}, [needEditor]);
+	}, []);
 
 	/** A gesture was abandoned: neither optimistic value has text coming to replace it. */
 	const handleCancel = React.useCallback(() => {
@@ -1372,7 +1358,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * and look, write nothing" for the case where there is no CodeMirror at all, so the lock
 	 * reuses that path rather than inventing a second one the gestures would have to learn.
 	 */
-	const editable = !!editor && !locked && !readOnly;
+	const editable = !!doc && !locked && !readOnly;
 
 	/**
 	 * What a gesture on the selection will do to the file, when that is not simply "edit the
@@ -1426,33 +1412,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		}
 	}, [beat, parse.result, selection, stage, t]);
 
-	// The editor a beat pick opened has arrived. Its caret starts outside the beats, and the
-	// caret drives the scrubber, so left alone it would throw the author back to the
-	// arrival state. Put the caret on the picked beat instead: caret and scrubber agree.
-	React.useEffect(() => {
-		const wanted = pendingBeat.current;
-
-		if (!editor || wanted === undefined) {
-			return;
-		}
-
-		pendingBeat.current = undefined;
-
-		const span = wanted > 0 ? parse.result?.beatSpans?.[wanted - 1] : undefined;
-		const line = span
-			? beatLines(span, block?.lineOffset ?? 0, editor.lineCount())[0]
-			: undefined;
-
-		if (line !== undefined) {
-			editor.setCursor({ch: 0, line});
-		}
-
-		setBeat(wanted);
-	}, [block, editor, parse.result]);
-
 	// The beat on screen, lit up in the text the author is typing in.
 	useActiveBeatMark(
-		editor ?? undefined,
+		doc,
 		beat > 0 ? parse.result?.beatSpans?.[beat - 1] : undefined,
 		block?.lineOffset ?? 0
 	);
@@ -1462,11 +1424,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * Never in full screen. That is reading mode — a tap anywhere steps forward — and the
 	 * bubble frame would swallow every tap that landed on the words.
 	 */
-	// On a picture the bubble is still a target: pressing it opens the passage, and the
-	// press itself writes nothing (no editor yet, so the commit is a no-op).
-	const bubblePickable = editable || (!editor && !!onNeedEditor && !locked);
 	const bubbleBeat =
-		bubblePickable &&
+		editable &&
 		!fullScreen &&
 		(shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
 			? beat - 1
@@ -1862,19 +1821,19 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: !!editor && !readOnly,
+		enabled: !!doc && !readOnly,
 		id: 'scene.undo',
 		label: t('hotkeys.commands.scene.undo'),
-		run: () => editor?.undo(),
+		run: () => doc?.undo(),
 		scope: 'scene-preview'
 	});
 
 	useCommand({
 		allowRepeat: true,
-		enabled: !!editor && !readOnly,
+		enabled: !!doc && !readOnly,
 		id: 'scene.redo',
 		label: t('hotkeys.commands.scene.redo'),
-		run: () => editor?.redo(),
+		run: () => doc?.redo(),
 		scope: 'scene-preview'
 	});
 
@@ -2023,13 +1982,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				icon={<IconMessage2 />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.beatPanel')}
-				onClick={() => {
-					if (!beatPanelOpen) {
-						needEditor();
-					}
-
-					setBeatPanelOpen(!beatPanelOpen);
-				}}
+				onClick={() => setBeatPanelOpen(!beatPanelOpen)}
 				selectable
 				selected={beatPanelOpen}
 			/>
@@ -2195,7 +2148,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			    above is still the keyboard-accessible path. */}
 			<BubbleEditor
 				beat={bubbleBeat}
-				editable={bubblePickable}
+				editable={editable}
 				onCommit={handleBubbleCommit}
 				onDraft={setBubbleDraft}
 				onEditText={handleEditBeatText}

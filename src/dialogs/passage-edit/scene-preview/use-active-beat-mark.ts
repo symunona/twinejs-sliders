@@ -10,9 +10,10 @@
  * between a parse and the cleanup, and a number would then unclass the wrong line.
  */
 
-import {Editor, LineHandle} from 'codemirror';
+import {LineHandle} from 'codemirror';
 import * as React from 'react';
 import type {SceneSpan} from '@sliders/scene-types';
+import type {SceneDoc} from '../../../store/passage-docs';
 
 const LINE_CLASS = 'sliders-active-beat';
 
@@ -45,7 +46,7 @@ export function beatLines(
 }
 
 export function useActiveBeatMark(
-	editor: Editor | undefined,
+	editor: SceneDoc | undefined,
 	span: SceneSpan | undefined,
 	lineOffset: number
 ): void {

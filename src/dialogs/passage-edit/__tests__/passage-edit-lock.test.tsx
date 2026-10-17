@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import * as React from 'react';
 import {ServerSyncContext} from '../../../store/persistence/server/use-server-sync';
 import type {PassageLock} from '../../../store/persistence/server/presence';
@@ -7,6 +7,7 @@ import {
 	testSyncContext
 } from '../../../store/persistence/server/test-fixtures';
 import {useStoriesContext} from '../../../store/stories';
+import {PassageDocsProvider} from '../../../store/passage-docs';
 import {
 	FakeStateProvider,
 	fakeStory,
@@ -53,7 +54,10 @@ function renderEditor(lock?: PassageLock, props: {disabled?: boolean} = {}) {
 	const result = render(
 		<FakeStateProvider stories={[story]} storyFormats={[format]}>
 			<ServerSyncContext.Provider value={value}>
-				<Contents {...props} />
+				{/* Inner registry: it claims through THIS sync context. */}
+				<PassageDocsProvider>
+					<Contents {...props} />
+				</PassageDocsProvider>
 			</ServerSyncContext.Provider>
 		</FakeStateProvider>
 	);
@@ -67,20 +71,34 @@ function renderEditor(lock?: PassageLock, props: {disabled?: boolean} = {}) {
 }
 
 describe('<PassageEditContents> with soft locks', () => {
-	it('claims the passage while it is the editor in front', () => {
+	it('claims the passage on the first write, not on open', async () => {
 		const {handlers, passageId, storyId, unmount} = renderEditor();
 
-		expect(handlers.focusPassage).toHaveBeenCalledWith(storyId, passageId);
+		expect(handlers.focusPassage).not.toHaveBeenCalled();
+		fireEvent.click(
+			within(screen.getByTestId(`mock-passage-text-${passageId}`)).getByText(
+				'onChange'
+			)
+		);
+		await waitFor(() =>
+			expect(handlers.focusPassage).toHaveBeenCalledWith(storyId, passageId)
+		);
 		expect(handlers.blurPassage).not.toHaveBeenCalled();
 
 		unmount();
 		expect(handlers.blurPassage).toHaveBeenCalledWith(storyId, passageId);
 	});
 
+	it('stays silent when only opened', () => {
+		// Reading a passage must not shut someone else out of it.
+		const {handlers, unmount} = renderEditor(undefined);
+
+		unmount();
+		expect(handlers.focusPassage).not.toHaveBeenCalled();
+		expect(handlers.blurPassage).not.toHaveBeenCalled();
+	});
+
 	it('stays silent for a background card in the stack', () => {
-		// Those cards are read-only for a reason that has nothing to do with presence,
-		// and claiming a lock from one would shut someone else out of a passage this
-		// author is only looking past.
 		const {handlers} = renderEditor(undefined, {disabled: true});
 
 		expect(handlers.focusPassage).not.toHaveBeenCalled();

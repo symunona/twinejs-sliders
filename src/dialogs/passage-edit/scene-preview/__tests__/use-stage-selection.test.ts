@@ -1,4 +1,9 @@
+// The repo stubs `codemirror` for every other suite (src/__mocks__/codemirror.ts).
+jest.unmock('codemirror');
+
 import {act, renderHook} from '@testing-library/react-hooks';
+import CodeMirror from 'codemirror';
+import type {LiveDoc} from '../../../../store/passage-docs';
 import {extractSceneBlock} from '@sliders/scene-index';
 import type {Scene} from '@sliders/scene-types';
 import {parseSceneText} from '../use-scene-parse';
@@ -32,63 +37,60 @@ const passage = [
 const block = extractSceneBlock(passage)!;
 const scene = parseSceneText(passage).result!.scene as Scene;
 
-/** Just enough CodeMirror for the selection to talk to. */
+/** Headless Doc events land on a zero timeout. */
+function settle() {
+	jest.advanceTimersByTime(0);
+}
+
+beforeEach(() => jest.useFakeTimers());
+afterEach(() => {
+	// CodeMirror queues headless Doc events behind ONE module-level timeout; clearing it
+	// unfired would starve every later test.
+	jest.runOnlyPendingTimers();
+	jest.useRealTimers();
+});
+
+/**
+ * A real headless Doc, the registry's, for the caret and the marks. The view is a fake:
+ * only the double click needs one, and jsdom has no layout for `coordsChar` to read.
+ */
 function fakeEditor(lines: string[]) {
+	const doc = new CodeMirror.Doc(lines.join('\n')) as LiveDoc;
 	const handlers: Record<string, ((...args: unknown[]) => void)[]> = {};
-	const marks: {
-		from: unknown;
-		to: unknown;
-		options: unknown;
-		cleared: boolean;
-	}[] = [];
-	let cursor = {ch: 0, line: 0};
-
-	const doc = {
-		getLine: (line: number) => lines[line],
-		lastLine: () => lines.length - 1,
-		markText(from: unknown, to: unknown, options: unknown) {
-			const mark = {cleared: false, from, options, to};
-
-			marks.push(mark);
-
-			return {
-				clear() {
-					mark.cleared = true;
-				}
-			};
+	const view = {
+		// Lines are 20px tall in this fake, so a click's y names its line.
+		coordsChar: (at: {top: number}) => ({ch: 0, line: Math.floor(at.top / 20)}),
+		off(event: string, fn: (...args: unknown[]) => void) {
+			handlers[event] = (handlers[event] ?? []).filter(one => one !== fn);
+		},
+		on(event: string, fn: (...args: unknown[]) => void) {
+			handlers[event] = [...(handlers[event] ?? []), fn];
 		}
-	};
+	} as unknown as CodeMirror.Editor;
 
 	return {
-		marks,
-		editor: {
-			// Lines are 20px tall in this fake, so a click's y names its line.
-			coordsChar: (at: {top: number}) => ({ch: 0, line: Math.floor(at.top / 20)}),
-			getCursor: () => cursor,
-			getDoc: () => doc,
-			lineCount: () => lines.length,
-			off(event: string, fn: (...args: unknown[]) => void) {
-				handlers[event] = (handlers[event] ?? []).filter(one => one !== fn);
-			},
-			on(event: string, fn: (...args: unknown[]) => void) {
-				handlers[event] = [...(handlers[event] ?? []), fn];
-			},
-			setCursor(position: {ch: number; line: number}) {
-				cursor = position;
-				// CodeMirror signals this synchronously at the end of the operation the
-				// call opens, which is exactly the echo the hook has to survive.
-				(handlers['cursorActivity'] ?? []).forEach(fn => fn());
-			}
-		} as unknown as CodeMirror.Editor,
-		moveCaretTo(line: number) {
-			cursor = {ch: 0, line};
-			(handlers['cursorActivity'] ?? []).forEach(fn => fn());
+		get marks() {
+			return doc.getAllMarks().map(mark => {
+				const {ch, line} = (mark.find() as {from: CodeMirror.Position}).from;
+
+				return {from: {ch, line}};
+			});
 		},
-		cursor: () => cursor,
+		editor: doc,
+		view,
+		moveCaretTo(line: number) {
+			doc.setCursor({ch: 0, line});
+			settle();
+		},
+		cursor: () => {
+			const {ch, line} = doc.getCursor();
+
+			return {ch, line};
+		},
 		doubleClickLine(line: number) {
 			const event = {clientX: 4, clientY: line * 20 + 5};
 
-			(handlers['dblclick'] ?? []).forEach(fn => fn(this.editor, event));
+			(handlers['dblclick'] ?? []).forEach(fn => fn(view, event));
 		}
 	};
 }
@@ -165,6 +167,7 @@ describe('useStageSelection() double click', () => {
 				enabled: true,
 				kindOf: () => 'cast',
 				onFocusEntity,
+				view: fake.view,
 				scene,
 				stageIds: ['mira', 'bram', 'candle']
 			})
@@ -220,7 +223,10 @@ describe('useStageSelection()', () => {
 		const fake = fakeEditor(passage.split('\n'));
 		const {result} = setup(fake);
 
-		act(() => result.current.select(['bram']));
+		act(() => {
+			result.current.select(['bram']);
+			settle();
+		});
 
 		expect(result.current.selection).toEqual(['bram']);
 		expect(fake.cursor()).toEqual({ch: 0, line: 6});
@@ -230,7 +236,10 @@ describe('useStageSelection()', () => {
 		const fake = fakeEditor(passage.split('\n'));
 		const {result} = setup(fake);
 
-		act(() => result.current.select(['mira', 'bram']));
+		act(() => {
+			result.current.select(['mira', 'bram']);
+			settle();
+		});
 
 		// The caret landed on mira's line and fired cursorActivity. Without the echo
 		// guard that would have set the selection back to mira alone, and the render it
@@ -263,7 +272,10 @@ describe('useStageSelection()', () => {
 		const fake = fakeEditor(passage.split('\n'));
 		const {result} = setup(fake);
 
-		act(() => result.current.select(['mira']));
+		act(() => {
+			result.current.select(['mira']);
+			settle();
+		});
 
 		expect(fake.marks).toHaveLength(3);
 		expect(fake.marks[0].from).toEqual({ch: 0, line: 5});
@@ -275,11 +287,14 @@ describe('useStageSelection()', () => {
 		const fake = fakeEditor(passage.split('\n'));
 		const {result} = setup(fake);
 
-		act(() => result.current.select(['mira']));
+		act(() => {
+			result.current.select(['mira']);
+			settle();
+		});
 		act(() => result.current.clear());
 
 		expect(result.current.selection).toEqual([]);
-		expect(fake.marks.every(mark => mark.cleared)).toBe(true);
+		expect(fake.marks).toHaveLength(0);
 	});
 
 	it('drops a selection the author deleted out of the text', () => {
@@ -297,7 +312,10 @@ describe('useStageSelection()', () => {
 			{initialProps: {stageIds: ['mira', 'bram']}}
 		);
 
-		act(() => result.current.select(['bram']));
+		act(() => {
+			result.current.select(['bram']);
+			settle();
+		});
 		rerender({stageIds: ['mira']});
 
 		expect(result.current.selection).toEqual([]);
@@ -374,7 +392,10 @@ describe('the caret driving the scrubber', () => {
 		const onCaretBeat = jest.fn();
 		const {hook} = render(onCaretBeat);
 
-		act(() => hook.result.current.select(['bram']));
+		act(() => {
+			hook.result.current.select(['bram']);
+			settle();
+		});
 		expect(onCaretBeat).not.toHaveBeenCalled();
 	});
 });

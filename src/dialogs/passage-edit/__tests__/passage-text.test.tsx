@@ -1,356 +1,138 @@
-import {fireEvent, render, screen, waitFor} from '@testing-library/react';
-import {axe} from 'jest-axe';
+/**
+ * The `</>` view over a registry Doc, with a REAL CodeMirror. Text, debounce and store sync
+ * belong to the registry and are tested there against a real Doc
+ * (store/passage-docs/__tests__). Here: focus, and the view sharing the Doc it shows.
+ */
+
+// The repo stubs `codemirror` for every other suite (src/__mocks__/codemirror.ts).
+jest.unmock('codemirror');
+
+import {act, render} from '@testing-library/react';
 import * as React from 'react';
+import {
+	PassageDoc,
+	usePassageDoc,
+	usePassageDocRegistry
+} from '../../../store/passage-docs';
 import {useStoriesContext} from '../../../store/stories';
 import {useFormatCodeMirrorMode} from '../../../store/use-format-codemirror-mode';
 import {
 	fakeLoadedStoryFormat,
 	fakePassage,
-	fakePrefs,
 	FakeStateProvider,
-	FakeStateProviderProps,
 	fakeStory
 } from '../../../test-util';
-import {PassageText, PassageTextProps} from '../passage-text';
+import {PassageText} from '../passage-text';
 
 jest.mock('../../../store/use-codemirror-passage-hints');
 jest.mock('../../../store/use-format-codemirror-mode');
-jest.mock('../../../components/control/code-area/code-area');
 
-const TestPassageText: React.FC<Partial<PassageTextProps>> = props => {
+/** CodeMirror measures text by range, and jsdom has none of that. */
+beforeAll(() => {
+	const empty = () => ({
+		bottom: 0,
+		height: 0,
+		left: 0,
+		right: 0,
+		top: 0,
+		width: 0
+	});
+
+	Range.prototype.getBoundingClientRect = empty as never;
+	Range.prototype.getClientRects = (() => ({
+		item: () => null,
+		length: 0
+	})) as never;
+});
+
+let held: PassageDoc | undefined;
+let view: CodeMirror.Editor | undefined;
+
+/** Holds the Doc itself, like the scene preview does, so it outlives the view. */
+const Harness: React.FC<{open: boolean}> = ({open}) => {
 	const {stories} = useStoriesContext();
+	const story = stories[0];
+	const handle = usePassageDoc(story.id, story.passages[0].id);
 
-	return (
+	usePassageDocRegistry();
+	held = handle;
+
+	return open && handle ? (
 		<PassageText
-			onChange={jest.fn()}
-			onEditorChange={jest.fn()}
-			passage={stories[0].passages[0]}
+			handle={handle}
+			onEditorChange={editor => (view = editor)}
+			passage={story.passages[0]}
+			story={story}
 			storyFormat={fakeLoadedStoryFormat()}
-			story={stories[0]}
-			{...props}
 		/>
-	);
+	) : null;
 };
 
-describe('<PassageText>', () => {
-	const useFormatCodeMirrorModeMock = useFormatCodeMirrorMode as jest.Mock;
+function renderHarness() {
+	const story = fakeStory(1);
 
+	story.passages[0] = fakePassage({...story.passages[0], text: 'line one'});
+
+	const ui = (open: boolean) => (
+		<FakeStateProvider stories={[story]}>
+			<Harness open={open} />
+		</FakeStateProvider>
+	);
+	const result = render(ui(true));
+
+	return {...result, setOpen: (open: boolean) => result.rerender(ui(open))};
+}
+
+describe('<PassageText>', () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
-		useFormatCodeMirrorModeMock.mockReturnValue(undefined);
+		(useFormatCodeMirrorMode as jest.Mock).mockReturnValue(undefined);
+		held = undefined;
+		view = undefined;
 	});
 
 	afterEach(() => {
-		jest.clearAllTimers();
+		// CodeMirror queues headless Doc events behind ONE module-level timeout.
+		act(() => {
+			jest.runOnlyPendingTimers();
+		});
 		jest.useRealTimers();
 	});
 
-	function renderComponent(
-		props?: Partial<PassageTextProps>,
-		contexts?: FakeStateProviderProps
-	) {
-		return render(
-			<FakeStateProvider {...contexts}>
-				<TestPassageText {...props} />
-			</FakeStateProvider>
-		);
-	}
-
-	it('displays the passage text', () => {
-		renderComponent({passage: fakePassage({text: 'mock-text'})});
-		expect(
-			screen.getByLabelText('dialogs.passageEdit.passageTextEditorLabel')
-		).toHaveValue('mock-text');
-	});
-
-	it('updates the passage text if it has been changed elsewhere', () => {
-		const onChange = jest.fn();
-		const onEditorChange = jest.fn();
-		const passage = fakePassage({text: 'mock-text'});
-		const storyFormat = fakeLoadedStoryFormat();
-
-		const {rerender} = render(
-			<FakeStateProvider>
-				<PassageText
-					onChange={onChange}
-					onEditorChange={onEditorChange}
-					passage={passage}
-					story={fakeStory()}
-					storyFormat={storyFormat}
-				/>
-			</FakeStateProvider>
-		);
-
-		passage.text = 'mock-changed-text';
-		rerender(
-			<FakeStateProvider>
-				<PassageText
-					onChange={onChange}
-					onEditorChange={onEditorChange}
-					passage={passage}
-					story={fakeStory()}
-					storyFormat={storyFormat}
-				/>
-			</FakeStateProvider>
-		);
-		expect(
-			screen.getByLabelText('dialogs.passageEdit.passageTextEditorLabel')
-		).toHaveValue('mock-changed-text');
-	});
-
-	it('ignores a passage text change if a manual edit is pending', async () => {
-		const onChange = jest.fn();
-		const onEditorChange = jest.fn();
-		const passage = fakePassage({text: 'mock-text'});
-		const storyFormat = fakeLoadedStoryFormat();
-
-		const {rerender} = render(
-			<FakeStateProvider>
-				<PassageText
-					onChange={onChange}
-					onEditorChange={onEditorChange}
-					passage={passage}
-					story={fakeStory()}
-					storyFormat={storyFormat}
-				/>
-			</FakeStateProvider>
-		);
-
-		fireEvent.change(
-			screen.getByLabelText('dialogs.passageEdit.passageTextEditorLabel'),
-			{target: {value: 'mock-manual-change'}}
-		);
-		passage.text = 'mock-externally-changed-text';
-		rerender(
-			<FakeStateProvider>
-				<PassageText
-					onChange={onChange}
-					onEditorChange={onEditorChange}
-					passage={passage}
-					story={fakeStory()}
-					storyFormat={storyFormat}
-				/>
-			</FakeStateProvider>
-		);
-		expect(
-			screen.getByLabelText('dialogs.passageEdit.passageTextEditorLabel')
-		).toHaveValue('mock-manual-change');
-	});
-
-	// Need to mock <CodeArea /> with higher fidelity to do these.
-	it.todo('focuses the code area after a delay on mount');
-	it.todo('executes a command when the onExecCommand prop is called');
-	it.todo('retains the selection after the onExecCommand prop is called');
-
-	it('sets the format mode on the code area if one exists', () => {
-		useFormatCodeMirrorModeMock.mockReturnValue('mock-format-mode-name');
-		renderComponent();
-
-		const options = JSON.parse(
-			screen.getByTestId('mock-code-area').dataset.options!
-		);
-
-		expect(options.mode).toBe('mock-format-mode-name');
-	});
-
-	it('sets the syntax mode to text if no format mode exists', () => {
-		useFormatCodeMirrorModeMock.mockReturnValue(undefined);
-		renderComponent();
-
-		const options = JSON.parse(
-			screen.getByTestId('mock-code-area').dataset.options!
-		);
-
-		expect(options.mode).toBe('text');
-	});
-
-	it('sets up autocompletion of passage names in links', () => {
-		useFormatCodeMirrorModeMock.mockReturnValue(undefined);
-		renderComponent();
-
-		const options = JSON.parse(
-			screen.getByTestId('mock-code-area').dataset.options!
-		);
-
-		expect(options.prefixTrigger).not.toBeUndefined();
-	});
-
-	it('uses the passage editor font preferences', () => {
-		renderComponent(
-			{},
-			{
-				prefs: fakePrefs({
-					passageEditorFontFamily: 'mock-font-family',
-					passageEditorFontScale: 2
-				})
-			}
-		);
-
-		expect(screen.getByTestId('mock-code-area').dataset.fontFamily).toBe(
-			'mock-font-family'
-		);
-		expect(screen.getByTestId('mock-code-area').dataset.fontScale).toBe('2');
-	});
-
-	it('blinks the cursor if that preference is not set', () => {
-		renderComponent({}, {prefs: {editorCursorBlinks: true}});
-		expect(
-			JSON.parse(screen.getByTestId('mock-code-area')!.dataset.options!)
-		).not.toEqual(expect.objectContaining({cursorBlinkRate: 0}));
-	});
-
-	it("doesn't blink the cursor if that preference is set", () => {
-		renderComponent({}, {prefs: {editorCursorBlinks: false}});
-		expect(
-			JSON.parse(screen.getByTestId('mock-code-area')!.dataset.options!)
-		).toEqual(expect.objectContaining({cursorBlinkRate: 0}));
-	});
-
-	it('updates the visible text immediately when the passage text is changed', async () => {
-		renderComponent();
-
-		const editor = screen.getByLabelText(
-			'dialogs.passageEdit.passageTextEditorLabel'
-		);
-
-		fireEvent.change(editor, {target: {value: 'mock-change'}});
-		expect(editor).toHaveValue('mock-change');
-		fireEvent.change(editor, {target: {value: 'mock-change2'}});
-		expect(editor).toHaveValue('mock-change2');
-	});
-
-	it('makes debounced calls to the onChange prop when multiple changes are made to the passage text', async () => {
-		const onChange = jest.fn();
-
-		renderComponent({onChange});
-		expect(onChange).not.toHaveBeenCalled();
-
-		const editor = screen.getByLabelText(
-			'dialogs.passageEdit.passageTextEditorLabel'
-		);
-
-		fireEvent.change(editor, {target: {value: 'mock-change'}});
-		fireEvent.change(editor, {target: {value: 'mock-change2'}});
-		expect(onChange).not.toHaveBeenCalled();
-		jest.advanceTimersToNextTimer();
-		await waitFor(() => expect(onChange).toBeCalledTimes(1));
-		expect(onChange.mock.calls).toEqual([['mock-change2']]);
-	});
-
-	it.each([true, false])(
-		'flushes pending passage text changes on blur when useCodeMirror is %s',
-		useCodeMirror => {
-			const onChange = jest.fn();
-
-			renderComponent({onChange}, {prefs: {useCodeMirror}});
-
-			const editor = screen.getByLabelText(
-				'dialogs.passageEdit.passageTextEditorLabel'
-			);
-
-			fireEvent.change(editor, {target: {value: 'mock-blur-change'}});
-			expect(onChange).not.toHaveBeenCalled();
-
-			fireEvent.blur(editor);
-
-			expect(onChange).toHaveBeenCalledTimes(1);
-			expect(onChange).toHaveBeenCalledWith('mock-blur-change');
-
-			jest.advanceTimersByTime(1000);
-			expect(onChange).toHaveBeenCalledTimes(1);
-		}
-	);
-
-	it('uses CodeMirror in the code area if enabled in preferences', () => {
-		renderComponent({}, {prefs: {useCodeMirror: true}});
-		expect(screen.getByTestId('mock-code-area')!.dataset.useCodeMirror).toBe(
-			'true'
-		);
-	});
-
-	it("doesn't use CodeMirror in the code area if disabled in preferences", () => {
-		renderComponent({}, {prefs: {useCodeMirror: false}});
-		expect(screen.getByTestId('mock-code-area')!.dataset.useCodeMirror).toBe(
-			'false'
-		);
-	});
-
-	// The scene editor writes to the document from a pointerup listener it added itself.
-	// React 16 only batches inside its own synthetic events, so that write re-renders and
-	// flushes effects SYNCHRONOUSLY, part-way through the change handler. The effect that
-	// watches for external text changes reads the pending-commit timeout to tell "the
-	// author is typing" from "someone replaced the text underneath us" — so if the timeout
-	// is scheduled after the state update rather than before, that effect fires while it is
-	// still unset and reverts the write. The drag then appears to do nothing at all.
-	describe('when text is written from outside React batching', () => {
-		/**
-		 * Stands in for PassageEditContents, which holds the live text so the scene
-		 * preview can read it. The parent state update is not incidental — it is the
-		 * second setState that makes React flush the pending passive effect early.
-		 */
-		const LiveTextParent: React.FC<Partial<PassageTextProps>> = props => {
-			const [live, setLive] = React.useState<string>();
-
-			return (
-				<>
-					<div data-testid="live-text">{live}</div>
-					<TestPassageText {...props} onLiveChange={setLive} />
-				</>
-			);
-		};
-
-		function renderWithLiveText(props?: Partial<PassageTextProps>) {
-			return render(
-				<FakeStateProvider>
-					<LiveTextParent {...props} />
-				</FakeStateProvider>
-			);
-		}
-
-		function writeNatively(text: string) {
-			const node = screen.getByTestId('mock-code-area') as HTMLElement & {
-				mockWriteText: (value: string) => void;
-			};
-
-			// Deliberately NOT wrapped in act(): act() batches, and batching is exactly
-			// what hides this.
-			node.mockWriteText(text);
-		}
-
-		it('keeps the written text instead of reverting to the stored passage', () => {
-			renderWithLiveText({passage: fakePassage({text: 'original'})});
-
-			writeNatively('written-by-drag');
-
-			expect(screen.getByRole('textbox')).toHaveValue('written-by-drag');
+	it('focuses the editor once the dialog has finished arriving', () => {
+		renderHarness();
+		expect(view).toBeDefined();
+		expect(view!.hasFocus()).toBe(false);
+		act(() => {
+			jest.advanceTimersByTime(400);
 		});
-
-		it('still commits it upward once the debounce elapses', () => {
-			const onChange = jest.fn();
-
-			renderWithLiveText({onChange, passage: fakePassage({text: 'original'})});
-			writeNatively('written-by-drag');
-			jest.advanceTimersByTime(1000);
-
-			expect(onChange).toHaveBeenCalledWith('written-by-drag');
-		});
-
-		it('reports it live, undebounced', () => {
-			renderWithLiveText({passage: fakePassage({text: 'original'})});
-
-			writeNatively('written-by-drag');
-
-			expect(screen.getByTestId('live-text')).toHaveTextContent(
-				'written-by-drag'
-			);
-		});
+		expect(view!.hasFocus()).toBe(true);
 	});
 
-	it('is accessible', async () => {
-		jest.useRealTimers();
+	it('shows and edits the registry Doc itself, so undo survives closing it', () => {
+		const {setOpen} = renderHarness();
 
-		const {container} = renderComponent();
+		expect(view!.getValue()).toBe('line one');
+		expect(view!.getDoc()).toBe(held!.doc);
+		act(() => {
+			view!.replaceRange('typed ', {ch: 0, line: 0});
+		});
+		expect(held!.doc.getValue()).toBe('typed line one');
 
-		expect(await axe(container)).toHaveNoViolations();
+		setOpen(false);
+		expect(view).toBeUndefined();
+		// Headless now: the scene preview writing on its own.
+		held!.doc.replaceRange('!', {ch: 14, line: 0}, undefined, '+drag');
+
+		setOpen(true);
+		expect(view!.getValue()).toBe('typed line one!');
+		act(() => {
+			view!.undo();
+		});
+		expect(view!.getValue()).toBe('typed line one');
+		act(() => {
+			view!.undo();
+		});
+		expect(view!.getValue()).toBe('line one');
 	});
 });

@@ -4,6 +4,7 @@ import {fakeLoadedStoryFormat} from '.';
 import {DialogsContextProvider} from '../dialogs';
 import {AssetScopeProvider} from '../dialogs/sliders-assets/asset-store-context';
 import {HotkeysProvider} from '../hotkeys';
+import {PassageDocsProvider} from '../store/passage-docs';
 import {PrefsContext, PrefsState} from '../store/prefs';
 import {reducer as prefsReducer} from '../store/prefs/reducer';
 import {StoriesContext, StoriesState} from '../store/stories';
@@ -63,15 +64,17 @@ export const FakeStateProvider: React.FC<FakeStateProviderProps> = props => {
 							storyId={props.assetScope ?? storiesState[0]?.id ?? 'test-story'}
 						>
 							<HotkeysProvider>
-								<DialogsContextProvider>
-									{props.hotkeyScope ? (
-										<HotkeyScope scope={props.hotkeyScope}>
-											{props.children}
-										</HotkeyScope>
-									) : (
-										props.children
-									)}
-								</DialogsContextProvider>
+								<PassageDocsProvider>
+									<DialogsContextProvider>
+										{props.hotkeyScope ? (
+											<HotkeyScope scope={props.hotkeyScope}>
+												{props.children}
+											</HotkeyScope>
+										) : (
+											props.children
+										)}
+									</DialogsContextProvider>
+								</PassageDocsProvider>
 							</HotkeysProvider>
 						</AssetScopeProvider>
 					</UndoableStoriesContextProvider>

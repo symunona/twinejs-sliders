@@ -6,6 +6,7 @@ import {
 	testSyncContext
 } from '../../../store/persistence/server/test-fixtures';
 import {ServerSyncContext} from '../../../store/persistence/server/use-server-sync';
+import {PassageDocsProvider} from '../../../store/passage-docs';
 import {FakeStateProvider, fakeStory} from '../../../test-util';
 import {ScenePreviewDialog} from '../scene-preview-dialog';
 
@@ -13,7 +14,11 @@ import {ScenePreviewDialog} from '../scene-preview-dialog';
 const previewProps = jest.fn();
 
 jest.mock('../../passage-edit/scene-preview/scene-preview', () => ({
-	ScenePreview: function ScenePreview(props: {readOnly?: boolean}) {
+	ScenePreview: function ScenePreview(props: {
+		doc?: unknown;
+		readOnly?: boolean;
+		text: string;
+	}) {
 		previewProps(props);
 		return null;
 	}
@@ -28,6 +33,7 @@ const jules = testPresenceClient({id: 'them', name: 'jules'});
 
 function renderDialog(lock?: PassageLock) {
 	const stealPassage = jest.fn();
+	const focusPassage = jest.fn();
 	const story = fakeStory(1);
 
 	// The map's solo selection is what the dialog shows with no editor open.
@@ -36,24 +42,36 @@ function renderDialog(lock?: PassageLock) {
 	render(
 		<FakeStateProvider stories={[story]}>
 			<ServerSyncContext.Provider
-				value={testSyncContext({lock: () => lock, stealPassage})}
+				value={testSyncContext({focusPassage, lock: () => lock, stealPassage})}
 			>
-				<ScenePreviewDialog
-					collapsed={false}
-					highlighted={false}
-					maximized={false}
-					onChangeCollapsed={jest.fn()}
-					onChangeHighlighted={jest.fn()}
-					onChangeMaximized={jest.fn()}
-					onChangeProps={jest.fn()}
-					onClose={jest.fn()}
-					storyId={story.id}
-				/>
+				{/* Inner registry: it claims through THIS sync context. */}
+				<PassageDocsProvider>
+					<ScenePreviewDialog
+						collapsed={false}
+						highlighted={false}
+						maximized={false}
+						onChangeCollapsed={jest.fn()}
+						onChangeHighlighted={jest.fn()}
+						onChangeMaximized={jest.fn()}
+						onChangeProps={jest.fn()}
+						onClose={jest.fn()}
+						storyId={story.id}
+					/>
+				</PassageDocsProvider>
 			</ServerSyncContext.Provider>
 		</FakeStateProvider>
 	);
 
-	return {passageId: story.passages[0].id, stealPassage, storyId: story.id};
+	return {
+		focusPassage,
+		passageId: story.passages[0].id,
+		stealPassage,
+		storyId: story.id
+	};
+}
+
+function lastProps() {
+	return previewProps.mock.calls[previewProps.mock.calls.length - 1][0];
 }
 
 function lastReadOnly() {
@@ -86,6 +104,26 @@ describe('<ScenePreviewDialog> soft lock', () => {
 
 		fireEvent.click(screen.getByTestId('passage-lock-takeover'));
 		expect(stealPassage).toHaveBeenCalledWith(storyId, passageId);
+	});
+
+	it('announces itself when taking over, or the holder never hears', () => {
+		const {focusPassage, passageId, storyId} = renderDialog({
+			by: jules,
+			shared: false
+		});
+
+		expect(focusPassage).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByTestId('passage-lock-takeover'));
+		expect(focusPassage).toHaveBeenCalledWith(storyId, passageId);
+	});
+
+	it('holds the passage Doc itself, so the stage writes with no editor open', () => {
+		renderDialog();
+
+		const {doc} =
+			previewProps.mock.calls[previewProps.mock.calls.length - 1][0];
+
+		expect(doc.getValue()).toBe(lastProps().text);
 	});
 
 	it('writes again once the edit is shared', () => {

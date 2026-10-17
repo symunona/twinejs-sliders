@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {DialogEditor} from '../../components/container/dialog-card';
-import {CodeArea} from '../../components/control/code-area';
+import {DocCodeArea} from '../../components/control/code-area/doc-code-area';
+import {PassageDoc} from '../../store/passage-docs';
 import {usePrefsContext} from '../../store/prefs';
 import {Passage, Story} from '../../store/stories';
 import {StoryFormat} from '../../store/story-formats';
@@ -12,32 +13,31 @@ import {sceneTemplateNames, useSceneHints} from './use-scene-hints';
 
 export interface PassageTextProps {
 	disabled?: boolean;
-	onChange: (value: string) => void;
-	onEditorChange: (value: CodeMirror.Editor) => void;
-	/**
-	 * Every keystroke, undebounced. `onChange` is a full second stale by design (see
-	 * below), which is fine for the story map and useless for the scene preview: a drag
-	 * has to read the document the author is looking at, not the one from a second ago.
-	 */
-	onLiveChange?: (value: string) => void;
+	/** The passage's registry Doc. Text, history and the debounced commit live there. */
+	handle: PassageDoc;
+	onEditorChange: (value: CodeMirror.Editor | undefined) => void;
 	passage: Passage;
 	story: Story;
 	storyFormat: StoryFormat;
 	storyFormatExtensionsDisabled?: boolean;
 }
 
+/**
+ * The `</>` view onto the passage's Doc.
+ *
+ * Owns nothing about the text any more: the Doc is the model and the registry commits it
+ * (`passage-doc-registry.ts`). This is options, hints and focus.
+ */
 export const PassageText: React.FC<PassageTextProps> = props => {
 	const {
 		disabled,
-		onChange,
+		handle,
 		onEditorChange,
-		onLiveChange,
 		passage,
 		story,
 		storyFormat,
 		storyFormatExtensionsDisabled
 	} = props;
-	const [localText, setLocalText] = React.useState(passage.text);
 	const {prefs} = usePrefsContext();
 	const autocompletePassageNames = useCodeMirrorPassageHints(story);
 	const passageNames = React.useMemo(
@@ -61,91 +61,18 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 	const mode =
 		useFormatCodeMirrorMode(storyFormat.name, storyFormat.version) ?? 'text';
 	const codeAreaContainerRef = React.useRef<HTMLDivElement>(null);
+	const hintsRef = React.useRef(autocompleteSceneNames);
 	const {t} = useTranslation();
 
-	// These are refs so that changing them doesn't trigger a rerender, and more
-	// importantly, no React effects fire.
+	hintsRef.current = autocompleteSceneNames;
 
-	const onChangeText = React.useRef<string>();
-	const onChangeTimeout = React.useRef<number>();
-
-	const commitPendingChange = React.useCallback(() => {
-		onChangeTimeout.current = undefined;
-		onChange(onChangeText.current!);
-	}, [onChange]);
-
-	const scheduleCommit = React.useCallback(() => {
-		onChangeTimeout.current = window.setTimeout(commitPendingChange, 1000);
-	}, [commitPendingChange]);
-
-	const flushPendingChange = React.useCallback(() => {
-		if (onChangeTimeout.current) {
-			window.clearTimeout(onChangeTimeout.current);
-			commitPendingChange();
-		}
-	}, [commitPendingChange]);
-
-	// Effects to handle debouncing updates upward. The idea here is that the
-	// component maintains a local state so that the CodeMirror instance always is
-	// up-to-date with what the user has typed, but the global context may not be.
-	// This is because updating global context causes re-rendering in the story
-	// map, which can be time-intensive.
-
-	React.useEffect(() => {
-		// A change to passage text has occurred externally, e.g. through a find and
-		// replace. We ignore this if a change is pending so that users don't see
-		// things they've typed in disappear or be replaced.
-
-		if (!onChangeTimeout.current && localText !== passage.text) {
-			setLocalText(passage.text);
-		}
-	}, [localText, passage.text]);
-
-	const handleLocalChangeText = React.useCallback(
-		(text: string) => {
-			// ORDER MATTERS, and not for style. The pending-commit timeout is what the
-			// effect above uses to tell "the author is typing" from "the text changed
-			// underneath us"; with no timeout set it treats the new text as external and
-			// resets it. Typing goes through a React synthetic event, so those updates are
-			// batched and the timeout is always set by the time effects run — but a write
-			// from a native listener (the scene editor's pointerup) is NOT batched, so
-			// `setLocalText` re-renders and flushes effects synchronously, mid-function.
-			// Schedule first and the guard holds either way.
-
-			if (onChangeTimeout.current) {
-				window.clearTimeout(onChangeTimeout.current);
-			}
-
-			onChangeText.current = text;
-			scheduleCommit();
-
-			// Set local state because the CodeMirror instance is controlled, and
-			// updates there should be immediate.
-
-			setLocalText(text);
-
-			// Synchronous, alongside the debounced path and never instead of it: the
-			// preview needs the text now, the story map does not, and committing to the
-			// store on every keystroke is what the debounce exists to avoid.
-
-			onLiveChange?.(text);
-		},
-		[onEditorChange, onLiveChange, scheduleCommit]
-	);
-
-	// If the onChange prop changes while an onChange call is pending, reset the
-	// timeout and point it to the correct callback.
-
-	React.useEffect(() => {
-		if (onChangeTimeout.current) {
-			window.clearTimeout(onChangeTimeout.current);
-			scheduleCommit();
-		}
-	}, [scheduleCommit]);
-
-	const handleMount = React.useCallback(
-		(editor: CodeMirror.Editor) => {
+	const handleEditor = React.useCallback(
+		(editor: CodeMirror.Editor | undefined) => {
 			onEditorChange(editor);
+
+			if (!editor) {
+				return;
+			}
 
 			// Opening a flow map is a question: what goes in here? Answer it without
 			// waiting for Ctrl-Space. The hint itself decides whether the brace is in
@@ -153,7 +80,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 
 			editor.on('inputRead', (instance, change) => {
 				if (change.text.length === 1 && change.text[0].endsWith('{')) {
-					autocompleteSceneNames(instance);
+					hintsRef.current(instance);
 				}
 			});
 
@@ -162,11 +89,14 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 			// is intended to run after the animation completes.
 
 			window.setTimeout(() => {
-				editor.focus();
+				if (editor.getOption('readOnly') !== 'nocursor') {
+					editor.focus();
+				}
+
 				editor.refresh();
 			}, 400);
 		},
-		[autocompleteSceneNames, onEditorChange]
+		[onEditorChange]
 	);
 
 	// Emulate the above behavior re: focus if we aren't using CodeMirror.
@@ -215,19 +145,16 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 
 	return (
 		<DialogEditor ref={codeAreaContainerRef}>
-			<CodeArea
-				editorDidMount={handleMount}
+			<DocCodeArea
 				fontFamily={prefs.passageEditorFontFamily}
 				fontScale={prefs.passageEditorFontScale}
+				handle={handle}
 				id={`passage-dialog-passage-text-code-area-${passage.id}`}
 				label={t('dialogs.passageEdit.passageTextEditorLabel')}
 				labelHidden
-				onBlur={flushPendingChange}
-				onChangeEditor={onEditorChange}
-				onChangeText={handleLocalChangeText}
+				onEditor={handleEditor}
 				options={options}
 				useCodeMirror={prefs.useCodeMirror}
-				value={localText}
 			/>
 		</DialogEditor>
 	);

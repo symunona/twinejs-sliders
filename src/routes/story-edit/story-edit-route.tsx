@@ -19,6 +19,7 @@ import {MarqueeablePassageMap} from './marqueeable-passage-map';
 import {PassageFuzzyFinder} from './passage-fuzzy-finder';
 import {ScenePreviewAutoOpen} from './scene-preview-auto-open';
 import {ScenePreviewSourceProvider} from './scene-preview-source-context';
+import {PassageDocsProvider} from '../../store/passage-docs';
 import {StoryEditToolbar} from './toolbar';
 import {useInitialPassageCreation} from './use-initial-passage-creation';
 import {usePassageChangeHandlers} from './use-passage-change-handlers';
@@ -142,18 +143,21 @@ export const StoryEditRoute: React.FC = () => {
 	// Assets belong to the story being edited, and every asset dialog opens from this
 	// route, so the scope is set once, here, above the dialog stack.
 	// The scene preview is one dialog for the whole route, not one per passage editor. The
-	// registry it reads sits ABOVE the dialogs, because the publishers are passage editors
-	// that `DialogsContextProvider` renders itself.
+	// registries it reads sit ABOVE the dialogs, because the publishers are passage editors
+	// that `DialogsContextProvider` renders itself. Passage Docs above both: the preview and
+	// the passage editor hold the same one.
 	return (
 		<AssetScopeProvider storyId={storyId}>
 			<UndoableStoriesContextProvider>
 				<LeaveStoryPrompt />
-				<ScenePreviewSourceProvider>
-					<DialogsContextProvider>
-						<InnerStoryEditRoute />
-						<ScenePreviewAutoOpen storyId={storyId} />
-					</DialogsContextProvider>
-				</ScenePreviewSourceProvider>
+				<PassageDocsProvider>
+					<ScenePreviewSourceProvider>
+						<DialogsContextProvider>
+							<InnerStoryEditRoute />
+							<ScenePreviewAutoOpen storyId={storyId} />
+						</DialogsContextProvider>
+					</ScenePreviewSourceProvider>
+				</PassageDocsProvider>
 			</UndoableStoriesContextProvider>
 		</AssetScopeProvider>
 	);

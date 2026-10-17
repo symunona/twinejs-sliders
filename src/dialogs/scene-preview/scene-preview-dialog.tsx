@@ -12,6 +12,11 @@ import {useScenePreviewSource} from '../../routes/story-edit/scene-preview-sourc
 import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {passageMatchingName, storyWithId} from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
+import {
+	usePassageDoc,
+	usePassageDocText,
+	usePassageDocView
+} from '../../store/passage-docs';
 import {addPassageEditors, useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {PassageLockBanner} from '../passage-edit/passage-lock-banner';
@@ -36,9 +41,8 @@ export interface ScenePreviewDialogProps extends DialogComponentProps {
  *
  * It shows whichever passage the author is working in: the passage editor at the front of
  * the dialog stack if one is open, and otherwise the single passage selected on the map.
- * The fallback has no CodeMirror to write through, so it is a picture -- every gesture is
- * a text edit (spec 07), and there is no text to edit without an editor. Picking a beat
- * on it opens the passage's editor, which then publishes itself and makes it writable.
+ * Either way it holds that passage's registry Doc and writes to it headless -- every
+ * gesture is a text edit (spec 07), and the Doc is the text, editor open or not.
  */
 export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	stackToBottom?: boolean;
@@ -48,6 +52,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const {stories} = useUndoableStoriesContext();
 	const story = storyWithId(stories, storyId);
 	const assets = usePreviewResolver();
+	const {lock, stealPassage} = useServerSyncContext();
 	const published = useScenePreviewSource();
 	const [fullScreen, setFullScreen] = React.useState(false);
 	/**
@@ -67,19 +72,20 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	 * toolbar's actions follow.
 	 */
 	const fallback = !source && selected.length === 1 ? selected[0] : undefined;
-	// Unconditional, because hooks are. Parsing nothing is cheap and returns the empty parse.
-	const fallbackParse = useSceneParse(fallback?.text ?? '', story.passages);
-	const parse = source?.parse ?? fallbackParse;
 	const passageId = source?.passageId ?? fallback?.id;
-	const {lock, stealPassage} = useServerSyncContext();
+	const handle = usePassageDoc(story.id, passageId);
+	const view = usePassageDocView(handle);
+	const text = usePassageDocText(handle) ?? fallback?.text ?? '';
+	// Unconditional, because hooks are. Parsing nothing is cheap and returns the empty parse.
+	// An open editor already parses this Doc; reuse that one so the two never disagree.
+	const fallbackParse = useSceneParse(source ? '' : text, story.passages);
+	const parse = source?.parse ?? fallbackParse;
 	/**
-	 * The soft lock (spec 11), the same one the passage editor obeys. Every stage gesture is
-	 * a write to the passage text, so a passage somebody else holds is a picture here too
-	 * until the author takes the edit over. After a takeover the lock is `shared`: both
-	 * sides write, and the banner only says so.
+	 * Spec 11 soft lock: somebody else is in this passage. Read-only until "take edit",
+	 * which shares it (both sides writable, both see the banner).
 	 */
 	const passageLock = passageId ? lock(story.id, passageId) : undefined;
-	const heldByOther = !!passageLock && !passageLock.shared;
+	const readOnly = !!passageLock && !passageLock.shared;
 
 	/**
 	 * Ctrl/cmd-click on a link inside a scene bubble, when the preview is showing a passage
@@ -98,14 +104,6 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 		[dialogsDispatch, story]
 	);
 
-	/** Beat picked on the map's passage: open it, so the beat panel has text to write. */
-	const handleNeedEditor = React.useMemo(
-		() =>
-			fallback
-				? () => dialogsDispatch(addPassageEditors(story.id, [fallback.id]))
-				: undefined,
-		[dialogsDispatch, fallback, story.id]
-	);
 
 	useCommand({
 		id: 'scene.walkHere',
@@ -214,7 +212,10 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 				{passageId && (
 					<PassageLockBanner
 						lock={passageLock}
-						onTakeOver={() => stealPassage(story.id, passageId)}
+						onTakeOver={() => {
+							handle?.claim();
+							stealPassage(story.id, passageId);
+						}}
 					/>
 				)}
 				<ScenePreview
@@ -222,18 +223,18 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					barExtra={walkControls}
 					onWalkInfo={setWalkInfo}
 					walkHere={{on: walkOn, walker}}
-					editor={source?.editor}
+					doc={handle?.doc}
 					fullScreen={fullScreen}
 					onFullScreenChange={setFullScreen}
-					onNeedEditor={handleNeedEditor}
 					onOpenPassage={source?.onOpenPassage ?? handleOpenPassage}
 					parse={parse}
 					passageId={passageId}
 					passages={story.passages}
-					readOnly={heldByOther}
+					readOnly={readOnly}
 					storyId={story.id}
 					stylesheet={story.stylesheet}
-					text={source?.text ?? fallback?.text ?? ''}
+					text={text}
+					view={view}
 				/>
 			</div>
 		</DialogCard>

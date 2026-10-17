@@ -16,7 +16,13 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 				props.storyFormatExtensionsDisabled
 			}
 		>
-			<button onClick={() => props.onChange('mock-changed-text')}>
+			{/* Types into the shared Doc, then leaves it: the registry commits on blur. */}
+			<button
+				onClick={() => {
+					props.handle.doc.setValue('mock-changed-text');
+					props.handle.flush();
+				}}
+			>
 				onChange
 			</button>
 			<button onClick={() => setError(true)}>throw error</button>

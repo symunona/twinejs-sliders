@@ -9,9 +9,10 @@
  * a handful of errors at most, so this stays far cheaper than trying to diff them.
  */
 
-import {Editor, LineHandle, TextMarker} from 'codemirror';
+import {LineHandle, TextMarker} from 'codemirror';
 import * as React from 'react';
 import {SceneError} from '@sliders/scene-types';
+import type {SceneDoc} from '../../../store/passage-docs';
 
 /** Where the tooltip sits relative to the text it explains. */
 const TOOLTIP_GAP = 6;
@@ -27,7 +28,7 @@ const FIX_ATTR = 'data-sliders-fix';
  * to say one of them is wrong helps nobody. The line tint still covers the rest.
  */
 function markRange(
-	editor: Editor,
+	editor: SceneDoc,
 	error: SceneError
 ): {from: CodeMirror.Position; to: CodeMirror.Position} | undefined {
 	const line = error.line - 1;
@@ -87,8 +88,13 @@ function tooltipFor(target: HTMLElement): HTMLElement | undefined {
 	return tooltip;
 }
 
+/**
+ * Marks live on the Doc, so they survive the `</>` view closing and reopening; the tooltip
+ * needs pixels, so it lives on the view, when there is one.
+ */
 export function useSceneErrorMarks(
-	editor: Editor | undefined,
+	editor: SceneDoc | undefined,
+	view: CodeMirror.Editor | undefined,
 	errors: SceneError[]
 ): void {
 	React.useEffect(() => {
@@ -132,10 +138,27 @@ export function useSceneErrorMarks(
 			);
 		}
 
+		return () => {
+			for (const mark of marks) {
+				mark.clear();
+			}
+
+			for (const line of tinted) {
+				editor.removeLineClass(line, 'background', 'sliders-error-line');
+				editor.removeLineClass(line, 'background', 'sliders-warning-line');
+			}
+		};
+	}, [editor, errors]);
+
+	React.useEffect(() => {
+		if (!view) {
+			return;
+		}
+
 		// The tooltip lives on the body rather than inside the editor: CodeMirror's
 		// scroller clips its own children, and an error on the last visible line would
 		// have its explanation cut in half.
-		const wrapper = editor.getWrapperElement();
+		const wrapper = view.getWrapperElement();
 		let tooltip: HTMLElement | undefined;
 
 		function hide() {
@@ -191,15 +214,6 @@ export function useSceneErrorMarks(
 			wrapper.removeEventListener('mousemove', handleOver);
 			wrapper.removeEventListener('mouseleave', hide);
 			hide();
-
-			for (const mark of marks) {
-				mark.clear();
-			}
-
-			for (const line of tinted) {
-				editor.removeLineClass(line, 'background', 'sliders-error-line');
-				editor.removeLineClass(line, 'background', 'sliders-warning-line');
-			}
 		};
-	}, [editor, errors]);
+	}, [view]);
 }

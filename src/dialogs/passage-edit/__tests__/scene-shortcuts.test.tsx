@@ -21,7 +21,7 @@ import {PassageEditStack} from '../passage-edit-stack';
 // always mounted behind the editor; `MapToolbar` below stands in for it. The editor's
 // toolbar just shows buttons for them.
 
-jest.mock('../../../components/control/code-area/code-area');
+jest.mock('../../../components/control/code-area/doc-code-area');
 jest.mock('../../../components/tag/tag-grid');
 jest.mock('../../../components/visible-whitespace/visible-whitespace');
 

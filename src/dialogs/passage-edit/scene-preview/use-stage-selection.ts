@@ -22,6 +22,7 @@ import type {EntityTarget} from '@sliders/scene-edit';
 import type {SceneBlock} from '@sliders/scene-index';
 import type {Beat, EntityId, Scene, SceneSpan} from '@sliders/scene-types';
 import {beatAtLine} from './use-active-beat-mark';
+import type {SceneDoc} from '../../../store/passage-docs';
 
 /** CSS classes the marks carry. Styled in `scene-preview.css`. */
 export const ENTRY_MARK_CLASS = 'sliders-selected-entity';
@@ -120,7 +121,10 @@ export function entityHighlights(
 
 export interface StageSelectionOptions {
 	block?: BlockLike;
-	editor?: CodeMirror.Editor;
+	/** The passage's Doc: caret and line marks. Headless is fine. */
+	editor?: SceneDoc;
+	/** The `</>` view on it, if open. Only the double click needs pixels. */
+	view?: CodeMirror.Editor;
 	/** Entity ids currently on stage. The selection is pruned to these. */
 	stageIds: EntityId[];
 	scene?: Scene;
@@ -171,7 +175,8 @@ export function useStageSelection(
 		onCaretBeat,
 		onFocusEntity,
 		scene,
-		stageIds
+		stageIds,
+		view
 	} = options;
 	const [selection, setSelection] = React.useState<EntityId[]>([]);
 
@@ -309,7 +314,7 @@ export function useStageSelection(
 	// Double click -> show it on the stage. Read off the line the click landed on rather
 	// than the caret, which a double click may have moved as part of selecting a word.
 	React.useEffect(() => {
-		if (!editor) {
+		if (!view) {
 			return;
 		}
 
@@ -321,7 +326,7 @@ export function useStageSelection(
 				return;
 			}
 
-			const at = editor.coordsChar(
+			const at = view.coordsChar(
 				{left: event.clientX, top: event.clientY},
 				'window'
 			);
@@ -333,10 +338,10 @@ export function useStageSelection(
 			}
 		};
 
-		editor.on('dblclick', handler as never);
+		view.on('dblclick', handler as never);
 
-		return () => editor.off('dblclick', handler as never);
-	}, [editor]);
+		return () => view.off('dblclick', handler as never);
+	}, [view]);
 
 	// Selection -> marked lines.
 	React.useEffect(() => {
@@ -345,7 +350,7 @@ export function useStageSelection(
 		}
 
 		const marks: CodeMirror.TextMarker[] = [];
-		const doc = editor.getDoc();
+		const doc = editor;
 
 		const mark = (span: EditorLineSpan, className: string) => {
 			const last = Math.min(span.end, doc.lastLine());

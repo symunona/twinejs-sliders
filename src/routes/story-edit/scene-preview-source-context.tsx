@@ -2,20 +2,18 @@ import * as React from 'react';
 import type {SceneParse} from '../../dialogs/passage-edit/scene-preview/use-scene-parse';
 
 /**
- * Everything the route-level preview needs in order to show one passage's scene.
+ * Which passage the route-level preview should show, and what the passage editor already
+ * knows about it.
  *
- * A passage editor publishes this; the preview dialog is the only consumer. The `editor`
- * is what makes the preview writable — without it the stage is a picture, which is exactly
- * what the story map's fallback wants.
+ * A passage editor publishes this; the preview dialog is the only consumer. The text is
+ * NOT here: the preview acquires the passage's Doc from the registry itself, so it is
+ * writable whether or not an editor is open (`store/passage-docs`).
  */
 export interface ScenePreviewSource {
 	passageId: string;
 	storyId: string;
-	/** The text the author is looking at, undebounced. */
-	text: string;
-	/** The parse of `text`, shared with the error list and the editor's own marks. */
+	/** The parse of the Doc's text, shared with the error list and the editor's own marks. */
 	parse: SceneParse;
-	editor?: CodeMirror.Editor;
 	onOpenPassage?: (name: string) => void;
 	/** A background card in the dialog stack. Never drives the preview. */
 	disabled?: boolean;
@@ -126,30 +124,23 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 /**
  * Offers this passage editor's scene to the preview dialog.
  *
- * The entry is refreshed whenever the text, the parse or the editor changes, and claims the
- * preview when the card comes to the front of the stack or its CodeMirror takes focus — the
- * two gestures that mean "this is the passage I am working on".
+ * The entry is refreshed whenever the parse changes, and claims the preview when the card
+ * comes to the front of the stack or its CodeMirror (`view`) takes focus — the two gestures
+ * that mean "this is the passage I am working on".
  */
-export function usePublishScenePreview(source: ScenePreviewSource): void {
+export function usePublishScenePreview(
+	source: ScenePreviewSource,
+	editor?: CodeMirror.Editor
+): void {
 	const {activate, publish, unpublish} = React.useContext(
 		ScenePreviewSourceContext
 	);
-	const {disabled, editor, onOpenPassage, parse, passageId, storyId, text} =
-		source;
+	const {disabled, onOpenPassage, parse, passageId, storyId} = source;
 
 	// First, so that the activations below always find an entry to raise.
 	React.useEffect(() => {
-		publish({disabled, editor, onOpenPassage, parse, passageId, storyId, text});
-	}, [
-		disabled,
-		editor,
-		onOpenPassage,
-		parse,
-		passageId,
-		publish,
-		storyId,
-		text
-	]);
+		publish({disabled, onOpenPassage, parse, passageId, storyId});
+	}, [disabled, onOpenPassage, parse, passageId, publish, storyId]);
 
 	React.useEffect(() => {
 		if (!disabled) {

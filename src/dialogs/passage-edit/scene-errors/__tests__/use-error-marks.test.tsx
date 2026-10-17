@@ -1,10 +1,6 @@
 /**
- * Drives a real CodeMirror, because a mark is the editor's own state and nothing about it
- * shows up in React's tree.
- *
- * Asserted against the document model rather than the DOM: jsdom has no layout, so
- * CodeMirror draws no lines at all and there is no span to look at. What the marks say is
- * still exactly what the browser renders from.
+ * Drives a real headless CodeMirror Doc, the one the passage registry holds: marks live on
+ * the Doc, so they need no view. What they say is exactly what an attached view renders.
  */
 
 // The repo stubs `codemirror` for every other suite (src/__mocks__/codemirror.ts).
@@ -14,25 +10,8 @@ import {render} from '@testing-library/react';
 import CodeMirror from 'codemirror';
 import * as React from 'react';
 import {SceneError} from '@sliders/scene-types';
+import type {LiveDoc} from '../../../../store/passage-docs';
 import {useSceneErrorMarks} from '../use-error-marks';
-
-/** CodeMirror measures text by range, and jsdom has none of that. */
-beforeAll(() => {
-	const empty = () => ({
-		bottom: 0,
-		height: 0,
-		left: 0,
-		right: 0,
-		top: 0,
-		width: 0
-	});
-
-	Range.prototype.getBoundingClientRect = empty as never;
-	Range.prototype.getClientRects = (() => ({
-		item: () => null,
-		length: 0
-	})) as never;
-});
 
 const passage = '[scene]\nbg: tavern\nchast:\n  mira: {at: 0}\n';
 
@@ -50,20 +29,16 @@ function error(overrides: Partial<SceneError> = {}): SceneError {
 	};
 }
 
-let editor: CodeMirror.Editor;
+let editor: LiveDoc;
+
+beforeEach(() => {
+	editor = new CodeMirror.Doc(passage) as LiveDoc;
+});
 
 function Marks({errors}: {errors: SceneError[]}) {
-	const [ready, setReady] = React.useState(false);
-	const ref = React.useRef<HTMLDivElement>(null);
+	useSceneErrorMarks(editor, undefined, errors);
 
-	React.useEffect(() => {
-		editor = CodeMirror(ref.current!, {value: passage});
-		setReady(true);
-	}, []);
-
-	useSceneErrorMarks(ready ? editor : undefined, errors);
-
-	return <div ref={ref} />;
+	return null;
 }
 
 /** Every mark, with the text it covers. */
