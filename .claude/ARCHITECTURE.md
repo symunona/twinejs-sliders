@@ -72,6 +72,19 @@ Chapbook's. 0.2.0 shipped exactly that way, in production, for a day.
   tools, CLI). `id:` was removed 2026-09-24, no back-compat.
 - Unknown keys warn, never error: parser drops them, scene plays.
 
+## Passage text = one Doc
+
+`store/passage-docs`: one `CodeMirror.Doc` per open passage, refcounted, route level.
+
+- Doc = model (text, history, selection, marks). `</>` CodeMirror = optional view, `swapDoc`.
+- Scene editor writes the Doc HEADLESS. No editor needed. Shared undo across `</>` toggle.
+- Registry owns: 1 s debounced commit, store -> Doc sync (only when nothing pending),
+  flush on release / blur / pagehide.
+- Soft lock claimed on FIRST WRITE (and on take edit), not on open. Hub knows presence
+  only via `focus`.
+- Preview + hooks take `SceneDoc` (Doc subset). Model swap (CM6, own) = registry-local.
+- Never write passage text around the Doc while one is held: pending local text wins.
+
 ## Z and layers
 
 One z space. `StageEntity.layer` does not exist. `layer:` desugars to `z` at parse time.

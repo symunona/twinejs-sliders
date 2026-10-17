@@ -32,6 +32,10 @@ fixture **before** building any drag handles.
 All writes go through the **CodeMirror document**, never around it. Then Twine's existing
 undo works for free, and text edits and drag edits share one history stack.
 
+The document is the passage's registry `Doc` (`store/passage-docs`), written headless: no
+passage editor needs to be open. `</>` attaches a view to the same Doc, so the history
+survives opening and closing it.
+
 Coalesce a drag into **one** undo entry — `origin` on the CM change, joined for the drag,
 sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 
