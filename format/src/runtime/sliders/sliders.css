@@ -47,19 +47,6 @@ sliders-stage[data-waiting='beat']:after {
 	visibility: hidden;
 }
 
-.sliders-stage__error {
-	background: rgb(120 20 20 / 92%);
-	color: #fff;
-	font-size: 0.8em;
-	inset: 0;
-	margin: 0;
-	overflow: auto;
-	padding: 1em;
-	position: absolute;
-	white-space: pre-wrap;
-	z-index: 200;
-}
-
 /* Full screen: the page chrome gets out of the way and the stage takes the window. */
 
 body.sliders-cinema {
@@ -145,6 +132,81 @@ body.sliders-cinema #page > error-handler.active {
 
 body.sliders-cinema #page > error-handler.active {
 	z-index: 400;
+}
+
+/*
+ * Test bar (`test-bar.ts`): Restart and a warning count, small in the top-left corner of a
+ * test play. Faint until pointed at, so it does not sit on the scene. Above the cinema stage
+ * and its chrome, below `<error-handler>` (400) — a real error still takes the page.
+ */
+.sliders-test-bar {
+	align-items: flex-start;
+	display: flex;
+	flex-wrap: wrap;
+	font-family: var(--font-system, system-ui, sans-serif);
+	font-size: 12px;
+	gap: 4px;
+	left: 6px;
+	max-width: min(60vw, 520px);
+	opacity: 0.55;
+	position: fixed;
+	top: 6px;
+	transition: opacity 0.15s;
+	z-index: 350;
+}
+
+.sliders-test-bar:hover,
+.sliders-test-bar:focus-within,
+.sliders-test-bar:has([aria-expanded='true']) {
+	opacity: 1;
+}
+
+.sliders-test-bar button {
+	background: rgb(20 20 24 / 70%);
+	border: 1px solid rgb(255 255 255 / 20%);
+	border-radius: 999px;
+	color: #fff;
+	cursor: pointer;
+	font: inherit;
+	line-height: 1.4;
+	padding: 1px 8px;
+}
+
+.sliders-test-bar button:hover {
+	background: rgb(20 20 24 / 90%);
+}
+
+.sliders-test-bar__warnings {
+	color: #ffd866 !important;
+}
+
+.sliders-test-bar button[hidden] {
+	display: none;
+}
+
+.sliders-test-bar__list {
+	background: rgb(20 20 24 / 88%);
+	border-left: 3px solid #ffd866;
+	border-radius: 4px;
+	color: #f3f3f3;
+	flex-basis: 100%;
+	list-style: none;
+	margin: 0;
+	max-height: 40vh;
+	max-height: 40dvh;
+	overflow: auto;
+	padding: 6px 8px;
+	white-space: pre-wrap;
+}
+
+.sliders-test-bar__list[hidden] {
+	display: none;
+}
+
+.sliders-test-bar__list li + li {
+	border-top: 1px solid rgb(255 255 255 / 12%);
+	margin-top: 4px;
+	padding-top: 4px;
 }
 
 /*

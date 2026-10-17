@@ -41,6 +41,17 @@ describe('from: across passages', () => {
 
 		expect(index.errors.map(error => error.code)).toEqual(['unknown-from']);
 		expect(index.errors[0].message).toContain('official-landing-template');
+		// The player reports a scene's problems when THAT scene plays, so it needs the owner.
+		expect(index.errors[0].passage).toBe('official landing');
+	});
+
+	it('tags a parse error with the passage it came from', () => {
+		const index = buildSceneIndex([
+			{name: 'clean', text: '[scene]\nbg: a\n'},
+			{name: 'typo', text: '[scene]\nbg: a\nzap: 1\n'}
+		]);
+
+		expect(index.errors.map(error => error.passage)).toEqual(['typo']);
 	});
 
 	it('matches a passage name case-insensitively, the way a link does', () => {

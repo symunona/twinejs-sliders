@@ -9,16 +9,29 @@
  */
 
 import {buildSceneIndex} from '@sliders/scene-index';
-import type {SceneIndex} from '@sliders/scene-index';
+import type {SceneIndex, SceneIndexError} from '@sliders/scene-index';
 import {emptyStage} from '@sliders/scene-types';
 import type {Scene, Stage} from '@sliders/scene-types';
-import {createLoggers} from '../logger';
 import {passages} from '../story';
-
-const {warn} = createLoggers('scene');
 
 let index: SceneIndex | undefined;
 
+/**
+ * Index codes that only exist BETWEEN passages. A scene's own parse errors are reported by
+ * `scene-modifier.ts` when it renders, so the index repeating them would say each twice.
+ */
+const CROSS_PASSAGE_CODES = new Set(['from-cycle', 'unknown-from']);
+
+/**
+ * Builds the index. Reports NOTHING to the warning list.
+ *
+ * It used to warn every error in the story here, at startup — so "Test from here" on one
+ * scene opened under a banner of every other scene's typos, none of them about the scene
+ * under test. The editor already lints each scene as it is written; the player reports a
+ * scene's problems when THAT scene plays (`crossPassageProblems`, plus the modifier's own
+ * parse errors). The story-wide count goes to `console.info`, which `<warning-list>` and
+ * the test bar do not spy on.
+ */
 export function initSceneIndex(): void {
 	index = buildSceneIndex(
 		passages().map(passage => ({
@@ -27,13 +40,27 @@ export function initSceneIndex(): void {
 		}))
 	);
 
-	for (const error of index.errors) {
-		warn(
-			`[scene] line ${error.line}: ${error.message}${
-				error.hint ? ` ${error.hint}` : ''
-			}`
+	if (index.errors.length > 0) {
+		// eslint-disable-next-line no-console
+		console.info(
+			`scene: ${index.errors.length} scene problem(s) in this story. Each is reported when its passage plays.`
 		);
 	}
+}
+
+function describeIndexError(error: SceneIndexError): string {
+	return `[scene] line ${error.line}: ${error.message}${
+		error.hint ? ` ${error.hint}` : ''
+	}`;
+}
+
+/** The cross-passage problems (`from:` cycles, unknown `from:`) of one passage's scene. */
+export function crossPassageProblems(passage: string): string[] {
+	return (index?.errors ?? [])
+		.filter(
+			error => error.passage === passage && CROSS_PASSAGE_CODES.has(error.code)
+		)
+		.map(describeIndexError);
 }
 
 /**

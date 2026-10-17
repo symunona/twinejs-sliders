@@ -95,8 +95,6 @@ export interface StagePayload {
 	 * draws nothing, because the markup path has it covered or nobody wanted it.
 	 */
 	drawLinks?: boolean;
-	/** Only sent when `config.testing` is on. */
-	errors?: string[];
 }
 
 export function encodePayload(payload: StagePayload): string {
@@ -297,10 +295,6 @@ export class SlidersStage extends CustomElement {
 			enterCinema();
 		}
 
-		if (payload.errors?.length) {
-			this.renderErrors(payload.errors);
-		}
-
 		this.scene = payload.scene;
 		this.links = payload.links ?? {};
 
@@ -485,14 +479,6 @@ export class SlidersStage extends CustomElement {
 	 */
 	private hideLinkList() {
 		this.linkListLayer?.set([], this.scene?.linkList);
-	}
-
-	private renderErrors(errors: string[]) {
-		const el = document.createElement('pre');
-
-		el.className = 'sliders-stage__error';
-		el.textContent = `This scene has problems:\n\n${errors.join('\n')}`;
-		this.append(el);
 	}
 
 	/** Run beats until one of them needs to be read, or the scene is over. */

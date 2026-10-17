@@ -30,12 +30,17 @@ export interface SceneIndexEntry {
 export interface SceneIndex {
 	/** Keyed by passage name. */
 	scenes: Map<string, SceneIndexEntry>;
-	errors: SceneError[];
+	errors: SceneIndexError[];
 	/**
 	 * `Passage` (exit state) · `Passage@enter` · `Passage@markName`. The name matches the
 	 * way a link to the passage does: exact, then case-insensitively.
 	 */
 	resolve(ref: string): Stage | undefined;
+}
+
+/** A `SceneError` plus the passage it belongs to, so a player can report one scene's own. */
+export interface SceneIndexError extends SceneError {
+	passage: string;
 }
 
 export interface IndexedPassage {
@@ -89,7 +94,7 @@ function keyPosition(
 }
 
 export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
-	const errors: SceneError[] = [];
+	const errors: SceneIndexError[] = [];
 	const scenes = new Map<string, SceneIndexEntry>();
 
 	const nodes: Node[] = [];
@@ -111,7 +116,8 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 				endLine:
 					error.endLine === undefined ? undefined : error.endLine + block.lineOffset,
 				line: error.line + block.lineOffset,
-				message: `${passage.name}: ${error.message}`
+				message: `${passage.name}: ${error.message}`,
+				passage: passage.name
 			});
 		}
 
@@ -193,6 +199,7 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 					message: `Scene '${rep.passage}' is part of a from: cycle: ${cycle
 						.map(step => nodes[step].passage)
 						.join(' -> ')}.`,
+					passage: rep.passage,
 					severity: 'error',
 					...keyPosition(rep.blockText, 'from', rep.lineOffset)
 				});
@@ -213,6 +220,7 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 					code: 'unknown-from',
 					hint: 'from: names a passage that has a scene.',
 					message: `Unknown scene '${ref.id}' in from: '${from}'.`,
+					passage: self.passage,
 					severity: 'error',
 					...keyPosition(self.blockText, 'from', self.lineOffset)
 				});
@@ -230,6 +238,7 @@ export function buildSceneIndex(passages: IndexedPassage[]): SceneIndex {
 							code: 'unknown-from',
 							hint: `Add '- mark: ${ref.mark}' to the beats of '${ref.id}'.`,
 							message: `Scene '${ref.id}' has no mark '${ref.mark ?? ''}'.`,
+							passage: self.passage,
 							severity: 'error',
 							...keyPosition(self.blockText, 'from', self.lineOffset)
 						});

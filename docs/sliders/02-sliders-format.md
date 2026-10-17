@@ -1221,5 +1221,10 @@ The engine sees all passages at boot. Build the scene index there and report:
 unknown `from:` target, unknown `@mark`, `from:` cycles. Every scene is checked. Keyed by
 passage name; duplicate passage names keep the first.
 
-Surface in Chapbook's existing `<warning-list>` / Backstage. **This is the net that still
-fires in stock Twine**, which is what keeps the fork-independence rule real.
+Report per passage, when that passage plays — not all at boot. Boot only `console.info`s the
+count. (Boot-time warn made "Test from here" open under every other scene's typos.)
+
+Surface: test play → Sliders test bar (`sliders/test-bar.ts`), top-left: `↺ Restart` (fresh
+vars, same start passage + beat) and `⚠ N`, click to open the list. Replaces Chapbook's
+`<warning-list>` banner in test mode only. Messages still go to the console. **This is the
+net that still fires in stock Twine**, which is what keeps the fork-independence rule real.

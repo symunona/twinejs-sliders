@@ -15,6 +15,7 @@ import {initKeyboard} from './keyboard';
 import {preloadArt} from './preload';
 import {initSceneIndex} from './scene-graph';
 import {SlidersStage} from './stage-element';
+import {initTestBar} from './test-bar';
 
 export {sceneModifier} from './scene-modifier';
 export {sceneOnlyBlocks} from './scene-only';
@@ -26,4 +27,5 @@ export function initSliders(): void {
 	initSceneIndex();
 	defineElements({'sliders-stage': SlidersStage});
 	initKeyboard();
+	initTestBar();
 }

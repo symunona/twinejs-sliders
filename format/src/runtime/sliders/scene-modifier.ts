@@ -25,6 +25,7 @@ import {get} from '../state';
 import type {Modifier} from '../template/modifiers';
 import {showSceneLinks} from './config';
 import {encodePayload} from './stage-element';
+import {crossPassageProblems} from './scene-graph';
 import {SCENE_MODIFIER} from './scene-only';
 import {noteSceneTransition} from './transitions';
 
@@ -75,6 +76,13 @@ function pruneEntityLinks(scene: Scene): void {
 	}
 }
 
+/** The passage being rendered: the last entry of the trail. */
+function currentPassage(): string {
+	const trail = get('trail');
+
+	return Array.isArray(trail) ? String(trail[trail.length - 1] ?? '') : '';
+}
+
 export const sceneModifier: Modifier = {
 	match: SCENE_MODIFIER,
 	processRaw(output, {state}) {
@@ -84,19 +92,26 @@ export const sceneModifier: Modifier = {
 		// entity links are below: this is the only place that can read it. The stage element
 		// is handed a scene with nothing left to decide.
 		const scene = gateScene(parsed.scene, holds);
-		const messages = errors.map(describe);
-
-		for (const message of messages) {
-			warn(message);
-		}
-
-		// How this passage arrives (`transitions.ts`). Only the first scene in it counts.
-		noteSceneTransition(scene.transition, Boolean(scene.from));
-
 		// Several scenes in one passage each need their own element identity.
 		const count = typeof state.count === 'number' ? state.count : 0;
 
 		state.count = count + 1;
+
+		// This scene's own parse errors, then what the story index found between it and
+		// other passages (`from:`), once per passage. Only this passage's: the index no
+		// longer warns the whole story at startup (`scene-graph.ts`).
+		for (const message of errors.map(describe)) {
+			warn(message);
+		}
+
+		if (count === 0) {
+			for (const message of crossPassageProblems(currentPassage())) {
+				warn(message);
+			}
+		}
+
+		// How this passage arrives (`transitions.ts`). Only the first scene in it counts.
+		noteSceneTransition(scene.transition, Boolean(scene.from));
 
 		const links = Object.values(scene.links ?? {}).filter(
 			link => !link.if || holds(link.if)
@@ -117,7 +132,6 @@ export const sceneModifier: Modifier = {
 
 		const payload = encodePayload({
 			drawLinks: drawn && Boolean(scene.linkList),
-			errors: get('config.testing') ? messages : undefined,
 			links: Object.fromEntries(links.map(link => [link.name, link.to])),
 			// The names travel as a list as well as a map, because in a menu the order IS
 			// the content and a map cannot carry it: an integer-like key sits at the FRONT
