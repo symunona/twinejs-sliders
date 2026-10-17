@@ -4,7 +4,7 @@ Player downloads art in priority order. Reader never outruns it.
 
 Code: `format/src/runtime/sliders/` — `preload-plan.ts` (tree), `asset-loader.ts` (queue),
 `preload.ts` (glue, bar, boot, nav stop), `autoplay.ts`, `preload-debug.ts`.
-Tests: `__tests__/preload*.test.ts`, `asset-loader.test.ts`.
+Tests: `__tests__/preload*.test.ts`, `asset-loader.test.ts`. Manual browser matrix: `test-sound.md`.
 
 ## Priority tree
 
