@@ -116,6 +116,16 @@ export function apiBase(url: string): string {
 }
 
 /**
+ * The unauthenticated link to a story's JSON on the server: `GET /pub/{id}` answers
+ * anyone, no token. Hangs off the server root, not the API base.
+ */
+export function publicStoryUrl(url: string, storyId: string): string {
+	const root = apiBase(url).slice(0, -API_PATH.length);
+
+	return `${root}/pub/${encodeURIComponent(storyId)}`;
+}
+
+/**
  * Local-only props, stripped on the way out.
  *
  * `selected` and `sync` are this editor's business (spec 11): whether a story is

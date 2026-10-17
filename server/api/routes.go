@@ -1,7 +1,7 @@
 // Package api is the HTTP surface of the story backup server (spec 11).
 //
 // Every route lives under /api/v1 and every one of them needs a bearer token except
-// /api/v1/health. Handlers do argument checking, preconditions and status mapping; all
+// /api/v1/health — plus GET /pub/{id}, the open read-only story link (public.go). Handlers do argument checking, preconditions and status mapping; all
 // disk work belongs to package store, and all notification goes through Notifier so the
 // websocket hub can be added without touching this file.
 package api
@@ -73,6 +73,8 @@ func NewHandler(opts Options) http.Handler {
 		// answers 401 before upgrading. See eventsPath in auth.go.
 		mux.Handle("GET "+eventsPath, opts.Events)
 	}
+
+	mux.HandleFunc("GET "+pubPrefix+"{id}", s.getPublicStory)
 
 	mux.HandleFunc("GET /api/v1/stories", s.listStories)
 	mux.HandleFunc("GET /api/v1/stories/{id}", s.getStory)

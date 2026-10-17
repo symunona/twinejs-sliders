@@ -3,7 +3,8 @@ import {
 	apiBase,
 	createServerClient,
 	isServerError,
-	outgoingStory
+	outgoingStory,
+	publicStoryUrl
 } from '../client';
 import {testStory} from '../test-fixtures';
 
@@ -41,6 +42,20 @@ function clientWith(fetchImpl: jest.Mock) {
 		url: 'https://example.test/'
 	});
 }
+
+describe('publicStoryUrl', () => {
+	it('hangs /pub/{id} off the server root, whichever the author typed', () => {
+		for (const url of [
+			'https://example.test',
+			'https://example.test/',
+			'https://example.test/api/v1'
+		]) {
+			expect(publicStoryUrl(url, 'a b')).toBe(
+				'https://example.test/pub/a%20b'
+			);
+		}
+	});
+});
 
 describe('apiBase', () => {
 	it('appends the api path once, whichever the author typed', () => {

@@ -3,6 +3,7 @@ import {ButtonBar} from '../../../../components/container/button-bar';
 import {RenameStoryButton} from '../../../../components/story/rename-story-button';
 import {useServerSyncContext} from '../../../../store/persistence/server';
 import {Story, updateStory, useStoriesContext} from '../../../../store/stories';
+import {CopyPublicUrlButton} from './copy-public-url-button';
 import {CreateStoryButton} from './create-story-button';
 import {DeleteStoryButton} from './delete-story-button';
 import {DuplicateStoryButton} from './duplicate-story-button';
@@ -51,6 +52,10 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 				/>
 			)}
 			<SyncStoryButton onSetSync={actions.setSync} story={selectedStory} />
+			<CopyPublicUrlButton
+				existsOnServer={existsOnServer}
+				story={selectedStory}
+			/>
 			{record?.state === 'gone' && (
 				<RepublishStoryButton
 					onRepublish={actions.republish}

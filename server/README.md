@@ -47,7 +47,7 @@ Flags override the environment, which overrides `.env`, which overrides the defa
 ## API
 
 Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` except
-`/health`. Errors are always `{"error":{"code":"…","message":"…"}}` with the codes from
+`/health` and `GET /pub/{id}`. Errors are always `{"error":{"code":"…","message":"…"}}` with the codes from
 `src/store/persistence/server/server.types.ts`.
 
 | Method | Path | Notes |
@@ -68,6 +68,10 @@ Base path `/api/v1`. Everything needs `Authorization: Bearer <AUTH_TOKEN>` excep
 | `POST` | `/stories/{id}/assets/diff` | → `{missing,present,stale}` |
 | `HEAD`/`GET`/`PUT`/`DELETE` | `/stories/{id}/assets/{assetId}` | bytes; `PUT` needs `X-Asset-Hash` |
 | `GET` | `/events` | websocket: change bus, presence, soft locks |
+
+`GET /pub/{id}` — outside `/api/v1`. Story JSON, no token, `Access-Control-Allow-Origin: *`,
+`ETag`. Open read link for demos; anyone with the id reads the story. Editor: story list →
+**Copy Public URL**.
 
 Every request may carry `X-Client-Id` and `X-Client-Name`; the name is recorded as
 `lastClient` and against every revision. Missing name is stored as `unknown`.

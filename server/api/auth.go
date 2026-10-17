@@ -28,7 +28,8 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 	want := []byte("Bearer " + token)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == healthPath || r.URL.Path == eventsPath {
+		if r.URL.Path == healthPath || r.URL.Path == eventsPath ||
+			strings.HasPrefix(r.URL.Path, pubPrefix) {
 			next.ServeHTTP(w, r)
 			return
 		}

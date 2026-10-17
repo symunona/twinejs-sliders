@@ -1506,6 +1506,8 @@
 				"alsoRemoveFromServer": "Also remove from server",
 				"checkOut": "Check Out",
 				"checkingOut": "Checking Out…",
+				"copyPublicUrl": "Copy Public URL",
+				"copyPublicUrlCopied": "Copied",
 				"ghostSize": "{{size}}",
 				"ghostUpdated": "Updated {{time}}",
 				"groupGhosts": "On server",
