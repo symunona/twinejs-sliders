@@ -1,0 +1,29 @@
+@import '../../../styles/colors.css';
+
+/*
+ * The scene settings: the beat props' groups and rows (`beat-props.css`), with a wider
+ * label column — "Transition" and "Auto-advance" do not fit the beat panel's 4.5em.
+ */
+.scene-settings-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.scene-settings-panel .beat-prop-row {
+	grid-template-columns: 5.5em minmax(0, 1fr) 22px;
+}
+
+.scene-settings-number input {
+	width: 5em;
+}
+
+/* One keyed music track: its name row, then its params, set in a little. */
+.scene-settings-track {
+	border-left: 1px solid var(--faint-gray);
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-left: 4px;
+	padding-left: 4px;
+}

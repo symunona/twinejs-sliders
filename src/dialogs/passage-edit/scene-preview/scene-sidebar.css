@@ -1,0 +1,94 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/metrics.css';
+
+/* Right edge of the stage view, the view's own height. The viewport gives up the same
+   width (`--layers-panel-width` in scene-preview.css), so the stage refits beside it
+   rather than being covered. */
+.scene-sidebar {
+	background: var(--white);
+	border-left: 1px solid var(--light-gray);
+	bottom: 0;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: var(--layers-panel-width);
+	/* Over the stage's own chrome (badge 5), never under it. */
+	z-index: 6;
+}
+
+/* Collapsed: a stripe of icons, stacked. */
+.scene-sidebar-tabs {
+	align-items: center;
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 2px;
+	padding: 2px;
+}
+
+.scene-sidebar.open .scene-sidebar-tabs {
+	border-bottom: 1px solid var(--light-gray);
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+/* The toggle is the stripe's head; set apart from the tabs it opens. */
+.scene-sidebar-tabs > .icon-button:first-child {
+	opacity: 0.75;
+}
+
+.scene-sidebar.open .scene-sidebar-tabs > .icon-button:first-child {
+	margin-right: 4px;
+}
+
+.scene-sidebar-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+	position: relative;
+}
+
+/* The panels were written for the old absolute slot. Inside the body they just fill it. */
+.scene-sidebar-body > .layers-panel,
+.scene-sidebar-body > .beat-panel,
+.scene-sidebar-body > .scene-error-panel {
+	border-left: none;
+	flex: 1 1 auto;
+	min-height: 0;
+	position: static;
+	width: auto;
+}
+
+/* One tab's plain content: settings, walk, the selection. */
+.scene-sidebar-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 6px 8px;
+}
+
+.scene-sidebar-row {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+}
+
+.scene-sidebar-heading {
+	color: var(--dark-gray);
+	font-size: 80%;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.scene-sidebar-empty {
+	color: var(--dark-gray);
+	font-size: 85%;
+	margin: 0;
+}

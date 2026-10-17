@@ -1,0 +1,58 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/metrics.css';
+
+/* Portalled to the body, so this number is compared against the full-screen editor (1000)
+   rather than trapped inside the stage view's stacking context. Same as .menu-button-menu.
+   No pointer events: it must never take the hover that keeps it open. */
+.scene-grade-extremes {
+	background: var(--white);
+	border: 1px solid var(--light-gray);
+	border-radius: var(--corner-round);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px 8px;
+	pointer-events: none;
+	z-index: 2000;
+}
+
+.scene-grade-extremes-title {
+	color: var(--dark-gray);
+	font-size: 80%;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.scene-grade-extremes-pair {
+	align-items: flex-end;
+	display: flex;
+	gap: 8px;
+}
+
+.scene-grade-extreme {
+	align-items: center;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+}
+
+/* A checkerboard behind the art, so transparency and a darkened sprite stay readable. On
+   the frame, never the img: the img's filter would grade it too. */
+.scene-grade-extreme-frame {
+	background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 12px 12px;
+	display: block;
+}
+
+.scene-grade-extreme img {
+	display: block;
+	object-fit: contain;
+}
+
+.scene-grade-extreme figcaption {
+	color: var(--dark-gray);
+	font-size: 85%;
+	font-variant-numeric: tabular-nums;
+}

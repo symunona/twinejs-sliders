@@ -1,6 +1,7 @@
 import {
 	IconArrowsMaximize,
 	IconArrowsMinimize,
+	IconCode,
 	IconWalk
 } from '@tabler/icons';
 import * as React from 'react';
@@ -229,13 +230,28 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			{...other}
 			className="scene-preview-dialog"
 			headerControls={
-				<IconButton
-					icon={fullScreen ? <IconArrowsMinimize /> : <IconArrowsMaximize />}
-					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-					onClick={() => setFullScreen(!fullScreen)}
-					tooltipPosition="bottom"
-				/>
+				<>
+					{/* The passage's source: its `</>` editor, on the same Doc the stage
+					    writes. Raised if already open. */}
+					<IconButton
+						disabled={!passageId}
+						icon={<IconCode />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.openSource')}
+						onClick={() =>
+							passageId &&
+							dialogsDispatch(addPassageEditors(story.id, [passageId]))
+						}
+						tooltipPosition="bottom"
+					/>
+					<IconButton
+						icon={fullScreen ? <IconArrowsMinimize /> : <IconArrowsMaximize />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
+						onClick={() => setFullScreen(!fullScreen)}
+						tooltipPosition="bottom"
+					/>
+				</>
 			}
 			headerLabel={t('dialogs.passageEdit.scenePreview.title')}
 			hotkeyScope="scene-preview"
@@ -266,7 +282,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 				)}
 				<ScenePreview
 					assets={assets}
-					barExtra={walkControls}
+					walkControls={walkControls}
 					onWalkInfo={setWalkInfo}
 					onCreatePassage={handleCreatePassage}
 					onGoToLine={handleGoToLine}

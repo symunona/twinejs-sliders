@@ -220,3 +220,92 @@ describe('<StageSelectionControls>', () => {
 		expect(onDelete).toHaveBeenCalled();
 	});
 });
+
+describe('grade extremes on slider hover', () => {
+	/** The stage's sprite as the renderer draws it: `.sliders-entity > .sliders-entity-art > img`. */
+	function drawSprite(id: string) {
+		const box = document.createElement('div');
+		const artBox = document.createElement('div');
+		const img = document.createElement('img');
+
+		box.className = 'sliders-entity';
+		box.dataset.entityId = id;
+		artBox.className = 'sliders-entity-art';
+		img.src = `http://localhost/${id}.png`;
+		Object.defineProperty(img, 'complete', {value: true});
+		Object.defineProperty(img, 'naturalWidth', {value: 100});
+		Object.defineProperty(img, 'naturalHeight', {value: 200});
+		artBox.appendChild(img);
+		box.appendChild(artBox);
+		document.body.appendChild(box);
+		drawn.push(box);
+	}
+
+	const drawn: HTMLElement[] = [];
+
+	function overlay() {
+		return document.querySelector<HTMLElement>('[data-testid="scene-grade-extremes"]');
+	}
+
+	function controls(id: string, onGradeHover = jest.fn()) {
+		return (
+			<FakeStateProvider>
+				<StageSelectionControls
+					assets={assets}
+					editable
+					entities={[stage.entities[id]]}
+					onDelete={jest.fn()}
+					onFlip={jest.fn()}
+					onGrade={jest.fn()}
+					onGradeHover={onGradeHover}
+					onPose={jest.fn()}
+					onPreviewPose={jest.fn()}
+					onStepZ={jest.fn()}
+				/>
+			</FakeStateProvider>
+		);
+	}
+
+	function row(key: string) {
+		return document.querySelector<HTMLElement>(
+			`.scene-grade-sliders-row[data-grade-key="${key}"]`
+		)!;
+	}
+
+	// Only what this block drew: clearing the body would pull the render container out
+	// from under testing-library's own cleanup.
+	afterEach(() => {
+		drawn.splice(0).forEach(el => el.remove());
+	});
+
+	it('shows the hovered key, and drops it on leave and on selection change', async () => {
+		drawSprite('candle');
+		drawSprite('joren');
+
+		const onGradeHover = jest.fn();
+		const {rerender} = render(controls('candle', onGradeHover));
+
+		// React 16 derives enter/leave from over/out (TRAPS).
+		fireEvent.pointerOver(row('saturation'));
+		await waitFor(() => expect(overlay()?.dataset.gradeKey).toBe('saturation'));
+		expect(onGradeHover).toHaveBeenLastCalledWith('saturation');
+		expect(overlay()!.querySelectorAll('img')).toHaveLength(2);
+
+		fireEvent.pointerOut(row('saturation'), {relatedTarget: document.body});
+		await waitFor(() => expect(overlay()).toBeNull());
+		expect(onGradeHover).toHaveBeenLastCalledWith(null);
+
+		fireEvent.pointerOver(row('hue'));
+		await waitFor(() => expect(overlay()).not.toBeNull());
+		rerender(controls('joren', onGradeHover));
+		await waitFor(() => expect(overlay()).toBeNull());
+	});
+
+	it('shows nothing for a sprite with no picture on the stage', async () => {
+		render(controls('candle'));
+		fireEvent.pointerOver(row('hue'));
+		// Nothing to wait FOR; one tick for the state to land.
+		await waitFor(() => expect(row('hue')).not.toBeNull());
+		expect(overlay()).toBeNull();
+	});
+});

@@ -115,7 +115,7 @@ const WHEEL_COMMIT_DELAY_MS = 220;
  * It only ever worked while the panel happened to overlap its own sprite.
  */
 const OWN_PRESS_SELECTOR =
-	'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor, .scene-bubble-editor-anchor, .menu-button-menu, .preview-select-list, .stage-editor-trace-readout, .scene-grade-popover, .scene-error-badge, .scene-error-panel';
+	'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor, .scene-bubble-editor-anchor, .menu-button-menu, .preview-select-list, .stage-editor-trace-readout, .scene-sidebar, .scene-stage-tools, .scene-error-badge, .scene-error-panel';
 
 /** Feet, bottom centre — the fallback when there is no rect to invert an origin out of. */
 const DEFAULT_ORIGIN_FRAC = {x: 0.5, y: 1};

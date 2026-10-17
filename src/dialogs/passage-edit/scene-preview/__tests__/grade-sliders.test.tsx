@@ -1,7 +1,7 @@
 import {act, fireEvent, render} from '@testing-library/react';
 import * as React from 'react';
 import type {EntityGrade} from '@sliders/scene-types';
-import {GradePopover} from '../grade-popover';
+import {GradeSliders} from '../grade-sliders';
 
 jest.useFakeTimers();
 
@@ -9,7 +9,7 @@ function rowFor(labelKey: string): HTMLElement {
 	// A non-editable AdjustSlider folds its readout into the label, so find the row by
 	// label text and take its range (`.claude/TRAPS.md`).
 	const row = Array.from(
-		document.querySelectorAll<HTMLElement>('.scene-grade-popover .adjust-slider')
+		document.querySelectorAll<HTMLElement>('.scene-grade-sliders .adjust-slider')
 	).find(el => el.textContent?.includes(labelKey));
 
 	if (!row) {
@@ -20,32 +20,29 @@ function rowFor(labelKey: string): HTMLElement {
 }
 
 function setup(grade: EntityGrade | undefined) {
-	const anchor = document.createElement('button');
 	const onChange = jest.fn();
-	const onClose = jest.fn();
 	const onCommit = jest.fn();
+	const onHoverKey = jest.fn();
 
-	document.body.appendChild(anchor);
 	render(
-		<GradePopover
-			anchor={anchor}
+		<GradeSliders
 			grade={grade}
 			note="note"
 			onChange={onChange}
-			onClose={onClose}
 			onCommit={onCommit}
+			onHoverKey={onHoverKey}
 		/>
 	);
 
-	return {anchor, onChange, onClose, onCommit};
+	return {onChange, onCommit, onHoverKey};
 }
 
-describe('GradePopover', () => {
+describe('GradeSliders', () => {
 	it('shows one slider per grade key, at the grade on screen', () => {
 		setup({warmth: 30});
 
 		expect(
-			document.querySelectorAll('.scene-grade-popover .adjust-slider')
+			document.querySelectorAll('.scene-grade-sliders .adjust-slider')
 		).toHaveLength(11);
 
 		const warmth = rowFor('dialogs.assetEditor.warmth').querySelector(
@@ -85,13 +82,11 @@ describe('GradePopover', () => {
 		expect(onChange).toHaveBeenLastCalledWith({hue: 5});
 	});
 
-	it('resets the whole grade, and writes it', () => {
+	it('writes when one slider is reset', () => {
 		const {onChange, onCommit} = setup({warmth: 30});
-		const reset = Array.from(
-			document.querySelectorAll<HTMLButtonElement>(
-				'.scene-grade-popover-foot button'
-			)
-		).pop()!;
+		const reset = rowFor('dialogs.assetEditor.warmth').querySelector(
+			'button'
+		) as HTMLButtonElement;
 
 		fireEvent.click(reset);
 		expect(onChange).toHaveBeenLastCalledWith(undefined);
@@ -101,18 +96,17 @@ describe('GradePopover', () => {
 		expect(onCommit).toHaveBeenCalled();
 	});
 
-	it('closes on Escape and on a press outside, not on a press inside', () => {
-		const {anchor, onClose} = setup(undefined);
+	it('says which slider the pointer is over', () => {
+		const {onHoverKey} = setup(undefined);
+		const row = rowFor('dialogs.assetEditor.hue').closest(
+			'.scene-grade-sliders-row'
+		) as HTMLElement;
 
-		fireEvent.pointerDown(
-			document.querySelector('.scene-grade-popover') as HTMLElement
+		fireEvent.pointerOver(row);
+		expect(onHoverKey).toHaveBeenLastCalledWith('hue');
+		fireEvent.pointerOut(
+			document.querySelector('.scene-grade-sliders') as HTMLElement
 		);
-		fireEvent.pointerDown(anchor);
-		expect(onClose).not.toHaveBeenCalled();
-
-		fireEvent.pointerDown(document.body);
-		expect(onClose).toHaveBeenCalledTimes(1);
-		fireEvent.keyDown(document, {key: 'Escape'});
-		expect(onClose).toHaveBeenCalledTimes(2);
+		expect(onHoverKey).toHaveBeenLastCalledWith(null);
 	});
 });

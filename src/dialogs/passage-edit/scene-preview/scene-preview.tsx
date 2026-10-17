@@ -1,19 +1,26 @@
 import {
+	IconAlertTriangle,
 	IconArrowsMinimize,
+	IconBox,
 	IconCamera,
 	IconCameraOff,
 	IconChevronLeft,
 	IconChevronRight,
 	IconGridDots,
+	IconLink,
 	IconLock,
 	IconLockOpen,
 	IconMessage2,
 	IconPlayerPause,
 	IconPlayerPlay,
+	IconPlus,
+	IconSettings,
 	IconStack2,
 	IconTimeline,
+	IconUser,
 	IconVolume,
 	IconVolumeOff,
+	IconWalk,
 	IconZoomIn,
 	IconZoomOut
 } from '@tabler/icons';
@@ -22,6 +29,7 @@ import * as React from 'react';
 import {createPortal} from 'react-dom';
 import {useTranslation} from 'react-i18next';
 import {IconButton} from '../../../components/control/icon-button';
+import {MenuButton} from '../../../components/control/menu-button';
 import {useCommand} from '../../../hotkeys';
 import {extractSceneBlock, IndexedPassage} from '@sliders/scene-index';
 import {
@@ -78,10 +86,19 @@ import {
 } from '../../sliders-assets/character-poses';
 import {requestAssetFocus} from '../../sliders-assets/focus-request';
 import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
+import {AssetEditorDialog} from '../../asset-editor';
 import {useDialogsContext} from '../../context';
 import {useStoryLaunch} from '../../../store/use-story-launch';
 import {zResetBlocks} from './layer-order';
-import {LayersPanel, useLayersPanelOpen} from './layers-panel';
+import {LayersPanel} from './layers-panel';
+import {SceneLinksPanel} from './scene-links-panel';
+import {SceneSettingsTab} from './scene-settings-panel';
+import {
+	SceneSidebar,
+	SceneSidebarTab,
+	SceneSidebarTabId,
+	useSceneSidebar
+} from './scene-sidebar';
 import {SceneStage} from './scene-stage';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
@@ -191,8 +208,11 @@ export interface ScenePreviewProps {
 	walkHere?: WalkHereRequest;
 	/** What walk-here found on the beat on screen: who can walk, and why a click will not. */
 	onWalkInfo?: (info: WalkHereInfo) => void;
-	/** The dialog's own controls, drawn in the bar beside the preview's. */
-	barExtra?: React.ReactNode;
+	/**
+	 * The dialog's walk-here controls, drawn in the sidebar's walk tab above the preview's
+	 * own "edit walk area" link.
+	 */
+	walkControls?: React.ReactNode;
 	/**
 	 * An error row in the stage's error sidebar was clicked: show that line of the passage
 	 * text. Absent means the rows go nowhere.
@@ -349,7 +369,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	view,
 	walkHere: walkHereRequest,
 	onWalkInfo,
-	barExtra,
+	walkControls,
 	onCreatePassage,
 	onGoToLine
 }) => {
@@ -391,21 +411,26 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const stageLockedByScene = lockReason(parse.result?.scene, 'entities');
 	const cameraLockedByScene = lockReason(parse.result?.scene, 'bg');
 	const [timelineLabels, setTimelineLabels] = React.useState(
-		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) === 'true'
+		() => window.localStorage.getItem(TIMELINE_LABELS_KEY) !== 'false'
 	);
-	const [layersOpen, toggleLayers] = useLayersPanelOpen();
 	/**
-	 * The beat panel, in the layers panel's slot. Session state: opened by a press on the
-	 * bubble or the bar button, closed by its own X or the bar button. Not by selecting a
-	 * sprite -- the caret in a beat's line selects its speaker, and the panel must not shut
-	 * under an author typing there.
+	 * The sidebar: which tab, and whether open. Both remembered. A press on the bubble
+	 * opens the beat tab, the error badge the problems tab, a selection the selection tab.
 	 */
-	const [beatPanelOpen, setBeatPanelOpen] = React.useState(false);
-	/**
-	 * The error sidebar, opened by the badge in the stage's corner. Same slot again: the
-	 * last panel asked for wins, so opening this closes the beat panel and the reverse.
-	 */
-	const [errorsOpen, setErrorsOpen] = React.useState(false);
+	const sidebar = useSceneSidebar();
+	const {setActive: setSidebarTab, setOpen: setSidebarOpen} = sidebar;
+	const openTab = React.useCallback(
+		(id: SceneSidebarTabId) => {
+			setSidebarTab(id);
+			setSidebarOpen(true);
+		},
+		[setSidebarOpen, setSidebarTab]
+	);
+	const tabShown = (id: SceneSidebarTabId) =>
+		sidebar.open && sidebar.active === id;
+	const toggleTab = (id: SceneSidebarTabId) =>
+		tabShown(id) ? setSidebarOpen(false) : openTab(id);
+	const toggleLayers = () => toggleTab('layers');
 	/** Bumped by a double click on the bubble: focus the panel's text box. */
 	const [beatTextFocus, setBeatTextFocus] = React.useState(0);
 	const {dispatch: storiesDispatch, stories} = useUndoableStoriesContext();
@@ -535,6 +560,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const beats = parse.result?.scene.beats ?? EMPTY_BEATS;
 	// State N is produced by beat N-1; S0 has no beat.
 	const shownBeat = beat > 0 ? beats[beat - 1] : undefined;
+	/** Set by "add beat": focus the beat panel's text once the new beat is on screen. */
+	const focusAddedBeat = React.useRef(false);
+
+	React.useEffect(() => {
+		if (focusAddedBeat.current && shownBeat) {
+			focusAddedBeat.current = false;
+			setBeatTextFocus(value => value + 1);
+		}
+	}, [shownBeat]);
 	/**
 	 * What a live bubble drag is painting with.
 	 *
@@ -826,14 +860,26 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 	const handleSelectBeat = React.useCallback(() => {
 		clear();
-		setBeatPanelOpen(true);
-		setErrorsOpen(false);
-	}, [clear]);
+		openTab('beat');
+	}, [clear, openTab]);
 	const handleEditBeatText = React.useCallback(() => {
-		setBeatPanelOpen(true);
-		setErrorsOpen(false);
+		openTab('beat');
 		setBeatTextFocus(value => value + 1);
-	}, []);
+	}, [openTab]);
+
+	/**
+	 * "Add beat": an empty line for `who` right after the beat on screen, then the beat
+	 * tab with its text box focused. The focus waits for the parse that brings the new
+	 * beat, or it would land on the old one's words.
+	 */
+	const handleAddBeat = React.useCallback(
+		(who: string) => {
+			focusAddedBeat.current = true;
+			commit([{insertBeat: beat, who}], EDIT_ORIGIN);
+			openTab('beat');
+		},
+		[beat, commit, openTab]
+	);
 
 	/** A gesture was abandoned: neither optimistic value has text coming to replace it. */
 	const handleCancel = React.useCallback(() => {
@@ -1237,6 +1283,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 
 	/**
+	 * The selection tab follows the selection: selecting shows it, deselecting goes back to
+	 * whichever tab the author was on. Never opens a collapsed sidebar -- collapsing it was
+	 * the author asking for the stage.
+	 */
+	const hasSelection = selection.length > 0;
+	const sidebarActiveRef = React.useRef(sidebar.active);
+	const tabBeforeSelection = React.useRef<SceneSidebarTabId>('scene');
+
+	sidebarActiveRef.current = sidebar.active;
+
+	React.useEffect(() => {
+		const active = sidebarActiveRef.current;
+
+		if (hasSelection) {
+			if (active !== 'selection') {
+				tabBeforeSelection.current = active;
+				setSidebarTab('selection');
+			}
+		} else if (active === 'selection') {
+			setSidebarTab(tabBeforeSelection.current);
+		}
+	}, [hasSelection, setSidebarTab]);
+
+	/**
 	 * The pose the pose menu is hovering: drawn, never written. `null` is not hovering,
 	 * `''` is the Automatic row — the fallback the renderer picks when no pose is named.
 	 *
@@ -1514,6 +1584,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 		dispatch({component: SlidersAssetsDialog, maximized: true, type: 'addDialog'});
 		requestAssetFocus(ref);
+	}
+
+	/**
+	 * The walk tab's link: open the backdrop on screen in the asset editor, on its walk tool.
+	 * Resolved the way the preview draws it -- own collection first, `coll/name` too.
+	 */
+	function handleEditWalkArea() {
+		const bg = stage.bg?.trim();
+
+		if (!bg) {
+			return;
+		}
+
+		void store.lookup(bg).then(asset => {
+			if (asset && !asset.ownerCharacter) {
+				dispatch({
+					component: AssetEditorDialog,
+					// Drawing a walk area needs the room.
+					maximized: true,
+					props: {assetId: asset.id, tool: 'walk'},
+					type: 'addDialog'
+				});
+			}
+		});
 	}
 
 	function toggleCameraTool() {
@@ -1861,11 +1955,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// Above the no-scene return: hooks must run on every render, or a passage gaining its
 	// [scene] block crashes the dialog (React #310).
 	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
-	const showErrors = errorsOpen && !fullScreen;
-	const showBeatPanel = beatPanelOpen && !fullScreen && !showErrors;
-	// One slot: the beat panel or the error list, while open, stands where the layers
-	// panel would.
-	const showLayers = layersOpen && !fullScreen && !showBeatPanel && !showErrors;
+	const showLayers = tabShown('layers');
 	/**
 	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
 	 * (`buildWriteEdits` on the same context `commit` builds) so the panel can never offer a
@@ -1943,10 +2033,39 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					)
 			: undefined;
 
+	/**
+	 * The beat line: step, count, step, play, the strip, and the strip's labels toggle at
+	 * its far end. One row -- the strip is how the author reads the scene's timing, and the
+	 * buttons that move through it belong beside it rather than in a bar of their own.
+	 */
+	/** Who can say the new beat: the narrator, then who is on stage, characters first. */
+	const onStage = Object.values(stage.entities ?? {}).sort((a, b) =>
+		a.id.localeCompare(b.id)
+	);
+	const speakers = (cast: boolean) =>
+		onStage
+			.filter(entity => (entity.kind === 'cast') === cast)
+			.map(entity => ({
+				label: entity.id,
+				onClick: () => handleAddBeat(entity.id)
+			}));
+	const characterItems = speakers(true);
+	const assetItems = speakers(false);
+	const addBeatItems = [
+		{
+			label: t('dialogs.passageEdit.scenePreview.addBeat.narrator'),
+			onClick: () => handleAddBeat('box')
+		},
+		...(characterItems.length > 0
+			? [{separator: true as const}, ...characterItems]
+			: []),
+		...(assetItems.length > 0 ? [{separator: true as const}, ...assetItems] : [])
+	];
+
 	const bar = (
 		<div className="scene-preview-bar">
 			<IconButton
-			commandId="scene.previousBeat"
+				commandId="scene.previousBeat"
 				disabled={beat <= 0}
 				icon={<IconChevronLeft />}
 				iconOnly
@@ -1957,7 +2076,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				{beat} / {lastBeat}
 			</span>
 			<IconButton
-			commandId="scene.nextBeat"
+				commandId="scene.nextBeat"
 				disabled={beat >= lastBeat && !nextScene}
 				icon={<IconChevronRight />}
 				iconOnly
@@ -1971,15 +2090,27 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onClick={goToNextBeat}
 			/>
 			<IconButton
-			commandId="scene.play"
+				commandId="scene.play"
 				icon={playing ? <IconPlayerPause /> : <IconPlayerPlay />}
 				iconOnly
 				label={t('dialogs.passageEdit.scenePreview.play')}
 				onClick={togglePlaying}
 			/>
-			{/* Next to play rather than next to the locks: it is what the strip
-			    below shows, and the strip is part of reading the scene's
-			    timing, not part of staging it. */}
+			<BeatTimeline
+				autoAdvanceMs={holdMs}
+				beat={beat}
+				beats={beats}
+				labels={timelineLabels}
+				onBeatChange={goToBeat}
+			/>
+			{editable && (
+				<MenuButton
+					icon={<IconPlus />}
+					iconOnly
+					items={addBeatItems}
+					label={t('dialogs.passageEdit.scenePreview.addBeat.button')}
+				/>
+			)}
 			<IconButton
 				icon={<IconTimeline />}
 				iconOnly
@@ -1988,91 +2119,27 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selectable
 				selected={timelineLabels}
 			/>
-			{/* Sits beside the lock rather than in the selection row: the grid
-			    is how the author reads the stage, and nothing has to be
-			    selected to want to read it. */}
-			<IconButton
-				icon={<IconGridDots />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.grid')}
-				onClick={toggleGrid}
-				selectable
-				selected={grid}
-			/>
-			{/* With the grid: another way of reading the stage, and like the grid it
-			    writes nothing by being open. */}
-			<IconButton
-				icon={<IconMessage2 />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.beatPanel')}
-				onClick={() => {
-					setBeatPanelOpen(!beatPanelOpen);
-					setErrorsOpen(false);
-				}}
-				selectable
-				selected={beatPanelOpen}
-			/>
-			<IconButton
-				commandId="scene.layersPanel"
-				icon={<IconStack2 />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.layers.toggle')}
-				onClick={toggleLayers}
-				selectable
-				selected={layersOpen}
-			/>
-			{/* Next to the grid: both are "how this preview behaves for me", not
-			    anything the scene says. A click is also the user gesture the
-			    browser wants before it will play anything, so the button that
-			    turns sound on is the same one that unblocks it. */}
-			<IconButton
-				icon={sound ? <IconVolume /> : <IconVolumeOff />}
-				iconOnly
-				label={t(
-					sound
-						? 'dialogs.passageEdit.scenePreview.soundOn'
-						: 'dialogs.passageEdit.scenePreview.soundOff'
-				)}
-				onClick={toggleSound}
-				selectable
-				selected={sound}
-			/>
-			{/* Beside the stage lock, and the inverse of it: a MODE the author turns
-			    on to frame the shot, off the rest of the time. */}
-			<IconButton
-				disabled={!!cameraLockedByScene}
-				icon={cameraLocked ? <IconCameraOff /> : <IconCamera />}
-				iconOnly
-				label={t(
-					cameraLockedByScene
-						? 'dialogs.passageEdit.scenePreview.lockedByScene'
-						: cameraTool
-						? 'dialogs.passageEdit.scenePreview.cameraToolOn'
-						: 'dialogs.passageEdit.scenePreview.cameraToolOff'
-				)}
-				onClick={toggleCameraTool}
-				selectable
-				selected={cameraTool && !cameraLocked}
-			/>
-			{/* Always here, selection or not: the lock is how the author stops
-			    the stage editing the file, so it cannot be a control that only
-			    appears once something has been grabbed. */}
-			<IconButton
-			commandId="scene.toggleLock"
-				disabled={!!stageLockedByScene}
-				icon={locked ? <IconLock /> : <IconLockOpen />}
-				iconOnly
-				label={t(
-					stageLockedByScene
-						? 'dialogs.passageEdit.scenePreview.lockedByScene'
-						: locked
-						? 'dialogs.passageEdit.scenePreview.unlock'
-						: 'dialogs.passageEdit.scenePreview.lock'
-				)}
-				onClick={toggleLock}
-				selectable
-				selected={locked}
-			/>
+			{/* Entering full screen is a header control on the dialog card, next to
+			    maximize. LEAVING it cannot be: full screen portals out of the card and
+			    the header goes with it, so the way back has to live in the bar. */}
+			{fullScreen && (
+				<IconButton
+					commandId="scene.fullScreen"
+					icon={<IconArrowsMinimize />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.fullScreen')}
+					onClick={() => onFullScreenChange(false)}
+				/>
+			)}
+		</div>
+	);
+
+	/**
+	 * Top right of the stage, beside the error badge: how big the stage is drawn here and
+	 * whether it may be edited. Neither is anything the scene says.
+	 */
+	const stageTools = (
+		<div className="scene-stage-tools" data-testid="scene-stage-tools">
 			{/* How big the stage is drawn here, not what the camera frames: nothing
 			    about it is written to the scene. */}
 			{!fullScreen && (
@@ -2083,6 +2150,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						iconOnly
 						label={t('dialogs.passageEdit.scenePreview.zoomOut')}
 						onClick={() => viewZoom.stepZoom(-1)}
+						tooltipPosition="bottom"
 					/>
 					<button
 						className="scene-preview-zoom-percent"
@@ -2098,24 +2166,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						iconOnly
 						label={t('dialogs.passageEdit.scenePreview.zoomIn')}
 						onClick={() => viewZoom.stepZoom(1)}
+						tooltipPosition="bottom"
 					/>
 				</span>
 			)}
-			{barExtra}
-			{/* Entering full screen is a header control on the dialog card, next to
-			    maximize. LEAVING it cannot be: full screen portals out of the card and
-			    the header goes with it, so the way back has to live in the bar. */}
-			{fullScreen && (
-				<span className="scene-preview-bar-right">
-					<IconButton
-						commandId="scene.fullScreen"
-						icon={<IconArrowsMinimize />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-						onClick={() => onFullScreenChange(false)}
-					/>
-				</span>
-			)}
+			{/* Always here, selection or not: the lock is how the author stops
+			    the stage editing the file, so it cannot be a control that only
+			    appears once something has been grabbed. */}
+			<IconButton
+				commandId="scene.toggleLock"
+				disabled={!!stageLockedByScene}
+				icon={locked ? <IconLock /> : <IconLockOpen />}
+				iconOnly
+				label={t(
+					stageLockedByScene
+						? 'dialogs.passageEdit.scenePreview.lockedByScene'
+						: locked
+						? 'dialogs.passageEdit.scenePreview.unlock'
+						: 'dialogs.passageEdit.scenePreview.lock'
+				)}
+				onClick={toggleLock}
+				selectable
+				selected={locked}
+				tooltipPosition="bottom"
+			/>
 		</div>
 	);
 
@@ -2233,71 +2307,75 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// The overlay scrolls inside the viewport when the view is zoomed in. The selection
 	// row sits outside that scroll, over the viewport, so it stays where the author can
 	// reach it however far the stage has been scrolled.
-	const stageBody = (
-		<div
-			className={classNames('scene-stage-view', {
-				'with-beat-panel': showBeatPanel || showErrors,
-				'with-layers': showLayers || showBeatPanel || showErrors
-			})}
-		>
-			<div className="scene-stage-viewport" ref={setViewport}>
-				<div className="scene-stage-canvas" style={viewZoom.canvasStyle}>
-					{stageOverlay}
-				</div>
+	const passageNames = (passages ?? []).map(passage => passage.name);
+	const singleSelected =
+		selectedEntities.length === 1 ? selectedEntities[0] : undefined;
+
+	/** Settings tab: how this preview behaves for me, then what the scene says. */
+	const sceneTab = (
+		<div className="scene-sidebar-section">
+			<div className="scene-sidebar-row">
+				{/* The grid is how the author reads the stage, and nothing has to be
+				    selected to want to read it. */}
+				<IconButton
+					icon={<IconGridDots />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.grid')}
+					onClick={toggleGrid}
+					selectable
+					selected={grid}
+					tooltipPosition="bottom"
+				/>
+				{/* The background lock's successor: a MODE the author turns on to frame
+				    the shot, off the rest of the time. */}
+				<IconButton
+					disabled={!!cameraLockedByScene}
+					icon={cameraLocked ? <IconCameraOff /> : <IconCamera />}
+					iconOnly
+					label={t(
+						cameraLockedByScene
+							? 'dialogs.passageEdit.scenePreview.lockedByScene'
+							: cameraTool
+							? 'dialogs.passageEdit.scenePreview.cameraToolOn'
+							: 'dialogs.passageEdit.scenePreview.cameraToolOff'
+					)}
+					onClick={toggleCameraTool}
+					selectable
+					selected={cameraTool && !cameraLocked}
+					tooltipPosition="bottom"
+				/>
+				{/* A click is also the user gesture the browser wants before it will
+				    play anything, so the button that turns sound on is the same one that
+				    unblocks it. */}
+				<IconButton
+					icon={sound ? <IconVolume /> : <IconVolumeOff />}
+					iconOnly
+					label={t(
+						sound
+							? 'dialogs.passageEdit.scenePreview.soundOn'
+							: 'dialogs.passageEdit.scenePreview.soundOff'
+					)}
+					onClick={toggleSound}
+					selectable
+					selected={sound}
+					tooltipPosition="bottom"
+				/>
 			</div>
-			{showLayers && (
-				<LayersPanel
-					editable={editable}
-					hidden={hidden}
-					onCommit={commit}
-					onSelect={select}
-					onToggleHidden={toggleHidden}
-					resetBlocks={zResetBlocksShown}
-					selection={selection}
-					// Authored, not `stage`: resolving drops `of:`, which is what indents a
-					// child row. Same beat, same patch, same ids, kinds and z as `stage` —
-					// `layer-order` resolves `at` itself to rank by the drawn y.
-					stage={localStage}
-				/>
-			)}
-			{showErrors && (
-				<SceneErrorPanel
-					errors={parse.errors}
-					onApplyFix={
-						editable && doc ? fix => applySceneFix(doc, fix) : undefined
-					}
-					onClose={() => setErrorsOpen(false)}
-					onCreatePassage={editable ? onCreatePassage : undefined}
-					onGoToLine={onGoToLine}
-				/>
-			)}
-			{/* The reader's view has no problems to show. */}
-			{!fullScreen && (
-				<SceneErrorBadge
-					errors={parse.errors}
-					onToggle={() => {
-						setErrorsOpen(!errorsOpen);
-						setBeatPanelOpen(false);
-					}}
-					open={showErrors}
-				/>
-			)}
-			{showBeatPanel && (
-				<BeatPanel
-					autoAdvanceMs={holdMs}
-					beat={shownBeat}
-					beatCount={beats.length}
-					beatNumber={beat}
-					editable={editable}
-					focusText={beatTextFocus}
-					inherited={bubbleDefaults}
-					onClose={() => setBeatPanelOpen(false)}
-					onMakeDefault={makeBeatStyleDefault}
-					onSetBubble={handleBeatBubble}
-					onSetKey={handleBeatKey}
-					onSetText={handleBeatText}
-					storyColors={swatches}
-				/>
+			<SceneSettingsTab
+				assets={assets}
+				editable={editable}
+				onWrite={writes => commit(writes, EDIT_ORIGIN)}
+				scene={parse.result?.scene}
+			/>
+		</div>
+	);
+
+	const selectionTab = (
+		<div className="scene-sidebar-section">
+			{!editable && (
+				<p className="scene-sidebar-empty">
+					{beatNote ?? t('dialogs.passageEdit.scenePreview.sidebar.readOnly')}
+				</p>
 			)}
 			<StageSelectionControls
 				assets={assets}
@@ -2312,7 +2390,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onOpenLink={onOpenPassage}
 				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}
-				gradeFooter={
+				matchBg={
 					selection.length === 1 && (
 						<MatchBgButton
 							bgKey={stage.bg}
@@ -2335,6 +2413,175 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		</div>
 	);
 
+	const walkTab = (
+		<div className="scene-sidebar-section">
+			{walkControls && <div className="scene-sidebar-row">{walkControls}</div>}
+			{/* The walk area belongs to the backdrop asset, so it is drawn in the asset
+			    editor's walk tool. This is the way there. */}
+			<IconButton
+				disabled={!stage.bg}
+				icon={<IconWalk />}
+				label={t('dialogs.passageEdit.scenePreview.sidebar.editWalkArea')}
+				onClick={handleEditWalkArea}
+				tooltipLabel={
+					stage.bg
+						? t('dialogs.passageEdit.scenePreview.sidebar.editWalkAreaHint', {
+								bg: stage.bg
+						  })
+						: t('dialogs.passageEdit.scenePreview.sidebar.noBg')
+				}
+			/>
+		</div>
+	);
+
+	const sidebarTabs: SceneSidebarTab[] = [
+		{
+			content: sceneTab,
+			icon: <IconSettings />,
+			id: 'scene',
+			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.scene')
+		},
+		{
+			content: (
+				<LayersPanel
+					editable={editable}
+					hidden={hidden}
+					onCommit={commit}
+					onSelect={select}
+					onToggleHidden={toggleHidden}
+					resetBlocks={zResetBlocksShown}
+					selection={selection}
+					// Authored, not `stage`: resolving drops `of:`, which is what indents a
+					// child row. Same beat, same patch, same ids, kinds and z as `stage` —
+					// `layer-order` resolves `at` itself to rank by the drawn y.
+					stage={localStage}
+				/>
+			),
+			icon: <IconStack2 />,
+			id: 'layers',
+			label: t('dialogs.passageEdit.scenePreview.layers.toggle')
+		},
+		{
+			content: (
+				<BeatPanel
+					autoAdvanceMs={holdMs}
+					beat={shownBeat}
+					beatCount={beats.length}
+					beatNumber={beat}
+					editable={editable}
+					focusText={beatTextFocus}
+					inherited={bubbleDefaults}
+					onClose={() => setSidebarOpen(false)}
+					onMakeDefault={makeBeatStyleDefault}
+					onSetBubble={handleBeatBubble}
+					onSetKey={handleBeatKey}
+					onSetText={handleBeatText}
+					storyColors={swatches}
+				/>
+			),
+			icon: <IconMessage2 />,
+			id: 'beat',
+			label: t('dialogs.passageEdit.scenePreview.beatPanel')
+		},
+		...(hasSelection
+			? [
+					{
+						content: selectionTab,
+						icon:
+							singleSelected && singleSelected.kind !== 'prop' ? (
+								<IconUser />
+							) : (
+								<IconBox />
+							),
+						id: 'selection' as const,
+						label: t(
+							singleSelected && singleSelected.kind !== 'prop'
+								? 'dialogs.passageEdit.scenePreview.sidebar.tabs.character'
+								: 'dialogs.passageEdit.scenePreview.sidebar.tabs.object'
+						)
+					}
+			  ]
+			: []),
+		{
+			content: walkTab,
+			icon: <IconWalk />,
+			id: 'walk',
+			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.walk')
+		},
+		{
+			content: (
+				<div className="scene-sidebar-section">
+					<SceneLinksPanel
+						editable={editable}
+						onCreatePassage={editable ? onCreatePassage : undefined}
+						onOpenPassage={onOpenPassage}
+						onWrite={writes => commit(writes, EDIT_ORIGIN)}
+						passageNames={passageNames}
+						scene={parse.result?.scene}
+					/>
+				</div>
+			),
+			icon: <IconLink />,
+			id: 'links',
+			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.links')
+		},
+		...(parse.errors.length > 0 || sidebar.active === 'problems'
+			? [
+					{
+						content: (
+							<SceneErrorPanel
+								errors={parse.errors}
+								onApplyFix={
+									editable && doc ? fix => applySceneFix(doc, fix) : undefined
+								}
+								onClose={() => setSidebarOpen(false)}
+								onCreatePassage={editable ? onCreatePassage : undefined}
+								onGoToLine={onGoToLine}
+							/>
+						),
+						icon: <IconAlertTriangle />,
+						id: 'problems' as const,
+						label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.problems')
+					}
+			  ]
+			: [])
+	];
+
+	// The overlay scrolls inside the viewport when the view is zoomed in. The sidebar and
+	// the stage tools sit outside that scroll, over the view, so they stay where the author
+	// can reach them however far the stage has been scrolled.
+	const stageBody = (
+		<div
+			// One width for every tab: a tab switch that resized the viewport would move the
+			// stage under the pointer on the very click that selected a sprite.
+			className={classNames('scene-stage-view', 'with-layers', {
+				'sidebar-collapsed': !sidebar.open
+			})}
+		>
+			<div className="scene-stage-viewport" ref={setViewport}>
+				<div className="scene-stage-canvas" style={viewZoom.canvasStyle}>
+					{stageOverlay}
+				</div>
+			</div>
+			{stageTools}
+			{/* The reader's view has no problems to show. */}
+			{!fullScreen && (
+				<SceneErrorBadge
+					errors={parse.errors}
+					onToggle={() => toggleTab('problems')}
+					open={tabShown('problems')}
+				/>
+			)}
+			<SceneSidebar
+				active={sidebar.active}
+				onActive={setSidebarTab}
+				onOpenChange={setSidebarOpen}
+				open={sidebar.open}
+				tabs={sidebarTabs}
+			/>
+		</div>
+	);
+
 	const body = (
 		<div
 			className={classNames('scene-preview', {'full-screen': fullScreen})}
@@ -2346,13 +2593,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			tabIndex={-1}
 		>
 			{bar}
-			<BeatTimeline
-				autoAdvanceMs={holdMs}
-				beat={beat}
-				beats={beats}
-				labels={timelineLabels}
-				onBeatChange={goToBeat}
-			/>
 			{stageBody}
 		</div>
 	);

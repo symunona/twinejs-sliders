@@ -21,11 +21,12 @@
 	z-index: 1000;
 }
 
-/* Pinned: in full screen the stage takes the rest of the column, so the bar has to keep its
-   height whatever lands in it — an error badge appearing must not push the stage down. */
+/* The beat line: step buttons, the strip, the labels toggle. Pinned: in full screen the
+   stage takes the rest of the column. Top-aligned, because the strip grows downward when
+   its labels are on and the buttons stay on the marker row. */
 .scene-preview-bar {
 	background: var(--white);
-	align-items: center;
+	align-items: flex-start;
 	display: flex;
 	flex-shrink: 0;
 	gap: 2px;
@@ -33,12 +34,15 @@
 	padding: 2px 4px;
 }
 
-/* The way out of full screen, pushed away from the viewer controls. */
-.scene-preview-bar-right {
-	align-items: center;
-	display: flex;
-	gap: 2px;
-	margin-left: auto;
+.scene-preview-bar > .scene-preview-beat {
+	align-self: center;
+}
+
+/* The strip takes the row's slack. Its markers centre on the buttons' line. */
+.scene-preview-bar > .scene-preview-timeline {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: calc((var(--control-height) - 14px) / 2) 8px 0;
 }
 
 .scene-preview-beat {
@@ -60,41 +64,51 @@
 	background: #f3c8c8;
 }
 
-/* Drawn OVER the stage, so appearing and disappearing with the selection costs the stage
-   no height and the scene never jumps on the click that selected a sprite. Translucent
-   because the sprite it speaks for is very often right underneath it, and transparent to
-   the pointer except at the controls themselves — the ground under this strip still pans. */
+/* The sidebar's selection tab, top down: grade fixes, name, buttons, pose, sliders. */
 .scene-preview-selection {
-	align-items: center;
-	background: var(--white-translucent);
 	display: flex;
-	flex-wrap: wrap;
+	flex-direction: column;
 	gap: 6px;
-	left: 0;
-	padding: 2px 4px;
-	pointer-events: none;
-	position: absolute;
-	right: 0;
-	top: 0;
-	/* Over the marker layer: a selection box drawn round a sprite at the top of the stage
-	   must not cross the controls that sprite is being edited with. */
-	z-index: 4;
 }
 
-.scene-preview-selection > * {
-	pointer-events: auto;
+.scene-preview-selection-grade-fixes,
+.scene-preview-selection-buttons {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+}
+
+.scene-preview-selection-name {
+	font-weight: bold;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Why a gesture here would go nowhere. Sits with the controls it explains, and is a note
    rather than an error: nothing is wrong with the scene, the author is just parked on a
-   beat that belongs to somebody else. */
+   beat that belongs to somebody else. Wraps: the sidebar is narrow, and the half that an
+   ellipsis would cut is the half that says what to do about it. */
 .scene-preview-selection-note {
 	color: var(--dark-gray);
 	font-size: 85%;
-	max-width: 24em;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+}
+
+/* Zoom and the stage lock, top right of the stage, left of the error badge. Outside the
+   viewport's scroll, so a zoomed-in view never carries them away. */
+.scene-stage-tools {
+	align-items: center;
+	background: rgba(255, 255, 255, 0.82);
+	border-radius: var(--corner-round);
+	display: flex;
+	gap: 2px;
+	padding: 1px 2px;
+	position: absolute;
+	right: calc(var(--layers-panel-width) + 42px);
+	top: 6px;
+	z-index: 5;
 }
 
 .scene-preview-badge svg {
@@ -124,18 +138,22 @@
 	position: absolute;
 }
 
-/* The layers panel takes the right edge of the view. The viewport and the selection row
-   give it up rather than sit under it, so the stage refits (the zoom hook watches the
-   viewport's size) instead of the panel covering whatever stands on that side. */
+/* The sidebar takes the right edge of the view. The viewport gives it up rather than sit
+   under it, so the stage refits (the zoom hook watches the viewport's size) instead of the
+   sidebar covering whatever stands on that side. */
 .scene-preview .scene-stage-view {
 	/* A share of the view, capped: a fixed 220px took half of a narrow dialog and left the
-	   stage a thumbnail. The panel and the viewport's `right` are both absolute in this
+	   stage a thumbnail. The sidebar and the viewport's `right` are both absolute in this
 	   view, so the percentage means the same width for both. */
-	--layers-panel-width: clamp(140px, 36%, 220px);
+	--layers-panel-width: clamp(220px, 40%, 300px);
 }
 
-.scene-preview .scene-stage-view.with-layers .scene-stage-viewport,
-.scene-preview .scene-stage-view.with-layers .scene-preview-selection {
+/* Collapsed: the icon stripe. One icon button plus the stripe's padding and border. */
+.scene-preview .scene-stage-view.sidebar-collapsed {
+	--layers-panel-width: calc(var(--control-height) + 5px);
+}
+
+.scene-preview .scene-stage-view.with-layers .scene-stage-viewport {
 	right: var(--layers-panel-width);
 }
 
@@ -368,7 +386,3 @@
 	opacity: 0.8;
 }
 
-/* The beat panel holds a text box and a column of controls: give it more of the view. */
-.scene-preview .scene-stage-view.with-beat-panel {
-	--layers-panel-width: clamp(180px, 42%, 280px);
-}

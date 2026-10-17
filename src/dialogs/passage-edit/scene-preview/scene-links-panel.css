@@ -1,0 +1,96 @@
+@import '../../../styles/colors.css';
+
+/*
+ * Scene links: the beat props' groups and rows (`beat-props.css`), one bordered card per
+ * `links:` entry so its name, target and props read as one thing.
+ */
+.scene-links-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.scene-links-panel .beat-prop-row {
+	grid-template-columns: 5.5em minmax(0, 1fr) 22px;
+}
+
+.scene-links-panel .beat-prop-control .text-input,
+.scene-links-panel .beat-prop-control .text-input label,
+.scene-links-panel .beat-prop-control .text-input input {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+}
+
+.scene-links-panel .scene-links-number,
+.scene-links-panel .scene-links-number .text-input,
+.scene-links-panel .scene-links-number input {
+	flex: 0 0 auto;
+	width: 5em;
+}
+
+.scene-links-entry {
+	border: 1px solid var(--faint-gray);
+	border-radius: 3px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 2px 0;
+}
+
+.scene-links-mini {
+	flex: 0 0 auto;
+}
+
+/* A target that names no passage. A warning, as the link check's is: not written YET. */
+.scene-links-missing .beat-prop-label,
+.scene-links-warning,
+li.scene-links-missing {
+	color: var(--orange);
+}
+
+.scene-links-missing input {
+	border-color: var(--orange);
+}
+
+.scene-links-warning {
+	display: inline-flex;
+}
+
+.scene-links-warning svg {
+	height: 16px;
+	width: 16px;
+}
+
+.scene-links-note {
+	color: var(--dark-gray);
+	font-size: 80%;
+	margin: 0 4px;
+}
+
+.scene-links-add {
+	margin-top: 4px;
+}
+
+.scene-links-readonly {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.scene-links-name {
+	font-weight: bold;
+}
+
+.scene-links-if {
+	color: var(--dark-gray);
+}
+
+.scene-links-target-link {
+	background: none;
+	border: none;
+	color: var(--blue);
+	cursor: pointer;
+	padding: 0;
+	text-decoration: underline;
+}

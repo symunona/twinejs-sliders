@@ -17,6 +17,7 @@ import {
 	applyEdit,
 	entityHasParent,
 	insertBeatEntity,
+	insertBeatLine,
 	mergeEdits,
 	removeEntities,
 	removeEntityKey,
@@ -262,7 +263,18 @@ export interface EntityStructWrite {
  * with the gestures, not with the splicer.
  */
 export interface SceneKeyWrite {
-	sceneKey: 'bg' | 'camera' | 'music';
+	sceneKey:
+		| 'autoAdvance'
+		| 'bg'
+		| 'bubble'
+		| 'camera'
+		| 'ease'
+		| 'fx'
+		| 'links'
+		| 'linkList'
+		| 'locked'
+		| 'music'
+		| 'transition';
 	/** Formatted YAML. `undefined` REMOVES the key. */
 	formatted?: string;
 }
@@ -309,7 +321,17 @@ export interface BeatTextWrite {
 	beatText: string;
 }
 
+/**
+ * A new spoken beat, empty, from the beat bar's "add beat": `- who: ""` landing as
+ * `beats[insertBeat]`. `who` is `box` for narration, else an entity id.
+ */
+export interface BeatInsertWrite {
+	insertBeat: number;
+	who: string;
+}
+
 export type SceneWrite =
+	| BeatInsertWrite
 	| BeatKeyWrite
 	| BeatTextWrite
 	| BubbleWrite
@@ -327,6 +349,10 @@ export function isBubbleWrite(write: SceneWrite): write is BubbleWrite {
 
 export function isBeatKeyWrite(write: SceneWrite): write is BeatKeyWrite {
 	return 'beatKey' in write;
+}
+
+export function isBeatInsertWrite(write: SceneWrite): write is BeatInsertWrite {
+	return 'insertBeat' in write;
 }
 
 export function isBeatTextWrite(write: SceneWrite): write is BeatTextWrite {
@@ -463,6 +489,10 @@ export function buildWriteEdit(
 		);
 	}
 
+	if (isBeatInsertWrite(write)) {
+		return insertBeatLine(context.blockText, write.insertBeat, write.who);
+	}
+
 	if (isBeatTextWrite(write)) {
 		return setBeatText(context.blockText, write.beat, write.beatText);
 	}
@@ -521,6 +551,7 @@ export function buildWriteEdits(
 		}
 
 		if (
+			!isBeatInsertWrite(write) &&
 			!isBeatKeyWrite(write) &&
 			!isBeatTextWrite(write) &&
 			!isBubbleWrite(write) &&
@@ -584,8 +615,14 @@ export function insertedBeatCount(
 	writes: SceneWrite[]
 ): number {
 	const ids = new Set<EntityId>();
+	let lines = 0;
 
 	for (const write of writes) {
+		if (isBeatInsertWrite(write)) {
+			lines++;
+			continue;
+		}
+
 		if (
 			isBeatKeyWrite(write) ||
 			isBeatTextWrite(write) ||
@@ -608,7 +645,7 @@ export function insertedBeatCount(
 		}
 	}
 
-	return ids.size;
+	return ids.size + lines;
 }
 
 /**

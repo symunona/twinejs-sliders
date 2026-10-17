@@ -115,6 +115,7 @@ export {
 } from './effects';
 export type {EffectLayer} from './effects';
 export {
+	GRADE_PX_VAR,
 	gradeFilter,
 	gradeIsNative,
 	holdGrade

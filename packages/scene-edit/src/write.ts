@@ -939,6 +939,81 @@ export function insertBeatEntity(
 }
 
 /**
+ * A brand new spoken beat, `- who: ""`, so that `beats[index]` is it.
+ *
+ * The beat bar's "add beat": `who` is `box` for narration, else an entity id. Empty words,
+ * because the author types them next, in the beat panel. Inserting at 0 lands before the
+ * first beat; past the end, after the last. No `beats:` yet: the key is created in its slot.
+ *
+ * Block sequences only, like `insertBeatEntity`.
+ */
+export function insertBeatLine(
+	text: string,
+	index: number,
+	who: string
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+	const line = `- ${who}: ""`;
+
+	if (!parsed) {
+		return appendAtEnd(text, `beats:\n  ${line}`);
+	}
+
+	const pair = findPair(parsed.root, 'beats');
+
+	if (!pair) {
+		return insertTopLevelKey(parsed, 'beats', `beats:\n  ${line}`);
+	}
+
+	const beats = beatsSeqOf(parsed);
+
+	// `beats:` with nothing under it: the value is null, so the item goes after the key.
+	if (!beats) {
+		const keyRange = rangeOf(pair.key);
+		const empty =
+			pair.value == null || (isScalar(pair.value) && pair.value.value == null);
+
+		if (!empty || !keyRange) {
+			return undefined;
+		}
+
+		const at = lineEndAt(text, keyRange[1]);
+
+		return {from: at, insert: `\n  ${line}`, to: at};
+	}
+
+	if (beats.flow || beats.items.length === 0) {
+		return undefined;
+	}
+
+	if (index <= 0) {
+		const range = rangeOf(beats.items[0]);
+
+		if (!range) {
+			return undefined;
+		}
+
+		// The first item's own `- ` starts its line, at the sequence's indent.
+		const at = lineStartAt(text, range[0]);
+		const indent = text.slice(at, text.indexOf('-', at));
+
+		return {from: at, insert: `${indent}${line}\n`, to: at};
+	}
+
+	const after = beats.items[Math.min(index, beats.items.length) - 1];
+	const range = rangeOf(after);
+
+	if (!range) {
+		return undefined;
+	}
+
+	// End of the LINE the previous beat ends on, so its trailing `# note` stays with it.
+	const at = lineEndAt(text, trimEnd(text, range[1], range[0]));
+
+	return {from: at, insert: `\n${indentAt(text, range[0])}${line}`, to: at};
+}
+
+/**
  * Does this entity's own entry declare an `of:` parent? What a new beat needs to know, since
  * the beat it is writing has no entry of its own to read it off.
  */

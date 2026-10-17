@@ -1,10 +1,15 @@
 /**
  * The controls that only make sense with something selected: flip, depth, pose, delete.
  *
- * These live in the preview's toolbar rather than floating over the sprite. A widget drawn
- * on the stage would have to be excluded from hit testing, would move with the camera, and
- * would cover the very thing the author is looking at. The keyboard is the fast path — this
- * row exists so that the gestures are discoverable at all, which a keymap alone never is.
+ * These live in the sidebar's selection tab rather than floating over the sprite. A widget
+ * drawn on the stage would have to be excluded from hit testing, would move with the
+ * camera, and would cover the very thing the author is looking at. The keyboard is the fast
+ * path — this panel exists so that the gestures are discoverable at all, which a keymap
+ * alone never is.
+ *
+ * Order, top down: the two one-click grade fixes (match bg, reset), the gesture buttons,
+ * then the grade sliders — the long part goes last so the buttons never move. Hovering one
+ * slider shows the sprite at that slider's two ends (`GradeExtremesOverlay`).
  *
  * `pose:` is cast-only and single-selection-only: props are one image and have no poses
  * (spec 03), and two characters share no pose vocabulary. An `entities:` entry is kind
@@ -21,7 +26,7 @@
  */
 
 import {
-	IconAdjustments,
+	IconArrowBackUp,
 	IconArrowDown,
 	IconArrowUp,
 	IconAspectRatio,
@@ -34,14 +39,18 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
+import {normalizeGrade} from '@sliders/scene-types';
 import type {
 	AssetResolver,
 	EntityGrade,
+	GradeKey,
 	StageEntity
 } from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
-import {GradePopover} from './grade-popover';
+import {GradeExtremesOverlay} from './grade-extremes-overlay';
+import {GradeSliders} from './grade-sliders';
+import {sprite} from './match-bg-dom';
 
 export interface StageSelectionControlsProps {
 	assets: AssetResolver;
@@ -86,17 +95,31 @@ export interface StageSelectionControlsProps {
 	onOpenLink?: (to: string) => void;
 	/**
 	 * A grade slider moved: the WHOLE grade now on screen for the single selection. The
-	 * parent paints it live and writes it (`grade-write.ts`). Absent hides the button.
+	 * parent paints it live and writes it (`grade-write.ts`). Absent hides the sliders.
 	 */
 	onGrade?: (grade: EntityGrade | undefined) => void;
 	/** Write the grade on screen: a slider was let go of, or a reset clicked. */
 	onGradeCommit?: () => void;
-	/** The popover opened or closed. Closing is the parent's cue to flush its write. */
+	/**
+	 * The sliders appeared or went away (selection changed, panel closed). Going away is
+	 * the parent's cue to flush its write.
+	 */
 	onGradeOpenChange?: (open: boolean) => void;
+	/** The pointer is over one grade slider, or none. */
+	onGradeHover?: (key: GradeKey | null) => void;
 	/** Where a grade write lands with the scrubber where it is, in words. */
 	gradeNote?: string;
-	/** Extra popover controls, beside Reset. */
-	gradeFooter?: React.ReactNode;
+	/** The Match bg button, at the top beside Reset. */
+	matchBg?: React.ReactNode;
+}
+
+/** The slider row for one key, found by its data attribute. */
+function gradeRow(panel: HTMLElement, key: GradeKey): HTMLElement | null {
+	return (
+		Array.from(
+			panel.querySelectorAll<HTMLElement>('.scene-grade-sliders-row[data-grade-key]')
+		).find(row => row.dataset.gradeKey === key) ?? null
+	);
 }
 
 /** No pose chosen: the renderer falls back to `idle`, or to the manifest's first pose. */
@@ -161,10 +184,11 @@ export const StageSelectionControls: React.FC<
 		onOpenLink,
 		onPreviewPose,
 		onStepZ,
-		gradeFooter,
 		gradeNote,
+		matchBg,
 		onGrade,
 		onGradeCommit,
+		onGradeHover,
 		onGradeOpenChange
 	} = props;
 	const {t} = useTranslation();
@@ -182,41 +206,75 @@ export const StageSelectionControls: React.FC<
 	// Single selection only: two sprites can lead two different places, and a button that
 	// silently picked one of them would be worse than no button.
 	const link = single?.link?.to;
-	const [gradeOpen, setGradeOpen] = React.useState(false);
-	const [gradeAnchor, setGradeAnchor] = React.useState<HTMLButtonElement | null>(
-		null
-	);
-	const gradeId = single?.id;
+	const gradeId = editable && onGrade ? single?.id : undefined;
 	const onGradeOpenChangeRef = React.useRef(onGradeOpenChange);
+	const onGradeCommitRef = React.useRef(onGradeCommit);
 
 	onGradeOpenChangeRef.current = onGradeOpenChange;
+	onGradeCommitRef.current = onGradeCommit;
 
-	const changeGradeOpen = React.useCallback((open: boolean) => {
-		setGradeOpen(open);
-		onGradeOpenChangeRef.current?.(open);
-	}, []);
+	const [panelEl, setPanelEl] = React.useState<HTMLDivElement | null>(null);
+	// Remembered WITH the sprite it was hovered for, so a selection change drops it without
+	// an effect: a new sprite reads as nothing hovered until the pointer moves again. The
+	// sliders only fire leave when the pointer goes, not when the row unmounts under it.
+	const [gradeHover, setGradeHover] = React.useState<{
+		id: string;
+		key: GradeKey;
+	} | null>(null);
+	const hoverKey =
+		gradeHover && single && gradeHover.id === single.id ? gradeHover.key : null;
+	const hoverGrade = (key: GradeKey | null) => {
+		setGradeHover(key && single ? {id: single.id, key} : null);
+		onGradeHover?.(key);
+	};
 
-	// One sprite's popover: selecting something else, or two things, closes it.
+	// One sprite's sliders: they open with it and close when the selection moves on, which
+	// is the parent's cue to write whatever is left.
 	React.useEffect(() => {
-		changeGradeOpen(false);
-	}, [changeGradeOpen, gradeId]);
+		if (!gradeId) {
+			return;
+		}
 
-	// Nothing to offer, nothing to draw. The row floats OVER the stage rather than sitting
-	// above it, so it can come and go without moving the scene — which is what the empty
-	// placeholder used to be for.
+		onGradeOpenChangeRef.current?.(true);
+
+		return () => onGradeOpenChangeRef.current?.(false);
+	}, [gradeId]);
+
+	// Nothing to offer, nothing to draw.
 	if (entities.length === 0 || !editable) {
 		return null;
 	}
 
+	const names = entities.map(entity => entity.id).join(', ');
+
 	return (
-		<div className="scene-preview-selection" data-testid="scene-preview-selection">
+		<div
+			className="scene-preview-selection"
+			data-testid="scene-preview-selection"
+			ref={setPanelEl}
+		>
+			{single && onGrade && (
+				<div className="scene-preview-selection-grade-fixes">
+					{matchBg}
+					<IconButton
+						disabled={!normalizeGrade(single.grade)}
+						icon={<IconArrowBackUp />}
+						label={t('dialogs.passageEdit.scenePreview.grade.resetAll')}
+						onClick={() => {
+							onGrade(undefined);
+							// After the paint has landed, like a slider's release.
+							window.setTimeout(() => onGradeCommitRef.current?.(), 0);
+						}}
+					/>
+				</div>
+			)}
+			<div className="scene-preview-selection-name" title={names}>
+				{names}
+			</div>
 			{note && (
 				<span
 					className="scene-preview-selection-note"
 					data-testid="scene-preview-selection-note"
-					// Ellipsised on a narrow stage, and the half that gets cut is the half
-					// that says what to do about it.
-					title={note}
 				>
 					{note}
 				</span>
@@ -231,64 +289,73 @@ export const StageSelectionControls: React.FC<
 					})}
 				/>
 			)}
-			<IconButton
-			commandId="scene.flip"
-				icon={<IconFlipHorizontal />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.flip')}
-				onClick={onFlip}
-				selectable
-				selected={entities.every(entity => entity.flip)}
-			/>
-			{onResetStretch &&
-				entities.some(
-					entity =>
-						!!entity.stretch &&
-						(entity.stretch.x !== 1 || entity.stretch.y !== 1)
-				) && (
+			<div className="scene-preview-selection-buttons">
+				<IconButton
+					commandId="scene.flip"
+					icon={<IconFlipHorizontal />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.flip')}
+					onClick={onFlip}
+					selectable
+					selected={entities.every(entity => entity.flip)}
+				/>
+				{onResetStretch &&
+					entities.some(
+						entity =>
+							!!entity.stretch &&
+							(entity.stretch.x !== 1 || entity.stretch.y !== 1)
+					) && (
+						<IconButton
+							icon={<IconAspectRatio />}
+							iconOnly
+							label={t('dialogs.passageEdit.scenePreview.resetAspect')}
+							onClick={onResetStretch}
+						/>
+					)}
+				{onToggleLock && (
 					<IconButton
-						icon={<IconAspectRatio />}
+						icon={
+							entities.every(entity => entity.locked) ? (
+								<IconLock />
+							) : (
+								<IconLockOpen />
+							)
+						}
 						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.resetAspect')}
-						onClick={onResetStretch}
+						label={
+							entities.every(entity => entity.locked)
+								? t('dialogs.passageEdit.scenePreview.unlockEntity')
+								: t('dialogs.passageEdit.scenePreview.lockEntity')
+						}
+						onClick={onToggleLock}
+						selectable
+						selected={entities.every(entity => entity.locked)}
 					/>
 				)}
-			{onToggleLock && (
+				{/* Depth is one number now, so these are the buttons the layer select used
+				    to be. They step `z:`, exactly as `[` / `]` and mod+down / mod+up do. */}
 				<IconButton
-					icon={
-						entities.every(entity => entity.locked) ? (
-							<IconLock />
-						) : (
-							<IconLockOpen />
-						)
-					}
+					commandId="scene.zBack"
+					icon={<IconArrowDown />}
 					iconOnly
-					label={
-						entities.every(entity => entity.locked)
-							? t('dialogs.passageEdit.scenePreview.unlockEntity')
-							: t('dialogs.passageEdit.scenePreview.lockEntity')
-					}
-					onClick={onToggleLock}
-					selectable
-					selected={entities.every(entity => entity.locked)}
+					label={t('dialogs.passageEdit.scenePreview.zBack')}
+					onClick={() => onStepZ(-1)}
 				/>
-			)}
-			{/* Depth is one number now, so these are the buttons the layer select used to
-			    be. They step `z:`, exactly as `[` / `]` and mod+down / mod+up do. */}
-			<IconButton
-			commandId="scene.zBack"
-				icon={<IconArrowDown />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.zBack')}
-				onClick={() => onStepZ(-1)}
-			/>
-			<IconButton
-			commandId="scene.zFront"
-				icon={<IconArrowUp />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.zFront')}
-				onClick={() => onStepZ(1)}
-			/>
+				<IconButton
+					commandId="scene.zFront"
+					icon={<IconArrowUp />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.zFront')}
+					onClick={() => onStepZ(1)}
+				/>
+				<IconButton
+					commandId="scene.delete"
+					icon={<IconTrash />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.remove')}
+					onClick={onDelete}
+				/>
+			</div>
 			{single && single.kind !== 'prop' && poses.length > 0 && (
 				<MenuButton
 					icon={<IconMoodSmile />}
@@ -325,46 +392,32 @@ export const StageSelectionControls: React.FC<
 							onPreviewPose(null);
 						}
 					}}
-					// Upward, because this row sits across the TOP of the stage and a menu
-					// dropped from it lands on the sprite it is previewing — on a docked
-					// stage, squarely on it. Above the row is the editor's own chrome,
-					// which is nothing the author is looking at while choosing a pose.
-					// Popper flips it back down when there is no room, which is full
-					// screen, where the stage is large enough not to care.
-					placement="top-end"
+					// Down and to the stage's side: the sidebar is at the right edge, and a
+					// menu that opens leftward covers the sidebar, not the sprite.
+					placement="bottom-end"
 					tooltipLabel={t('dialogs.passageEdit.scenePreview.poseHint')}
 				/>
 			)}
 			{single && onGrade && (
-				<IconButton
-					icon={<IconAdjustments />}
-					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.grade.button')}
-					onClick={() => changeGradeOpen(!gradeOpen)}
-					ref={setGradeAnchor}
-					selectable
-					selected={gradeOpen || !!single.grade}
-					tooltipLabel={t('dialogs.passageEdit.scenePreview.grade.hint')}
-				/>
-			)}
-			{single && onGrade && gradeOpen && (
-				<GradePopover
-					anchor={gradeAnchor}
-					footer={gradeFooter}
+				<GradeSliders
 					grade={single.grade}
 					note={gradeNote}
 					onChange={onGrade}
-					onClose={() => changeGradeOpen(false)}
 					onCommit={() => onGradeCommit?.()}
+					onHoverKey={hoverGrade}
 				/>
 			)}
-			<IconButton
-			commandId="scene.delete"
-				icon={<IconTrash />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.remove')}
-				onClick={onDelete}
-			/>
+			{single && onGrade && hoverKey && panelEl && (
+				<GradeExtremesOverlay
+					anchor={gradeRow(panelEl, hoverKey)}
+					// The stage this sidebar belongs to, not the first one in the document:
+					// the dialog and the passage editor can both have a preview open.
+					art={sprite(panelEl.closest('.scene-preview') ?? document, single.id)}
+					flip={single.flip}
+					grade={single.grade}
+					gradeKey={hoverKey}
+				/>
+			)}
 		</div>
 	);
 };

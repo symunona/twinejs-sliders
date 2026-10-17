@@ -233,6 +233,8 @@ export interface AssetEditorDialogProps extends DialogComponentProps {
 	 * saving as new reports the new one, so a character can repoint its frame at it.
 	 */
 	onSaved?: (assetId: AssetId) => void;
+	/** The tool to open on. Default Colour. The scene preview's walk tab asks for `walk`. */
+	tool?: ToolId;
 }
 
 function megabytes(bytes: number): string {
@@ -471,7 +473,7 @@ export const AssetEditorDialog: React.FC<AssetEditorDialogProps> = props => {
 	 * that is safe to open on, because it changes nothing until a slider moves, where
 	 * arriving in Sizing arms a crop drag on the very first click.
 	 */
-	const [tool, setTool] = React.useState<ToolId>('adjust');
+	const [tool, setTool] = React.useState<ToolId>(props.tool ?? 'adjust');
 	const {t} = useTranslation();
 
 	/** Passages whose scenes write this asset's name. Empty while it has no name yet. */

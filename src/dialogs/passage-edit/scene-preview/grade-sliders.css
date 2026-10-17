@@ -1,0 +1,27 @@
+@import '../../../styles/colors.css';
+@import '../../../styles/metrics.css';
+
+.scene-grade-sliders {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.scene-grade-sliders-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.scene-grade-sliders-title {
+	color: var(--dark-gray);
+	font-size: 80%;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.scene-grade-sliders-note {
+	color: var(--dark-gray);
+	font-size: 85%;
+}

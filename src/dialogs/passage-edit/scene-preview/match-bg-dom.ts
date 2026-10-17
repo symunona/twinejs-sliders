@@ -64,7 +64,8 @@ function backdrop(root: ParentNode): HTMLImageElement | undefined {
 	return all[all.length - 1];
 }
 
-function sprite(root: ParentNode, id: string): HTMLImageElement | undefined {
+/** The sprite's live, loaded picture on the stage. Also the grade extremes overlay's source. */
+export function sprite(root: ParentNode, id: string): HTMLImageElement | undefined {
 	// Compared, not interpolated into a selector: jsdom has no CSS.escape, and an id is the
 	// author's word.
 	const box = Array.from(

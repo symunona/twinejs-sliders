@@ -18,6 +18,7 @@ export {
 	addEntity,
 	entityHasParent,
 	insertBeatEntity,
+	insertBeatLine,
 	mergeEdits,
 	removeEntities,
 	removeEntity,

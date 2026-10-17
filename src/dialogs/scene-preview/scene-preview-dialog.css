@@ -25,17 +25,14 @@
 	display: none;
 }
 
-/* Walk-here's walker picker and its note live in the preview bar. The note truncates:
-   the bar is one line, and the full text is in the title. */
+/* Walk-here's walker picker and its note live in the sidebar's walk tab. The note wraps:
+   the tab is narrow, and it is the only place that says why a click will not walk. */
 .scene-preview-walker {
-	max-width: 10em;
+	max-width: 100%;
 }
 
 .scene-preview-walk-note {
 	color: var(--gray);
+	flex-basis: 100%;
 	font-size: 85%;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }

@@ -56,11 +56,41 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 | Pose dropdown on selection | `pose:` |
 | Pan / scroll-zoom the stage | `camera:` |
 
+## Layout
+
+```
+┌ Scene Editor ─────────────────────── </> ⤢ ⛶ ⌄ ✕ ┐   </> = open passage source
+│ ‹ 1/3 › ▶ ●───●──────●  + 〰                     │   beat line, + add beat, 〰 labels
+│ ┌ stage ─────────────── [− 100% + 🔒] ☺ ┐┌ ▣ ⚙ ≡ 💬 👤 🚶 🔗 ⚠ ┐│
+│ │                                        ││ tab body             ││
+│ └────────────────────────────────────────┘└──────────────────────┘│
+└───────────────────────────────────────────────────────────────────┘
+```
+
+| Part | Notes |
+|---|---|
+| Beat line | prev · count · next · play · strip · `+` add beat · labels toggle (default ON). Full screen: exit button at end |
+| `+` add beat | menu: Narrator (`box`), characters on stage, then props. Writes `- who: ""` after the beat on screen, steps to it, beat tab, text focused |
+| Stage top right | zoom, stage lock, error badge |
+| `</>` | dialog header, beside full screen. Opens passage editor on the same Doc |
+| Sidebar | collapsible stripe, right. Collapsed = icon column. Open + tab remembered (`sliders.preview.sidebar.*`). Click on open tab = collapse. Shown in full screen too |
+
+Sidebar tabs, top to bottom of the icon row:
+
+| Tab | Holds |
+|---|---|
+| ⚙ scene | grid, camera tool (old bg lock), sound · then scene keys: `bg` `transition` `ease` `autoAdvance` `fx` `music` `bubble` `locked` |
+| ≡ layers | layers panel |
+| 💬 beat | beat panel (below). Opened by press on bubble, add beat |
+| 👤 / ▣ selection | only while something is selected; follows selection, back to previous tab on deselect. Match bg + reset grade · name, note · flip, stretch, lock, z, delete · pose · grade sliders (hover a slider = min/max preview) |
+| 🚶 walk | walk-here toggle, walker, note · "Edit walk area" = bg asset in asset editor, walk tool |
+| 🔗 links | scene `links:` editable list |
+| ⚠ problems | only with errors. Error badge toggles it |
+
 ## Beat panel
 
-Right side, layers panel's slot (replaces it while open). Opens on: press on the bubble, or
-bar button. Closes on: its X, bar button. Not on sprite select — caret in a beat line selects
-the speaker.
+Sidebar beat tab. Opens on: press on the bubble, add beat, its tab. Closes on: its X (collapses
+sidebar). Not on sprite select — caret in a beat line selects the speaker.
 
 | Part | Writes |
 |---|---|

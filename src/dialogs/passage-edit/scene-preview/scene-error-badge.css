@@ -23,11 +23,6 @@
 	right: calc(var(--layers-panel-width) + 6px);
 }
 
-/* The selection row spans the same top edge: keep its controls clear of the badge. */
-.scene-preview .scene-preview-selection {
-	padding-right: 42px;
-}
-
 .scene-error-badge:hover,
 .scene-error-badge.open {
 	background: rgba(16, 16, 20, 0.85);

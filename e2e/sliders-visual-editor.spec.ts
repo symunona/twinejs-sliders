@@ -240,13 +240,12 @@ test.describe('visual scene editor', () => {
 	});
 
 	/**
-	 * The selection toolbar is drawn OVER the stage, not above it: it is absolutely
-	 * positioned inside the stage frame, and there is nothing in the layout at all until
-	 * something is selected. In full screen the stage takes whatever height is left, so a
-	 * row that took part in the layout would resize the stage — and the whole scene would
-	 * jump — on the very click that selected a sprite.
+	 * The selection's controls live in the sidebar's selection tab. The sidebar keeps one
+	 * width whatever tab is up, so selecting a sprite — which switches to that tab — never
+	 * resizes the stage. In full screen the stage takes whatever is left, and a resize
+	 * there would make the whole scene jump on the very click that selected a sprite.
 	 */
-	test('the full screen selection row overlays the stage instead of resizing it', async ({
+	test('selecting in full screen opens the selection tab without resizing the stage', async ({
 		page
 	}) => {
 		test.setTimeout(180000);
@@ -262,7 +261,7 @@ test.describe('visual scene editor', () => {
 		const before = (await stage.boundingBox())!;
 		const row = page.getByTestId('scene-preview-selection');
 
-		// Nothing selected, nothing rendered — the placeholder row is gone.
+		// Nothing selected, nothing rendered.
 		await expect(row).toHaveCount(0);
 
 		const mira = page.locator('.sliders-entity[data-entity-id="mira"]');
@@ -272,23 +271,16 @@ test.describe('visual scene editor', () => {
 		await page.waitForTimeout(400);
 
 		await expect(row).toBeVisible();
+		await expect(
+			page.getByTestId('scene-sidebar').locator('[data-tab="selection"]')
+		).toBeVisible();
 
-		// Taken out of flow, so appearing costs the stage no height...
-		expect(
-			await row.evaluate(node => getComputedStyle(node).position)
-		).toEqual('absolute');
-
-		// ...and it lands on top of the stage rather than beside it.
-		const rowBox = (await row.boundingBox())!;
 		const after = (await stage.boundingBox())!;
 
-		expect(rowBox.y).toBeGreaterThanOrEqual(after.y - 1);
-		expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(
-			after.y + after.height + 1
-		);
-
 		expect(after.height).toEqual(before.height);
+		expect(after.width).toEqual(before.width);
 		expect(after.y).toEqual(before.y);
+		expect(after.x).toEqual(before.x);
 	});
 
 	/**

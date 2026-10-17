@@ -1,4 +1,4 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, render} from '@testing-library/react';
 import {renderHook} from '@testing-library/react-hooks';
 import * as React from 'react';
 import type {AssetResolver} from '@sliders/scene-types';
@@ -90,7 +90,7 @@ describe('useGradeEdit', () => {
 	});
 });
 
-describe('the Grade button', () => {
+describe('the grade sliders', () => {
 	const assets = {
 		character: async () => undefined,
 		meta: async () => undefined,
@@ -123,24 +123,15 @@ describe('the Grade button', () => {
 		return handlers;
 	}
 
-	it('is there for one sprite, lit when it is graded, and opens the popover', () => {
+	it('shows the sliders for one sprite, and says so to the grade edit', () => {
 		const {onGradeOpenChange} = renderRow(['hero']);
-		const button = screen.getByRole('button', {
-			name: 'dialogs.passageEdit.scenePreview.grade.button'
-		});
 
-		expect(button.getAttribute('aria-pressed')).toBe('true');
-		fireEvent.click(button);
 		expect(onGradeOpenChange).toHaveBeenLastCalledWith(true);
-		expect(document.querySelector('.scene-grade-popover')).not.toBeNull();
+		expect(document.querySelector('.scene-grade-sliders')).not.toBeNull();
 	});
 
-	it('is not there for two', () => {
+	it('shows no sliders for two', () => {
 		renderRow(['hero', 'mira']);
-		expect(
-			screen.queryByRole('button', {
-				name: 'dialogs.passageEdit.scenePreview.grade.button'
-			})
-		).toBeNull();
+		expect(document.querySelector('.scene-grade-sliders')).toBeNull();
 	});
 });
