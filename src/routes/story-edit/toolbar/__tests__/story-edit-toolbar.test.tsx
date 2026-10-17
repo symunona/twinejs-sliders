@@ -54,6 +54,23 @@ describe('<StoryEditToolbar>', () => {
 		expect(screen.getByText('common.appName')).toBeInTheDocument();
 	});
 
+	it('displays an Assets link between the app and Sync tabs', async () => {
+		await renderComponent();
+
+		// Links sit beside the tablist in the DOM; CSS `order` places them among the tabs.
+		const items = Array.from(
+			document.querySelectorAll<HTMLElement>('.route-toolbar-tab')
+		)
+			.sort((a, b) => Number(a.style.order) - Number(b.style.order))
+			.map(item => item.textContent);
+
+		expect(items.slice(-3)).toEqual([
+			'common.appName',
+			'routes.storyEdit.toolbar.slidersAssets',
+			'common.sync'
+		]);
+	});
+
 	it('displays undo/redo buttons', async () => {
 		await renderComponent();
 		expect(screen.getByText('common.undo')).toBeInTheDocument();

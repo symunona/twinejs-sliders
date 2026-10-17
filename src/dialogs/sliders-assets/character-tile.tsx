@@ -21,6 +21,8 @@ export interface CharacterTileProps {
 	onDelete: () => void;
 	/** Image files dropped onto this tile, to become new poses of this character. */
 	onDropFiles: (files: File[]) => void;
+	/** The tile started a drag that may land outside the Library -- see `attach-on-drop`. */
+	onDragOut?: () => void;
 	onEdit: () => void;
 	/** Passage names whose scenes cast this character. */
 	usedIn?: string[];
@@ -42,6 +44,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		focused,
 		onChangeTags,
 		onDelete,
+		onDragOut,
 		onDropFiles,
 		onEdit,
 		unreferenced,
@@ -120,13 +123,14 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 			onDrop={handleDrop}
 			// A cast entry is addressed by the character's ID, which is what `ref` resolves
 			// through — unlike a prop, whose ref is an asset name.
-			onDragStart={event =>
+			onDragStart={event => {
 				setAssetDragData(
 					event.dataTransfer,
 					{label: character.name, ref: character.id, target: 'cast'},
 					characterFragment(character)
-				)
-			}
+				);
+				onDragOut?.();
+			}}
 			ref={tileRef}
 			title={t('dialogs.slidersAssets.dragToStage')}
 		>

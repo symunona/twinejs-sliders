@@ -87,8 +87,12 @@
 	display: block;
 }
 
-.route-toolbar .route-toolbar-tablist {
+.route-toolbar .route-toolbar-tabrow {
 	display: inline-flex;
+}
+
+.route-toolbar .route-toolbar-tablist {
+	display: contents;
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -103,6 +107,12 @@
 	height: var(--control-height);
 	padding: var(--grid-size);
 	transition: background 0.3s;
+}
+
+.route-toolbar .route-toolbar-tab-link {
+	background: none;
+	border: none;
+	border-radius: 0;
 }
 
 .route-toolbar .route-toolbar-tab:focus {

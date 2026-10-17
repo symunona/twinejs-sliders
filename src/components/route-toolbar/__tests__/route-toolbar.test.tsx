@@ -62,6 +62,37 @@ describe('<RouteToolbar>', () => {
 		expect(screen.getByTestId('mock-tab-content-2')).toBeInTheDocument();
 	});
 
+	it('renders a link entry in the tab row that runs on one click and has no panel', () => {
+		const onClick = jest.fn();
+
+		renderComponent({
+			tabs: {
+				'mock-tab-1': <div data-testid="mock-tab-content-1" />,
+				'mock-link': {commandId: 'sliders.assets', onClick},
+				'mock-tab-2': <div data-testid="mock-tab-content-2" />
+			}
+		});
+
+		expect(screen.getAllByRole('tab').length).toBe(2);
+		expect(screen.getAllByRole('tabpanel', {hidden: true}).length).toBe(2);
+
+		const link = screen.getByRole('button', {name: 'mock-link'});
+		// Links sit beside the tablist in the DOM; CSS `order` places them among the tabs.
+		const items = Array.from(
+			document.querySelectorAll<HTMLElement>('.route-toolbar-tab')
+		)
+			.sort((a, b) => Number(a.style.order) - Number(b.style.order))
+			.map(item => item.textContent);
+
+		expect(items).toEqual(['mock-tab-1', 'mock-link', 'mock-tab-2']);
+		fireEvent.click(link);
+		expect(onClick).toHaveBeenCalledTimes(1);
+		// Did not change the selected tab.
+		expect(panelFor('mock-tab-content-1')).toHaveClass(
+			'react-tabs__tab-panel--selected'
+		);
+	});
+
 	it('displays a help button that opens the URL given in helpUrl prop in a new tab', () => {
 		const openSpy = jest
 			.spyOn(window, 'open')

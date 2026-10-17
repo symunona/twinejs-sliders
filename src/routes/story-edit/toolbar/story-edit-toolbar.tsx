@@ -12,6 +12,7 @@ import {Point} from '../../../util/geometry';
 import {BuildInfo} from './build-info';
 import {PassageActions} from './passage/passage-actions';
 import {StoryActions} from './story/story-actions';
+import {useOpenSlidersAssets} from './story/sliders-assets-button';
 import {StoryPresence} from './story-presence';
 import {VoiceModeButton} from './voice-mode-button';
 import {UndoRedoButtons} from './undo-redo-buttons';
@@ -28,6 +29,7 @@ export interface StoryEditToolbarProps {
 export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 	const {getCenter, onOpenFuzzyFinder, setCenter, story} = props;
 	const {t} = useTranslation();
+	const openAssets = useOpenSlidersAssets();
 
 	return (
 		<RouteToolbar
@@ -56,6 +58,11 @@ export const StoryEditToolbar: React.FC<StoryEditToolbarProps> = props => {
 				[t('common.story')]: <StoryActions story={story} />,
 				[t('common.build')]: <BuildActions story={story} />,
 				[t('common.appName')]: <AppActions />,
+				// The hotkey is registered by the Story tab's SlidersAssetsButton.
+				[t('routes.storyEdit.toolbar.slidersAssets')]: {
+					commandId: 'sliders.assets',
+					onClick: openAssets
+				},
 				[t('common.sync')]: <SyncActions story={story} />
 			}}
 		/>

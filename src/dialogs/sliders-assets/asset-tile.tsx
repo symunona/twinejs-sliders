@@ -45,6 +45,8 @@ export interface AssetTileProps {
 	meta: AssetMeta;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
+	/** The tile started a drag that may land outside the Library -- see `attach-on-drop`. */
+	onDragOut?: () => void;
 	onEdit: () => void;
 	/** The scenes that write the old name always follow -- see `rename-plan.ts`. */
 	onRename: (name: string) => void;
@@ -81,6 +83,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		nameTaken,
 		onChangeTags,
 		onDelete,
+		onDragOut,
 		onEdit,
 		onRename,
 		unreferenced,
@@ -156,6 +159,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			onDragStart={event => {
 				// Any tile can land on a collection in the Library rail (move, Alt = copy).
 				event.dataTransfer.setData(LIBRARY_ASSET_MIME, meta.id);
+				onDragOut?.();
 
 				if (dragPayload) {
 					setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta));

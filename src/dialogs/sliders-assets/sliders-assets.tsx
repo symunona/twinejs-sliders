@@ -59,6 +59,7 @@ import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {SlidersCharactersDialog} from '../sliders-characters';
 import {AssetTile} from './asset-tile';
+import {useAttachOnDrop} from './attach-on-drop';
 import {
 	useAssetLibrary,
 	useAssetScope,
@@ -166,6 +167,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const usage = useAssetUsage();
 	const {t} = useTranslation();
 	const story = stories.find(candidate => candidate.id === storyId);
+	const attachOnDrop = useAttachOnDrop(engine, storyId, story?.name);
 	const [focus, setFocus] = React.useState<AssetFocusRequest>();
 	const [newCharacterName, setNewCharacterName] = React.useState('');
 	const [error, setError] = React.useState<string>();
@@ -1059,6 +1061,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						nameTaken={name => nameTaken(record, name)}
 						onChangeTags={tags => void handleChangeTags(meta.id, tags)}
 						onDelete={() => void handleDeleteAsset(record)}
+						onDragOut={() => attachOnDrop(record.collection)}
 						onEdit={() => openAssetEditor(meta.id)}
 						onRename={name => void handleRenameAsset(meta.id, name)}
 						unreferenced={
@@ -1089,6 +1092,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						onDelete={() =>
 							inView ? void handleDeleteCharacter(character.id) : outside()
 						}
+						onDragOut={() => attachOnDrop(record.collection)}
 						onDropFiles={files =>
 							inView ? void handleDropOnCharacter(character, files) : outside()
 						}
