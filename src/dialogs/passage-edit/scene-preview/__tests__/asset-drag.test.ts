@@ -60,6 +60,16 @@ describe('asset drag payloads', () => {
 		expect(readAssetDragData(transfer)).toBeUndefined();
 	});
 
+	it('accepts a sound headed for music:', () => {
+		const transfer = fakeTransfer();
+
+		transfer.setData(
+			ASSET_DRAG_MIME,
+			JSON.stringify({ref: 'rain-heavy', target: 'music'})
+		);
+		expect(readAssetDragData(transfer)?.target).toBe('music');
+	});
+
 	it('rejects a payload with an unknown target', () => {
 		const transfer = fakeTransfer();
 

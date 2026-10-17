@@ -145,6 +145,13 @@ describe('assetDropWrites()', () => {
 		).toEqual([{formatted: 'tavern/night', sceneKey: 'bg'}]);
 	});
 
+	// Regression: a sound tile dropped on the scene used to end up as a beat `- sfx:`.
+	it('writes a sound as the scene music:, not a beat sfx', () => {
+		expect(
+			assetDropWrites({ref: 'rain-heavy', target: 'music'}, at, [])
+		).toEqual([{formatted: 'rain-heavy', sceneKey: 'music'}]);
+	});
+
 	it('adds a cast entry keyed by the character id', () => {
 		expect(assetDropWrites({ref: 'mira', target: 'cast'}, at, [])).toEqual([
 			{

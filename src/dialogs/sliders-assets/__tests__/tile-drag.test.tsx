@@ -109,6 +109,36 @@ describe('dragging a tile onto the stage', () => {
 		expect(readAssetDragData(drag(tile('.sliders-tile')))?.target).toBe('bg');
 	});
 
+	// Regression: dropping a sound on the scene wrote a beat `- sfx:` instead of the
+	// scene's music.
+	it('sends a sound as the scene music:, on the stage and in the text', () => {
+		render(
+			<FakeStateProvider>
+				<AssetTile
+					allTags={[]}
+					meta={meta({
+						kind: 'sound',
+						mime: 'audio/ogg',
+						name: 'rain-heavy'
+					})}
+					onChangeTags={jest.fn()}
+					onDelete={jest.fn()}
+					onEdit={jest.fn()}
+					onRename={jest.fn()}
+				/>
+			</FakeStateProvider>
+		);
+
+		const transfer = drag(tile('.sliders-tile'));
+
+		expect(readAssetDragData(transfer)).toEqual({
+			label: 'rain-heavy',
+			ref: 'rain-heavy',
+			target: 'music'
+		});
+		expect(transfer.getData('text/plain')).toBe('music: rain-heavy');
+	});
+
 	it('leaves an fx asset undraggable — there is nowhere on the stage for it', () => {
 		render(
 			<FakeStateProvider>

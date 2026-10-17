@@ -233,8 +233,8 @@ export function uniqueEntityId(base: string, taken: EntityId[]): EntityId {
 /**
  * What a drop from the asset panel writes.
  *
- * A background replaces `bg:`; anything else becomes a new entry positioned where it
- * landed. `ref` is written verbatim — it is already the NAME (or character id) the payload
+ * A background replaces `bg:`, a sound replaces `music:` (same rule as a sound FILE drop,
+ * `musicDropWrites`); anything else becomes a new entry positioned where it landed. `ref` is written verbatim — it is already the NAME (or character id) the payload
  * promised — and `addEntity` drops it again when it happens to equal the derived id, so the
  * common `mira: {at: 0}` case stays clean while `candle: {ref: props/candle, at: 0}` keeps
  * the pointer it needs.
@@ -246,6 +246,10 @@ export function assetDropWrites(
 ): SceneWrite[] {
 	if (payload.target === 'bg') {
 		return [{formatted: formatValue('bg', payload.ref), sceneKey: 'bg'}];
+	}
+
+	if (payload.target === 'music') {
+		return musicDropWrites(payload.ref);
 	}
 
 	const kind = payload.target === 'cast' ? 'cast' : 'prop';

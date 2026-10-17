@@ -94,17 +94,23 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 	const [renameOpen, setRenameOpen] = React.useState(false);
 	const [draftName, setDraftName] = React.useState(meta.name);
 
-	// Backgrounds replace `bg:`, objects become an entry under `props:`. Only the NAME
-	// travels — scene YAML addresses assets by name, and `a_8f21` is unwritable. An `fx`
-	// asset is not draggable: `fx:` is a list of effects on the whole stage, not something
-	// with a position, so there is nowhere on the stage for it to land.
-	const dragPayload: AssetDragPayload | undefined =
-		meta.kind === 'bg' || meta.kind === 'object'
-			? {label: meta.name, ref: meta.name, target: meta.kind === 'bg' ? 'bg' : 'prop'}
-			: undefined;
 	// A sound has no pixels, so the whole art half of a tile means something else for it:
 	// audition instead of thumbnail, length instead of dimensions, and no image editor.
 	const isSound = meta.kind === 'sound';
+	// Backgrounds replace `bg:`, objects become an entry under `props:`, sounds replace the
+	// scene's `music:` -- dropped on a SCENE, a sound is "this scene sounds like this", the
+	// same rule as a sound file dropped from the desktop. Only the NAME travels -- scene
+	// YAML addresses assets by name, and `a_8f21` is unwritable. An `fx` asset is not
+	// draggable: `fx:` is a list of effects on the whole stage, not something with a
+	// position, so there is nowhere on the stage for it to land.
+	const dragPayload: AssetDragPayload | undefined =
+		meta.kind === 'bg' || meta.kind === 'object' || isSound
+			? {
+					label: meta.name,
+					ref: meta.name,
+					target: isSound ? 'music' : meta.kind === 'bg' ? 'bg' : 'prop'
+			  }
+			: undefined;
 
 	React.useEffect(() => {
 		if (focused) {
@@ -155,32 +161,28 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		<div
 			className={`sliders-tile${focused ? ' focused' : ''}`}
 			data-asset-id={meta.id}
-			draggable={!!dragPayload || isSound || !!menuItems}
+			draggable={!!dragPayload || !!menuItems}
 			onDragStart={event => {
 				// Any tile can land on a collection in the Library rail (move, Alt = copy).
 				event.dataTransfer.setData(LIBRARY_ASSET_MIME, meta.id);
 				onDragOut?.();
 
 				if (dragPayload) {
-					setAssetDragData(event.dataTransfer, dragPayload, assetFragment(meta));
-					return;
-				}
-
-				if (isSound) {
-					// Text only, and deliberately no ASSET_DRAG_MIME: a sound has nowhere to
-					// land ON the stage, so advertising it to the stage's drop target would
-					// mean inventing a position for a thing that has none. Dropped into the
-					// passage text it pastes its beat, which is the whole gesture.
-					event.dataTransfer.effectAllowed = 'copy';
-					event.dataTransfer.setData('text/plain', assetFragment(meta));
+					// A sound pastes its `music:` line into the passage text, matching what
+					// it writes on the stage. The one-shot `- sfx:` beat is the copy button.
+					setAssetDragData(
+						event.dataTransfer,
+						dragPayload,
+						isSound ? musicFragment(meta) : assetFragment(meta)
+					);
 				}
 			}}
 			ref={tileRef}
 			title={
-				dragPayload
+				isSound
+					? t('dialogs.slidersAssets.dragSoundToScene')
+					: dragPayload
 					? t('dialogs.slidersAssets.dragToStage')
-					: isSound
-					? t('dialogs.slidersAssets.dragSoundToText')
 					: undefined
 			}
 		>
@@ -249,15 +251,14 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			</div>
 			<ButtonBar>
 				{isSound ? (
-					// The other half of the pair the tile hands out. The drag (and the tile's
-					// own fragment) writes the one-shot beat, because that is the commoner
-					// half; this writes the scene's looping bed, which is the half an author
-					// would otherwise have to remember the spelling of.
+					// The other half of the pair the tile hands out. The drag writes the
+					// scene's looping bed; this copies the one-shot beat, which belongs on a
+					// beat the author picks, so it is pasted where they put the cursor.
 					<IconButton
 						icon={<IconMusic />}
 						iconOnly
-						label={t('dialogs.slidersAssets.copyMusicLine')}
-						onClick={() => void copyText(musicFragment(meta))}
+						label={t('dialogs.slidersAssets.copySfxLine')}
+						onClick={() => void copyText(assetFragment(meta))}
 					/>
 				) : (
 					<IconButton

@@ -17,8 +17,11 @@
 export const ASSET_DRAG_MIME = 'application/x-sliders-asset';
 
 export interface AssetDragPayload {
-	/** What the drop writes: a `cast:` entry, a `props:` entry, or `bg:`. */
-	target: 'cast' | 'prop' | 'bg';
+	/**
+	 * What the drop writes: a `cast:` entry, a `props:` entry, `bg:`, or the scene's
+	 * `music:` (a sound: dropped on the scene, it is the scene's bed, not a one-shot).
+	 */
+	target: 'cast' | 'prop' | 'bg' | 'music';
 	/** Exactly the token that goes into the text — a character id, or an asset NAME. */
 	ref: string;
 	/** For the drag image and the drop hint only. Never written. */
@@ -127,7 +130,7 @@ export function readAssetDragData(
 		if (
 			typeof payload?.ref !== 'string' ||
 			payload.ref === '' ||
-			!['cast', 'prop', 'bg'].includes(payload?.target)
+			!['cast', 'prop', 'bg', 'music'].includes(payload?.target)
 		) {
 			return undefined;
 		}
