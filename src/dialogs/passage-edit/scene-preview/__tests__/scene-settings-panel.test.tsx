@@ -28,7 +28,11 @@ function scene(yaml: string): Scene {
 	return parsed.scene;
 }
 
-function renderPanel(yaml: string, editable = true) {
+function renderPanel(
+	yaml: string,
+	editable = true,
+	extra: Partial<React.ComponentProps<typeof SceneSettingsPanel>> = {}
+) {
 	const onWrite = jest.fn();
 
 	render(
@@ -41,15 +45,29 @@ function renderPanel(yaml: string, editable = true) {
 			editable={editable}
 			onWrite={onWrite}
 			scene={scene(yaml)}
+			{...extra}
 		/>
 	);
 
 	return {onWrite};
 }
 
+const camera = (yaml: string, extra = {}) =>
+	renderPanel(yaml, true, {pane: 'camera', ...extra});
+
 const row = (testId: string) => screen.getByTestId(testId);
 const select = (testId: string) =>
 	within(row(testId)).getByRole('combobox') as HTMLSelectElement;
+/** A `PreviewSelect`'s button: shows the value, opens the list. */
+const picker = (testId: string) =>
+	row(testId).querySelector('.preview-select-button') as HTMLButtonElement;
+/** Opens a `PreviewSelect` and picks the option of that name. */
+function pick(testId: string, name: string | RegExp) {
+	fireEvent.click(picker(testId));
+	fireEvent.pointerDown(
+		within(screen.getByRole('listbox')).getByRole('option', {name})
+	);
+}
 const number = (testId: string) =>
 	within(row(testId)).getByRole('spinbutton') as HTMLInputElement;
 const reset = (testId: string) =>
@@ -133,7 +151,7 @@ describe('<SceneSettingsPanel>', () => {
 	it('shows the stated backdrop, highlighted, and its X removes it', () => {
 		const {onWrite} = renderPanel('bg: cellar');
 
-		expect(select('scene-settings-bg').value).toBe('cellar');
+		expect(picker('scene-settings-bg')).toHaveTextContent('cellar');
 		expect(row('scene-settings-bg').dataset.overridden).toBe('true');
 		fireEvent.click(reset('scene-settings-bg'));
 		expect(onWrite).toHaveBeenCalledWith([
@@ -144,7 +162,7 @@ describe('<SceneSettingsPanel>', () => {
 	it('changes the backdrop and keeps its motion', () => {
 		const {onWrite} = renderPanel('bg: {id: cellar, fx: earthquake}');
 
-		fireEvent.change(select('scene-settings-bg'), {target: {value: 'street'}});
+		pick('scene-settings-bg', 'street');
 		expect(onWrite).toHaveBeenCalledWith([
 			{formatted: '{id: street, fx: earthquake}', sceneKey: 'bg'}
 		]);
@@ -152,12 +170,11 @@ describe('<SceneSettingsPanel>', () => {
 
 	it('offers a stated backdrop the asset list lacks', () => {
 		renderPanel('bg: attic');
-		expect(select('scene-settings-bg').value).toBe('attic');
+		expect(picker('scene-settings-bg')).toHaveTextContent('attic');
 	});
 
 	it('disables motion without art', () => {
-		renderPanel('bg: ~');
-		expect(select('scene-settings-bg').value).toBe('~');
+		camera('bg: ~');
 		expect(select('scene-settings-bg-fx').disabled).toBe(true);
 	});
 
@@ -212,7 +229,7 @@ describe('<SceneSettingsPanel>', () => {
 	});
 
 	it('adds and removes an effect', () => {
-		const {onWrite} = renderPanel('fx: [rain@0.6]');
+		const {onWrite} = camera('fx: [rain@0.6]');
 
 		fireEvent.change(select('scene-settings-fx-add'), {
 			target: {value: 'dark'}
@@ -274,6 +291,98 @@ describe('<SceneSettingsPanel>', () => {
 		});
 		expect(onWrite).toHaveBeenCalledWith([
 			{formatted: '{as: yell, place: top}', sceneKey: 'bubble'}
+		]);
+	});
+
+	it('searches backdrops and shows their previews', () => {
+		renderPanel('bg: cellar', true, {
+			bgPreview: name => <i data-testid={`thumb-${name}`} />
+		});
+		// The closed button carries the current one's thumbnail.
+		expect(
+			within(row('scene-settings-bg')).getByTestId('thumb-cellar')
+		).toBeInTheDocument();
+		fireEvent.click(picker('scene-settings-bg'));
+		fireEvent.change(
+			screen.getByRole('textbox', {name: 'components.previewSelect.search'}),
+			{target: {value: 'str'}}
+		);
+
+		const listbox = screen.getByRole('listbox');
+
+		expect(within(listbox).getAllByRole('option')).toHaveLength(1);
+		expect(within(listbox).getByTestId('thumb-street')).toBeInTheDocument();
+	});
+
+	it('splits over panes: backdrop on scene, motion and effects on camera', () => {
+		renderPanel('bg: cellar');
+		expect(screen.getByTestId('scene-settings-bg')).toBeInTheDocument();
+		expect(screen.queryByTestId('scene-settings-bg-fx')).toBeNull();
+		expect(screen.queryByTestId('scene-settings-fx-group')).toBeNull();
+		expect(screen.queryByTestId('scene-settings-camera-group')).toBeNull();
+	});
+
+	it('shows the camera pane: coords, motion, effects, no backdrop', () => {
+		camera('bg: cellar', {camera: {at: {x: 0.25, y: -0.1}, zoom: 1.5}});
+		expect(screen.queryByTestId('scene-settings-bg')).toBeNull();
+		expect(screen.getByTestId('scene-settings-motion-group')).toBeInTheDocument();
+		expect(screen.getByTestId('scene-settings-fx-group')).toBeInTheDocument();
+		expect(number('scene-settings-camera-x').value).toBe('0.25');
+		expect(number('scene-settings-camera-y').value).toBe('-0.1');
+		expect(number('scene-settings-camera-zoom').value).toBe('1.5');
+	});
+
+	it('writes the whole camera from one coord, rest = removed', () => {
+		const {onWrite} = camera('camera: {zoom: 2}', {
+			camera: {at: {x: 0, y: 0}, zoom: 2}
+		});
+
+		expect(row('scene-settings-camera-zoom').dataset.overridden).toBe('true');
+		fireEvent.change(number('scene-settings-camera-x'), {
+			target: {value: '0.5'}
+		});
+		fireEvent.blur(number('scene-settings-camera-x'));
+		expect(onWrite).toHaveBeenLastCalledWith([
+			{formatted: '{at: [0.5, 0], zoom: 2}', sceneKey: 'camera'}
+		]);
+		fireEvent.click(reset('scene-settings-camera-zoom'));
+		expect(onWrite).toHaveBeenLastCalledWith([
+			{formatted: undefined, sceneKey: 'camera'}
+		]);
+	});
+
+	it('locks the camera coords when the scene locks the backdrop', () => {
+		camera('locked: [bg]', {cameraLockedReason: 'locked by scene'});
+		expect(number('scene-settings-camera-x').disabled).toBe(true);
+		expect(row('scene-settings-camera-x')).toHaveTextContent('locked by scene');
+	});
+
+	it('picks a template passage for from:, with a ? that explains', () => {
+		const {onWrite} = renderPanel('bg: cellar', true, {
+			templates: ['Tavern Night', 'Street']
+		});
+
+		expect(screen.getByTestId('scene-settings-from-help')).toHaveAttribute(
+			'title',
+			'dialogs.passageEdit.scenePreview.settings.fromHelp'
+		);
+		pick('scene-settings-from', 'Tavern Night');
+		expect(onWrite).toHaveBeenLastCalledWith([
+			{formatted: 'Tavern Night', sceneKey: 'from'}
+		]);
+	});
+
+	it('keeps a stated from: with a mark, and its X removes it', () => {
+		const {onWrite} = renderPanel('from: Tavern Night@tense', true, {
+			templates: ['Tavern Night']
+		});
+
+		expect(picker('scene-settings-from')).toHaveTextContent(
+			'Tavern Night@tense'
+		);
+		fireEvent.click(reset('scene-settings-from'));
+		expect(onWrite).toHaveBeenLastCalledWith([
+			{formatted: undefined, sceneKey: 'from'}
 		]);
 	});
 

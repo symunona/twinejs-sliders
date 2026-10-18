@@ -109,4 +109,26 @@ describe('GradeSliders', () => {
 		);
 		expect(onHoverKey).toHaveBeenLastCalledWith(null);
 	});
+
+	it('puts the whole-grade fixes on top of the group, over the sliders', () => {
+		render(
+			<GradeSliders
+				fixes={<button type="button">fix</button>}
+				grade={undefined}
+				onChange={jest.fn()}
+				onCommit={jest.fn()}
+			/>
+		);
+
+		const group = document.querySelector('.scene-grade-sliders') as HTMLElement;
+		const fixes = group.querySelector(
+			'[data-testid="scene-grade-sliders-fixes"]'
+		) as HTMLElement;
+		const firstRow = group.querySelector('.scene-grade-sliders-row')!;
+
+		expect(fixes).toHaveTextContent('fix');
+		expect(
+			fixes.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
 });

@@ -2134,6 +2134,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	// row sits outside that scroll, over the viewport, so it stays where the author can
 	// reach it however far the stage has been scrolled.
 	const passageNames = (passages ?? []).map(passage => passage.name);
+	// What `from:` may name: a passage with a scene, never this one (that is a cycle).
+	// By id, from the store: a bare preview has no story and offers no templates.
+	const templateNames = (story?.passages ?? [])
+		.filter(
+			passage => passage.id !== passageId && !!extractSceneBlock(passage.text)
+		)
+		.map(passage => passage.name)
+		.sort((a, b) => a.localeCompare(b));
 	const singleSelected =
 		selectedEntities.length === 1 ? selectedEntities[0] : undefined;
 
@@ -2150,24 +2158,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					onClick={toggleGrid}
 					selectable
 					selected={grid}
-					tooltipPosition="bottom"
-				/>
-				{/* The background lock's successor: a MODE the author turns on to frame
-				    the shot, off the rest of the time. */}
-				<IconButton
-					disabled={!!cameraLockedByScene}
-					icon={cameraLocked ? <IconCameraOff /> : <IconCamera />}
-					iconOnly
-					label={t(
-						cameraLockedByScene
-							? 'dialogs.passageEdit.scenePreview.lockedByScene'
-							: cameraTool
-							? 'dialogs.passageEdit.scenePreview.cameraToolOn'
-							: 'dialogs.passageEdit.scenePreview.cameraToolOff'
-					)}
-					onClick={toggleCameraTool}
-					selectable
-					selected={cameraTool && !cameraLocked}
 					tooltipPosition="bottom"
 				/>
 				{/* A click is also the user gesture the browser wants before it will
@@ -2191,6 +2181,46 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				assets={assets}
 				editable={editable}
 				onWrite={writes => commit(writes, EDIT_ORIGIN)}
+				scene={parse.result?.scene}
+				templates={templateNames}
+			/>
+		</div>
+	);
+
+	/** Camera tab: the tool, where the shot looks, and what moves in it. */
+	const cameraTab = (
+		<div className="scene-sidebar-section">
+			<div className="scene-sidebar-row">
+				{/* The background lock's successor: a MODE the author turns on to frame
+				    the shot, off the rest of the time. */}
+				<IconButton
+					disabled={!!cameraLockedByScene}
+					icon={cameraLocked ? <IconCameraOff /> : <IconCamera />}
+					label={t('dialogs.passageEdit.scenePreview.cameraTool')}
+					tooltipLabel={t(
+						cameraLockedByScene
+							? 'dialogs.passageEdit.scenePreview.lockedByScene'
+							: cameraTool
+							? 'dialogs.passageEdit.scenePreview.cameraToolOn'
+							: 'dialogs.passageEdit.scenePreview.cameraToolOff'
+					)}
+					onClick={toggleCameraTool}
+					selectable
+					selected={cameraTool && !cameraLocked}
+					tooltipPosition="bottom"
+				/>
+			</div>
+			<SceneSettingsTab
+				assets={assets}
+				camera={localStage.camera}
+				cameraLockedReason={
+					cameraLockedByScene
+						? t('dialogs.passageEdit.scenePreview.lockedByScene')
+						: undefined
+				}
+				editable={editable}
+				onWrite={writes => commit(writes, EDIT_ORIGIN)}
+				pane="camera"
 				scene={parse.result?.scene}
 			/>
 		</div>
@@ -2266,6 +2296,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			icon: <IconSettings />,
 			id: 'scene',
 			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.scene')
+		},
+		{
+			content: cameraTab,
+			icon: <IconCamera />,
+			id: 'camera',
+			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.camera')
 		},
 		{
 			content: (

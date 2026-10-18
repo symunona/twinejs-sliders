@@ -33,6 +33,13 @@
 	text-transform: uppercase;
 }
 
+/* A group's own icon, before its words. */
+.scene-preview-beat-props-heading > svg {
+	flex: none;
+	height: 14px;
+	width: 14px;
+}
+
 .beat-prop-help {
 	cursor: help;
 	display: inline-flex;

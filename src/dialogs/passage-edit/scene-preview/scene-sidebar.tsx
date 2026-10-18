@@ -25,6 +25,7 @@ import './scene-sidebar.css';
 
 export type SceneSidebarTabId =
 	| 'scene'
+	| 'camera'
 	| 'layers'
 	| 'beat'
 	| 'selection'
@@ -55,6 +56,7 @@ const TAB_KEY = 'sliders.preview.sidebar.tab';
 /** Tabs that are a place to come back to. `selection` and `problems` are moments. */
 const REMEMBERED: SceneSidebarTabId[] = [
 	'scene',
+	'camera',
 	'layers',
 	'beat',
 	'walk',

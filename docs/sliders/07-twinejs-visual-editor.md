@@ -80,13 +80,17 @@ Sidebar tabs, top to bottom of the icon row:
 
 | Tab | Holds |
 |---|---|
-| ⚙ scene | grid, camera tool (old bg lock), sound · then scene keys: `bg` `transition` `ease` `autoAdvance` `fx` `music` `bubble` `locked` |
+| ⚙ scene | grid, sound · then groups: Template from (`from:`, searchable passage list, `?` hover help) · Backdrop (`bg`, searchable, thumbnails) · Arrival · Pacing · Music · Bubbles · Editor (`locked`) |
+| 📷 camera | camera tool (old bg lock) · Camera x / y / zoom (shown stage camera, live in a pan, inherited under `from:`; writes whole `camera:`, rest = key removed; disabled by `locked: [bg]`) · Motion (`bg` fx, loop length) · Effects (`fx`) |
 | ≡ layers | layers panel |
 | 💬 beat | beat panel (below). Opened by press on bubble, add beat |
-| 👤 / ▣ selection | only while something is selected; follows selection, back to previous tab on deselect. Match bg + reset grade · name, note · flip, stretch, lock, z, delete · pose · grade sliders (hover a slider = min/max preview) |
+| 👤 / ▣ selection | only while something is selected; follows selection, back to previous tab on deselect. name, note · flip, stretch, lock, z, delete · pose · grade: title, match bg + reset grade on top, sliders (hover a slider = min/max preview) |
 | 🚶 walk | walk-here toggle, walker, note · "Edit walk area" = bg asset in asset editor, walk tool |
 | 🔗 links | scene `links:` editable list |
 | ⚠ problems | only with errors. Error badge toggles it |
+
+Every group heading in the sidebar has an icon (`Heading` in `scene-settings-panel.tsx`). New
+pane = new tab id + `SceneSettingsPane` value.
 
 ## Beat panel
 
@@ -101,7 +105,8 @@ sidebar). Not on sprite select — caret in a beat line selects the speaker.
 
 ## What is NOT editable visually
 
-`beats` (structure; words and beat keys are, in the beat panel) · `links` · `from` · `mark` · `id`.
+`beats` (structure; words and beat keys are, in the beat panel) · `links` · `mark` · `id`. `from:` only as
+a passage pick (no `@mark` picker; a stated `@mark` is kept and shown).
 
 These are prose and structure. Typing them is faster than any widget, and a beat editor is a
 whole second product. Selecting an entity **highlights its beat lines** in the text — that's

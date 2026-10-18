@@ -269,6 +269,7 @@ export interface SceneKeyWrite {
 		| 'bubble'
 		| 'camera'
 		| 'ease'
+		| 'from'
 		| 'fx'
 		| 'links'
 		| 'linkList'

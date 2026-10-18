@@ -8,6 +8,7 @@
  * depending on the scrubber, and the sliders should not have to know which.
  */
 
+import {IconAdjustments} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {
@@ -35,6 +36,11 @@ export interface GradeSlidersProps {
 	onHoverKey?: (key: GradeKey | null) => void;
 	/** Where the next write lands, said in words. */
 	note?: string;
+	/**
+	 * Whole-grade fixes (match bg, reset all), drawn at the TOP of the group, over the
+	 * sliders: one place for them wherever the grade is edited.
+	 */
+	fixes?: React.ReactNode;
 }
 
 /** The asset editor's own label for each key, where it has one. */
@@ -53,7 +59,7 @@ export const GRADE_LABEL_KEYS: Record<GradeKey, string> = {
 };
 
 export const GradeSliders: React.FC<GradeSlidersProps> = props => {
-	const {grade, note, onChange, onCommit, onHoverKey} = props;
+	const {fixes, grade, note, onChange, onCommit, onHoverKey} = props;
 	const {t} = useTranslation();
 	const [el, setEl] = React.useState<HTMLDivElement | null>(null);
 	// Through a ref so the listeners live exactly as long as the element, whatever the
@@ -102,10 +108,19 @@ export const GradeSliders: React.FC<GradeSlidersProps> = props => {
 		>
 			<div className="scene-grade-sliders-head">
 				<span className="scene-grade-sliders-title">
+					<IconAdjustments />
 					{t('dialogs.passageEdit.scenePreview.grade.title')}
 				</span>
 				{note && <span className="scene-grade-sliders-note">{note}</span>}
 			</div>
+			{fixes && (
+				<div
+					className="scene-grade-sliders-fixes"
+					data-testid="scene-grade-sliders-fixes"
+				>
+					{fixes}
+				</div>
+			)}
 			{GRADE_KEYS.map(key => (
 				<div
 					className="scene-grade-sliders-row"

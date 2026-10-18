@@ -253,21 +253,6 @@ export const StageSelectionControls: React.FC<
 			data-testid="scene-preview-selection"
 			ref={setPanelEl}
 		>
-			{single && onGrade && (
-				<div className="scene-preview-selection-grade-fixes">
-					{matchBg}
-					<IconButton
-						disabled={!normalizeGrade(single.grade)}
-						icon={<IconArrowBackUp />}
-						label={t('dialogs.passageEdit.scenePreview.grade.resetAll')}
-						onClick={() => {
-							onGrade(undefined);
-							// After the paint has landed, like a slider's release.
-							window.setTimeout(() => onGradeCommitRef.current?.(), 0);
-						}}
-					/>
-				</div>
-			)}
 			<div className="scene-preview-selection-name" title={names}>
 				{names}
 			</div>
@@ -400,6 +385,23 @@ export const StageSelectionControls: React.FC<
 			)}
 			{single && onGrade && (
 				<GradeSliders
+					// Inside the sliders' group, which also commits on any button click in it:
+					// a second commit while one is in flight is queued and writes nothing.
+					fixes={
+						<>
+							{matchBg}
+							<IconButton
+								disabled={!normalizeGrade(single.grade)}
+								icon={<IconArrowBackUp />}
+								label={t('dialogs.passageEdit.scenePreview.grade.resetAll')}
+								onClick={() => {
+									onGrade(undefined);
+									// After the paint has landed, like a slider's release.
+									window.setTimeout(() => onGradeCommitRef.current?.(), 0);
+								}}
+							/>
+						</>
+					}
 					grade={single.grade}
 					note={gradeNote}
 					onChange={onGrade}

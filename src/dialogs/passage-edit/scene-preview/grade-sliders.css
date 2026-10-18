@@ -14,11 +14,27 @@
 }
 
 .scene-grade-sliders-title {
+	align-items: center;
 	color: var(--dark-gray);
+	display: flex;
 	font-size: 80%;
 	font-weight: bold;
+	gap: 4px;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
+}
+
+.scene-grade-sliders-title svg {
+	flex: none;
+	height: 14px;
+	width: 14px;
+}
+
+.scene-grade-sliders-fixes {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
 }
 
 .scene-grade-sliders-note {

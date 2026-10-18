@@ -23,3 +23,24 @@
 	margin-left: 4px;
 	padding-left: 4px;
 }
+
+/* Backdrop picker thumbnails: 16:9, cropped, small on the button, bigger in the list. */
+.scene-settings-bg-thumb {
+	border-radius: 2px;
+	display: block;
+	height: 18px;
+	overflow: hidden;
+	width: 32px;
+}
+
+.preview-select-option .scene-settings-bg-thumb {
+	height: 36px;
+	width: 64px;
+}
+
+.scene-settings-bg-thumb img {
+	display: block;
+	height: 100%;
+	object-fit: cover;
+	width: 100%;
+}

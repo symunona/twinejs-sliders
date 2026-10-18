@@ -2,9 +2,13 @@
  * Scene settings: the scene-level keys, edited beside the stage without going to the YAML.
  *
  * One group per key the parser reads at the top of a scene (`TOP_LEVEL_KEYS`) that is a
- * SETTING rather than content: `bg`, `transition`, `ease`, `autoAdvance`, `fx`, `music`,
- * `bubble`, `locked`. Cast, props, beats, links, `from:` and `camera:` have their own
- * editors (or gestures) and are not here.
+ * SETTING rather than content: `from`, `bg`, `transition`, `ease`, `autoAdvance`, `fx`,
+ * `music`, `bubble`, `locked`, `camera`. Cast, props, beats and links have their own
+ * editors and are not here.
+ *
+ * Split over sidebar panes (`pane`): `scene` is the scene's own settings, `camera` is the
+ * shot — where it looks, how the backdrop moves, what weather is over it. A new pane is a
+ * new `SceneSettingsPane` and a `pane === …` block below.
  *
  * Same grid as the beat props (`beat-props.tsx`): label, control, X. A row is highlighted
  * when the scene states the key, and the X removes it — back to whatever the layer under
@@ -16,7 +20,20 @@
  * CodeMirror edit, and "0", "0.", "0.6" in the undo stack is three reparses for one value.
  */
 
-import {IconX} from '@tabler/icons';
+import {
+	IconArrowsMove,
+	IconCamera,
+	IconCloudRain,
+	IconDoorEnter,
+	IconHelp,
+	IconHourglass,
+	IconLock,
+	IconMessageCircle,
+	IconMusic,
+	IconPhoto,
+	IconTemplate,
+	IconX
+} from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
@@ -38,6 +55,7 @@ import {
 import type {
 	AssetResolver,
 	BubbleStyle,
+	Camera,
 	MusicEntry,
 	MusicLoop,
 	MusicSpec,
@@ -60,11 +78,19 @@ import {
 import {bubbleSizingOptions} from '../../bubble-style/bubble-sizing';
 import {useAssetLibrary} from '../../sliders-assets/asset-store-context';
 import {FX_IDS} from '../use-scene-hints';
+import {AssetPreview} from '../../sliders-assets/asset-preview';
+import {cameraWrite} from './scene-gestures';
+import {roundCoord} from './stage-geometry';
 import type {SceneKeyWrite} from './use-scene-writer';
 import './beat-props.css';
 import './scene-settings-panel.css';
 
+/** Which sidebar pane the panel is drawn in. Each pane renders its own groups. */
+export type SceneSettingsPane = 'scene' | 'camera';
+
 export interface SceneSettingsPanelProps {
+	/** Default `scene`. */
+	pane?: SceneSettingsPane;
 	/** `parse.result?.scene`. Absent renders nothing — no scene, nothing to set. */
 	scene: Scene | undefined;
 	/** False when there is no Doc to write to. Renders nothing. */
@@ -81,6 +107,17 @@ export interface SceneSettingsPanelProps {
 	 * picker never shows a value it cannot hold.
 	 */
 	assetNames?: {backgrounds: string[]; audio: string[]};
+	/** A backdrop's thumbnail, by name, for the backdrop picker. Absent = names only. */
+	bgPreview?: (name: string) => React.ReactNode;
+	/**
+	 * Passages `from:` may name: the story's scene passages, this one left out. A value the
+	 * scene states but the list lacks is always offered.
+	 */
+	templates?: string[];
+	/** The camera on screen (`camera` pane). Live during a pan, inherited under `from:`. */
+	camera?: Camera;
+	/** Why the camera may not be edited, when it may not (`locked: [bg]`). */
+	cameraLockedReason?: string;
 	/** Parent calls `commit(writes, EDIT_ORIGIN)`. */
 	onWrite: (writes: SceneKeyWrite[]) => void;
 }
@@ -382,6 +419,30 @@ const SettingRow: React.FC<SettingRowProps> = ({
 	</div>
 );
 
+/** A group's title line: icon, words, and an optional `?` that explains on hover. */
+const Heading: React.FC<{
+	help?: string;
+	helpTestId?: string;
+	icon: React.ReactNode;
+}> = ({children, help, helpTestId, icon}) => (
+	<h4 className="scene-preview-beat-props-heading">
+		{icon}
+		{children}
+		{help && (
+			<span
+				aria-label={help}
+				className="beat-prop-help"
+				data-testid={helpTestId}
+				role="img"
+				tabIndex={0}
+				title={help}
+			>
+				<IconHelp />
+			</span>
+		)}
+	</h4>
+);
+
 /** A loop as one dropdown value. Counts and sections are a readout. */
 function loopChoice(loop: MusicLoop | undefined, single: boolean): string {
 	if (loop === undefined || loop === single) {
@@ -397,9 +458,14 @@ function loopChoice(loop: MusicLoop | undefined, single: boolean): string {
 
 export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 	assetNames,
+	bgPreview,
+	camera,
+	cameraLockedReason,
 	editable,
 	onWrite,
-	scene
+	pane = 'scene',
+	scene,
+	templates
 }) => {
 	const {t} = useTranslation();
 
@@ -668,528 +734,680 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 		{label: label('lockBoth'), value: [...SCENE_LOCKS].sort().join(',')}
 	];
 
+	// --- from ---------------------------------------------------------------
+
+	const templateNames = withCurrent(templates ?? [], scene.from);
+
+	// --- camera -------------------------------------------------------------
+
+	// Rounded as the gesture writes it: a live pan paints float noise (0.10000000149).
+	const cameraNow: Camera = {
+		at: {x: roundCoord(camera?.at.x ?? 0), y: roundCoord(camera?.at.y ?? 0)},
+		zoom: roundCoord(camera?.zoom ?? 1)
+	};
+	// Off rest, not merely written: the gesture never writes a part at rest.
+	const cameraStated = {
+		x: !!scene.camera?.at && cameraNow.at.x !== 0,
+		y: !!scene.camera?.at && cameraNow.at.y !== 0,
+		zoom: scene.camera?.zoom !== undefined && cameraNow.zoom !== 1
+	};
+	// The whole camera is written, as the pan gesture writes it: one key, at rest = gone.
+	const setCamera = (axis: 'x' | 'y' | 'zoom', value: number | undefined) =>
+		onWrite([
+			cameraWrite(
+				axis === 'zoom'
+					? {...cameraNow, zoom: value ?? 1}
+					: {...cameraNow, at: {...cameraNow.at, [axis]: value ?? 0}}
+			)
+		]);
+
 	return (
-		<div className="scene-settings-panel" data-testid="scene-settings-panel">
-			<div className="scene-preview-beat-props-group">
-				<h4 className="scene-preview-beat-props-heading">
-					{label('backdrop')}
-				</h4>
-				<SettingRow
-					fallback={fallback(label('bgInherit'))}
-					label={label('bg')}
-					onReset={() => write('bg')}
-					resetLabel={resetLabel('bg')}
-					stated={bgStated}
-					testId="scene-settings-bg"
-				>
-					<TextSelect
-						onChange={event => {
-							const value = event.target.value;
-
-							if (value === UNSET) {
-								write('bg');
-							} else if (value === NONE) {
-								write('bg', formatBg(null));
-							} else {
-								// The motion goes with the art it moved: keep it.
-								write('bg', formatBg(value, bgFx));
-							}
-						}}
-						options={[
-							unsetOption,
-							{label: label('bgNone'), value: NONE},
-							...bgNames.map(name => ({label: name, value: name}))
-						]}
-						value={bgId}
+		<div
+			className="scene-settings-panel"
+			data-pane={pane}
+			data-testid="scene-settings-panel"
+		>
+			{pane === 'scene' && (
+				<>
+					<div
+						className="scene-preview-beat-props-group"
+						data-testid="scene-settings-from-group"
 					>
-						{label('bg')}
-					</TextSelect>
-				</SettingRow>
-				<SettingRow
-					fallback={fallback(label('bgStill'))}
-					label={label('bgFx')}
-					onReset={() => setBgFx(undefined)}
-					resetLabel={resetLabel('bgFx')}
-					stated={!!bgFx}
-					testId="scene-settings-bg-fx"
-				>
-					<TextSelect
-						disabled={!hasArt}
-						onChange={event =>
-							setBgFx(
-								event.target.value
-									? {id: event.target.value, speed: bgFx?.speed}
-									: undefined
-							)
-						}
-						options={[
-							{label: label('bgStill'), value: UNSET},
-							...withCurrent(BG_MOTIONS, bgFx?.id).map(id => ({
-								label: id,
-								value: id
-							}))
-						]}
-						value={bgFx?.id ?? UNSET}
-					>
-						{label('bgFx')}
-					</TextSelect>
-				</SettingRow>
-				<SettingRow
-					fallback={fallback(label('bgSpeedPreset'))}
-					label={label('bgSpeed')}
-					onReset={() => setBgFx(bgFx && {id: bgFx.id})}
-					resetLabel={resetLabel('bgSpeed')}
-					stated={bgFx?.speed !== undefined}
-					testId="scene-settings-bg-speed"
-				>
-					<NumberField
-						disabled={!bgFx}
-						label={label('bgSpeed')}
-						min={0.1}
-						onCommit={speed => setBgFx(bgFx && {id: bgFx.id, speed})}
-						unit="s"
-						value={bgFx?.speed}
-					/>
-				</SettingRow>
-			</div>
-
-			<div className="scene-preview-beat-props-group">
-				<h4 className="scene-preview-beat-props-heading">{label('arrival')}</h4>
-				<SettingRow
-					fallback={fallback(label('transitionInherit'))}
-					label={label('transition')}
-					onReset={() => setTransition({kind: undefined})}
-					resetLabel={resetLabel('transition')}
-					stated={transition.kind !== undefined}
-					testId="scene-settings-transition"
-				>
-					<TextSelect
-						onChange={event =>
-							setTransition({kind: event.target.value || undefined})
-						}
-						options={[
-							unsetOption,
-							...SCENE_TRANSITION_KINDS.map(kind => ({
-								label: kind,
-								value: kind
-							}))
-						]}
-						value={transition.kind ?? UNSET}
-					>
-						{label('transition')}
-					</TextSelect>
-				</SettingRow>
-				<SettingRow
-					fallback={fallback(label('transitionDurInherit'))}
-					label={label('transitionDur')}
-					onReset={() => setTransition({dur: undefined})}
-					resetLabel={resetLabel('transitionDur')}
-					stated={transition.dur !== undefined}
-					testId="scene-settings-transition-dur"
-				>
-					<NumberField
-						label={label('transitionDur')}
-						max={2}
-						min={0}
-						onCommit={dur => setTransition({dur})}
-						placeholder="0.3"
-						step={0.1}
-						unit="s"
-						value={transition.dur}
-					/>
-				</SettingRow>
-				<SettingRow
-					fallback={fallback(label('transitionEaseInherit'))}
-					label={label('transitionEase')}
-					onReset={() => setTransition({ease: undefined})}
-					resetLabel={resetLabel('transitionEase')}
-					stated={transition.ease !== undefined}
-					testId="scene-settings-transition-ease"
-				>
-					<TextSelect
-						onChange={event =>
-							setTransition({ease: event.target.value || undefined})
-						}
-						options={[
-							unsetOption,
-							...transitionEases.map(name => ({label: name, value: name}))
-						]}
-						value={transition.ease ?? UNSET}
-					>
-						{label('transitionEase')}
-					</TextSelect>
-				</SettingRow>
-			</div>
-
-			<div className="scene-preview-beat-props-group">
-				<h4 className="scene-preview-beat-props-heading">{label('pacing')}</h4>
-				<SettingRow
-					fallback={fallback(label('autoAdvanceInherit'))}
-					label={label('autoAdvance')}
-					onReset={() => write('autoAdvance')}
-					resetLabel={resetLabel('autoAdvance')}
-					stated={scene.autoAdvance !== undefined}
-					testId="scene-settings-auto-advance"
-				>
-					<NumberField
-						label={label('autoAdvance')}
-						min={0}
-						onCommit={seconds =>
-							write(
-								'autoAdvance',
-								seconds === undefined ? undefined : formatNumber(seconds)
-							)
-						}
-						step={0.5}
-						unit="s"
-						value={scene.autoAdvance}
-					/>
-				</SettingRow>
-				<SettingRow
-					fallback={fallback(label('easeInherit'))}
-					label={label('ease')}
-					onReset={() => write('ease')}
-					resetLabel={resetLabel('ease')}
-					stated={scene.ease !== undefined}
-					testId="scene-settings-ease"
-				>
-					<TextSelect
-						onChange={event => {
-							const value = event.target.value;
-
-							// The map form is a readout, not a value to write back.
-							if (value === CUSTOM) {
-								return;
-							}
-
-							write('ease', value ? formatValue('ease', value) : undefined);
-						}}
-						options={[
-							unsetOption,
-							...(ease === CUSTOM ? [customOption('easePerKind')] : []),
-							...withCurrent(
-								EASE_NAMES,
-								ease === CUSTOM ? undefined : ease || undefined
-							).map(name => ({label: name, value: name}))
-						]}
-						value={ease}
-					>
-						{label('ease')}
-					</TextSelect>
-				</SettingRow>
-			</div>
-
-			<div
-				className="scene-preview-beat-props-group"
-				data-testid="scene-settings-fx-group"
-			>
-				<h4 className="scene-preview-beat-props-heading">{label('fx')}</h4>
-				{fx.map((entry, index) => (
-					<SettingRow
-						key={`${entry.id}-${index}`}
-						label={entry.id}
-						onReset={() => setFx(fx.filter((_, at) => at !== index))}
-						resetLabel={t(key('reset'), {name: entry.id})}
-						stated
-						testId={`scene-settings-fx-${entry.id}`}
-					>
-						<NumberField
-							label={label('fxAmount')}
-							max={1}
-							min={0}
-							onCommit={amount =>
-								setFx(
-									fx.map((one, at) =>
-										at === index ? {...one, amount: amount ?? 1} : one
-									)
-								)
-							}
-							placeholder="1"
-							step={0.1}
-							value={entry.amount}
-						/>
-					</SettingRow>
-				))}
-				{unusedFx.length > 0 && (
-					<SettingRow
-						label={label('fxAdd')}
-						resetLabel={label('fxAdd')}
-						testId="scene-settings-fx-add"
-					>
-						<TextSelect
-							onChange={event => {
-								if (event.target.value) {
-									setFx([...fx, {amount: 1, id: event.target.value}]);
-								}
-							}}
-							options={[
-								{label: label('fxAddPrompt'), value: UNSET},
-								...unusedFx.map(id => ({label: id, value: id}))
-							]}
-							value={UNSET}
+						<Heading
+							help={label('fromHelp')}
+							helpTestId="scene-settings-from-help"
+							icon={<IconTemplate />}
 						>
-							{label('fxAdd')}
-						</TextSelect>
-					</SettingRow>
-				)}
-			</div>
-
-			<div
-				className="scene-preview-beat-props-group"
-				data-testid="scene-settings-music-group"
-			>
-				<h4 className="scene-preview-beat-props-heading">{label('music')}</h4>
-				<SettingRow
-					fallback={fallback(label('musicInherit'))}
-					label={label('musicSound')}
-					onReset={() => write('music')}
-					resetLabel={resetLabel('music')}
-					stated={music !== undefined}
-					testId="scene-settings-music"
-				>
-					<TextSelect
-						onChange={event => {
-							const value = event.target.value;
-
-							if (value === CUSTOM) {
-								return;
-							}
-
-							if (value === UNSET) {
-								write('music');
-							} else if (value === NONE) {
-								write('music', formatMusic(null));
-							} else if (main) {
-								// Same bed, another sound: its volume, loop and fade stay.
-								write(
-									'music',
-									formatMusic({
-										...music!,
-										tracks: {[MUSIC_MAIN_TRACK]: {...main, id: value}}
-									})
-								);
-							} else {
-								write('music', formatValue('music', value));
-							}
-						}}
-						options={[
-							unsetOption,
-							{label: label('musicSilence'), value: NONE},
-							...(musicChoice === CUSTOM ? [customOption('musicTracks')] : []),
-							...audioNames.map(name => ({label: name, value: name}))
-						]}
-						value={musicChoice}
-					>
-						{label('musicSound')}
-					</TextSelect>
-				</SettingRow>
-				{main && trackRows(MUSIC_MAIN_TRACK, main, true)}
-				{music &&
-					!single &&
-					Object.entries(music.tracks).map(([name, entry]) => (
-						<div
-							className="scene-settings-track"
-							data-testid={`scene-settings-track-${name}`}
-							key={name}
+							{label('fromHeading')}
+						</Heading>
+						<SettingRow
+							fallback={fallback(label('fromNone'))}
+							label={label('from')}
+							onReset={() => write('from')}
+							resetLabel={resetLabel('from')}
+							stated={scene.from !== undefined}
+							testId="scene-settings-from"
 						>
-							<SettingRow
-								label={<strong>{name}</strong>}
-								onReset={() => dropTrack(name)}
-								resetLabel={t(key('reset'), {name})}
-								stated
-								testId={`scene-settings-track-${name}-name`}
-							>
-								{entry === null && (
-									<span className="beat-prop-unit">
-										{label('musicStopped')}
-									</span>
-								)}
-							</SettingRow>
-							{entry && trackRows(name, entry, false)}
-						</div>
-					))}
-				{music && (
-					<SettingRow
-						fallback={fallback(label('stopOthersNone'))}
-						label={label('stopOthers')}
-						onReset={() =>
-							write('music', formatMusic({...music, stopOthers: undefined}))
-						}
-						resetLabel={resetLabel('stopOthers')}
-						stated={stop !== undefined}
-						testId="scene-settings-stop-others"
-					>
-						<TextSelect
-							onChange={event => {
-								const value = event.target.value;
-
-								if (value === CUSTOM) {
-									return;
-								}
-
-								write(
-									'music',
-									formatMusic({
-										...music,
-										stopOthers: value === 'all' ? 'all' : undefined
-									})
-								);
-							}}
-							options={[
-								unsetOption,
-								...(stopChoice === CUSTOM
-									? [{label: (stop as string[]).join(', '), value: CUSTOM}]
-									: []),
-								{label: label('stopOthersAll'), value: 'all'}
-							]}
-							value={stopChoice}
-						>
-							{label('stopOthers')}
-						</TextSelect>
-					</SettingRow>
-				)}
-			</div>
-
-			<div
-				className="scene-preview-beat-props-group"
-				data-testid="scene-settings-bubble-group"
-			>
-				<h4 className="scene-preview-beat-props-heading">{label('bubble')}</h4>
-				<SettingRow {...bubbleRow('as')}>
-					<PreviewSelect
-						onChange={value => setBubble('as', value || null)}
-						options={bubbleStyleOptions({
-							colors: {
-								accent: bubble.accent,
-								bg: bubble.bg,
-								color: bubble.color,
-								font: bubble.font
-							},
-							emptyLabel: label('unset')
-						})}
-						value={bubble.as ?? UNSET}
-					>
-						{label('bubble_as')}
-					</PreviewSelect>
-				</SettingRow>
-				<SettingRow {...bubbleRow('font')}>
-					<PreviewSelect
-						onChange={value => setBubble('font', value || null)}
-						options={bubbleFontOptions({
-							current: bubble.font,
-							customLabel: label('fontCustom'),
-							emptyLabel: label('unset'),
-							emptyPreview: (
-								<BubbleFontSwatch
-									label={label('fontSample')}
-									stack={bubbleFontStack(undefined)}
-								/>
-							)
-						})}
-						searchable
-						value={bubble.font ?? UNSET}
-					>
-						{label('bubble_font')}
-					</PreviewSelect>
-				</SettingRow>
-				{(['color', 'bg', 'accent'] as const).map(name => (
-					<SettingRow {...bubbleRow(name)} key={name}>
-						<BubbleColorControl
-							clearLabel={label('clearColor')}
-							onChange={value => setBubble(name, value ?? null)}
-							value={bubble[name]}
-						>
-							{label(`bubble_${name}`)}
-						</BubbleColorControl>
-					</SettingRow>
-				))}
-				{/* Sizing sits between place and anchor, as in the beat row. */}
-				{(
-					[
-						['place', BUBBLE_PLACES],
-						['sizing', undefined],
-						['anchor', BUBBLE_ANCHORS],
-						['enter', BUBBLE_ENTERS]
-					] as const
-				).map(([name, values]) =>
-					values === undefined ? (
-						<SettingRow {...bubbleRow(name)} key={name}>
 							<PreviewSelect
-								onChange={value => setBubble(name, value || null)}
-								options={bubbleSizingOptions({
-									emptyLabel: label('unset'),
-									emptyNote: t('components.bubbleSizing.storyDefault'),
-									emptyValue: UNSET,
-									t
-								})}
-								value={bubble.sizing ?? UNSET}
-							>
-								{label(`bubble_${name}`)}
-							</PreviewSelect>
-						</SettingRow>
-					) : (
-						<SettingRow {...bubbleRow(name)} key={name}>
-							<TextSelect
-								onChange={event => setBubble(name, event.target.value || null)}
+								onChange={value =>
+									write('from', value ? formatValue('from', value) : undefined)
+								}
 								options={[
 									unsetOption,
-									...(values as readonly string[]).map(value => ({
-										label: value,
-										value
+									...templateNames.map(name => ({label: name, value: name}))
+								]}
+								searchable
+								value={scene.from ?? UNSET}
+							>
+								{label('from')}
+							</PreviewSelect>
+						</SettingRow>
+					</div>
+
+					<div className="scene-preview-beat-props-group">
+						<Heading icon={<IconPhoto />}>{label('backdrop')}</Heading>
+						<SettingRow
+							fallback={fallback(label('bgInherit'))}
+							label={label('bg')}
+							onReset={() => write('bg')}
+							resetLabel={resetLabel('bg')}
+							stated={bgStated}
+							testId="scene-settings-bg"
+						>
+							<PreviewSelect
+								onChange={value => {
+									if (value === UNSET) {
+										write('bg');
+									} else if (value === NONE) {
+										write('bg', formatBg(null));
+									} else {
+										// The motion goes with the art it moved: keep it.
+										write('bg', formatBg(value, bgFx));
+									}
+								}}
+								options={[
+									unsetOption,
+									{label: label('bgNone'), value: NONE},
+									...bgNames.map(name => ({
+										label: name,
+										preview: bgPreview?.(name),
+										value: name
 									}))
 								]}
-								value={(bubble[name] as string | undefined) ?? UNSET}
+								searchable
+								value={bgId}
 							>
-								{label(`bubble_${name}`)}
+								{label('bg')}
+							</PreviewSelect>
+						</SettingRow>
+					</div>
+
+					<div className="scene-preview-beat-props-group">
+						<Heading icon={<IconDoorEnter />}>{label('arrival')}</Heading>
+						<SettingRow
+							fallback={fallback(label('transitionInherit'))}
+							label={label('transition')}
+							onReset={() => setTransition({kind: undefined})}
+							resetLabel={resetLabel('transition')}
+							stated={transition.kind !== undefined}
+							testId="scene-settings-transition"
+						>
+							<TextSelect
+								onChange={event =>
+									setTransition({kind: event.target.value || undefined})
+								}
+								options={[
+									unsetOption,
+									...SCENE_TRANSITION_KINDS.map(kind => ({
+										label: kind,
+										value: kind
+									}))
+								]}
+								value={transition.kind ?? UNSET}
+							>
+								{label('transition')}
 							</TextSelect>
 						</SettingRow>
-					)
-				)}
-				<SettingRow {...bubbleRow('enterDur')}>
-					<NumberField
-						label={label('bubble_enterDur')}
-						min={0}
-						onCommit={value => setBubble('enterDur', value ?? null)}
-						placeholder={String(DEFAULT_BUBBLE_ENTER_DUR)}
-						step={0.05}
-						unit="s"
-						value={bubble.enterDur}
-					/>
-				</SettingRow>
-			</div>
+						<SettingRow
+							fallback={fallback(label('transitionDurInherit'))}
+							label={label('transitionDur')}
+							onReset={() => setTransition({dur: undefined})}
+							resetLabel={resetLabel('transitionDur')}
+							stated={transition.dur !== undefined}
+							testId="scene-settings-transition-dur"
+						>
+							<NumberField
+								label={label('transitionDur')}
+								max={2}
+								min={0}
+								onCommit={dur => setTransition({dur})}
+								placeholder="0.3"
+								step={0.1}
+								unit="s"
+								value={transition.dur}
+							/>
+						</SettingRow>
+						<SettingRow
+							fallback={fallback(label('transitionEaseInherit'))}
+							label={label('transitionEase')}
+							onReset={() => setTransition({ease: undefined})}
+							resetLabel={resetLabel('transitionEase')}
+							stated={transition.ease !== undefined}
+							testId="scene-settings-transition-ease"
+						>
+							<TextSelect
+								onChange={event =>
+									setTransition({ease: event.target.value || undefined})
+								}
+								options={[
+									unsetOption,
+									...transitionEases.map(name => ({label: name, value: name}))
+								]}
+								value={transition.ease ?? UNSET}
+							>
+								{label('transitionEase')}
+							</TextSelect>
+						</SettingRow>
+					</div>
 
-			<div className="scene-preview-beat-props-group">
-				<h4 className="scene-preview-beat-props-heading">{label('editor')}</h4>
-				<SettingRow
-					fallback={fallback(label('lockNone'))}
-					label={label('locked')}
-					onReset={() => write('locked')}
-					resetLabel={resetLabel('locked')}
-					stated={scene.locked !== undefined}
-					testId="scene-settings-locked"
-				>
-					<TextSelect
-						onChange={event => {
-							const value = event.target.value;
+					<div className="scene-preview-beat-props-group">
+						<Heading icon={<IconHourglass />}>{label('pacing')}</Heading>
+						<SettingRow
+							fallback={fallback(label('autoAdvanceInherit'))}
+							label={label('autoAdvance')}
+							onReset={() => write('autoAdvance')}
+							resetLabel={resetLabel('autoAdvance')}
+							stated={scene.autoAdvance !== undefined}
+							testId="scene-settings-auto-advance"
+						>
+							<NumberField
+								label={label('autoAdvance')}
+								min={0}
+								onCommit={seconds =>
+									write(
+										'autoAdvance',
+										seconds === undefined ? undefined : formatNumber(seconds)
+									)
+								}
+								step={0.5}
+								unit="s"
+								value={scene.autoAdvance}
+							/>
+						</SettingRow>
+						<SettingRow
+							fallback={fallback(label('easeInherit'))}
+							label={label('ease')}
+							onReset={() => write('ease')}
+							resetLabel={resetLabel('ease')}
+							stated={scene.ease !== undefined}
+							testId="scene-settings-ease"
+						>
+							<TextSelect
+								onChange={event => {
+									const value = event.target.value;
 
-							write(
-								'locked',
-								value === UNSET
-									? undefined
-									: formatLocked(
-											value === 'true'
-												? true
-												: (value.split(',') as SceneLock[])
-									  )
-							);
-						}}
-						options={lockOptions}
-						value={locked}
+									// The map form is a readout, not a value to write back.
+									if (value === CUSTOM) {
+										return;
+									}
+
+									write('ease', value ? formatValue('ease', value) : undefined);
+								}}
+								options={[
+									unsetOption,
+									...(ease === CUSTOM ? [customOption('easePerKind')] : []),
+									...withCurrent(
+										EASE_NAMES,
+										ease === CUSTOM ? undefined : ease || undefined
+									).map(name => ({label: name, value: name}))
+								]}
+								value={ease}
+							>
+								{label('ease')}
+							</TextSelect>
+						</SettingRow>
+					</div>
+
+					<div
+						className="scene-preview-beat-props-group"
+						data-testid="scene-settings-music-group"
 					>
-						{label('locked')}
-					</TextSelect>
-				</SettingRow>
-			</div>
+						<Heading icon={<IconMusic />}>{label('music')}</Heading>
+						<SettingRow
+							fallback={fallback(label('musicInherit'))}
+							label={label('musicSound')}
+							onReset={() => write('music')}
+							resetLabel={resetLabel('music')}
+							stated={music !== undefined}
+							testId="scene-settings-music"
+						>
+							<TextSelect
+								onChange={event => {
+									const value = event.target.value;
+
+									if (value === CUSTOM) {
+										return;
+									}
+
+									if (value === UNSET) {
+										write('music');
+									} else if (value === NONE) {
+										write('music', formatMusic(null));
+									} else if (main) {
+										// Same bed, another sound: its volume, loop and fade stay.
+										write(
+											'music',
+											formatMusic({
+												...music!,
+												tracks: {[MUSIC_MAIN_TRACK]: {...main, id: value}}
+											})
+										);
+									} else {
+										write('music', formatValue('music', value));
+									}
+								}}
+								options={[
+									unsetOption,
+									{label: label('musicSilence'), value: NONE},
+									...(musicChoice === CUSTOM
+										? [customOption('musicTracks')]
+										: []),
+									...audioNames.map(name => ({label: name, value: name}))
+								]}
+								value={musicChoice}
+							>
+								{label('musicSound')}
+							</TextSelect>
+						</SettingRow>
+						{main && trackRows(MUSIC_MAIN_TRACK, main, true)}
+						{music &&
+							!single &&
+							Object.entries(music.tracks).map(([name, entry]) => (
+								<div
+									className="scene-settings-track"
+									data-testid={`scene-settings-track-${name}`}
+									key={name}
+								>
+									<SettingRow
+										label={<strong>{name}</strong>}
+										onReset={() => dropTrack(name)}
+										resetLabel={t(key('reset'), {name})}
+										stated
+										testId={`scene-settings-track-${name}-name`}
+									>
+										{entry === null && (
+											<span className="beat-prop-unit">
+												{label('musicStopped')}
+											</span>
+										)}
+									</SettingRow>
+									{entry && trackRows(name, entry, false)}
+								</div>
+							))}
+						{music && (
+							<SettingRow
+								fallback={fallback(label('stopOthersNone'))}
+								label={label('stopOthers')}
+								onReset={() =>
+									write('music', formatMusic({...music, stopOthers: undefined}))
+								}
+								resetLabel={resetLabel('stopOthers')}
+								stated={stop !== undefined}
+								testId="scene-settings-stop-others"
+							>
+								<TextSelect
+									onChange={event => {
+										const value = event.target.value;
+
+										if (value === CUSTOM) {
+											return;
+										}
+
+										write(
+											'music',
+											formatMusic({
+												...music,
+												stopOthers: value === 'all' ? 'all' : undefined
+											})
+										);
+									}}
+									options={[
+										unsetOption,
+										...(stopChoice === CUSTOM
+											? [{label: (stop as string[]).join(', '), value: CUSTOM}]
+											: []),
+										{label: label('stopOthersAll'), value: 'all'}
+									]}
+									value={stopChoice}
+								>
+									{label('stopOthers')}
+								</TextSelect>
+							</SettingRow>
+						)}
+					</div>
+
+					<div
+						className="scene-preview-beat-props-group"
+						data-testid="scene-settings-bubble-group"
+					>
+						<Heading icon={<IconMessageCircle />}>{label('bubble')}</Heading>
+						<SettingRow {...bubbleRow('as')}>
+							<PreviewSelect
+								onChange={value => setBubble('as', value || null)}
+								options={bubbleStyleOptions({
+									colors: {
+										accent: bubble.accent,
+										bg: bubble.bg,
+										color: bubble.color,
+										font: bubble.font
+									},
+									emptyLabel: label('unset')
+								})}
+								value={bubble.as ?? UNSET}
+							>
+								{label('bubble_as')}
+							</PreviewSelect>
+						</SettingRow>
+						<SettingRow {...bubbleRow('font')}>
+							<PreviewSelect
+								onChange={value => setBubble('font', value || null)}
+								options={bubbleFontOptions({
+									current: bubble.font,
+									customLabel: label('fontCustom'),
+									emptyLabel: label('unset'),
+									emptyPreview: (
+										<BubbleFontSwatch
+											label={label('fontSample')}
+											stack={bubbleFontStack(undefined)}
+										/>
+									)
+								})}
+								searchable
+								value={bubble.font ?? UNSET}
+							>
+								{label('bubble_font')}
+							</PreviewSelect>
+						</SettingRow>
+						{(['color', 'bg', 'accent'] as const).map(name => (
+							<SettingRow {...bubbleRow(name)} key={name}>
+								<BubbleColorControl
+									clearLabel={label('clearColor')}
+									onChange={value => setBubble(name, value ?? null)}
+									value={bubble[name]}
+								>
+									{label(`bubble_${name}`)}
+								</BubbleColorControl>
+							</SettingRow>
+						))}
+						{/* Sizing sits between place and anchor, as in the beat row. */}
+						{(
+							[
+								['place', BUBBLE_PLACES],
+								['sizing', undefined],
+								['anchor', BUBBLE_ANCHORS],
+								['enter', BUBBLE_ENTERS]
+							] as const
+						).map(([name, values]) =>
+							values === undefined ? (
+								<SettingRow {...bubbleRow(name)} key={name}>
+									<PreviewSelect
+										onChange={value => setBubble(name, value || null)}
+										options={bubbleSizingOptions({
+											emptyLabel: label('unset'),
+											emptyNote: t('components.bubbleSizing.storyDefault'),
+											emptyValue: UNSET,
+											t
+										})}
+										value={bubble.sizing ?? UNSET}
+									>
+										{label(`bubble_${name}`)}
+									</PreviewSelect>
+								</SettingRow>
+							) : (
+								<SettingRow {...bubbleRow(name)} key={name}>
+									<TextSelect
+										onChange={event =>
+											setBubble(name, event.target.value || null)
+										}
+										options={[
+											unsetOption,
+											...(values as readonly string[]).map(value => ({
+												label: value,
+												value
+											}))
+										]}
+										value={(bubble[name] as string | undefined) ?? UNSET}
+									>
+										{label(`bubble_${name}`)}
+									</TextSelect>
+								</SettingRow>
+							)
+						)}
+						<SettingRow {...bubbleRow('enterDur')}>
+							<NumberField
+								label={label('bubble_enterDur')}
+								min={0}
+								onCommit={value => setBubble('enterDur', value ?? null)}
+								placeholder={String(DEFAULT_BUBBLE_ENTER_DUR)}
+								step={0.05}
+								unit="s"
+								value={bubble.enterDur}
+							/>
+						</SettingRow>
+					</div>
+
+					<div className="scene-preview-beat-props-group">
+						<Heading icon={<IconLock />}>{label('editor')}</Heading>
+						<SettingRow
+							fallback={fallback(label('lockNone'))}
+							label={label('locked')}
+							onReset={() => write('locked')}
+							resetLabel={resetLabel('locked')}
+							stated={scene.locked !== undefined}
+							testId="scene-settings-locked"
+						>
+							<TextSelect
+								onChange={event => {
+									const value = event.target.value;
+
+									write(
+										'locked',
+										value === UNSET
+											? undefined
+											: formatLocked(
+													value === 'true'
+														? true
+														: (value.split(',') as SceneLock[])
+											  )
+									);
+								}}
+								options={lockOptions}
+								value={locked}
+							>
+								{label('locked')}
+							</TextSelect>
+						</SettingRow>
+					</div>
+				</>
+			)}
+			{pane === 'camera' && (
+				<>
+					<div
+						className="scene-preview-beat-props-group"
+						data-testid="scene-settings-camera-group"
+					>
+						<Heading icon={<IconCamera />}>{label('camera')}</Heading>
+						<SettingRow
+							fallback={cameraLockedReason ?? fallback('0')}
+							label={label('cameraX')}
+							onReset={
+								cameraLockedReason ? undefined : () => setCamera('x', undefined)
+							}
+							resetLabel={resetLabel('cameraX')}
+							stated={cameraStated.x}
+							testId="scene-settings-camera-x"
+						>
+							<NumberField
+								disabled={!!cameraLockedReason}
+								label={label('cameraX')}
+								onCommit={value => setCamera('x', value)}
+								placeholder="0"
+								step={0.01}
+								value={cameraNow.at.x}
+							/>
+						</SettingRow>
+						<SettingRow
+							fallback={fallback('0')}
+							label={label('cameraY')}
+							onReset={
+								cameraLockedReason ? undefined : () => setCamera('y', undefined)
+							}
+							resetLabel={resetLabel('cameraY')}
+							stated={cameraStated.y}
+							testId="scene-settings-camera-y"
+						>
+							<NumberField
+								disabled={!!cameraLockedReason}
+								label={label('cameraY')}
+								onCommit={value => setCamera('y', value)}
+								placeholder="0"
+								step={0.01}
+								value={cameraNow.at.y}
+							/>
+						</SettingRow>
+						<SettingRow
+							fallback={fallback('1')}
+							label={label('cameraZoom')}
+							onReset={
+								cameraLockedReason
+									? undefined
+									: () => setCamera('zoom', undefined)
+							}
+							resetLabel={resetLabel('cameraZoom')}
+							stated={cameraStated.zoom}
+							testId="scene-settings-camera-zoom"
+						>
+							<NumberField
+								disabled={!!cameraLockedReason}
+								label={label('cameraZoom')}
+								min={0.1}
+								onCommit={value => setCamera('zoom', value)}
+								placeholder="1"
+								step={0.1}
+								value={cameraNow.zoom}
+							/>
+						</SettingRow>
+					</div>
+
+					<div
+						className="scene-preview-beat-props-group"
+						data-testid="scene-settings-motion-group"
+					>
+						<Heading icon={<IconArrowsMove />}>{label('motion')}</Heading>
+						<SettingRow
+							fallback={fallback(label('bgStill'))}
+							label={label('bgFx')}
+							onReset={() => setBgFx(undefined)}
+							resetLabel={resetLabel('bgFx')}
+							stated={!!bgFx}
+							testId="scene-settings-bg-fx"
+						>
+							<TextSelect
+								disabled={!hasArt}
+								onChange={event =>
+									setBgFx(
+										event.target.value
+											? {id: event.target.value, speed: bgFx?.speed}
+											: undefined
+									)
+								}
+								options={[
+									{label: label('bgStill'), value: UNSET},
+									...withCurrent(BG_MOTIONS, bgFx?.id).map(id => ({
+										label: id,
+										value: id
+									}))
+								]}
+								value={bgFx?.id ?? UNSET}
+							>
+								{label('bgFx')}
+							</TextSelect>
+						</SettingRow>
+						<SettingRow
+							fallback={fallback(label('bgSpeedPreset'))}
+							label={label('bgSpeed')}
+							onReset={() => setBgFx(bgFx && {id: bgFx.id})}
+							resetLabel={resetLabel('bgSpeed')}
+							stated={bgFx?.speed !== undefined}
+							testId="scene-settings-bg-speed"
+						>
+							<NumberField
+								disabled={!bgFx}
+								label={label('bgSpeed')}
+								min={0.1}
+								onCommit={speed => setBgFx(bgFx && {id: bgFx.id, speed})}
+								unit="s"
+								value={bgFx?.speed}
+							/>
+						</SettingRow>
+					</div>
+
+					<div
+						className="scene-preview-beat-props-group"
+						data-testid="scene-settings-fx-group"
+					>
+						<Heading icon={<IconCloudRain />}>{label('fx')}</Heading>
+						{fx.map((entry, index) => (
+							<SettingRow
+								key={`${entry.id}-${index}`}
+								label={entry.id}
+								onReset={() => setFx(fx.filter((_, at) => at !== index))}
+								resetLabel={t(key('reset'), {name: entry.id})}
+								stated
+								testId={`scene-settings-fx-${entry.id}`}
+							>
+								<NumberField
+									label={label('fxAmount')}
+									max={1}
+									min={0}
+									onCommit={amount =>
+										setFx(
+											fx.map((one, at) =>
+												at === index ? {...one, amount: amount ?? 1} : one
+											)
+										)
+									}
+									placeholder="1"
+									step={0.1}
+									value={entry.amount}
+								/>
+							</SettingRow>
+						))}
+						{unusedFx.length > 0 && (
+							<SettingRow
+								label={label('fxAdd')}
+								resetLabel={label('fxAdd')}
+								testId="scene-settings-fx-add"
+							>
+								<TextSelect
+									onChange={event => {
+										if (event.target.value) {
+											setFx([...fx, {amount: 1, id: event.target.value}]);
+										}
+									}}
+									options={[
+										{label: label('fxAddPrompt'), value: UNSET},
+										...unusedFx.map(id => ({label: id, value: id}))
+									]}
+									value={UNSET}
+								>
+									{label('fxAdd')}
+								</TextSelect>
+							</SettingRow>
+						)}
+					</div>
+				</>
+			)}
 		</div>
 	);
 };
@@ -1199,7 +1417,7 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
  * library here, so only an open settings tab pays for listing the library.
  */
 export const SceneSettingsTab: React.FC<
-	Omit<SceneSettingsPanelProps, 'assetNames'>
+	Omit<SceneSettingsPanelProps, 'assetNames' | 'bgPreview'>
 > = props => {
 	const {all} = useAssetLibrary();
 	const assetNames = React.useMemo(() => {
@@ -1211,6 +1429,29 @@ export const SceneSettingsTab: React.FC<
 
 		return {audio: named('sound'), backgrounds: named('bg')};
 	}, [all]);
+	const bgPreview = React.useMemo(() => {
+		const ids = new Map(
+			all
+				.filter(asset => asset.kind === 'bg')
+				.map(asset => [asset.name, asset.id] as const)
+		);
 
-	return <SceneSettingsPanel {...props} assetNames={assetNames} />;
+		// Elements only: an AssetPreview fetches when the open list draws it.
+		return (name: string) =>
+			ids.has(name) ? (
+				<AssetPreview
+					alt=""
+					assetId={ids.get(name)}
+					className="scene-settings-bg-thumb"
+				/>
+			) : undefined;
+	}, [all]);
+
+	return (
+		<SceneSettingsPanel
+			{...props}
+			assetNames={assetNames}
+			bgPreview={bgPreview}
+		/>
+	);
 };
