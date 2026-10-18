@@ -137,7 +137,7 @@ describe('<SceneSidebar> transform tab', () => {
 				tabs={[
 					{content: <p>scene</p>, icon: null, id: 'scene', label: 'scene'},
 					{
-						accent: true,
+						accent: 'selection',
 						content: (
 							<TransformPanel
 								authored={authored}

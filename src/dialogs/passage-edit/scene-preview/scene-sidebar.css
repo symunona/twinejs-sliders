@@ -114,18 +114,29 @@
 	box-shadow: inset 0 -2px 0 var(--blue);
 }
 
-/* An accented handle (`SceneSidebarTab.accent`): a tab that comes and goes with the
-   selection, tinted so the author sees it arrive. */
+/* An accented handle (`SceneSidebarTab.accent`). Orange `selection`: a tab that comes and
+   goes with the selection. Purple `object`: the Links tab editing the selected entity's own
+   link, not the scene's. */
 .scene-sidebar-tab-accent {
 	display: inline-flex;
 }
 
-.scene-sidebar-tab-accent .icon-button {
+.scene-sidebar-tab-accent[data-accent='selection'] .icon-button {
 	background: var(--faint-orange);
 	color: var(--dark-orange);
 }
 
-.scene-sidebar-tab-accent .icon-button.selected {
+.scene-sidebar-tab-accent[data-accent='selection'] .icon-button.selected {
 	background: var(--light-orange);
 	box-shadow: inset 0 -2px 0 var(--orange);
+}
+
+.scene-sidebar-tab-accent[data-accent='object'] .icon-button {
+	background: var(--faint-purple);
+	color: var(--dark-purple);
+}
+
+.scene-sidebar-tab-accent[data-accent='object'] .icon-button.selected {
+	background: var(--light-purple);
+	box-shadow: inset 0 -2px 0 var(--purple);
 }

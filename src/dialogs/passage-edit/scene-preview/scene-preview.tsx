@@ -7,6 +7,7 @@ import {
 	IconChevronLeft,
 	IconChevronRight,
 	IconGridDots,
+	IconHandFinger,
 	IconLink,
 	IconLock,
 	IconLockOpen,
@@ -102,6 +103,7 @@ import {useDialogsContext} from '../../context';
 import {useStoryLaunch} from '../../../store/use-story-launch';
 import {zResetBlocks} from './layer-order';
 import {LayersPanel} from './layers-panel';
+import {ObjectLinkPanel} from './object-link-panel';
 import {SceneLinksPanel} from './scene-links-panel';
 import {
 	SceneSettingsTab,
@@ -1418,7 +1420,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		const active = sidebarActiveRef.current;
 
 		if (hasSelection) {
-			if (active !== 'selection') {
+			// Links stays put: with a selection it IS the selected entity's own link.
+			if (active !== 'selection' && active !== 'links') {
 				tabBeforeSelection.current = active;
 				setSidebarTab('selection');
 			}
@@ -2694,7 +2697,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						)
 					},
 					{
-						accent: true,
+						accent: 'selection' as const,
 						content: (
 							<TransformPanel
 								authored={localStage}
@@ -2718,21 +2721,43 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.walk')
 		},
 		{
+			// A selection turns this tab into the selected entity's OWN `link:` — a
+			// different key from the scene's `links:`, so it looks different on purpose.
+			accent: hasSelection ? ('object' as const) : undefined,
 			content: (
 				<div className="scene-sidebar-section">
-					<SceneLinksPanel
-						editable={editable}
-						onCreatePassage={editable ? onCreatePassage : undefined}
-						onOpenPassage={onOpenPassage}
-						onWrite={writes => commit(writes, EDIT_ORIGIN)}
-						passageNames={passageNames}
-						scene={parse.result?.scene}
-					/>
+					{hasSelection ? (
+						<ObjectLinkPanel
+							beat={beat}
+							editable={editable}
+							entities={selectedEntities}
+							onCreatePassage={editable ? onCreatePassage : undefined}
+							onOpenPassage={onOpenPassage}
+							onShowSceneLinks={clear}
+							onWrite={writes => commit(writes, EDIT_ORIGIN)}
+							passageNames={passageNames}
+							scene={parse.result?.scene}
+							swatches={swatches}
+						/>
+					) : (
+						<SceneLinksPanel
+							editable={editable}
+							onCreatePassage={editable ? onCreatePassage : undefined}
+							onOpenPassage={onOpenPassage}
+							onWrite={writes => commit(writes, EDIT_ORIGIN)}
+							passageNames={passageNames}
+							scene={parse.result?.scene}
+						/>
+					)}
 				</div>
 			),
-			icon: <IconLink />,
+			icon: hasSelection ? <IconHandFinger /> : <IconLink />,
 			id: 'links',
-			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.links')
+			label: t(
+				hasSelection
+					? 'dialogs.passageEdit.scenePreview.sidebar.tabs.objectLink'
+					: 'dialogs.passageEdit.scenePreview.sidebar.tabs.links'
+			)
 		},
 		...(parse.errors.length > 0 || sidebar.active === 'problems'
 			? [

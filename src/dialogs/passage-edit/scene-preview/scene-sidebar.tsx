@@ -48,10 +48,11 @@ export interface SceneSidebarTab {
 	id: SceneSidebarTabId;
 	scope?: SceneSidebarTabScope;
 	/**
-	 * Drawn in the accent colour whether open or not: a tab that only exists while
-	 * something is selected (`transform`) has to be noticed in the moment it is there.
+	 * The handle is recoloured. `selection`: a tab that only exists while something is
+	 * selected (`transform`), orange so it is noticed the moment it is there. `object`: the
+	 * Links tab editing the selected entity's own `link:`, purple.
 	 */
-	accent?: boolean;
+	accent?: 'selection' | 'object';
 	icon: React.ReactNode;
 	label: string;
 	/** Drawn only while this tab is the open one. */
@@ -181,6 +182,7 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = props => {
 								'scene-sidebar-tab-accent': tab.accent,
 								'scene-sidebar-tab-scope': tab.scope
 							})}
+							data-accent={tab.accent}
 							data-scope={tab.scope}
 							data-testid={`scene-sidebar-tab-${tab.id}`}
 							key={tab.id}
