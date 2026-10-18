@@ -24,6 +24,8 @@ import {
 	ENTITY_KEYS,
 	LINK_KEYS,
 	LINK_ENTITY_KEYS,
+	LINK_LIST_KEYS,
+	LINK_LIST_SHOWS,
 	LOOP_KEYS,
 	MOTION_KEYS,
 	MUSIC_KEYS,
@@ -50,7 +52,9 @@ import {
 	ENTITY_FITS,
 	GRADE_KEYS,
 	POSE_LOOPS,
-	LAYERS
+	LAYERS,
+	SCENE_TRANSITION_KEYS,
+	SCENE_TRANSITION_KINDS
 } from '@sliders/scene-types';
 import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-context';
 import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
@@ -80,6 +84,13 @@ export const HIGHLIGHT_TOKENS = ['gold', 'danger', 'cold', 'warm'];
 
 /** Beat keys that are commands rather than a speaker, offered after the cast. */
 const BEAT_COMMAND_NAMES = [...BEAT_COMMAND_KEYS];
+
+/** `transition:` values -- the kinds the player animates. */
+const TRANSITION_VALUES: HintSlot = {
+	id: 'transition',
+	kind: 'values',
+	names: SCENE_TRANSITION_KINDS
+};
 
 /**
  * Command beats whose value is a scalar and nothing else: `- wait: 1`, `- fx: rain`,
@@ -496,6 +507,12 @@ function keySlotFor(chain: string[]): HintSlot | undefined {
 		case 'camera':
 			return keys('camera', CAMERA_KEYS);
 
+		case 'transition':
+			return keys('transition', SCENE_TRANSITION_KEYS);
+
+		case 'linkList':
+			return keys('linkList', LINK_LIST_KEYS);
+
 		case 'cast':
 			return {kind: 'cast'};
 
@@ -811,6 +828,16 @@ export function sceneHintContext(
 				return found({kind: 'sound'});
 			}
 
+			// `transition: {kind: |}` -- the map form's word is the same list the short form
+			// takes. `kind` is a key nowhere else.
+			if (key === 'kind' && owner() === 'transition') {
+				return found(TRANSITION_VALUES);
+			}
+
+			if (key === 'show' && owner() === 'linkList') {
+				return found({id: 'linkListShow', kind: 'values', names: LINK_LIST_SHOWS});
+			}
+
 			switch (key) {
 				case 'ease':
 					return found({kind: 'ease'});
@@ -885,6 +912,16 @@ export function sceneHintContext(
 				// not a map and does not parse, so the entry brings its own braces.
 				case 'links':
 					return found({kind: 'linkName'}, true, '{', '}');
+
+				// Scene, link and `linkList:` alike: one grammar (`parseSceneTransition`), so
+				// one list. Only the kind is offered; `0.6s` and an ease are typed after it.
+				case 'transition':
+					return found(TRANSITION_VALUES);
+
+				// Entity flags. Top-level `locked:` also takes a list, but `true` is the word.
+				case 'flip':
+				case 'locked':
+					return found({id: 'flag', kind: 'values', names: ['true', 'false']});
 
 				case 'highlight':
 					return found({kind: 'highlight'});

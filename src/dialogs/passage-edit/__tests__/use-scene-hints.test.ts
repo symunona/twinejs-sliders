@@ -6,12 +6,17 @@ import {
 	CAMERA_KEYS,
 	ENTITY_KEYS,
 	LINK_KEYS,
+	LINK_LIST_KEYS,
 	LOOP_KEYS,
 	MOTION_KEYS,
 	MUSIC_KEYS,
 	SAY_KEYS
 } from '@sliders/scene-schema';
-import {EASE_KINDS} from '@sliders/scene-types';
+import {
+	EASE_KINDS,
+	SCENE_TRANSITION_KEYS,
+	SCENE_TRANSITION_KINDS
+} from '@sliders/scene-types';
 import {sceneHintContext} from '../use-scene-hints';
 
 /**
@@ -665,5 +670,49 @@ describe('keys offered to a line with no map in it yet', () => {
 		expect(contextAt('[scene]\nbeats:\n  - fx: rai|')).toMatchObject({
 			slot: {kind: 'fx'}
 		});
+	});
+});
+
+describe('closed value lists', () => {
+	it('offers transition kinds for transition: everywhere it is a key', () => {
+		const kinds = {id: 'transition', kind: 'values', names: SCENE_TRANSITION_KINDS};
+
+		expect(contextAt('[scene]\ntransition: |')).toMatchObject({slot: kinds});
+		expect(contextAt('[scene]\ntransition: pu|')).toMatchObject({
+			slot: kinds,
+			typed: 'pu'
+		});
+		expect(
+			contextAt('[scene]\nlinks:\n  back:\n    to: Street\n    transition: |')
+		).toMatchObject({slot: kinds});
+		expect(contextAt('[scene]\nlinkList: {transition: |}')).toMatchObject({slot: kinds});
+		expect(contextAt('[scene]\ntransition: {kind: |}')).toMatchObject({slot: kinds});
+	});
+
+	it('offers the transition map keys inside transition: {', () => {
+		expect(contextAt('[scene]\ntransition: {|')).toMatchObject({
+			slot: {id: 'transition', kind: 'keys', names: SCENE_TRANSITION_KEYS}
+		});
+	});
+
+	it('offers the linkList keys and show values', () => {
+		expect(contextAt('[scene]\nlinkList:\n  |')).toMatchObject({
+			slot: {id: 'linkList', kind: 'keys', names: LINK_LIST_KEYS}
+		});
+		expect(contextAt('[scene]\nlinkList: {show: |}')).toMatchObject({
+			slot: {kind: 'values', names: ['auto', 'always', 'never']}
+		});
+	});
+
+	it('offers true/false for flip: and locked:', () => {
+		const flags = {kind: 'values', names: ['true', 'false']};
+
+		expect(contextAt('[scene]\ncast:\n  mira: {at: 0, flip: |}')).toMatchObject({
+			slot: flags
+		});
+		expect(contextAt('[scene]\ncast:\n  mira: {at: 0, locked: |}')).toMatchObject({
+			slot: flags
+		});
+		expect(contextAt('[scene]\nlocked: |')).toMatchObject({slot: flags});
 	});
 });

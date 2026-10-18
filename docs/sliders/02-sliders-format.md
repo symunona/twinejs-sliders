@@ -969,6 +969,7 @@ transition: {kind: push-left, dur: 0.6, ease: in_out}
 | ease | beat `ease:` words (`ease_in_out`, `back_out`, …, CSS) + `in`, `out`, `inOut`/`in_out` |
 
 - No kind = `fade`. Unknown token = warning, skipped. Nothing readable = next layer answers.
+- Ctrl-Space on the value (or `kind:` in the map) lists the kinds. Picking `transition` from the key list opens it by itself.
 - Direction = where content goes. `push`: both move. `cover`: new slides over old. `uncover`: old slides off new.
 - Missing dur/ease: story `config.body.transition.duration` / `.ease`, then 300ms / per kind (fades linear, moves `ease_in_out`).
 

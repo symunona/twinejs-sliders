@@ -162,6 +162,21 @@ describe('the scene hint dropdown', () => {
 			JSON.parse(window.localStorage.getItem('sliders-recent-names')!)
 		).toEqual({bg: ['tavern-night']});
 	});
+	it('offers transition kinds right after transition is picked', () => {
+		// The reported flow: type `trans`, pick `transition`, and the value list is next.
+		const editor = openHints('[scene]\ntrans', {ch: 5, line: 1});
+		const items = [...document.querySelectorAll('.CodeMirror-hint')];
+
+		(items.find(item => item.textContent === 'transition') as HTMLElement).click();
+		expect(editor.getValue()).toBe('[scene]\ntransition: ');
+
+		const values = sceneCompletion(editor, library, []);
+
+		expect(values?.list.map(item => item.displayText)).toEqual(
+			expect.arrayContaining(['fade', 'push-left', 'zoom'])
+		);
+	});
+
 	it('overwrites a name the cursor is standing in', () => {
 		// Cursor at the front of `tavern-night`, which is therefore what a pick replaces.
 		const editor = openHints('[scene]\nbg: tavern-night', {ch: 4, line: 1});

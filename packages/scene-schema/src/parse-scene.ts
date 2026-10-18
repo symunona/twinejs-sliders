@@ -264,7 +264,7 @@ export const LINK_LIST_KEYS = [
  * Typed rather than `as const` so a value that is not a `LinkListShow` fails the build
  * here, where the check lives, instead of being reported as an unknown token at runtime.
  */
-const LINK_LIST_SHOWS: readonly LinkListShow[] = ['auto', 'always', 'never'];
+export const LINK_LIST_SHOWS: readonly LinkListShow[] = ['auto', 'always', 'never'];
 
 /** The single tag the subset permits: `cast: !only {…}`. */
 const ONLY_TAG = '!only';
