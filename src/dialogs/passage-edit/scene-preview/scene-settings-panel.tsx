@@ -31,6 +31,7 @@ import {
 	IconArrowsMove,
 	IconCamera,
 	IconCloudRain,
+	IconRefresh,
 	IconDoorEnter,
 	IconHelp,
 	IconLock,
@@ -471,12 +472,16 @@ const SettingRow: React.FC<SettingRowProps> = ({
 	</div>
 );
 
-/** A group's title line: icon, words, and an optional `?` that explains on hover. */
+/**
+ * A group's title line: icon, words, an optional `?` that explains on hover, and an
+ * optional action parked at the right end.
+ */
 const Heading: React.FC<{
+	action?: React.ReactNode;
 	help?: string;
 	helpTestId?: string;
 	icon: React.ReactNode;
-}> = ({children, help, helpTestId, icon}) => (
+}> = ({action, children, help, helpTestId, icon}) => (
 	<h4 className="scene-preview-beat-props-heading">
 		{icon}
 		{children}
@@ -492,6 +497,7 @@ const Heading: React.FC<{
 				<IconHelp />
 			</span>
 		)}
+		{action && <span className="scene-settings-heading-action">{action}</span>}
 	</h4>
 );
 
@@ -791,6 +797,7 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 		y: !!scene.camera?.at && cameraNow.at.y !== 0,
 		zoom: scene.camera?.zoom !== undefined && cameraNow.zoom !== 1
 	};
+	const cameraOffRest = cameraStated.x || cameraStated.y || cameraStated.zoom;
 	// The whole camera is written, as the pan gesture writes it: one key, at rest = gone.
 	const setCamera = (axis: 'x' | 'y' | 'zoom', value: number | undefined) =>
 		onWrite([
@@ -1182,7 +1189,27 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 						className="scene-preview-beat-props-group"
 						data-testid="scene-settings-camera-group"
 					>
-						<Heading icon={<IconCamera />}>{label('camera')}</Heading>
+						<Heading
+							action={
+								<button
+									aria-label={label('cameraReset')}
+									className="beat-prop-reset"
+									data-testid="scene-settings-camera-reset"
+									disabled={!!cameraLockedReason || !cameraOffRest}
+									// Whole camera to rest: cameraWrite drops the key.
+									onClick={() =>
+										onWrite([cameraWrite({at: {x: 0, y: 0}, zoom: 1})])
+									}
+									title={label('cameraReset')}
+									type="button"
+								>
+									<IconRefresh />
+								</button>
+							}
+							icon={<IconCamera />}
+						>
+							{label('camera')}
+						</Heading>
 						<SettingRow
 							fallback={cameraLockedReason ?? fallback('0')}
 							label={label('cameraX')}

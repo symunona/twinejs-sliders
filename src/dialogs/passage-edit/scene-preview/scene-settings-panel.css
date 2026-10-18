@@ -44,3 +44,9 @@
 	object-fit: cover;
 	width: 100%;
 }
+
+/* A heading's action (camera reset) sits at the line's right end. */
+.scene-settings-heading-action {
+	display: inline-flex;
+	margin-left: auto;
+}

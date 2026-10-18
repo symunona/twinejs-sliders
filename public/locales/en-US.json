@@ -716,6 +716,7 @@
 					"bubble_place": "Place",
 					"bubble_sizing": "Sizing",
 					"camera": "Camera",
+					"cameraReset": "Reset camera (at 0, 0, zoom 1)",
 					"cameraX": "X",
 					"cameraY": "Y",
 					"cameraZoom": "Zoom",

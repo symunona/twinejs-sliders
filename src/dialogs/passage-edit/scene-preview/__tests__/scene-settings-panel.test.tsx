@@ -450,6 +450,42 @@ describe('<SceneSettingsPanel>', () => {
 		]);
 	});
 
+	it('resets the whole camera from the heading: key removed', () => {
+		const {onWrite} = camera('camera: {at: [0.3, -0.2], zoom: 2}', {
+			camera: {at: {x: 0.3, y: -0.2}, zoom: 2}
+		});
+		const button = screen.getByTestId(
+			'scene-settings-camera-reset'
+		) as HTMLButtonElement;
+
+		expect(button.disabled).toBe(false);
+		fireEvent.click(button);
+		expect(onWrite).toHaveBeenLastCalledWith([
+			{formatted: undefined, sceneKey: 'camera'}
+		]);
+	});
+
+	it('greys the camera reset when the camera is at rest', () => {
+		camera('camera: {at: [0, 0], zoom: 1}', {
+			camera: {at: {x: 0, y: 0}, zoom: 1}
+		});
+		expect(
+			(screen.getByTestId('scene-settings-camera-reset') as HTMLButtonElement)
+				.disabled
+		).toBe(true);
+	});
+
+	it('greys the camera reset under a locked backdrop', () => {
+		camera('camera: {zoom: 2}\nlocked: [bg]', {
+			camera: {at: {x: 0, y: 0}, zoom: 2},
+			cameraLockedReason: 'locked by scene'
+		});
+		expect(
+			(screen.getByTestId('scene-settings-camera-reset') as HTMLButtonElement)
+				.disabled
+		).toBe(true);
+	});
+
 	it('locks the camera coords when the scene locks the backdrop', () => {
 		camera('locked: [bg]', {cameraLockedReason: 'locked by scene'});
 		expect(number('scene-settings-camera-x').disabled).toBe(true);
