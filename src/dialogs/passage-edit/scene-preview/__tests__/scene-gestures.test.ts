@@ -7,6 +7,7 @@ import {
 	deleteWrites,
 	flipWrites,
 	formatCamera,
+	motionSpeedWrites,
 	motionWrites,
 	musicDropWrites,
 	poseWrite,
@@ -132,6 +133,25 @@ describe('motionWrites()', () => {
 		expect(motionWrites(moving, ['hills'], 'circling')[0].value).toEqual({
 			id: 'circling',
 			speed: 12
+		});
+	});
+
+	it('times only the sprites that move', () => {
+		expect(motionSpeedWrites(moving, ['hills', 'sky'], 4)).toEqual([
+			{
+				id: 'hills',
+				key: 'motion',
+				kind: 'prop',
+				ref: 'hills',
+				value: {id: 'parallax_left', speed: 4}
+			}
+		]);
+	});
+
+	it('drops the speed back to the preset', () => {
+		expect(motionSpeedWrites(moving, ['hills'], undefined)[0].value).toEqual({
+			id: 'parallax_left',
+			speed: undefined
 		});
 	});
 

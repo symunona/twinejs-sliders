@@ -869,6 +869,8 @@
 				"motion": "Motion",
 				"motionStill": "Still",
 				"motionMixed": "Mixed",
+				"motionSpeed": "Loop length",
+				"motionSpeedPreset": "preset",
 				"grade": {
 					"button": "Grade",
 					"hint": "Colour grade: tint this sprite to its backdrop without changing the image",

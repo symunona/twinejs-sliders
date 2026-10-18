@@ -1,4 +1,10 @@
-import {fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor
+} from '@testing-library/react';
 import * as React from 'react';
 import type {AssetResolver, Character, Stage} from '@sliders/scene-types';
 import {FakeStateProvider} from '../../../../test-util';
@@ -359,5 +365,39 @@ describe('motion menu', () => {
 		expect(motionSelect().value).toBe('lava_glow');
 		fireEvent.change(motionSelect(), {target: {value: ''}});
 		expect(onMotion).toHaveBeenCalledWith(undefined);
+	});
+
+	it('shows the loop length only for a moving sprite, and writes it', () => {
+		const onMotionSpeed = jest.fn();
+		const moving = parseSceneText(
+			'[scene]\nprops:\n  hills: {motion: {id: parallax_left, speed: 12}}'
+		).states[0];
+		const speedBox = () =>
+			screen.queryByRole('spinbutton', {
+				name: 'dialogs.passageEdit.scenePreview.motionSpeed'
+			}) as HTMLInputElement | null;
+
+		renderControls(['candle'], {onMotionSpeed});
+		expect(speedBox()).toBeNull();
+		cleanup();
+		render(
+			<FakeStateProvider>
+				<StageSelectionControls
+					assets={assets}
+					editable
+					entities={[moving.entities.hills]}
+					onDelete={jest.fn()}
+					onFlip={jest.fn()}
+					onMotionSpeed={onMotionSpeed}
+					onPose={jest.fn()}
+					onPreviewPose={jest.fn()}
+					onStepZ={jest.fn()}
+				/>
+			</FakeStateProvider>
+		);
+		expect(speedBox()!.value).toBe('12');
+		fireEvent.change(speedBox()!, {target: {value: '5'}});
+		fireEvent.blur(speedBox()!);
+		expect(onMotionSpeed).toHaveBeenCalledWith(5);
 	});
 });

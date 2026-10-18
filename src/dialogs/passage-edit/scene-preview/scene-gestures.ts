@@ -206,6 +206,31 @@ export function motionWrites(
 	}));
 }
 
+/**
+ * Set or clear `speed` (seconds per cycle) on every selected sprite that HAS a motion. A
+ * still sprite has nothing to time, and a bare speed is not a key the parser takes.
+ * `undefined` goes back to the preset's own loop length — the token alone.
+ */
+export function motionSpeedWrites(
+	stage: Stage,
+	ids: EntityId[],
+	speed: number | undefined
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids).flatMap(entity =>
+		entity.motion
+			? [
+					{
+						id: entity.id,
+						key: 'motion',
+						kind: entity.kind,
+						ref: entity.ref,
+						value: {id: entity.motion.id, speed}
+					}
+			  ]
+			: []
+	);
+}
+
 // ---------------------------------------------------------------------------
 // delete
 // ---------------------------------------------------------------------------

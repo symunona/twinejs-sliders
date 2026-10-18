@@ -48,6 +48,7 @@ import type {
 } from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
+import {NumberField} from './number-field';
 import {TextSelect} from '../../../components/control/text-select';
 import {GradeExtremesOverlay} from './grade-extremes-overlay';
 import {GradeSliders} from './grade-sliders';
@@ -79,6 +80,8 @@ export interface StageSelectionControlsProps {
 	 * Same presets as the backdrop's `fx:` — a prop row of hills is a parallax layer.
 	 */
 	onMotion?: (motion: string | undefined) => void;
+	/** Seconds per cycle on the selection's motions, `undefined` for the preset's own. */
+	onMotionSpeed?: (speed: number | undefined) => void;
 	/**
 	 * Draw a pose on the stage without writing it: `AUTO_POSE` for the fallback, a name
 	 * for that pose, `null` to stop previewing and go back to what the scene says.
@@ -147,6 +150,15 @@ function sharedMotion(entities: StageEntity[]): string {
 	return ids.size === 1 ? [...ids][0] : MIXED;
 }
 
+/** The speed every moving sprite in the selection shares, else undefined (box empty). */
+function sharedSpeed(entities: StageEntity[]): number | undefined {
+	const speeds = new Set(
+		entities.filter(entity => entity.motion).map(entity => entity.motion?.speed)
+	);
+
+	return speeds.size === 1 ? [...speeds][0] : undefined;
+}
+
 /**
  * The pose names a character declares.
  *
@@ -202,6 +214,7 @@ export const StageSelectionControls: React.FC<
 		onFlip,
 		onPose,
 		onMotion,
+		onMotionSpeed,
 		onResetStretch,
 		onToggleLock,
 		onOpenLink,
@@ -439,6 +452,18 @@ export const StageSelectionControls: React.FC<
 				>
 					{t('dialogs.passageEdit.scenePreview.motion')}
 				</TextSelect>
+			)}
+			{onMotionSpeed && entities.some(entity => entity.motion) && (
+				<div className="scene-preview-selection-motion-speed">
+					<NumberField
+						label={t('dialogs.passageEdit.scenePreview.motionSpeed')}
+						min={0.1}
+						onCommit={onMotionSpeed}
+						placeholder={t('dialogs.passageEdit.scenePreview.motionSpeedPreset')}
+						unit="s"
+						value={sharedSpeed(entities)}
+					/>
+				</div>
 			)}
 			{single && onGrade && (
 				<GradeSliders

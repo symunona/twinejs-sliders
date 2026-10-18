@@ -72,6 +72,12 @@
 	gap: 2px;
 }
 
+.scene-preview-selection-motion-speed {
+	align-items: center;
+	display: flex;
+	gap: 4px;
+}
+
 .scene-preview-selection-name {
 	font-weight: bold;
 	min-width: 0;

@@ -74,6 +74,7 @@ import {
 	lockWrites,
 	musicDropWrites,
 	unstretchWrites,
+	motionSpeedWrites,
 	motionWrites,
 	poseWrite,
 	zWrites
@@ -1263,6 +1264,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const setMotion = React.useCallback(
 		(motion: string | undefined) =>
 			commit(motionWrites(stage, selection, motion), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	const setMotionSpeed = React.useCallback(
+		(speed: number | undefined) =>
+			commit(motionSpeedWrites(stage, selection, speed), EDIT_ORIGIN),
 		[commit, selection, stage]
 	);
 
@@ -2477,6 +2484,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onToggleLock={toggleEntityLock}
 				onPose={setPose}
 				onMotion={setMotion}
+				onMotionSpeed={setMotionSpeed}
 				onOpenLink={onOpenPassage}
 				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}
