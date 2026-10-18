@@ -243,6 +243,13 @@ export interface EntityKeyWrite {
 	 * where splicing a beat would put an editor setting on the timeline.
 	 */
 	entry?: boolean;
+	/**
+	 * This write's `at` is an offset from an `of:` parent (true) or a stage position
+	 * (false), whatever the text says now. Only for the write that goes with an `of:`
+	 * change in the same batch: every edit is built against the text BEFORE the batch, so
+	 * the new parent is not there to be read.
+	 */
+	relative?: boolean;
 }
 
 /**
@@ -433,7 +440,9 @@ function insertBeatEdit(
 	}
 
 	const options = {
-		relative: entityHasParent(blockText, {id: first.id, kind: first.kind})
+		relative:
+			writes.find(write => write.relative !== undefined)?.relative ??
+			entityHasParent(blockText, {id: first.id, kind: first.kind})
 	};
 
 	return plan.join
@@ -469,7 +478,9 @@ export function buildEntityEdit(
 		const edit =
 			value === undefined
 				? removeEntityKey(blockText, target, write.key)
-				: setEntityKey(blockText, target, write.key, value);
+				: setEntityKey(blockText, target, write.key, value, {
+						relative: write.relative
+				  });
 
 		if (edit) {
 			return edit;

@@ -102,6 +102,27 @@ describe('<TransformPanel>', () => {
 		expect(screen.getByText(`${K}.relative`)).toBeInTheDocument();
 	});
 
+	it('picks a parent: of: and the at that keeps the sprite in place', () => {
+		const onWrite = renderPanel(['cup']);
+		const select = screen.getByRole('combobox', {
+			name: `${K}.parent`
+		}) as HTMLSelectElement;
+
+		expect(select.value).toBe('mira');
+		expect(
+			within(select)
+				.getAllByRole('option')
+				.map(option => option.textContent)
+		).toEqual([`${K}.parentNone`, 'mira', 'joren']);
+
+		fireEvent.change(select, {target: {value: ''}});
+
+		expect(onWrite).toHaveBeenCalledWith([
+			expect.objectContaining({id: 'cup', key: 'of', value: undefined}),
+			expect.objectContaining({id: 'cup', key: 'at', relative: false})
+		]);
+	});
+
 	it('offers only z on a fit: plane', () => {
 		renderPanel(['sky']);
 

@@ -2706,6 +2706,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 								ids={selection}
 								note={beatNote}
 								onWrite={writes => commit(writes, EDIT_ORIGIN)}
+								patchScene={parse.result?.scene.from !== undefined}
 							/>
 						),
 						icon: <IconArrowsMove />,
