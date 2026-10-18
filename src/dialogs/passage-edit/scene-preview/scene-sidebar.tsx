@@ -33,6 +33,7 @@ export type SceneSidebarTabId =
 	| 'layers'
 	| 'beat'
 	| 'selection'
+	| 'transform'
 	| 'walk'
 	| 'links'
 	| 'problems';
@@ -46,6 +47,11 @@ export type SceneSidebarTabScope = 'global' | 'beat';
 export interface SceneSidebarTab {
 	id: SceneSidebarTabId;
 	scope?: SceneSidebarTabScope;
+	/**
+	 * Drawn in the accent colour whether open or not: a tab that only exists while
+	 * something is selected (`transform`) has to be noticed in the moment it is there.
+	 */
+	accent?: boolean;
 	icon: React.ReactNode;
 	label: string;
 	/** Drawn only while this tab is the open one. */
@@ -64,7 +70,10 @@ export interface SceneSidebarProps {
 const OPEN_KEY = 'sliders.preview.sidebar.open';
 const TAB_KEY = 'sliders.preview.sidebar.tab';
 
-/** Tabs that are a place to come back to. `selection` and `problems` are moments. */
+/**
+ * Tabs that are a place to come back to. `selection`, `transform` and `problems` are
+ * moments: each exists only while there is a selection or an error.
+ */
 const REMEMBERED: SceneSidebarTabId[] = [
 	'scene',
 	'camera',
@@ -165,10 +174,13 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = props => {
 						/>
 					);
 
-					// IconButton takes no class, so a scoped handle is wrapped.
-					return tab.scope ? (
+					// IconButton takes no class, so a scoped or accented handle is wrapped.
+					return tab.scope || tab.accent ? (
 						<span
-							className="scene-sidebar-tab-scope"
+							className={classNames({
+								'scene-sidebar-tab-accent': tab.accent,
+								'scene-sidebar-tab-scope': tab.scope
+							})}
 							data-scope={tab.scope}
 							data-testid={`scene-sidebar-tab-${tab.id}`}
 							key={tab.id}

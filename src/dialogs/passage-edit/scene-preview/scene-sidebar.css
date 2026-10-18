@@ -113,3 +113,19 @@
 	background: var(--light-blue);
 	box-shadow: inset 0 -2px 0 var(--blue);
 }
+
+/* An accented handle (`SceneSidebarTab.accent`): a tab that comes and goes with the
+   selection, tinted so the author sees it arrive. */
+.scene-sidebar-tab-accent {
+	display: inline-flex;
+}
+
+.scene-sidebar-tab-accent .icon-button {
+	background: var(--faint-orange);
+	color: var(--dark-orange);
+}
+
+.scene-sidebar-tab-accent .icon-button.selected {
+	background: var(--light-orange);
+	box-shadow: inset 0 -2px 0 var(--orange);
+}
