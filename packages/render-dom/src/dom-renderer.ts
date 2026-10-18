@@ -695,6 +695,28 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
+	 * Jump every running CSS transition on the stage to its end.
+	 *
+	 * A reader's click while a beat is still moving finishes the move instead of skipping
+	 * past it (spec 02, "Timing"). Re-applying the same stage with zero durations cannot do
+	 * this: nothing changes value, so a running transition keeps running. Animations (motion
+	 * loops, bubble enters) are not transitions and are left alone.
+	 */
+	finishTransitions(): void {
+		const root = this.mountEl;
+
+		if (!root || typeof root.getAnimations !== 'function') {
+			return;
+		}
+
+		for (const animation of root.getAnimations({subtree: true})) {
+			if (typeof CSSTransition !== 'undefined' && animation instanceof CSSTransition) {
+				animation.finish();
+			}
+		}
+	}
+
+	/**
 	 * Show or hide the "waiting for you" cue: a mouse in a ring, bottom right of the stage.
 	 *
 	 * The host says when — only it knows whether a timer is about to advance the beat. The

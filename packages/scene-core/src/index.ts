@@ -7,6 +7,20 @@
 
 export {applyScene} from './apply-scene';
 export {
+	beatTiming,
+	beatTransitions,
+	sceneTimeline,
+	timeBeat
+} from './beat-timing';
+export type {
+	BeatAdvance,
+	BeatTiming,
+	BeatTimingOptions,
+	BeatTrack,
+	SceneTimelineOptions,
+	TimelineBeat
+} from './beat-timing';
+export {
 	DEFAULT_DURATIONS,
 	diffStages,
 	easeTransitions,

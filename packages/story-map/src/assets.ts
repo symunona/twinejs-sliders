@@ -24,6 +24,7 @@ import type {
 } from '@sliders/scene-types';
 import {
 	MUSIC_MAIN_TRACK,
+	beatParts,
 	poseAssets,
 	splitPoseImage,
 	upgradeCharacter
@@ -411,10 +412,9 @@ export function resolveSceneAssets(
 				}
 
 				for (const beat of current.beats ?? []) {
-					const who = (beat as {who?: string}).who;
-					const body = (beat as {patch?: EntityPatchBody}).patch;
+					const body = beatParts(beat).find(part => part.who === id)?.patch;
 
-					if (who !== id || !body) {
+					if (!body) {
 						continue;
 					}
 

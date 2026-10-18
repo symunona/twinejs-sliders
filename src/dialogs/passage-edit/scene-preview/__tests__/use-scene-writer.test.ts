@@ -114,7 +114,7 @@ describe('planEntityWrite()', () => {
 		const plan = planEntityWrite(scene, 1, 'prop', 'candle');
 
 		expect(plan.targets).toEqual([]);
-		expect(plan.insertBeat).toEqual({after: 0, index: 1, owner: 'mira'});
+		expect(plan.insertBeat).toEqual({after: 0, index: 1, join: true, owner: 'mira'});
 	});
 
 	it('reports no owner when the beat on screen is a command', () => {
@@ -124,7 +124,7 @@ describe('planEntityWrite()', () => {
 		const plan = planEntityWrite(commands, 1, 'cast', 'mira');
 
 		expect(plan.targets).toEqual([]);
-		expect(plan.insertBeat).toEqual({after: 0, index: 1});
+		expect(plan.insertBeat).toEqual({after: 0, index: 1, join: true, owner: undefined});
 	});
 
 	// Past the last beat there is no beat to own anything, so the entry is right again.
@@ -738,9 +738,9 @@ describe('writing onto the beat the scrubber is on', () => {
 		expect(out).toContain('- mira: {at: 0.5}');
 	});
 
-	// Not the entry — that would move the candle from the top of the scene. A beat of its
-	// own, immediately after the one on screen.
-	it('splices a new beat when the beat on screen is somebody else\'s', () => {
+	// Not the entry — that would move the candle from the top of the scene. It joins the
+	// beat on screen: the candle moves at that moment, with mira.
+	it('joins the beat on screen when it is somebody else\'s', () => {
 		const out = applied(passage, 1, {
 			id: 'candle',
 			key: 'at',
@@ -750,28 +750,28 @@ describe('writing onto the beat the scrubber is on', () => {
 		});
 
 		expect(out).toContain(
-			['  - mira: {at: 0.2}', '  - candle: {at: 0.5}'].join('\n')
+			['  - mira: {at: 0.2}', '    candle: {at: 0.5}'].join('\n')
 		);
 		// cast: and props: untouched.
 		expect(out).toContain('  candle: {at: 0.1, scale: 0.6}');
 	});
 
-	it('folds one gesture\'s keys into a single new beat', () => {
+	it('folds one gesture\'s keys into one joined entry', () => {
 		const out = applied2(passage, 1, [
 			{id: 'candle', key: 'at', kind: 'prop', ref: 'candle', value: 0.5},
 			{id: 'candle', key: 'scale', kind: 'prop', ref: 'candle', value: 2}
 		]);
 
-		expect(out).toContain('  - candle: {at: 0.5, scale: 2}');
+		expect(out).toContain('\n    candle: {at: 0.5, scale: 2}');
 	});
 
-	it('counts the beats a gesture will add, before it adds them', () => {
+	it('counts no new beat for a gesture that joins one', () => {
 		expect(
 			insertedBeatCount(context(passage, 1), [
 				{id: 'candle', key: 'at', kind: 'prop', ref: 'candle', value: 0.5},
 				{id: 'candle', key: 'scale', kind: 'prop', ref: 'candle', value: 2}
 			])
-		).toBe(1);
+		).toBe(0);
 		expect(
 			insertedBeatCount(context(passage, 1), [
 				{id: 'mira', key: 'at', kind: 'cast', ref: 'mira', value: 0.5}
@@ -828,7 +828,7 @@ describe('writing onto the beat the scrubber is on', () => {
 
 	// A patch scene has no `props:` at all, and the new beat needs none: the beat IS the
 	// whole write.
-	it('gives a patch scene a beat rather than an entry', () => {
+	it('joins a beat in a patch scene rather than adding an entry', () => {
 		const out = applied(patchPassage, 1, {
 			id: 'candle',
 			key: 'at',
@@ -837,7 +837,7 @@ describe('writing onto the beat the scrubber is on', () => {
 			value: 0.5
 		});
 
-		expect(out).toContain('  - candle: {at: 0.5}');
+		expect(out).toContain('  - mira: "Back again."\n    candle: {at: 0.5}');
 		expect(out).not.toContain('props:');
 	});
 });

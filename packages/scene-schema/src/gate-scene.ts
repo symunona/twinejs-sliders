@@ -42,6 +42,23 @@ export function gateScene(scene: Scene, holds: (condition: string) => boolean): 
 				// first-visit drone does not need the same `if:` written on every line.
 				!('who' in beat && gone.has(beat.who))
 		)
+		// The rest of a several-entity beat goes the same way, one entity at a time.
+		.map((beat): Beat => {
+			if (!beat.with?.some(part => gone.has(part.who))) {
+				return beat;
+			}
+
+			const kept = beat.with.filter(part => !gone.has(part.who));
+			const out = {...beat};
+
+			if (kept.length > 0) {
+				out.with = kept;
+			} else {
+				delete out.with;
+			}
+
+			return out;
+		})
 		// Renumbered: `index` is a position in THIS list, and `@mark` resolution reads it.
 		.map((beat, index): Beat => (beat.index === index ? beat : {...beat, index}));
 

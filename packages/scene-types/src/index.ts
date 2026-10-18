@@ -578,6 +578,33 @@ export interface BeatBase {
 	 * `wait`, `fx` and `mark` are scalars with no body map to write one in.
 	 */
 	ease?: BeatEase;
+	/**
+	 * Every entity in this beat after its first key (spec 02, "Several at once"):
+	 *
+	 *     - mira:  {at: 0.3, dur: 2}
+	 *       joren: {say: "Wait!", at: -0.3}
+	 *
+	 * The first key still decides the beat's `kind` and fills `who` / `patch` / `text`, so
+	 * a reader that knows only one entity per beat keeps working. Anything that must see
+	 * all of them reads `beatParts()` / `beatLines()` instead of this list.
+	 */
+	with?: BeatPart[];
+}
+
+/**
+ * One entity's share of a beat: what it changes, what it says, and its own timing.
+ *
+ * `dur` / `ease` time only THIS entity's transitions; absent = the beat's own. Two parts
+ * never name the same entity — a YAML map cannot hold the key twice.
+ */
+export interface BeatPart {
+	who: EntityId;
+	patch?: EntityPatchBody;
+	/** Words. A part with text draws its own bubble, beside the others. */
+	text?: string;
+	style?: BubbleStyle;
+	dur?: number;
+	ease?: BeatEase;
 }
 
 /**
@@ -927,6 +954,57 @@ export type Beat =
 	| SetBeat
 	| BgBeat
 	| MusicBeat;
+
+/**
+ * Every entity a beat touches, its first key included, in the order written.
+ *
+ * The one place the primary entity (`who`/`patch`/`text` on a `say` or `set` beat) and the
+ * `with:` parts are read as one list — consumers that loop over this cannot forget either.
+ * The primary's `dur`/`ease` are the beat's, so they are not copied onto its part.
+ */
+export function beatParts(beat: Beat): BeatPart[] {
+	const out: BeatPart[] = [];
+
+	if (beat.kind === 'say') {
+		out.push({
+			who: beat.who,
+			text: beat.text,
+			...(beat.patch ? {patch: beat.patch} : {}),
+			...(beat.style ? {style: beat.style} : {})
+		});
+	} else if (beat.kind === 'set') {
+		out.push({who: beat.who, patch: beat.patch});
+	}
+
+	return beat.with ? [...out, ...beat.with] : out;
+}
+
+/** One thing a beat puts into words: a speaker's bubble, or the narration box (`who` absent). */
+export interface BeatLine {
+	who?: EntityId;
+	text: string;
+	style?: BubbleStyle;
+}
+
+/** Every line a beat shows at once: the box first, then each speaker, in written order. */
+export function beatLines(beat: Beat): BeatLine[] {
+	const out: BeatLine[] =
+		beat.kind === 'box'
+			? [{text: beat.text, ...(beat.style ? {style: beat.style} : {})}]
+			: [];
+
+	for (const part of beatParts(beat)) {
+		if (part.text !== undefined) {
+			out.push({
+				who: part.who,
+				text: part.text,
+				...(part.style ? {style: part.style} : {})
+			});
+		}
+	}
+
+	return out;
+}
 
 // ---------------------------------------------------------------------------
 // Links (D3)

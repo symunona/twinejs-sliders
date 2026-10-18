@@ -57,12 +57,7 @@ import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import {isAudioFile} from '@sliders/asset-store';
 import type {AssetDragPayload} from './asset-drag';
-import {
-	beatHoldMs,
-	beatWaitsForClick,
-	sceneAutoAdvanceMs,
-	sceneHoldMs
-} from './beat-hold';
+import {AUTO_ADVANCE_MS, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatPanel} from './beat-panel';
 import {applySceneFix} from '../scene-errors/apply-scene-fix';
 import {SceneErrorBadge, SceneErrorPanel} from './scene-error-badge';
@@ -115,7 +110,7 @@ import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
-import {parentOffsets, resolveStage} from '@sliders/scene-core';
+import {parentOffsets, resolveStage, sceneTimeline} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
 import {useActiveBeatMark} from './use-active-beat-mark';
 import type {SceneDoc} from '../../../store/passage-docs';
@@ -582,6 +577,26 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const beats = parse.result?.scene.beats ?? EMPTY_BEATS;
 	// State N is produced by beat N-1; S0 has no beat.
 	const shownBeat = beat > 0 ? beats[beat - 1] : undefined;
+	/**
+	 * The scene on the player's clock (`sceneTimeline`): per beat, what animates, for how
+	 * long, and how it hands over. Play, the strip and the timing overlay all read this one.
+	 * A scene with no `autoAdvance:` plays at the standard beat; `0` waits for a click.
+	 */
+	const sceneAutoMs = sceneAutoAdvanceMs(parse.result?.scene);
+	const timeline = React.useMemo(
+		() =>
+			sceneTimeline(parse.states, beats, {
+				autoAdvanceSec: (sceneAutoMs ?? AUTO_ADVANCE_MS) / 1000,
+				readerSec: holdMs / 1000,
+				sceneEase: parse.result?.scene.ease
+			}),
+		[beats, holdMs, parse.result, parse.states, sceneAutoMs]
+	);
+	/** Hold of every state, ms. State 0 is produced by no beat and takes the standard beat. */
+	const holdsMs = React.useMemo(
+		() => [holdMs, ...timeline.beats.map(each => each.length * 1000)],
+		[holdMs, timeline]
+	);
 	/** Set by "add beat": focus the beat panel's text once the new beat is on screen. */
 	const focusAddedBeat = React.useRef(false);
 
@@ -1734,11 +1749,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 */
 	const waitingForClick =
 		playing &&
+		beat > 0 &&
 		beat < lastBeat &&
-		beatWaitsForClick(
-			shownBeat,
-			sceneAutoAdvanceMs(parse.result?.scene)
-		);
+		timeline.beats[beat - 1]?.timing.advance === 'reader';
 
 	React.useEffect(() => {
 		if (!playing) {
@@ -1754,14 +1767,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
-		const producedBy = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
 		const timer = window.setTimeout(
 			() => setBeat(b => b + 1),
-			beatHoldMs(producedBy, holdMs)
+			holdsMs[beat] ?? holdMs
 		);
 
 		return () => window.clearTimeout(timer);
-	}, [beat, holdMs, lastBeat, parse.result, playing, waitingForClick]);
+	}, [beat, holdMs, holdsMs, lastBeat, playing, waitingForClick]);
 
 	// The press that ends a wait. Native and CAPTURING on the viewport, so it lands before
 	// the overlay's own React handler and is swallowed there: the click means "go on", not
@@ -2114,6 +2126,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				autoAdvanceMs={holdMs}
 				beat={beat}
 				beats={beats}
+				holdsMs={holdsMs}
 				labels={timelineLabels}
 				onBeatChange={goToBeat}
 			/>

@@ -19,17 +19,18 @@
  * what a host with no story state to evaluate `if:` against can say.
  */
 
+import {beatLines, beatParts} from '@sliders/scene-types';
 import type {Beat, EntityLink, Scene} from '@sliders/scene-types';
 import {scanWikiLinks} from './links';
 
-/** The text a beat shows the reader, or nothing for the beats that show none. */
-function beatText(beat: Beat): string | undefined {
-	return beat.kind === 'say' || beat.kind === 'box' ? beat.text : undefined;
+/** Every text a beat shows the reader: the box and each speaker's words. */
+function beatTexts(beat: Beat): string[] {
+	return beatLines(beat).map(line => line.text);
 }
 
-/** A beat's patch carries the entity `link:`; only `say` and `set` beats have one. */
-function beatLink(beat: Beat): EntityLink | null | undefined {
-	return 'patch' in beat ? beat.patch?.link : undefined;
+/** Every entity `link:` a beat's patches set — its first entity's and each `with:` part's. */
+function beatLinkList(beat: Beat): (EntityLink | null | undefined)[] {
+	return beatParts(beat).map(part => part.patch?.link);
 }
 
 function followable(link: EntityLink, liveLinks: ReadonlySet<string>): boolean {
@@ -46,22 +47,18 @@ export function beatsOfferLinks(
 	liveLinks: ReadonlySet<string> = new Set(Object.keys(scene.links ?? {}))
 ): boolean {
 	for (const beat of scene.beats ?? []) {
-		const link = beatLink(beat);
-
-		if (link && followable(link, liveLinks)) {
-			return true;
-		}
-
-		const text = beatText(beat);
-
-		if (text === undefined) {
-			continue;
-		}
-
-		for (const wiki of scanWikiLinks(text)) {
-			// `[[stay -> Street]]` states its own target; `[[stay]]` needs a live entry.
-			if (wiki.target !== undefined || liveLinks.has(wiki.name)) {
+		for (const link of beatLinkList(beat)) {
+			if (link && followable(link, liveLinks)) {
 				return true;
+			}
+		}
+
+		for (const text of beatTexts(beat)) {
+			for (const wiki of scanWikiLinks(text)) {
+				// `[[stay -> Street]]` states its own target; `[[stay]]` needs a live entry.
+				if (wiki.target !== undefined || liveLinks.has(wiki.name)) {
+					return true;
+				}
 			}
 		}
 	}

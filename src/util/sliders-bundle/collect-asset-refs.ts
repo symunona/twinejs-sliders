@@ -10,6 +10,7 @@
 
 import {extractSceneBlock} from '@sliders/scene-index';
 import {parseScene} from '@sliders/scene-schema';
+import {beatParts} from '@sliders/scene-types';
 import type {MusicSpec, SceneStep, Scene} from '@sliders/scene-types';
 import type {SceneAssetRefs} from './bundle.types';
 import type {Story} from '../../store/stories';
@@ -147,12 +148,12 @@ function addScene(sets: RefSets, scene: Scene): void {
 				add(sets.fxRefs, beat.fx.id);
 				break;
 
-			case 'say':
-			case 'set':
-				// A beat can name a pose for an entity the block never declared — that is
-				// still a pose the character has to have.
-				addPoses(sets, beat.who, beat.patch);
-				break;
+		}
+
+		// A beat can name a pose for an entity the block never declared — that is still a
+		// pose the character has to have. Every entity in the beat, not just its first.
+		for (const part of beatParts(beat)) {
+			addPoses(sets, part.who, part.patch);
 		}
 	}
 }

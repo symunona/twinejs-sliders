@@ -952,6 +952,81 @@ export function insertBeatEntity(
 }
 
 /**
+ * Add entity `id` to the beat at seq position `index`, beside the keys already there:
+ *
+ *     - mira: "Over here!"
+ *       joren: {at: 0.3}        # <- this line
+ *
+ * What a drag does when the scrubber is parked on somebody else's beat: the move happens AT
+ * that moment, with them (spec 02, "Several at once"), rather than on a beat of its own
+ * after it. undefined when the item already names `id`, or is not a map.
+ */
+export function insertBeatPart(
+	text: string,
+	index: number,
+	id: EntityId,
+	keys: Record<string, unknown>,
+	options: {relative?: boolean} = {}
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+
+	if (!parsed) {
+		return undefined;
+	}
+
+	const item = beatsSeqOf(parsed)?.items[index];
+
+	if (!isMap(item)) {
+		return undefined;
+	}
+
+	const map = item as YAMLMap;
+	const items = map.items as Pair<unknown, unknown>[];
+
+	if (items.length === 0 || items.some(one => keyName(one) === id)) {
+		return undefined;
+	}
+
+	const parts: string[] = [];
+
+	for (const key of ENTITY_KEY_ORDER) {
+		if (key === 'ref' || keys[key] === undefined) {
+			continue;
+		}
+
+		parts.push(`${key}: ${formatValue(key, keys[key], {relative: options.relative})}`);
+	}
+
+	if (parts.length === 0) {
+		return undefined;
+	}
+
+	const formatted = `{${parts.join(', ')}}`;
+
+	if (map.flow) {
+		return insertIntoMap(parsed, map, id, formatted);
+	}
+
+	const firstKey = rangeOf(items[0].key);
+	const end = pairEnd(items[items.length - 1]);
+
+	if (!firstKey || end === undefined) {
+		return undefined;
+	}
+
+	// The COLUMN of the first key, not the line's indent: on `  - mira: …` the line's
+	// leading whitespace stops at the dash, and a sibling key has to line up past it.
+	const column = firstKey[0] - lineStartAt(text, firstKey[0]);
+	const at = lineEndAt(text, trimEnd(text, end, firstKey[0]));
+
+	return {
+		from: at,
+		insert: `\n${' '.repeat(column)}${id}: ${formatted}`,
+		to: at
+	};
+}
+
+/**
  * A brand new spoken beat, `- who: ""`, so that `beats[index]` is it.
  *
  * The beat bar's "add beat": `who` is `box` for narration, else an entity id. Empty words,

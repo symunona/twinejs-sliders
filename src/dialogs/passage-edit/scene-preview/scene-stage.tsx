@@ -11,9 +11,10 @@ import {
 	BeatEase,
 	BubbleStyle,
 	Stage,
-	Transition
+	Transition,
+	beatLines
 } from '@sliders/scene-types';
-import {diffStages, easeTransitions, timeTransitions} from '@sliders/scene-core';
+import {diffStages, timeBeat} from '@sliders/scene-core';
 
 export interface SceneStageProps {
 	assets: AssetResolver;
@@ -118,29 +119,26 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	const onRendererRef = React.useRef(onRenderer);
 	const [ready, setReady] = React.useState(false);
 	/**
-	 * Pulled out as a primitive so the apply effect can depend on it.
+	 * Everything that times the beat — its `dur:`/`ease:`, each `with:` part's, the scene's
+	 * `ease:` — as ONE string the apply effect can depend on.
 	 *
 	 * `beat` itself is a fresh object on every parse, so depending on it would re-apply the
-	 * stage on every keystroke; the number only changes when the author retimes the beat.
+	 * stage on every keystroke; this string only changes when the author retimes something.
+	 * The real values are read out of refs.
 	 */
-	const beatDur = beat?.dur;
-	/**
-	 * The same trick `beatDur` plays, for a value that can be a map.
-	 *
-	 * An ease is an object as often as it is a string, so it is a fresh identity on every
-	 * parse exactly the way `beat` is. The effect depends on this STRING and reads the real
-	 * values out of a ref, so retiming a curve re-applies the stage and typing does not.
-	 */
-	const easeKey = `${JSON.stringify(beat?.ease ?? null)}\u0000${JSON.stringify(
+	const timingKey = JSON.stringify([
+		beat?.dur ?? null,
+		beat?.ease ?? null,
+		beat?.with?.map(part => [part.who, part.dur ?? null, part.ease ?? null]) ?? null,
 		sceneEase ?? null
-	)}`;
-	const easeRef = React.useRef<{beat?: BeatEase; scene?: BeatEase}>({});
+	]);
+	const sceneEaseRef = React.useRef<BeatEase | undefined>(sceneEase);
 	/** What the last `apply` was given, so a flip of `animate` alone can be told apart. */
-	const appliedRef = React.useRef<{beatDur?: number; easeKey: string; stage?: Stage}>({
-		easeKey: ''
+	const appliedRef = React.useRef<{stage?: Stage; timingKey: string}>({
+		timingKey: ''
 	});
 
-	easeRef.current = {beat: beat?.ease, scene: sceneEase};
+	sceneEaseRef.current = sceneEase;
 	assetsRef.current = assets;
 	beatRef.current = beat;
 	onLinkRef.current = onLink;
@@ -190,7 +188,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			rendererRef.current = undefined;
 			dialogueRef.current = undefined;
 			prevStageRef.current = undefined;
-			appliedRef.current = {easeKey: ''};
+			appliedRef.current = {timingKey: ''};
 			onRendererRef.current?.(undefined);
 		};
 	}, []);
@@ -212,24 +210,24 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		if (
 			prev === stage &&
 			applied.stage === stage &&
-			applied.beatDur === beatDur &&
-			applied.easeKey === easeKey
+			applied.timingKey === timingKey
 		) {
 			return;
 		}
 
-		appliedRef.current = {beatDur, easeKey, stage};
+		appliedRef.current = {stage, timingKey};
 
 		let transitions: Transition[] = [];
 
 		if (prev) {
-			// The beat's own `dur:` first, then its curve, THEN the snap -- a scene being
-			// typed into must not animate whatever the author timed the beat at, and a
-			// zeroed duration with a curve on it is still a snap.
-			transitions = easeTransitions(
-				timeTransitions(diffStages(prev, stage), beatDur),
-				easeRef.current.beat,
-				easeRef.current.scene
+			// The beat's own timing first -- per entity, the way the player times it --
+			// THEN the snap: a scene being typed into must not animate whatever the author
+			// timed the beat at, and a zeroed duration with a curve on it is still a snap.
+			transitions = timeBeat(
+				diffStages(prev, stage),
+				beatRef.current,
+				sceneEaseRef.current,
+				stage
 			);
 
 			// Snap while typing: derive the same set but with zero duration, so entities
@@ -241,7 +239,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 		prevStageRef.current = stage;
 		void renderer.apply(stage, transitions);
-	}, [animate, beatDur, easeKey, ready, stage]);
+	}, [animate, ready, stage, timingKey]);
 
 	/**
 	 * Re-resolve every asset on stage after the library moved.
@@ -355,52 +353,52 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			return;
 		}
 
-		// Each beat owns exactly one of the two surfaces, so stale text can't linger.
-		if (beat?.kind === 'say') {
-			const onStage = rendererRef.current?.characterOf(beat.who)?.bubble;
+		// Every line the beat shows, at once: the box and each speaker's bubble. Anything a
+		// beat does not say is cleared, so stale text can't linger.
+		const lines = beat ? beatLines(beat) : [];
+		const box = lines.find(line => line.who === undefined);
+		const speakers = lines.filter(line => line.who !== undefined);
+		const specs = (characterBubble: (who: string) => BubbleStyle | undefined) =>
+			speakers.map(line => ({
+				style: mergeBubbleStyle(
+					mergeBubbleStyle(bubbleDefaults, characterBubble(line.who!)),
+					line.style
+				),
+				text: line.text,
+				who: line.who!
+			}));
+		const onStage = (who: string) => rendererRef.current?.characterOf(who)?.bubble;
 
-			dialogue.setBubbles([
-				{
-					style: mergeBubbleStyle(
-						mergeBubbleStyle(bubbleDefaults, onStage),
-						beat.style
-					),
-					text: beat.text,
-					who: beat.who
+		dialogue.setBubbles(specs(onStage));
+		dialogue.setBox(
+			box ? box.text : null,
+			box ? mergeBubbleStyle(bubbleDefaults, box.style) : undefined
+		);
+
+		// A speaker who is not on stage — a narrator, a voice through a door — still has a
+		// character in the library, and their defaults arrive a tick later.
+		const offStage = speakers.filter(line => !onStage(line.who!));
+
+		if (offStage.length > 0) {
+			let live = true;
+
+			void Promise.all(
+				offStage.map(line =>
+					assetsRef.current
+						.character(line.who!)
+						.then(character => [line.who!, character?.bubble] as const)
+				)
+			).then(found => {
+				const library = new Map(found);
+
+				if (live && found.some(([, bubble]) => bubble)) {
+					dialogue.setBubbles(specs(who => onStage(who) ?? library.get(who)));
 				}
-			]);
-			dialogue.setBox(null);
+			});
 
-			// A speaker who is not on stage — a narrator, a voice through a door — still has
-			// a character in the library, and their defaults arrive a tick later.
-			if (!onStage) {
-				let live = true;
-
-				void assetsRef.current.character(beat.who).then(character => {
-					if (live && character?.bubble) {
-						dialogue.setBubbles([
-							{
-								style: mergeBubbleStyle(
-									mergeBubbleStyle(bubbleDefaults, character.bubble),
-									beat.style
-								),
-								text: beat.text,
-								who: beat.who
-							}
-						]);
-					}
-				});
-
-				return () => {
-					live = false;
-				};
-			}
-		} else if (beat?.kind === 'box') {
-			dialogue.setBubbles([]);
-			dialogue.setBox(beat.text, mergeBubbleStyle(bubbleDefaults, beat.style));
-		} else {
-			dialogue.setBubbles([]);
-			dialogue.setBox(null);
+			return () => {
+				live = false;
+			};
 		}
 	}, [beat, bubbleDefaults, ready, stage]);
 

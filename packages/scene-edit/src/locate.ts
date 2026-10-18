@@ -199,25 +199,20 @@ export function locateEntity(
 		}
 
 		const map = item as YAMLMap;
-		const first = (map.items as Pair<unknown, unknown>[])[0];
-
-		if (!first) {
-			return undefined;
-		}
-
-		const key = keyName(first);
 
 		// `- wait: 0.5` and friends are commands, not entities. A caller that somehow asks
 		// for `id: 'wait'` gets nothing rather than a write into the timeline.
-		if (
-			key === undefined ||
-			key !== target.id ||
-			(BEAT_COMMANDS as readonly string[]).includes(key)
-		) {
+		if ((BEAT_COMMANDS as readonly string[]).includes(target.id)) {
 			return undefined;
 		}
 
-		return {container: map, pair: first};
+		// Any key of the item, not just the first: a beat may move several entities at
+		// once (spec 02, "Several at once"), and each one's keys live under its own id.
+		const pair = (map.items as Pair<unknown, unknown>[]).find(
+			one => keyName(one) === target.id
+		);
+
+		return pair ? {container: map, pair} : undefined;
 	}
 
 	const map = entityMapOf(parsed, target.kind);

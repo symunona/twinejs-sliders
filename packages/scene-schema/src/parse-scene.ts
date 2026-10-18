@@ -39,6 +39,7 @@ import {
 	SCENE_TRANSITION_KEYS,
 	type Beat,
 	type BeatEase,
+	type BeatPart,
 	type BubbleAnchor,
 	type BubbleEnter,
 	type BubblePlace,
@@ -3158,72 +3159,409 @@ function parseBeats(ctx: Ctx, seq: YAMLSeq, scene: Scene): void {
 			continue;
 		}
 
-		const pair = pairs[0];
-		const key = keyName(pair);
+		const named = pairs.map(one => ({key: keyName(one), pair: one}));
+		const unnamed = named.find(one => one.key === undefined);
 
-		if (key === undefined) {
-			addError(ctx, 'bad-value', 'A beat key must be plain text.', pair.key);
+		if (unnamed) {
+			addError(ctx, 'bad-value', 'A beat key must be plain text.', unnamed.pair.key);
 			continue;
 		}
 
+		const first = named[0] as {key: string; pair: Pair<unknown, unknown>};
 		const extras = pairs.slice(1);
 
-		if (extras.length > 0) {
-			if (isExplodedBeat(key, extras)) {
-				// One error, naming the real mistake. The three the generic path used to
-				// produce ("two keys" twice, then "needs dialogue or a stage change") all
-				// describe the SAME missing indent, and none of them says so.
-				addError(
-					ctx,
-					'bad-value',
-					`Indent these under \`${key}:\` — at this indent they are separate beat keys, not ${key}'s.`,
-					extras[0].key,
-					{
-						hint: `Everything '${key}' does belongs one level deeper than \`${key}:\`.`
-					}
-				);
+		if (extras.length > 0 && isExplodedBeat(first.key, extras)) {
+			// One error, naming the real mistake. The three the generic path used to
+			// produce ("two keys" twice, then "needs dialogue or a stage change") all
+			// describe the SAME missing indent, and none of them says so.
+			addError(
+				ctx,
+				'bad-value',
+				`Indent these under \`${first.key}:\` — at this indent they are separate beat keys, not ${first.key}'s.`,
+				extras[0].key,
+				{
+					hint: `Everything '${first.key}' does belongs one level deeper than \`${first.key}:\`.`
+				}
+			);
 
-				// `mira:` alone is empty, and "needs dialogue or a stage change" is that
-				// same indent again, not a second problem. Only the beat that DOES carry
-				// something of its own is worth parsing on.
-				if (isNullNode(pair.value)) {
-					continue;
-				}
-			} else {
-				for (const extra of extras) {
-					addError(
-						ctx,
-						'bad-value',
-						'A beat has exactly one key. Split this into two beats.',
-						extra.key
-					);
-				}
+			// `mira:` alone is empty, and "needs dialogue or a stage change" is that
+			// same indent again, not a second problem. Only the beat that DOES carry
+			// something of its own is worth parsing on.
+			if (isNullNode(first.pair.value)) {
+				continue;
 			}
+
+			const index = scene.beats.length;
+			const beat = parseBeat(ctx, first.key, first.pair, index);
+
+			if (beat) {
+				applyBeatGate(ctx, beat, gate, index);
+				scene.beats.push(beat);
+				ctx.beatNodes.push(item);
+			}
+
+			continue;
 		}
 
 		const index = scene.beats.length;
-		const beat = parseBeat(ctx, key, pair, index);
-
-		if (beat && gate) {
-			const cond = parseIf(ctx, gate.value, 'if');
-
-			if (beat.if !== undefined) {
-				addError(ctx, 'bad-value', 'This beat has two if: conditions.', gate.key, {
-					hint: 'Keep one. Join two tests with and.'
-				});
-			} else if (cond !== undefined) {
-				beat.if = cond;
-				ctx.conditionNodes.push({if: cond, node: gate.value, what: `Beat ${index + 1}`});
-			}
-		}
+		const beat = parseBeatItem(ctx, named as {key: string; pair: Pair<unknown, unknown>}[], index);
 
 		if (beat) {
+			applyBeatGate(ctx, beat, gate, index);
 			scene.beats.push(beat);
 			// The whole `- …` item, not just its value: the highlight covers the beat as
 			// the author sees it, dash and all.
 			ctx.beatNodes.push(item);
 		}
 	}
+}
+
+/** `if:` beside a beat's keys gates the whole beat. */
+function applyBeatGate(
+	ctx: Ctx,
+	beat: Beat,
+	gate: Pair<unknown, unknown> | undefined,
+	index: number
+): void {
+	if (!gate) {
+		return;
+	}
+
+	const cond = parseIf(ctx, gate.value, 'if');
+
+	if (beat.if !== undefined) {
+		addError(ctx, 'bad-value', 'This beat has two if: conditions.', gate.key, {
+			hint: 'Keep one. Join two tests with and.'
+		});
+	} else if (cond !== undefined) {
+		beat.if = cond;
+		ctx.conditionNodes.push({if: cond, node: gate.value, what: `Beat ${index + 1}`});
+	}
+}
+
+/** Beat commands that ARE the beat: they cannot ride beside another key. */
+const BEAT_ONLY_COMMANDS = ['box', 'wait', 'fx', 'mark'] as const;
+
+/** Commands that are also beat riders: `- sfx: door` alone, or `sfx: door` beside a speaker. */
+const RIDER_COMMANDS = ['sfx', 'bg', 'music'] as const;
+
+/** Does this beat value speak? Read off the node: `"words"`, or a map with `say:`. */
+function speaks(node: unknown): boolean {
+	if (isScalar(node)) {
+		return !isNullNode(node) && typeof (node as {value: unknown}).value === 'string';
+	}
+
+	return (
+		isMap(node) &&
+		((node as YAMLMap).items as Pair<unknown, unknown>[]).some(
+			one => keyName(one) === 'say'
+		)
+	);
+}
+
+/**
+ * One beat item, any number of keys (spec 02, "Several at once").
+ *
+ *     - mira:  {at: 0.3, dur: 2}      # first entity = the beat's own `who`
+ *       joren: "Wait!"                # every other entity = a `with:` part
+ *       sfx: door                     # dur / ease / sfx / bg / music = the beat's
+ *
+ * The first key decides the kind, with two promotions so a beat's kind says what it DOES:
+ * a speaker goes first when somebody speaks (a `set` primary would hide the line), and an
+ * entity goes before `sfx`/`bg`/`music` (they become riders, the way they already ride on a
+ * line). `box`/`wait`/`fx`/`mark` are a beat of their own and keep their place; only
+ * `box:` lets others speak beside it.
+ */
+function parseBeatItem(
+	ctx: Ctx,
+	named: {key: string; pair: Pair<unknown, unknown>}[],
+	index: number
+): Beat | undefined {
+	let commands = named.filter(one =>
+		(BEAT_ONLY_COMMANDS as readonly string[]).includes(one.key)
+	);
+
+	// `- mira: "hi"` then `wait: 1` under it: a second beat written one dash short. The
+	// first key keeps the beat, the command is refused — only `box:` may join a speaker.
+	if (commands.length > 0 && commands[0] !== named[0] && commands[0].key !== 'box') {
+		for (const extra of commands) {
+			addError(
+				ctx,
+				'bad-value',
+				`${extra.key}: is a beat of its own. Split this into two beats.`,
+				extra.pair.key
+			);
+		}
+
+		commands = [];
+	}
+
+	const riders = named.filter(
+		one =>
+			(RIDER_COMMANDS as readonly string[]).includes(one.key) ||
+			one.key === 'dur' ||
+			one.key === 'ease'
+	);
+	const commandKeys = BEAT_ONLY_COMMANDS as readonly string[];
+	const entities = named.filter(
+		one => !commandKeys.includes(one.key) && !riders.includes(one)
+	);
+
+	for (const extra of commands.slice(1)) {
+		addError(
+			ctx,
+			'bad-value',
+			`A beat has one ${commands[0].key}:. Split this into two beats.`,
+			extra.pair.key
+		);
+	}
+
+	let primary: {key: string; pair: Pair<unknown, unknown>};
+	let rest: {key: string; pair: Pair<unknown, unknown>}[];
+
+	if (commands.length > 0) {
+		primary = commands[0];
+		rest = entities;
+	} else if (entities.length > 0) {
+		primary = entities.find(one => speaks(one.pair.value)) ?? entities[0];
+		rest = entities.filter(one => one !== primary);
+	} else {
+		// Riders only: the first one is the beat (`- sfx: door`), any others ride on it.
+		primary = riders[0];
+		rest = [];
+	}
+
+	const extraRiders = riders.filter(one => one !== primary);
+
+	if (commands.length > 0 && commands[0].key !== 'box') {
+		for (const one of rest) {
+			if (speaks(one.pair.value)) {
+				addError(
+					ctx,
+					'bad-value',
+					`A line cannot ride on ${commands[0].key}:. Give it a beat of its own.`,
+					one.pair.key
+				);
+			}
+		}
+	}
+
+	const beat = parseBeat(ctx, primary.key, primary.pair, index);
+
+	if (!beat) {
+		return undefined;
+	}
+
+	if (beat.kind === 'mark' || beat.kind === 'fx' || beat.kind === 'wait') {
+		for (const one of extraRiders) {
+			if (one.key === 'dur' || one.key === 'ease') {
+				addError(
+					ctx,
+					'bad-value',
+					`${one.key}: cannot time a ${beat.kind} beat.`,
+					one.pair.key,
+					beat.kind === 'wait' ? {hint: 'wait: is already a duration.'} : {}
+				);
+			}
+		}
+	}
+
+	for (const one of extraRiders) {
+		applyBeatRider(ctx, beat, one.key, one.pair);
+	}
+
+	const parts: BeatPart[] = [];
+
+	for (const one of rest) {
+		const part = parseBeatPart(ctx, beat, one.key, one.pair);
+
+		if (part && !(commands.length > 0 && commands[0].key !== 'box' && part.text !== undefined)) {
+			parts.push(part);
+		}
+	}
+
+	if (parts.length > 0) {
+		beat.with = parts;
+	}
+
+	return beat;
+}
+
+/** `dur`/`ease`/`sfx`/`bg`/`music` beside a beat's keys. Twice = error, never a silent pick. */
+function applyBeatRider(
+	ctx: Ctx,
+	beat: Beat,
+	key: string,
+	pair: Pair<unknown, unknown>
+): void {
+	const twice = () =>
+		addError(ctx, 'bad-value', `This beat has two ${key}: values.`, pair.key, {
+			hint: 'Keep one.'
+		});
+
+	switch (key) {
+		case 'dur': {
+			const dur = parseDur(ctx, pair.value);
+
+			if (beat.dur !== undefined) {
+				twice();
+			} else if (dur !== undefined) {
+				beat.dur = dur;
+			}
+
+			return;
+		}
+
+		case 'ease': {
+			const ease = parseEase(ctx, pair.value, 'ease');
+
+			if (beat.ease !== undefined) {
+				twice();
+			} else if (ease !== undefined) {
+				beat.ease = ease;
+			}
+
+			return;
+		}
+
+		case 'sfx': {
+			const sfx = parseSoundNode(ctx, pair.value, 'sfx');
+
+			if (beat.sfx !== undefined) {
+				twice();
+			} else if (sfx) {
+				beat.sfx = sfx;
+			}
+
+			return;
+		}
+
+		case 'bg': {
+			const bg = parseBgNode(ctx, pair.value, 'bg');
+
+			if (beat.bg !== undefined) {
+				twice();
+			} else if (bg) {
+				Object.assign(beat, bgFields(bg));
+			}
+
+			return;
+		}
+
+		case 'music': {
+			const music = parseMusicNode(ctx, pair.value, 'music');
+
+			if (beat.music !== undefined) {
+				twice();
+			} else if (music !== undefined) {
+				beat.music = music;
+			}
+
+			return;
+		}
+	}
+}
+
+/**
+ * One more entity in a beat. Its body takes what a beat body takes; `sfx`/`bg`/`music`
+ * belong to the moment and are lifted onto the beat, `if:` belongs to the whole beat.
+ */
+function parseBeatPart(
+	ctx: Ctx,
+	beat: Beat,
+	who: string,
+	pair: Pair<unknown, unknown>
+): BeatPart | undefined {
+	if (isScalar(pair.value)) {
+		if (isNullNode(pair.value)) {
+			addError(ctx, 'bad-value', `Beat for '${who}' needs dialogue or a stage change.`, pair.value);
+			return undefined;
+		}
+
+		const text = asString(ctx, pair.value, `dialogue for '${who}'`);
+
+		if (text === undefined) {
+			return undefined;
+		}
+
+		collectLinks(ctx, text, pair.value);
+		ctx.sayBeats.push({id: who, node: pair.value});
+		return {text, who};
+	}
+
+	if (!isMap(pair.value)) {
+		addError(
+			ctx,
+			'bad-value',
+			`Beat for '${who}' must be dialogue or a map of stage changes.`,
+			pair.value ?? pair.key
+		);
+		return undefined;
+	}
+
+	const body = parseEntityBody(ctx, pair.value as YAMLMap, true, who);
+	const hasPatch = Object.keys(body.patch).length > 0;
+
+	if (body.if !== undefined) {
+		addError(ctx, 'bad-value', `if: gates the whole beat, not just '${who}'.`, pair.value, {
+			hint: 'Put if: beside the beat\u2019s keys, or give this a beat of its own.',
+			severity: 'warning'
+		});
+	}
+
+	// The moment's, not the sprite's: lifted onto the beat, as if written beside it.
+	if (body.sfx) {
+		if (beat.sfx) {
+			addError(ctx, 'bad-value', 'This beat has two sfx: values.', pair.value);
+		} else {
+			beat.sfx = body.sfx;
+		}
+	}
+
+	if (body.bg) {
+		if (beat.bg !== undefined) {
+			addError(ctx, 'bad-value', 'This beat has two bg: values.', pair.value);
+		} else {
+			Object.assign(beat, bgFields(body.bg));
+		}
+	}
+
+	if (body.music !== undefined) {
+		if (beat.music !== undefined) {
+			addError(ctx, 'bad-value', 'This beat has two music: values.', pair.value);
+		} else {
+			beat.music = body.music;
+		}
+	}
+
+	if (body.say !== undefined) {
+		if (body.dur === 0) {
+			addError(ctx, 'bad-value', 'dur: 0 shows this line for no time at all.', pair.value, {
+				hint: 'Leave dur: off to wait for the reader.',
+				severity: 'warning'
+			});
+		}
+
+		collectLinks(ctx, body.say, body.sayNode ?? pair.value);
+		ctx.sayBeats.push({id: who, node: body.sayNode ?? pair.value});
+	} else if (!hasPatch) {
+		addError(
+			ctx,
+			'bad-value',
+			`Beat for '${who}' changes nothing and says nothing.`,
+			pair.value
+		);
+		return undefined;
+	}
+
+	return {
+		who,
+		...(hasPatch ? {patch: body.patch} : {}),
+		...(body.say !== undefined ? {text: body.say} : {}),
+		...(body.style ? {style: body.style} : {}),
+		...(body.dur !== undefined ? {dur: body.dur} : {}),
+		...(body.ease !== undefined ? {ease: body.ease} : {})
+	};
 }
 
 /**

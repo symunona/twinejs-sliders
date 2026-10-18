@@ -85,6 +85,16 @@ function applyBeat(stage: Stage, beat: Beat): void {
 			// mean replaying every sound in it.
 			break;
 	}
+
+	// The rest of the beat's entities, after its first key: one moment, several sprites.
+	// Same rule as a lone patch — somebody not on stage is a typo, not an entrance.
+	for (const part of beat.with ?? []) {
+		const target = part.patch && stage.entities[part.who];
+
+		if (target && part.patch) {
+			stage.entities[part.who] = mergePatch(target, part.patch);
+		}
+	}
 }
 
 /**

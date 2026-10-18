@@ -17,6 +17,7 @@ import {
 	applyEdit,
 	entityHasParent,
 	insertBeatEntity,
+	insertBeatPart,
 	insertBeatLine,
 	mergeEdits,
 	removeEntities,
@@ -117,23 +118,23 @@ export interface WritePlan {
 	 */
 	addEntity: boolean;
 	/**
-	 * There is no line of this entity's to write on, so the gesture gets one: a new set beat
-	 * spliced in at this seq position.
+	 * There is no line of this entity's to write on, so the gesture gets one.
 	 *
-	 * The scrubber is parked on a beat belonging to somebody else, and a beat item has
-	 * exactly one key, so this entity cannot join it. The `cast:` entry is NOT a fallback
-	 * here — it would move the character from the TOP of the scene, restaging every beat
-	 * before this one from a position the author never saw. The moment on screen is the one
-	 * after the beat shown, so a beat of its own, immediately after it, is the only place
-	 * that means what the gesture meant.
+	 * The scrubber is parked on a beat belonging to somebody else. `join` (the default): the
+	 * entity is added to THAT beat, beside its owner — one moment, several sprites (spec 02,
+	 * "Several at once"). Otherwise a new set beat is spliced in right after it. The `cast:`
+	 * entry is never a fallback: it would move the character from the TOP of the scene,
+	 * restaging every beat before this one from a position the author never saw.
 	 */
 	insertBeat?: {
-		/** Seq position the new item lands at. */
+		/** Seq position the new item lands at (`join`: `after + 1`, nothing lands). */
 		index: number;
 		/** The beat it follows, 0-based — what the author is told about. */
 		after: number;
 		/** Who owns that beat, when anybody does. */
 		owner?: EntityId;
+		/** Add to beat `after` instead of splicing a new one. */
+		join?: boolean;
 	};
 }
 
@@ -151,7 +152,11 @@ export interface WritePlan {
  * the lesser of the two.
  */
 export function beatOwnsEntity(beat: Beat | undefined, id: EntityId): boolean {
-	return !!beat && (beat.kind === 'say' || beat.kind === 'set') && beat.who === id;
+	return (
+		!!beat &&
+		(((beat.kind === 'say' || beat.kind === 'set') && beat.who === id) ||
+			!!beat.with?.some(part => part.who === id))
+	);
 }
 
 /**
@@ -162,9 +167,9 @@ export function beatOwnsEntity(beat: Beat | undefined, id: EntityId): boolean {
  * - Scrubber at 0 — the stage before any beat ran — writes the `cast:` / `props:` entry.
  * - Scrubber on a beat that belongs to this entity writes THAT BEAT, promoting a bare line
  *   of dialogue to a map if that is what it takes.
- * - Scrubber on somebody else's beat gets a new set beat of its own, right after it. A beat
- *   item has exactly one key, so this entity cannot join theirs, and falling through to the
- *   entry would move them from the top of the scene instead of from here.
+ * - Scrubber on somebody else's beat JOINS it: the entity is added beside the owner, so it
+ *   moves at that moment (spec 02, "Several at once"). Falling through to the entry would
+ *   move them from the top of the scene instead of from here.
  *
  * `beat` is the SCRUBBER index — state N is produced by `beats[N - 1]`.
  */
@@ -190,6 +195,7 @@ export function planEntityWrite(
 			insertBeat: {
 				after: index,
 				index: index + 1,
+				join: true,
 				owner:
 					shown && (shown.kind === 'say' || shown.kind === 'set')
 						? shown.who
@@ -403,7 +409,7 @@ export interface SceneWriteContext {
  */
 function insertBeatEdit(
 	context: SceneWriteContext,
-	index: number,
+	plan: NonNullable<WritePlan['insertBeat']>,
 	writes: EntityKeyWrite[]
 ): TextEdit | undefined {
 	const {blockText} = context;
@@ -426,9 +432,13 @@ function insertBeatEdit(
 		}
 	}
 
-	return insertBeatEntity(blockText, index, first.id, keys, {
+	const options = {
 		relative: entityHasParent(blockText, {id: first.id, kind: first.kind})
-	});
+	};
+
+	return plan.join
+		? insertBeatPart(blockText, plan.after, first.id, keys, options)
+		: insertBeatEntity(blockText, plan.index, first.id, keys, options);
 }
 
 /** One write's edit, or undefined when there is nowhere sane to put it. */
@@ -445,7 +455,7 @@ export function buildEntityEdit(
 	);
 
 	if (plan.insertBeat) {
-		return insertBeatEdit(context, plan.insertBeat.index, [write]);
+		return insertBeatEdit(context, plan.insertBeat, [write]);
 	}
 
 	for (const target of plan.targets) {
@@ -570,7 +580,10 @@ export function buildWriteEdits(
 	// Insertion order, so a multi-select drag writes its new beats in the order the entities
 	// were picked rather than in map order — every insert lands on the same offset, and
 	// `mergeEdits` concatenates same-offset inserts in the order it is handed them.
-	const inserted = new Map<EntityId, {index: number; writes: EntityKeyWrite[]}>();
+	const inserted = new Map<
+		EntityId,
+		{plan: NonNullable<WritePlan['insertBeat']>; writes: EntityKeyWrite[]}
+	>();
 
 	for (const write of writes) {
 		if (
@@ -603,7 +616,7 @@ export function buildWriteEdits(
 
 			if (plan.insertBeat) {
 				const group = inserted.get(write.id) ?? {
-					index: plan.insertBeat.index,
+					plan: plan.insertBeat,
 					writes: []
 				};
 
@@ -620,8 +633,8 @@ export function buildWriteEdits(
 		}
 	}
 
-	for (const {index, writes: group} of inserted.values()) {
-		const edit = insertBeatEdit(context, index, group);
+	for (const {plan, writes: group} of inserted.values()) {
+		const edit = insertBeatEdit(context, plan, group);
 
 		if (edit) {
 			edits.push(edit);
@@ -670,14 +683,15 @@ export function insertedBeatCount(
 			continue;
 		}
 
-		if (
-			planEntityWrite(
-				context.scene,
-				write.entry ? 0 : context.beat,
-				write.kind,
-				write.id
-			).insertBeat
-		) {
+		const insert = planEntityWrite(
+			context.scene,
+			write.entry ? 0 : context.beat,
+			write.kind,
+			write.id
+		).insertBeat;
+
+		// A join adds to the beat on screen: nothing new, the scrubber stays.
+		if (insert && !insert.join) {
 			ids.add(write.id);
 		}
 	}

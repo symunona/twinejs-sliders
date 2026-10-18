@@ -38,6 +38,11 @@ export interface BeatTimelineProps {
 	 * also what `holdTimes` tests expect at their own arity.
 	 */
 	autoAdvanceMs?: number;
+	/**
+	 * The hold of every state in ms, `beats.length + 1` long — the scene's real schedule
+	 * (`sceneTimeline`). Absent = the old per-beat estimate from `autoAdvanceMs`.
+	 */
+	holdsMs?: number[];
 }
 
 /** Height of one label row, px. Must match `--sliders-timeline-row` in the CSS. */
@@ -66,13 +71,17 @@ export const BeatTimeline: React.FC<BeatTimelineProps> = ({
 	autoAdvanceMs,
 	beat,
 	beats,
+	holdsMs,
 	labels,
 	onBeatChange
 }) => {
 	const {t} = useTranslation();
 	const holds = React.useMemo(
-		() => holdTimes(beats, autoAdvanceMs),
-		[autoAdvanceMs, beats]
+		() =>
+			holdsMs && holdsMs.length === beats.length + 1
+				? holdsMs
+				: holdTimes(beats, autoAdvanceMs),
+		[autoAdvanceMs, beats, holdsMs]
 	);
 	const inner = React.useRef<HTMLDivElement>(null);
 	const markRefs = React.useRef<(HTMLButtonElement | null)[]>([]);

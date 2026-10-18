@@ -10,12 +10,14 @@
 
 import {
 	applyScene,
+	beatTiming,
+	beatTransitions,
 	diffStages,
-	easeTransitions,
 	resolveStage,
 	runBeats,
 	timeTransitions
 } from '@sliders/scene-core';
+import type {BeatTiming} from '@sliders/scene-core';
 import {
 	DialogueLayer,
 	DomRenderer,
@@ -23,6 +25,7 @@ import {
 	mergeBubbleStyle
 } from '@sliders/render-dom';
 import type {LinkListEntry} from '@sliders/render-dom';
+import {beatLines} from '@sliders/scene-types';
 import type {Beat, Scene, SceneError, Stage} from '@sliders/scene-types';
 import {go} from '../actions';
 import {createLoggers} from '../logger';
@@ -160,6 +163,8 @@ export class SlidersStage extends CustomElement {
 	private linkListLayer?: LinkListLayer;
 	private linkListEntries: LinkListEntry[] = [];
 	private timer?: number;
+	/** `performance.now()` the beat on screen stops moving at. A click before it snaps. */
+	private movingUntil = 0;
 	private cinema = false;
 	private markReady!: () => void;
 
@@ -483,32 +488,46 @@ export class SlidersStage extends CustomElement {
 
 	/** Run beats until one of them needs to be read, or the scene is over. */
 	async play() {
+		const beats: Beat[] = this.scene?.beats ?? [];
+
+		// A click while the beat on screen is still moving finishes the move first (spec 02,
+		// "Timing"). On a line that is all it does — the reader asked to see the picture,
+		// not to skip the words — so the line's own timer, if any, keeps running.
+		if (this.movingUntil > performance.now()) {
+			this.movingUntil = 0;
+			this.renderer?.finishTransitions?.();
+
+			const shown = beats[this.beatIndex - 1];
+
+			if (shown && beatLines(shown).length > 0) {
+				return;
+			}
+		}
+
 		window.clearTimeout(this.timer);
 		this.renderer?.setWaitingForClick?.(false);
-
-		const beats: Beat[] = this.scene?.beats ?? [];
 
 		while (this.beatIndex < beats.length) {
 			const beat = beats[this.beatIndex];
 			const before = this.states[this.beatIndex];
 			const after = this.states[this.beatIndex + 1] ?? before;
+			const transitions =
+				after !== before
+					? beatTransitions(before, after, beat, this.scene?.ease)
+					: [];
+			const timing = beatTiming(beat, transitions, after, {
+				autoAdvanceSec: this.autoAdvanceDelay() / 1000,
+				last: this.beatIndex === beats.length - 1
+			});
 
 			this.beatIndex++;
 
 			if (after !== before) {
-				const from = resolveStage(before);
-				const to = resolveStage(after);
-
-				await this.renderer?.apply(
-					to,
-					easeTransitions(
-						timeTransitions(diffStages(from, to), beat.dur),
-						beat.ease,
-						this.scene?.ease
-					)
-				);
+				await this.renderer?.apply(resolveStage(after), transitions);
 				publishStage(after);
 			}
+
+			this.movingUntil = performance.now() + timing.animSec * 1000;
 
 			// Before the switch, not inside it: a sound rides on a line, on a stage move or
 			// on a beat of its own, and all three arrive here.
@@ -516,29 +535,20 @@ export class SlidersStage extends CustomElement {
 				this.renderer?.cue?.(beat.sfx);
 			}
 
-			switch (beat.kind) {
-				case 'say':
-				case 'box':
-					await this.showLine(beat);
-					this.waitForReader(beat.dur);
-					return;
-
-				case 'wait':
-					this.setAttribute('data-waiting', 'timer');
-					this.timer = window.setTimeout(
-						() => void this.play(),
-						beat.seconds * 1000
-					);
-					return;
+			if (timing.lines.length > 0) {
+				await this.showLine(beat);
+				this.waitForReader(timing);
+				return;
 			}
 
-			// `set` and `fx` change the stage and fall through in the SAME tick, so the next
-			// line lands on top of the move -- unless the author gave the beat a `dur:`,
-			// which is how "hold this, then go on" is written without a `- wait:` line
-			// underneath it. A `dur: 0` still falls through: zero is a snap, not a pause.
-			if (beat.dur !== undefined && beat.dur > 0) {
+			// Nothing to read: on when the beat's own animation has run — a walk ends when
+			// the walker arrives — or when its `dur:` / `- wait:` says. A beat that moves
+			// nothing (a mark, a sound, `dur: 0`) is 0 and falls through in the same tick.
+			const hold = timing.holdSec ?? 0;
+
+			if (hold > 0) {
 				this.setAttribute('data-waiting', 'timer');
-				this.timer = window.setTimeout(() => void this.play(), beat.dur * 1000);
+				this.timer = window.setTimeout(() => void this.play(), hold * 1000);
 				return;
 			}
 		}
@@ -553,38 +563,40 @@ export class SlidersStage extends CustomElement {
 	}
 
 	/**
-	 * Put a `say` or a `box` on screen.
+	 * Put a beat's words on screen: the narration box and every speaker's bubble at once.
 	 *
 	 * Shared by playing forward and by stepping back, so a line the reader returns to looks
 	 * exactly like the line they read the first time — the merge order alone is four layers
 	 * deep, and two copies of it would drift.
 	 */
 	private async showLine(beat: Beat): Promise<void> {
-		if (beat.kind === 'say') {
-			this.dialogue?.setBox(null);
-			this.dialogue?.say(beat.who, beat.text, {
-				// Four layers, widest first: the story's `sliders.bubble.*` variables, the
-				// scene's own `bubble:`, the speaking character's, then this beat's
-				// `as:`/`bubble:`. Merged key by key the whole way, so each one only states
-				// what it cares about.
-				style: mergeBubbleStyle(
-					mergeBubbleStyle(
-						this.sceneBubbleDefaults(),
-						await this.bubbleDefaults(beat.who)
+		const lines = beatLines(beat);
+		const box = lines.find(line => line.who === undefined);
+		const bubbles = await Promise.all(
+			lines
+				.filter(line => line.who !== undefined)
+				.map(async line => ({
+					// Four layers, widest first: the story's `sliders.bubble.*` variables, the
+					// scene's own `bubble:`, the speaking character's, then this beat's
+					// `as:`/`bubble:`. Merged key by key the whole way, so each one only
+					// states what it cares about.
+					style: mergeBubbleStyle(
+						mergeBubbleStyle(
+							this.sceneBubbleDefaults(),
+							await this.bubbleDefaults(line.who!)
+						),
+						line.style
 					),
-					beat.style
-				)
-			});
-			return;
-		}
+					text: line.text,
+					who: line.who!
+				}))
+		);
 
-		if (beat.kind === 'box') {
-			this.dialogue?.clear();
-			this.dialogue?.setBox(
-				beat.text,
-				mergeBubbleStyle(this.sceneBubbleDefaults(), beat.style)
-			);
-		}
+		this.dialogue?.setBubbles(bubbles);
+		this.dialogue?.setBox(
+			box ? box.text : null,
+			box ? mergeBubbleStyle(this.sceneBubbleDefaults(), box.style) : undefined
+		);
 	}
 
 	/** The beats this scene stops on. See `beat-steps.ts` for what counts as a stop. */
@@ -768,34 +780,20 @@ export class SlidersStage extends CustomElement {
 	 * `data-waiting` stays `'beat'` either way, so the marker still says "there is more to
 	 * read" and a click still skips ahead.
 	 */
-	private waitForReader(dur?: number) {
+	private waitForReader(timing: BeatTiming) {
 		this.setAttribute('data-waiting', 'beat');
 
-		if (this.beatIndex >= (this.scene?.beats?.length ?? 0)) {
+		// `reader`: the last beat, or no auto-advance anywhere. `auto` and `timer` already
+		// carry the longer of the line's hold and its animation — a line never moves on
+		// while its speaker is still walking.
+		//
+		// The two zeros mean opposite things, and `beatTiming` keeps them apart: a `dur: 0`
+		// is a `timer` of 0 (straight on), a zero `autoAdvance` is `reader` (let them click).
+		if (timing.advance === 'reader' || timing.holdSec === undefined) {
 			this.waitForClick();
 			return;
 		}
 
-		// The two zeros mean opposite things, and which one you get depends on WHERE it was
-		// written. A `dur: 0` is the author saying "do not dwell on this beat", so it still
-		// schedules -- at 0ms, i.e. straight on to the next one. A zero from the scene's
-		// `autoAdvance:` or from the reader's setting means "let them click", so it
-		// schedules nothing. Same number, opposite answers, because one times a single beat
-		// and the other is a standing default for the beats that did not time themselves.
-		if (dur !== undefined) {
-			this.timer = window.setTimeout(
-				() => void this.play(),
-				Math.max(0, dur) * 1000
-			);
-			return;
-		}
-
-		const delay = this.autoAdvanceDelay();
-
-		if (delay > 0) {
-			this.timer = window.setTimeout(() => void this.play(), delay);
-		} else {
-			this.waitForClick();
-		}
+		this.timer = window.setTimeout(() => void this.play(), timing.holdSec * 1000);
 	}
 }

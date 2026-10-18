@@ -561,7 +561,7 @@ describe('parseScene', () => {
 
 			expect(errors).toHaveLength(1);
 			expect(errors[0].message).toBe(
-				'A beat has exactly one key. Split this into two beats.'
+				'A beat has one wait:. Split this into two beats.'
 			);
 		});
 

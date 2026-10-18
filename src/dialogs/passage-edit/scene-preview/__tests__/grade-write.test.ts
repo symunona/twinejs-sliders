@@ -125,7 +125,7 @@ describe('gradeWrite', () => {
 		});
 	});
 
-	it('gives itself a new beat after somebody else’s', () => {
+	it('joins somebody else’s beat', () => {
 		const {reparsed, write} = roundTrip(passage, 2, {
 			brightness: -15,
 			hue: -10,
@@ -134,8 +134,8 @@ describe('gradeWrite', () => {
 		});
 
 		expect(write.value).toEqual({tint: 5});
-		expect(reparsed.result!.scene.beats).toHaveLength(4);
-		expect(reparsed.states[3].entities.hero.grade).toEqual({
+		expect(reparsed.result!.scene.beats).toHaveLength(3);
+		expect(reparsed.states[2].entities.hero.grade).toEqual({
 			brightness: -15,
 			hue: -10,
 			tint: 5,
