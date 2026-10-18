@@ -574,7 +574,7 @@
 				"sizeAbsolute": "Absolute fits the text to the box. Size scales how big a short line may grow.",
 				"ease": "Ease",
 				"easePerKind": "Per kind…",
-				"inherit": "Default",
+				"inherit": "inherit",
 				"noneArrival": "The stage before the first beat \u2014 nothing to time here. Pick a beat above.",
 				"noneCommand": "This beat carries no timing or bubble of its own.",
 				"noneWait": "A wait beat is already a duration \u2014 set it in the passage text.",

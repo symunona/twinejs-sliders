@@ -45,6 +45,14 @@
 	padding: calc((var(--control-height) - 14px) / 2) 8px 0;
 }
 
+/* Add beat, labels toggle, leave full screen: always at the right end, strip or not. */
+.scene-preview-bar-end {
+	display: flex;
+	flex: none;
+	gap: 2px;
+	margin-left: auto;
+}
+
 .scene-preview-beat {
 	font-variant-numeric: tabular-nums;
 	min-width: 3.5em;

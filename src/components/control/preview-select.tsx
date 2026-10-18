@@ -403,13 +403,32 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 							{explained && (
 								// Follows the highlight, not the value: the question while the list
 								// is open is "what would THIS one do", asked by pointing at it.
-								<div
-									aria-live="polite"
-									className="preview-select-explanation"
-									data-testid="preview-select-explanation"
-									id={`${id}-explanation`}
-								>
-									{explanation}
+								//
+								// Every explanation is laid out, hidden, in the same grid cell, so
+								// the pane is as tall as the TALLEST one and never resizes on
+								// hover. It did: a list flipped above its button grows upward,
+								// a shorter pane moved the options under a still pointer, the
+								// pointer entered the next option, the pane grew back -- flicker.
+								<div className="preview-select-explanation-frame">
+									{shown.map(option =>
+										option.explanation === undefined ? null : (
+											<div
+												aria-hidden
+												className="preview-select-explanation-sizer"
+												key={option.value}
+											>
+												{option.explanation}
+											</div>
+										)
+									)}
+									<div
+										aria-live="polite"
+										className="preview-select-explanation"
+										data-testid="preview-select-explanation"
+										id={`${id}-explanation`}
+									>
+										{explanation}
+									</div>
 								</div>
 							)}
 						</div>

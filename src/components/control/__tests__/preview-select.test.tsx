@@ -303,6 +303,24 @@ describe('PreviewSelect explanation pane', () => {
 		expect(pane).toHaveTextContent('second does that');
 	});
 
+	it('lays out every explanation, hidden, so hovering never resizes the pane', () => {
+		renderComponent({options: EXPLAINED, value: 'one'});
+		open();
+
+		const pane = screen.getByTestId('preview-select-explanation');
+		const sizers = Array.from(
+			pane.parentElement!.querySelectorAll('.preview-select-explanation-sizer')
+		);
+
+		expect(sizers.map(sizer => sizer.textContent)).toEqual([
+			'first does this',
+			'second does that'
+		]);
+		sizers.forEach(sizer => expect(sizer).toHaveAttribute('aria-hidden'));
+		expect(pane).toHaveTextContent('first does this');
+		expect(pane).not.toHaveTextContent('second does that');
+	});
+
 	it('describes the highlighted option by the pane', () => {
 		renderComponent({options: EXPLAINED, value: 'two'});
 		open();

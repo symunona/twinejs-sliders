@@ -2103,34 +2103,39 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				labels={timelineLabels}
 				onBeatChange={goToBeat}
 			/>
-			{editable && (
-				<MenuButton
-					icon={<IconPlus />}
-					iconOnly
-					items={addBeatItems}
-					label={t('dialogs.passageEdit.scenePreview.addBeat.button')}
-				/>
-			)}
-			<IconButton
-				icon={<IconTimeline />}
-				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.timelineLabels')}
-				onClick={toggleTimelineLabels}
-				selectable
-				selected={timelineLabels}
-			/>
-			{/* Entering full screen is a header control on the dialog card, next to
-			    maximize. LEAVING it cannot be: full screen portals out of the card and
-			    the header goes with it, so the way back has to live in the bar. */}
-			{fullScreen && (
+			{/* Pinned right. The strip takes the slack when there is one; with under two
+			    beats it renders nothing and this group would slide left onto the play
+			    button without the auto margin. */}
+			<span className="scene-preview-bar-end">
+				{editable && (
+					<MenuButton
+						icon={<IconPlus />}
+						iconOnly
+						items={addBeatItems}
+						label={t('dialogs.passageEdit.scenePreview.addBeat.button')}
+					/>
+				)}
 				<IconButton
-					commandId="scene.fullScreen"
-					icon={<IconArrowsMinimize />}
+					icon={<IconTimeline />}
 					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-					onClick={() => onFullScreenChange(false)}
+					label={t('dialogs.passageEdit.scenePreview.timelineLabels')}
+					onClick={toggleTimelineLabels}
+					selectable
+					selected={timelineLabels}
 				/>
-			)}
+				{/* Entering full screen is a header control on the dialog card, next to
+				    maximize. LEAVING it cannot be: full screen portals out of the card and
+				    the header goes with it, so the way back has to live in the bar. */}
+				{fullScreen && (
+					<IconButton
+						commandId="scene.fullScreen"
+						icon={<IconArrowsMinimize />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
+						onClick={() => onFullScreenChange(false)}
+					/>
+				)}
+			</span>
 		</div>
 	);
 

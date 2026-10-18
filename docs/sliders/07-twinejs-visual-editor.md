@@ -69,7 +69,7 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 
 | Part | Notes |
 |---|---|
-| Beat line | prev · count · next · play · strip · `+` add beat · labels toggle (default ON). Full screen: exit button at end |
+| Beat line | prev · count · next · play · strip · `+` add beat · labels toggle (default ON). `+` and toggle pinned right, strip or not (strip hidden under 2 beats). Full screen: exit button at end |
 | `+` add beat | menu: Narrator (`box`), characters on stage, then props. Writes `- who: ""` after the beat on screen, steps to it, beat tab, text focused |
 | Stage top right | zoom, stage lock, error badge |
 | `</>` | dialog header, beside full screen. Opens passage editor on the same Doc |
@@ -95,7 +95,7 @@ sidebar). Not on sprite select — caret in a beat line selects the speaker.
 | Part | Writes |
 |---|---|
 | Text box (double click bubble = focus) | beat words: scalar, `say:` or `text:`, quote style kept. Live while typing, throttled 300ms, one undo step per burst (`+sliders-type`). Enter = write now, Shift+Enter = newline, Esc = back to text at focus. Ctrl+B `**bold**`, Ctrl+I `_italic_` toggle around selection / word at caret |
-| Timing, Bubble groups | `dur:` `ease:` · `bubble:` keys on the beat. Grid rows: label · control · X. X = remove beat's key (back to default). "Default: …" line under each = story + scene value, else built-in. Row highlighted when beat states a value ≠ default. Timing `?` = hover help |
+| Timing, Bubble groups | `dur:` `ease:` · `bubble:` keys on the beat. Grid rows: label · control · X. X = remove beat's key (back to default). "Default: …" line under each = story + scene value, else built-in. Row highlighted when beat states a value ≠ default. Dropdowns' unset option reads `inherit`. Explained dropdown (`sizing`) pane sized to its tallest explanation: no resize on hover, no flicker. Timing `?` = hover help |
 | "Make beat styles default for project" + confirm | `sliders.bubble.*` in START passage vars, beat's `as font color bg accent sizing anchor size` over existing. No `w h at tail place`. No beat, no other passage touched. Undoable. |
 
 ## What is NOT editable visually

@@ -131,15 +131,28 @@
 }
 
 /* Fixed width, so the list does not jump sideways as the highlight walks from a short
-   explanation to a long one. */
-.preview-select-explanation {
+   explanation to a long one. Fixed height too: the pane and every hidden sizer share one
+   grid cell, so it is as tall as the tallest explanation. */
+.preview-select-explanation-frame {
 	border-left: 1px solid var(--light-gray-translucent);
 	box-sizing: border-box;
 	color: var(--black);
+	display: grid;
 	flex: none;
 	overflow-y: auto;
 	padding: var(--grid-size);
 	width: 360px;
+}
+
+.preview-select-explanation,
+.preview-select-explanation-sizer {
+	grid-area: 1 / 1;
+	min-width: 0;
+}
+
+.preview-select-explanation-sizer {
+	pointer-events: none;
+	visibility: hidden;
 }
 
 .preview-select-option {
@@ -216,6 +229,14 @@
 	inset: 0;
 	justify-content: center;
 	position: absolute;
+}
+
+/* Bigger in the open list, where it is the thing being chosen; the closed button keeps
+   the thumbnail so it stays a control's height. `zoom`, not a second size: the swatch's
+   geometry is fixed px in `bubble-previews.tsx`, and zoom scales box, drawing and word
+   together and still lays out at the new size. */
+.preview-select-list .bubble-style-preview {
+	zoom: 1.5;
 }
 
 /* The drawing reaches outside its own box by the shape's margin, so it is the SVG that is
