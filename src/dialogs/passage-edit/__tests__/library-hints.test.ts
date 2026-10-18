@@ -1,4 +1,4 @@
-import CodeMirror, {Editor} from 'codemirror';
+import {Editor} from 'codemirror';
 import {team, upload} from '../../../../packages/asset-library/src/testing/scenario';
 import {hintsForSlot, libraryHints} from '../library-hints';
 import {sceneCompletion} from '../use-scene-hints';
