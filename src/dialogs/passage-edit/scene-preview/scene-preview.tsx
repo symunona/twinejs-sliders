@@ -39,9 +39,11 @@ import {
 	BubbleStyle,
 	Camera,
 	Character,
+	EntityFit,
 	EntityId,
 	EntityKind,
 	matchPassageName,
+	PoseLoop,
 	Vec2
 } from '@sliders/scene-types';
 import {mergeBubbleStyle} from '@sliders/render-dom';
@@ -76,6 +78,9 @@ import {
 	unstretchWrites,
 	motionSpeedWrites,
 	motionWrites,
+	fitWrites,
+	poseLoopWrites,
+	conditionWrites,
 	opacityWrites,
 	poseWrite,
 	zWrites
@@ -1280,6 +1285,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const setMotionSpeed = React.useCallback(
 		(speed: number | undefined) =>
 			commit(motionSpeedWrites(stage, selection, speed), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	const setFit = React.useCallback(
+		(fit: EntityFit | undefined) =>
+			commit(fitWrites(stage, selection, fit), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	const setPoseLoop = React.useCallback(
+		(poseLoop: PoseLoop | undefined) =>
+			commit(poseLoopWrites(stage, selection, poseLoop), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	const setCondition = React.useCallback(
+		(condition: string | undefined) =>
+			commit(conditionWrites(stage, selection, condition), EDIT_ORIGIN),
 		[commit, selection, stage]
 	);
 
@@ -2527,6 +2550,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onPose={setPose}
 				onMotion={setMotion}
 				onMotionSpeed={setMotionSpeed}
+				onFit={setFit}
+				onPoseLoop={setPoseLoop}
+				entityIfs={parse.result?.scene?.entityIfs}
+				onCondition={setCondition}
 				onOpacity={changeOpacity}
 				onOpacityCommit={commitOpacity}
 				onOpenLink={onOpenPassage}

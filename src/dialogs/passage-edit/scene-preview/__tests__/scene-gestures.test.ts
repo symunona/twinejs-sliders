@@ -1,16 +1,23 @@
 import type {Camera, Stage} from '@sliders/scene-types';
 import type {StageBox} from '@sliders/render-dom';
+import {extractSceneBlock} from '@sliders/scene-index';
+import {applyEdit} from '@sliders/scene-edit';
 import {parseSceneText} from '../use-scene-parse';
+import {buildEntityEdit} from '../use-scene-writer';
+import type {EntityKeyWrite} from '../use-scene-writer';
 import {
 	assetDropWrites,
 	cameraWrite,
+	conditionWrites,
 	deleteWrites,
+	fitWrites,
 	flipWrites,
 	formatCamera,
 	motionSpeedWrites,
 	motionWrites,
 	musicDropWrites,
 	opacityWrites,
+	poseLoopWrites,
 	poseWrite,
 	panCamera,
 	uniqueEntityId,
@@ -188,6 +195,142 @@ describe('motionWrites()', () => {
 		expect(
 			motionWrites(moving, ['hills', 'sky'], undefined).map(w => w.value)
 		).toEqual([undefined, undefined]);
+	});
+});
+
+/** One write spliced into the block and parsed back: what the text says afterwards. */
+function writeBack(text: string, write: EntityKeyWrite, beat = 0) {
+	const block = extractSceneBlock(text)!;
+	const parse = parseSceneText(text);
+	const edit = buildEntityEdit(
+		{
+			beat,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: parse.result!.scene
+		},
+		write
+	);
+
+	expect(edit).toBeDefined();
+
+	return applyEdit(block.text, edit!);
+}
+
+describe('fitWrites()', () => {
+	const planes = parseSceneText(
+		[
+			'[scene]',
+			'props:',
+			'  wall: {fit: cover}',
+			'  sky: {}',
+			'beats:',
+			'  - wall: {opacity: 0.5}'
+		].join('\n')
+	);
+
+	it('sets the token on the whole selection, always on the entry', () => {
+		expect(fitWrites(planes.states[0], ['wall', 'sky'], 'contain')).toEqual([
+			{
+				entry: true,
+				id: 'wall',
+				key: 'fit',
+				kind: 'prop',
+				ref: 'wall',
+				value: 'contain'
+			},
+			{
+				entry: true,
+				id: 'sky',
+				key: 'fit',
+				kind: 'prop',
+				ref: 'sky',
+				value: 'contain'
+			}
+		]);
+	});
+
+	it('removes the key for a sprite, even with the scrubber on a beat', () => {
+		const text = [
+			'[scene]',
+			'props:',
+			'  wall: {fit: cover}',
+			'beats:',
+			'  - wall: {opacity: 0.5}'
+		].join('\n');
+		const [write] = fitWrites(planes.states[1], ['wall'], undefined);
+		const after = writeBack(text, write, 1);
+
+		expect(after).toContain('wall: {}');
+		expect(after).toContain('- wall: {opacity: 0.5}');
+	});
+});
+
+describe('poseLoopWrites()', () => {
+	const walking = parseSceneText(
+		[
+			'[scene]',
+			'cast:',
+			'  mira: {pose: [walk_1, walk_2], poseLoop: once}',
+			'  joren: {pose: idle}',
+			'props:',
+			'  candle: {}'
+		].join('\n')
+	).states[0];
+
+	it('writes only characters playing a step list', () => {
+		expect(
+			poseLoopWrites(walking, ['mira', 'joren', 'candle'], 'all')
+		).toEqual([
+			{
+				id: 'mira',
+				key: 'poseLoop',
+				kind: 'cast',
+				ref: 'mira',
+				// On a beat the default has to be said: the loop is inherited.
+				reset: 'all',
+				value: 'all'
+			}
+		]);
+	});
+
+	it('removes the key for the default', () => {
+		expect(poseLoopWrites(walking, ['mira'], undefined)[0].value).toBeUndefined();
+	});
+});
+
+describe('conditionWrites()', () => {
+	const text = [
+		'[scene]',
+		'props:',
+		'  drone: {at: 0.2, if: passage.visits == 1}',
+		'  sky: {}',
+		'beats:',
+		'  - drone: {opacity: 0.5}'
+	].join('\n');
+	const parse = parseSceneText(text);
+
+	it('always lands on the entry: on a beat if: gates the beat', () => {
+		const [write] = conditionWrites(parse.states[1], ['drone'], 'not tense');
+		const after = writeBack(text, write, 1);
+
+		expect(write.entry).toBe(true);
+		expect(after).toContain('drone: {at: 0.2, if: not tense}');
+		expect(after).toContain('- drone: {opacity: 0.5}');
+	});
+
+	it('round-trips a condition YAML would otherwise misread', () => {
+		const [write] = conditionWrites(parse.states[0], ['sky'], '!lit');
+		const after = writeBack(text, write);
+		const scene = parseSceneText(`[scene]\n${after}`).result!.scene;
+
+		expect(scene.entityIfs).toEqual({drone: 'passage.visits == 1', sky: '!lit'});
+	});
+
+	it('removes the key when emptied', () => {
+		const [write] = conditionWrites(parse.states[0], ['drone'], undefined);
+
+		expect(writeBack(text, write)).toContain('drone: {at: 0.2}');
 	});
 });
 
