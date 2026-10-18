@@ -17,8 +17,10 @@ import {resolveZ} from '@sliders/render-dom';
 import type {StageBox} from '@sliders/render-dom';
 import type {
 	Camera,
+	EntityFit,
 	EntityId,
 	EntityPatch,
+	PoseLoop,
 	Stage,
 	StageEntity,
 	Vec2
@@ -255,6 +257,72 @@ export function motionSpeedWrites(
 			  ]
 			: []
 	);
+}
+
+/**
+ * Set or clear `fit:` on everything selected. `undefined` = a sprite again (key removed).
+ *
+ * Always on the entry. There is no `fit: ~` (`mergePatch`): a beat can turn a sprite into a
+ * plane but never back, so a write that followed the scrubber could set what it could not
+ * undo. Drawing mode is the entity's, not a moment's.
+ */
+export function fitWrites(
+	stage: Stage,
+	ids: EntityId[],
+	fit: EntityFit | undefined
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids).map(entity => ({
+		entry: true,
+		id: entity.id,
+		key: 'fit',
+		kind: entity.kind,
+		ref: entity.ref,
+		value: fit
+	}));
+}
+
+/**
+ * Set or clear `poseLoop:` on every selected character playing an inline step list. Props
+ * have no poses, and on a single pose the key means nothing.
+ *
+ * Clearing deletes the key on the entry and says `poseLoop: all` on a beat — the default
+ * spelled out, since a beat inherits the loop the one before it left.
+ */
+export function poseLoopWrites(
+	stage: Stage,
+	ids: EntityId[],
+	poseLoop: PoseLoop | undefined
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids)
+		.filter(entity => entity.kind !== 'prop' && entity.steps)
+		.map(entity => ({
+			id: entity.id,
+			key: 'poseLoop',
+			kind: entity.kind,
+			ref: entity.ref,
+			reset: 'all',
+			value: poseLoop
+		}));
+}
+
+/**
+ * Set or clear an entity's `if:` on everything selected. Always on the entry: on a beat
+ * `if:` gates the whole BEAT (the parser warns), so the entity's own condition only exists
+ * in `cast:` / `props:`.
+ */
+export function conditionWrites(
+	stage: Stage,
+	ids: EntityId[],
+	condition: string | undefined
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids).map(entity => ({
+		entry: true,
+		id: entity.id,
+		key: 'if',
+		kind: entity.kind,
+		ref: entity.ref,
+		value: condition
+	}));
 }
 
 // ---------------------------------------------------------------------------

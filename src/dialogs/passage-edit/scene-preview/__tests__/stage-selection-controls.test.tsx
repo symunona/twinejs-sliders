@@ -401,3 +401,129 @@ describe('motion menu', () => {
 		expect(onMotionSpeed).toHaveBeenCalledWith(5);
 	});
 });
+
+describe('fit menu', () => {
+	const fitSelect = () =>
+		screen.getByRole('combobox', {
+			name: 'dialogs.passageEdit.scenePreview.fit'
+		}) as HTMLSelectElement;
+
+	it('is hidden without a handler', () => {
+		renderControls(['candle']);
+		expect(
+			screen.queryByRole('combobox', {
+				name: 'dialogs.passageEdit.scenePreview.fit'
+			})
+		).toBeNull();
+	});
+
+	it('reads Sprite with no key, and writes a fit for the selection', () => {
+		const onFit = jest.fn();
+
+		renderControls(['candle', 'mira'], {onFit});
+		expect(fitSelect().value).toBe('');
+		fireEvent.change(fitSelect(), {target: {value: 'cover'}});
+		expect(onFit).toHaveBeenCalledWith('cover');
+	});
+
+	it('shows a written fit as itself, Mixed when they differ', () => {
+		const onFit = jest.fn();
+		const planes = parseSceneText(
+			'[scene]\nprops:\n  wall: {fit: contain}\n  sky: {}'
+		).states[0];
+
+		renderControls([], {entities: [planes.entities.wall], onFit});
+		expect(fitSelect().value).toBe('contain');
+		fireEvent.change(fitSelect(), {target: {value: ''}});
+		expect(onFit).toHaveBeenCalledWith(undefined);
+		cleanup();
+		renderControls([], {
+			entities: [planes.entities.wall, planes.entities.sky],
+			onFit
+		});
+		expect(fitSelect().value).not.toBe('');
+		expect(fitSelect().value).not.toBe('contain');
+	});
+});
+
+describe('poseLoop menu', () => {
+	const walking = parseSceneText(
+		[
+			'[scene]',
+			'cast:',
+			'  mira: {pose: [angry, idle]}',
+			'  joren: {pose: [idle, angry], poseLoop: all}'
+		].join('\n')
+	).states[0];
+	const loopSelect = () =>
+		screen.queryByRole('combobox', {
+			name: 'dialogs.passageEdit.scenePreview.poseLoop'
+		}) as HTMLSelectElement | null;
+
+	it('is hidden on a single pose and on props', () => {
+		renderControls(['mira', 'candle'], {onPoseLoop: jest.fn()});
+		expect(loopSelect()).toBeNull();
+	});
+
+	it('keeps Default apart from an explicit all', () => {
+		const onPoseLoop = jest.fn();
+
+		renderControls([], {entities: [walking.entities.mira], onPoseLoop});
+		expect(loopSelect()!.value).toBe('');
+		fireEvent.change(loopSelect()!, {target: {value: 'once'}});
+		expect(onPoseLoop).toHaveBeenCalledWith('once');
+		cleanup();
+		renderControls([], {entities: [walking.entities.joren], onPoseLoop});
+		expect(loopSelect()!.value).toBe('all');
+		fireEvent.change(loopSelect()!, {target: {value: ''}});
+		expect(onPoseLoop).toHaveBeenCalledWith(undefined);
+	});
+});
+
+describe('condition box', () => {
+	const box = () =>
+		screen.getByRole('textbox', {
+			name: 'dialogs.passageEdit.scenePreview.condition'
+		}) as HTMLInputElement;
+
+	it('is the last control in the panel', () => {
+		renderControls(['candle'], {onCondition: jest.fn(), onMotion: jest.fn()});
+
+		const controls = screen
+			.getByTestId('scene-preview-selection')
+			.querySelectorAll('input, select, button');
+
+		expect(controls[controls.length - 1]).toBe(box());
+	});
+
+	it('shows the condition and writes on Enter', () => {
+		const onCondition = jest.fn();
+
+		renderControls(['candle'], {
+			entityIfs: {candle: 'has_key'},
+			onCondition
+		});
+		expect(box().value).toBe('has_key');
+		fireEvent.change(box(), {target: {value: ' coins >= 3 '}});
+		fireEvent.keyDown(box(), {key: 'Enter'});
+		expect(onCondition).toHaveBeenCalledWith('coins >= 3');
+	});
+
+	it('removes the key when emptied, and writes nothing untouched', () => {
+		const onCondition = jest.fn();
+
+		renderControls(['candle', 'mira'], {
+			entityIfs: {candle: 'has_key'},
+			onCondition
+		});
+		// Mixed reads empty; passing through it must not clear the one that has a condition.
+		expect(box().value).toBe('');
+		fireEvent.blur(box());
+		expect(onCondition).not.toHaveBeenCalled();
+		cleanup();
+		renderControls(['candle'], {entityIfs: {candle: 'has_key'}, onCondition});
+		fireEvent.change(box(), {target: {value: ''}});
+		fireEvent.blur(box());
+		expect(onCondition).toHaveBeenCalledWith(undefined);
+	});
+});

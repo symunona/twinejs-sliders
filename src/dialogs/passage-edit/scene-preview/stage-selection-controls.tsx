@@ -8,8 +8,12 @@
  * alone never is.
  *
  * Order, top down: the two one-click grade fixes (match bg, reset), the gesture buttons,
- * pose, motion and opacity, then the grade sliders — the long part goes last so the buttons never move. Hovering one
- * slider shows the sprite at that slider's two ends (`GradeExtremesOverlay`).
+ * pose and its step loop, motion, fit and opacity, then the grade sliders — the long part goes last so the buttons never move. Hovering one
+ * slider shows the sprite at that slider's two ends (`GradeExtremesOverlay`). The entity's
+ * `if:` sits below everything: whether it is there at all, read once its look is known.
+ *
+ * `fit:`, `poseLoop:` and `if:` each show "not written" as its own choice (Sprite, Default,
+ * an empty box) — never folded into the value it happens to behave like.
  *
  * `pose:` is cast-only and single-selection-only: props are one image and have no poses
  * (spec 03), and two characters share no pose vocabulary. An `entities:` entry is kind
@@ -39,17 +43,25 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {BG_MOTIONS, normalizeGrade} from '@sliders/scene-types';
+import {
+	BG_MOTIONS,
+	ENTITY_FITS,
+	POSE_LOOPS,
+	normalizeGrade
+} from '@sliders/scene-types';
 import type {
 	AssetResolver,
+	EntityFit,
 	EntityGrade,
 	GradeKey,
+	PoseLoop,
 	StageEntity
 } from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
 import {AdjustSlider} from '../../asset-editor/adjust-slider';
 import {NumberField} from './number-field';
+import {TextField} from './text-field';
 import {TextSelect} from '../../../components/control/text-select';
 import {GradeExtremesOverlay} from './grade-extremes-overlay';
 import {GradeSliders} from './grade-sliders';
@@ -83,6 +95,17 @@ export interface StageSelectionControlsProps {
 	onMotion?: (motion: string | undefined) => void;
 	/** Seconds per cycle on the selection's motions, `undefined` for the preset's own. */
 	onMotionSpeed?: (speed: number | undefined) => void;
+	/** Set `fit:` on the whole selection, `undefined` for a sprite. Absent hides the menu. */
+	onFit?: (fit: EntityFit | undefined) => void;
+	/**
+	 * Set `poseLoop:` on the selected characters playing a step list, `undefined` to drop the
+	 * key. Absent hides the menu; so does a selection with no step list.
+	 */
+	onPoseLoop?: (poseLoop: PoseLoop | undefined) => void;
+	/** The scene's entity conditions (`Scene.entityIfs`): not stage state, so not on the entity. */
+	entityIfs?: Record<string, string>;
+	/** Set the selection's `if:`, `undefined` to remove it. Absent hides the box. */
+	onCondition?: (condition: string | undefined) => void;
 	/**
 	 * The opacity slider moved: PAINTS the whole selection at that opacity, writes nothing.
 	 * Absent hides the slider.
@@ -156,6 +179,30 @@ function sharedMotion(entities: StageEntity[]): string {
 	const ids = new Set(entities.map(entity => entity.motion?.id ?? STILL));
 
 	return ids.size === 1 ? [...ids][0] : MIXED;
+}
+
+/** No key written. Its own choice in each menu — not the value it behaves like. */
+const UNSET = '';
+
+/** The one token every value agrees on, `UNSET` when none is written, `MIXED` otherwise. */
+function sharedToken(tokens: (string | undefined)[]): string {
+	const set = new Set(tokens.map(token => token ?? UNSET));
+
+	return set.size === 1 ? [...set][0] : MIXED;
+}
+
+/** `TextSelect` options: Mixed (shown, never chosen) when it applies, unset, then tokens. */
+function tokenOptions(
+	value: string,
+	unsetLabel: string,
+	mixedLabel: string,
+	tokens: readonly string[]
+) {
+	return [
+		...(value === MIXED ? [{disabled: true, label: mixedLabel, value: MIXED}] : []),
+		{label: unsetLabel, value: UNSET},
+		...tokens.map(token => ({label: token, value: token}))
+	];
 }
 
 /** The speed every moving sprite in the selection shares, else undefined (box empty). */
@@ -282,6 +329,10 @@ export const StageSelectionControls: React.FC<
 		onPose,
 		onMotion,
 		onMotionSpeed,
+		onFit,
+		onPoseLoop,
+		entityIfs,
+		onCondition,
 		onOpacity,
 		onOpacityCommit,
 		onResetStretch,
@@ -352,6 +403,10 @@ export const StageSelectionControls: React.FC<
 
 	const names = entities.map(entity => entity.id).join(', ');
 	const motion = sharedMotion(entities);
+	const fit = sharedToken(entities.map(entity => entity.fit));
+	const looping = entities.filter(entity => entity.kind !== 'prop' && entity.steps);
+	const poseLoop = sharedToken(looping.map(entity => entity.poseLoop));
+	const condition = sharedToken(entities.map(entity => entityIfs?.[entity.id]));
 
 	return (
 		<div
@@ -489,6 +544,23 @@ export const StageSelectionControls: React.FC<
 					tooltipLabel={t('dialogs.passageEdit.scenePreview.poseHint')}
 				/>
 			)}
+			{onPoseLoop && looping.length > 0 && (
+				<TextSelect
+					onChange={event =>
+						event.target.value !== MIXED &&
+						onPoseLoop((event.target.value as PoseLoop) || undefined)
+					}
+					options={tokenOptions(
+						poseLoop,
+						t('dialogs.passageEdit.scenePreview.poseLoopDefault'),
+						t('dialogs.passageEdit.scenePreview.motionMixed'),
+						POSE_LOOPS
+					)}
+					value={poseLoop}
+				>
+					{t('dialogs.passageEdit.scenePreview.poseLoop')}
+				</TextSelect>
+			)}
 			{onMotion && (
 				<TextSelect
 					onChange={event =>
@@ -534,6 +606,23 @@ export const StageSelectionControls: React.FC<
 					/>
 				</div>
 			)}
+			{onFit && (
+				<TextSelect
+					onChange={event =>
+						event.target.value !== MIXED &&
+						onFit((event.target.value as EntityFit) || undefined)
+					}
+					options={tokenOptions(
+						fit,
+						t('dialogs.passageEdit.scenePreview.fitSprite'),
+						t('dialogs.passageEdit.scenePreview.motionMixed'),
+						ENTITY_FITS
+					)}
+					value={fit}
+				>
+					{t('dialogs.passageEdit.scenePreview.fit')}
+				</TextSelect>
+			)}
 			{onOpacity && (
 				<OpacitySlider
 					onChange={onOpacity}
@@ -567,6 +656,19 @@ export const StageSelectionControls: React.FC<
 					onChange={onGrade}
 					onCommit={() => onGradeCommit?.()}
 					onHoverKey={hoverGrade}
+				/>
+			)}
+			{onCondition && (
+				<TextField
+					label={t('dialogs.passageEdit.scenePreview.condition')}
+					onCommit={onCondition}
+					placeholder={
+						condition === MIXED
+							? t('dialogs.passageEdit.scenePreview.motionMixed')
+							: t('dialogs.passageEdit.scenePreview.conditionAlways')
+					}
+					// Mixed shows empty; the box writes only what was typed into it.
+					value={condition === MIXED || condition === UNSET ? undefined : condition}
 				/>
 			)}
 			{single && onGrade && hoverKey && panelEl && (
