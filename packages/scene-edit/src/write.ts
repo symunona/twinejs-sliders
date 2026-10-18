@@ -1131,6 +1131,35 @@ export function setBeatKey(
 	key: string,
 	value: unknown
 ): TextEdit | undefined {
+	return writeBeatKey(
+		text,
+		index,
+		key,
+		value === null ? null : formatValue(key, value)
+	);
+}
+
+/**
+ * `setBeatKey` with the value already YAML. For what a JS value cannot say through
+ * `formatValue`: `music: ~` on a beat (`null` there means remove), or a value its own
+ * formatter built (`formatMusic`).
+ */
+export function setBeatKeyFormatted(
+	text: string,
+	index: number,
+	key: string,
+	formatted: string
+): TextEdit | undefined {
+	return writeBeatKey(text, index, key, formatted);
+}
+
+/** `formatted: null` removes the key. */
+function writeBeatKey(
+	text: string,
+	index: number,
+	key: string,
+	formatted: string | null
+): TextEdit | undefined {
 	const parsed = parseBlock(text);
 
 	if (!parsed) {
@@ -1149,22 +1178,22 @@ export function setBeatKey(
 		const map = body as YAMLMap;
 		const existing = findPair(map, key);
 
-		if (value === null) {
+		if (formatted === null) {
 			return existing ? removePairEdit(parsed, map, existing) : undefined;
 		}
 
 		return existing
-			? spliceValue(parsed, existing, formatValue(key, value), key)
-			: insertIntoMap(parsed, map, key, formatValue(key, value));
+			? spliceValue(parsed, existing, formatted, key)
+			: insertIntoMap(parsed, map, key, formatted);
 	}
 
 	// Nothing to remove from a beat that is still one line of dialogue.
-	if (value === null) {
+	if (formatted === null) {
 		return undefined;
 	}
 
 	return promoteScalarBeat(text, beat.pair, beat.key === 'box' ? 'text' : 'say', [
-		[key, formatValue(key, value)]
+		[key, formatted]
 	]);
 }
 

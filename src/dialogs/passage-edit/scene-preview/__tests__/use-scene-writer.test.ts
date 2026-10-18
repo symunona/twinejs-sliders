@@ -446,6 +446,23 @@ describe('buildWriteEdit()', () => {
 		expect(after).not.toContain('drums');
 	});
 
+	it('writes a beat key as given YAML: music: ~ on a beat', () => {
+		const text = ['[scene]', 'music: rain', 'beats:', '  - box: "Hi."'].join(
+			'\n'
+		);
+		const stopped = apply(text, {
+			beat: 0,
+			beatKey: 'music',
+			formatted: '~',
+			value: '~'
+		});
+
+		expect(stopped).toContain('- box: {text: "Hi.", music: ~}');
+		expect(
+			apply(`[scene]\n${stopped}`, {beat: 0, beatKey: 'music', value: null})
+		).not.toContain('music: ~');
+	});
+
 	it('removes a top-level scene key when the value goes away', () => {
 		const withCamera = ['[scene]', 'camera: {zoom: 2}', 'cast:', '  mira: {at: 0}'].join(
 			'\n'

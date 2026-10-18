@@ -24,6 +24,7 @@ import {
 	removeSceneKey,
 	setBeatBubble,
 	setBeatKey,
+	setBeatKeyFormatted,
 	setBeatText,
 	setEntityKey,
 	setSceneKey
@@ -308,6 +309,8 @@ export interface BeatKeyWrite {
 	beatKey: string;
 	/** `null` REMOVES the key. `undefined` is not a value — filter it out before writing. */
 	value: unknown;
+	/** YAML as is, over `value`. For `music: ~`, which `value: null` cannot say. */
+	formatted?: string;
 }
 
 /**
@@ -482,6 +485,15 @@ export function buildWriteEdit(
 	write: SceneWrite
 ): TextEdit | undefined {
 	if (isBeatKeyWrite(write)) {
+		if (write.formatted !== undefined) {
+			return setBeatKeyFormatted(
+				context.blockText,
+				write.beat,
+				write.beatKey,
+				write.formatted
+			);
+		}
+
 		return setBeatKey(
 			context.blockText,
 			write.beat,

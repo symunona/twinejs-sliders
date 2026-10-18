@@ -1,4 +1,4 @@
-import {IconCode, IconWalk} from '@tabler/icons';
+import {IconCode, IconVolume, IconVolumeOff, IconWalk} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {DialogCard} from '../../components/container/dialog-card';
@@ -29,6 +29,28 @@ import {useSceneParse} from '../passage-edit/scene-preview/use-scene-parse';
 import type {WalkHereInfo} from '../passage-edit/scene-preview/use-walk-here';
 import {setScenePreviewDismissed} from './preview-dismissal';
 import './scene-preview-dialog.css';
+
+/**
+ * The header speaker's mute. Session storage: it outlives closing the dialog and a reload,
+ * not the tab — a mute found days later, on a scene that should be heard, reads as broken.
+ */
+const MUTED_KEY = 'sliders.preview.muted';
+
+function readMuted(): boolean {
+	try {
+		return window.sessionStorage.getItem(MUTED_KEY) === 'true';
+	} catch {
+		return false;
+	}
+}
+
+function writeMuted(muted: boolean) {
+	try {
+		window.sessionStorage.setItem(MUTED_KEY, String(muted));
+	} catch {
+		// Storage blocked: the mute still holds for this dialog.
+	}
+}
 
 export interface ScenePreviewDialogProps extends DialogComponentProps {
 	storyId: string;
@@ -63,6 +85,13 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const [walkOn, setWalkOn] = React.useState(false);
 	const [walker, setWalker] = React.useState<string>();
 	const [walkInfo, setWalkInfo] = React.useState<WalkHereInfo>();
+	/** Header speaker: shown while the preview plays (or would, but for the mute). */
+	const [audible, setAudible] = React.useState(false);
+	const [muted, setMutedState] = React.useState(readMuted);
+	const setMuted = React.useCallback((next: boolean) => {
+		writeMuted(next);
+		setMutedState(next);
+	}, []);
 	const {t} = useTranslation();
 	// An editor for another story would be a leftover; this dialog belongs to one story.
 	const source = published?.storyId === story.id ? published : undefined;
@@ -224,6 +253,17 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			className="scene-preview-dialog"
 			headerControls={
 				<>
+					{audible && (
+						<IconButton
+							icon={muted ? <IconVolumeOff /> : <IconVolume />}
+							iconOnly
+							label={t('dialogs.passageEdit.scenePreview.sounds.mute')}
+							onClick={() => setMuted(!muted)}
+							selectable
+							selected={muted}
+							tooltipPosition="bottom"
+						/>
+					)}
 					{/* The passage's source: its `</>` editor, on the same Doc the stage
 					    writes. Raised if already open. */}
 					<IconButton
@@ -267,6 +307,9 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 				<ScenePreview
 					assets={assets}
 					walkControls={walkControls}
+					muted={muted}
+					onAudible={setAudible}
+					onMutedChange={setMuted}
 					onWalkInfo={setWalkInfo}
 					onCreatePassage={handleCreatePassage}
 					onGoToLine={handleGoToLine}

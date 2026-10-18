@@ -7,6 +7,7 @@ import {
 	formatBubble,
 	formatFx,
 	formatMusic,
+	formatSfx,
 	formatTransition,
 	sceneBubbleWrite,
 	sceneGlobalKeyWrite,
@@ -56,6 +57,9 @@ function renderPanel(
 
 const camera = (yaml: string, extra = {}) =>
 	renderPanel(yaml, true, {pane: 'camera', ...extra});
+
+const sounds = (yaml: string, extra = {}) =>
+	renderPanel(yaml, true, {pane: 'sounds', ...extra});
 
 const row = (testId: string) => screen.getByTestId(testId);
 const select = (testId: string) =>
@@ -109,6 +113,11 @@ describe('formatting', () => {
 			])
 		).toBe('[rain@0.6, dark]');
 		expect(formatFx([])).toBeUndefined();
+	});
+
+	it('writes sfx with volume only when not 1', () => {
+		expect(formatSfx({amount: 1, id: 'door'})).toBe('door');
+		expect(formatSfx({amount: 0.4, id: 'door'})).toBe('door@0.4');
 	});
 
 	it('round-trips single-form music', () => {
@@ -279,7 +288,7 @@ describe('<SceneSettingsPanel>', () => {
 	});
 
 	it('picks a sound when the scene has no music', () => {
-		const {onWrite} = renderPanel('bg: cellar');
+		const {onWrite} = sounds('bg: cellar');
 
 		fireEvent.change(select('scene-settings-music'), {target: {value: 'rain'}});
 		expect(onWrite).toHaveBeenCalledWith([
@@ -288,7 +297,7 @@ describe('<SceneSettingsPanel>', () => {
 	});
 
 	it('changes the bed and keeps its volume', () => {
-		const {onWrite} = renderPanel('music: rain@0.4');
+		const {onWrite} = sounds('music: rain@0.4');
 
 		fireEvent.change(select('scene-settings-music'), {
 			target: {value: 'strings'}
@@ -299,7 +308,7 @@ describe('<SceneSettingsPanel>', () => {
 	});
 
 	it('sets a single track to play once', () => {
-		const {onWrite} = renderPanel('music: rain');
+		const {onWrite} = sounds('music: rain');
 
 		fireEvent.change(select('scene-settings-music-main-loop'), {
 			target: {value: 'false'}
@@ -310,12 +319,78 @@ describe('<SceneSettingsPanel>', () => {
 	});
 
 	it('removes one keyed track and leaves the other', () => {
-		const {onWrite} = renderPanel('music: {mellow: strings, drums: rain@0.3}');
+		const {onWrite} = sounds('music: {mellow: strings, drums: rain@0.3}');
 
 		fireEvent.click(reset('scene-settings-track-drums-name'));
 		expect(onWrite).toHaveBeenCalledWith([
 			{formatted: '{mellow: strings}', sceneKey: 'music'}
 		]);
+	});
+
+	it('keeps music off the scene pane: it lives on sounds', () => {
+		renderPanel('music: rain');
+		expect(screen.queryByTestId('scene-settings-music-group')).toBeNull();
+	});
+
+	describe('sounds pane, beat scope', () => {
+		const yaml =
+			'music: rain\ncast: {mira: {at: [0.5, 0.9]}}\nbeats:\n  - mira: {say: hi, sfx: door@0.4}\n  - mira: hello\n  - sfx: bell';
+		const beat = (index: number) => scene(yaml).beats[index];
+
+		function renderBeat(index: number) {
+			const onWriteBeat = jest.fn();
+			const {onWrite} = sounds(yaml, {onWriteBeat, soundBeat: beat(index)});
+
+			return {onWrite, onWriteBeat};
+		}
+
+		it('reads the beat, not the scene', () => {
+			renderBeat(1);
+			expect(select('scene-settings-music').value).toBe('');
+			expect(row('scene-settings-music').dataset.overridden).toBeUndefined();
+			expect(row('scene-settings-music')).toHaveTextContent(
+				'dialogs.passageEdit.scenePreview.settings.musicKeep'
+			);
+		});
+
+		it('writes the beat\'s music, never the scene key', () => {
+			const {onWrite, onWriteBeat} = renderBeat(1);
+
+			fireEvent.change(select('scene-settings-music'), {
+				target: {value: 'strings'}
+			});
+			expect(onWriteBeat).toHaveBeenCalledWith('music', 'strings');
+			fireEvent.change(select('scene-settings-music'), {target: {value: '~'}});
+			expect(onWriteBeat).toHaveBeenLastCalledWith('music', '~');
+			expect(onWrite).not.toHaveBeenCalled();
+		});
+
+		it('edits the beat\'s sfx: sound, volume, remove', () => {
+			const {onWriteBeat} = renderBeat(0);
+
+			expect(select('scene-settings-sfx').value).toBe('door');
+			expect(number('scene-settings-sfx-volume').value).toBe('0.4');
+			fireEvent.change(select('scene-settings-sfx'), {target: {value: 'rain'}});
+			expect(onWriteBeat).toHaveBeenLastCalledWith('sfx', 'rain@0.4');
+			fireEvent.click(reset('scene-settings-sfx-volume'));
+			expect(onWriteBeat).toHaveBeenLastCalledWith('sfx', 'door');
+			fireEvent.click(reset('scene-settings-sfx'));
+			expect(onWriteBeat).toHaveBeenLastCalledWith('sfx', undefined);
+		});
+
+		it('has no sfx row at Step 0: sfx: only belongs to a beat', () => {
+			sounds(yaml);
+			expect(screen.getByTestId('scene-settings-music-group')).toBeInTheDocument();
+			expect(screen.queryByTestId('scene-settings-sfx-group')).toBeNull();
+		});
+
+		it('says why a sound-command beat offers no rows', () => {
+			renderBeat(2);
+			expect(screen.queryByTestId('scene-settings-music-group')).toBeNull();
+			expect(screen.getByTestId('scene-settings-sound-note')).toHaveTextContent(
+				'dialogs.passageEdit.scenePreview.settings.soundCommand'
+			);
+		});
 	});
 
 	it('searches backdrops and shows their previews', () => {

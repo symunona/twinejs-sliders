@@ -11,8 +11,11 @@
  * into scene keys.
  *
  * Split over sidebar panes (`pane`): `scene` is the scene's own settings, `camera` is the
- * shot — where it looks, how the backdrop moves, what weather is over it. A new pane is a
- * new `SceneSettingsPane` and a `pane === …` block below.
+ * shot — where it looks, how the backdrop moves, what weather is over it, `sounds` is what
+ * is heard. A new pane is a new `SceneSettingsPane` and a `pane === …` block below.
+ *
+ * `sounds` is scope-aware like the beat tab: Step 0 edits the scene's `music:`, a beat on
+ * screen (`soundBeat`) edits that beat's own `music:` and `sfx:` through `onWriteBeat`.
  *
  * Same grid as the beat props (`beat-props.tsx`): label, control, X. A row is highlighted
  * when the scene states the key, and the X removes it — back to whatever the layer under
@@ -34,6 +37,7 @@ import {
 	IconMusic,
 	IconPhoto,
 	IconTemplate,
+	IconVolume,
 	IconX
 } from '@tabler/icons';
 import classNames from 'classnames';
@@ -51,6 +55,7 @@ import {
 } from '@sliders/scene-types';
 import type {
 	AssetResolver,
+	Beat,
 	BubbleStyle,
 	Camera,
 	MusicEntry,
@@ -59,7 +64,8 @@ import type {
 	Scene,
 	SceneLock,
 	StageBgFx,
-	StageFx
+	StageFx,
+	StageSound
 } from '@sliders/scene-types';
 import {formatNumber, formatValue} from '@sliders/scene-edit';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
@@ -76,7 +82,7 @@ import './beat-props.css';
 import './scene-settings-panel.css';
 
 /** Which sidebar pane the panel is drawn in. Each pane renders its own groups. */
-export type SceneSettingsPane = 'scene' | 'camera';
+export type SceneSettingsPane = 'scene' | 'camera' | 'sounds';
 
 export interface SceneSettingsPanelProps {
 	/** Default `scene`. */
@@ -110,6 +116,13 @@ export interface SceneSettingsPanelProps {
 	cameraLockedReason?: string;
 	/** Parent calls `commit(writes, EDIT_ORIGIN)`. */
 	onWrite: (writes: SceneKeyWrite[]) => void;
+	/**
+	 * `sounds` pane: the beat on screen. Present = beat scope, its `music:` / `sfx:` are
+	 * edited instead of the scene's. Absent = Step 0.
+	 */
+	soundBeat?: Beat;
+	/** Beat scope writes: formatted YAML, `undefined` removes the beat's key. */
+	onWriteBeat?: (key: 'music' | 'sfx', formatted: string | undefined) => void;
 }
 
 /** The empty option: the scene states nothing, so the layer underneath decides. */
@@ -219,6 +232,14 @@ export function formatFx(fx: StageFx[]): string | undefined {
 				? entry.id
 				: `${entry.id}@${formatNumber(entry.amount)}`
 		)
+	);
+}
+
+/** `sfx: door@0.4`. Volume 1 is the default, so it is not written. */
+export function formatSfx(sound: StageSound): string {
+	return formatValue(
+		'sfx',
+		sound.amount === 1 ? sound.id : `${sound.id}@${formatNumber(sound.amount)}`
 	);
 }
 
@@ -494,8 +515,10 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 	cameraLockedReason,
 	editable,
 	onWrite,
+	onWriteBeat,
 	pane = 'scene',
 	scene,
+	soundBeat,
 	templates
 }) => {
 	const {t} = useTranslation();
@@ -550,7 +573,19 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 
 	// --- music --------------------------------------------------------------
 
-	const music = scene.music;
+	// Scope: Step 0 is the scene's `music:`, a beat on screen its own.
+	const music = soundBeat ? soundBeat.music : scene.music;
+	const writeMusic = (formatted?: string) =>
+		soundBeat ? onWriteBeat?.('music', formatted) : write('music', formatted);
+	/** Only `say`, `set` and `box` have a body map to hold a sound key. */
+	const soundBody =
+		!soundBeat ||
+		soundBeat.kind === 'say' ||
+		soundBeat.kind === 'set' ||
+		soundBeat.kind === 'box';
+	const sfx = soundBeat?.sfx;
+	const writeSfx = (id: string | undefined, amount: number | undefined) =>
+		onWriteBeat?.('sfx', id ? formatSfx({amount: amount ?? 1, id}) : undefined);
 	const single = !!music && isSingleMusic(music);
 	const main = single ? music!.tracks[MUSIC_MAIN_TRACK]! : undefined;
 	const musicChoice =
@@ -564,8 +599,7 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 	const audioNames = withCurrent(assetNames?.audio ?? [], main?.id);
 	const setTrack = (name: string, entry: MusicEntry | null) => {
 		if (music) {
-			write(
-				'music',
+			writeMusic(
 				formatMusic({...music, tracks: {...music.tracks, [name]: entry}})
 			);
 		}
@@ -578,7 +612,7 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 		const tracks = {...music.tracks};
 
 		delete tracks[name];
-		write('music', formatMusic({...music, tracks}));
+		writeMusic(formatMusic({...music, tracks}));
 	};
 
 	/** The rows of one track. `single` is the one-bed form, where loop defaults on. */
@@ -916,124 +950,6 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 						</SettingRow>
 					</div>
 
-					<div
-						className="scene-preview-beat-props-group"
-						data-testid="scene-settings-music-group"
-					>
-						<Heading icon={<IconMusic />}>{label('music')}</Heading>
-						<SettingRow
-							fallback={fallback(label('musicInherit'))}
-							label={label('musicSound')}
-							onReset={() => write('music')}
-							resetLabel={resetLabel('music')}
-							stated={music !== undefined}
-							testId="scene-settings-music"
-						>
-							<TextSelect
-								onChange={event => {
-									const value = event.target.value;
-
-									if (value === CUSTOM) {
-										return;
-									}
-
-									if (value === UNSET) {
-										write('music');
-									} else if (value === NONE) {
-										write('music', formatMusic(null));
-									} else if (main) {
-										// Same bed, another sound: its volume, loop and fade stay.
-										write(
-											'music',
-											formatMusic({
-												...music!,
-												tracks: {[MUSIC_MAIN_TRACK]: {...main, id: value}}
-											})
-										);
-									} else {
-										write('music', formatValue('music', value));
-									}
-								}}
-								options={[
-									unsetOption,
-									{label: label('musicSilence'), value: NONE},
-									...(musicChoice === CUSTOM
-										? [customOption('musicTracks')]
-										: []),
-									...audioNames.map(name => ({label: name, value: name}))
-								]}
-								value={musicChoice}
-							>
-								{label('musicSound')}
-							</TextSelect>
-						</SettingRow>
-						{main && trackRows(MUSIC_MAIN_TRACK, main, true)}
-						{music &&
-							!single &&
-							Object.entries(music.tracks).map(([name, entry]) => (
-								<div
-									className="scene-settings-track"
-									data-testid={`scene-settings-track-${name}`}
-									key={name}
-								>
-									<SettingRow
-										label={<strong>{name}</strong>}
-										onReset={() => dropTrack(name)}
-										resetLabel={t(key('reset'), {name})}
-										stated
-										testId={`scene-settings-track-${name}-name`}
-									>
-										{entry === null && (
-											<span className="beat-prop-unit">
-												{label('musicStopped')}
-											</span>
-										)}
-									</SettingRow>
-									{entry && trackRows(name, entry, false)}
-								</div>
-							))}
-						{music && (
-							<SettingRow
-								fallback={fallback(label('stopOthersNone'))}
-								label={label('stopOthers')}
-								onReset={() =>
-									write('music', formatMusic({...music, stopOthers: undefined}))
-								}
-								resetLabel={resetLabel('stopOthers')}
-								stated={stop !== undefined}
-								testId="scene-settings-stop-others"
-							>
-								<TextSelect
-									onChange={event => {
-										const value = event.target.value;
-
-										if (value === CUSTOM) {
-											return;
-										}
-
-										write(
-											'music',
-											formatMusic({
-												...music,
-												stopOthers: value === 'all' ? 'all' : undefined
-											})
-										);
-									}}
-									options={[
-										unsetOption,
-										...(stopChoice === CUSTOM
-											? [{label: (stop as string[]).join(', '), value: CUSTOM}]
-											: []),
-										{label: label('stopOthersAll'), value: 'all'}
-									]}
-									value={stopChoice}
-								>
-									{label('stopOthers')}
-								</TextSelect>
-							</SettingRow>
-						)}
-					</div>
-
 					<div className="scene-preview-beat-props-group">
 						<Heading icon={<IconLock />}>{label('editor')}</Heading>
 						<SettingRow
@@ -1066,6 +982,198 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 							</TextSelect>
 						</SettingRow>
 					</div>
+				</>
+			)}
+			{pane === 'sounds' && (
+				<>
+					{soundBody ? (
+						<>
+							<div
+								className="scene-preview-beat-props-group"
+								data-testid="scene-settings-music-group"
+							>
+								<Heading icon={<IconMusic />}>{label('music')}</Heading>
+								<SettingRow
+									fallback={fallback(
+										label(soundBeat ? 'musicKeep' : 'musicInherit')
+									)}
+									label={label('musicSound')}
+									onReset={() => writeMusic()}
+									resetLabel={resetLabel('music')}
+									stated={music !== undefined}
+									testId="scene-settings-music"
+								>
+									<TextSelect
+										onChange={event => {
+											const value = event.target.value;
+
+											if (value === CUSTOM) {
+												return;
+											}
+
+											if (value === UNSET) {
+												writeMusic();
+											} else if (value === NONE) {
+												writeMusic(formatMusic(null));
+											} else if (main) {
+												// Same bed, another sound: its volume, loop and fade stay.
+												writeMusic(
+													formatMusic({
+														...music!,
+														tracks: {[MUSIC_MAIN_TRACK]: {...main, id: value}}
+													})
+												);
+											} else {
+												writeMusic(formatValue('music', value));
+											}
+										}}
+										options={[
+											unsetOption,
+											{label: label('musicSilence'), value: NONE},
+											...(musicChoice === CUSTOM
+												? [customOption('musicTracks')]
+												: []),
+											...audioNames.map(name => ({label: name, value: name}))
+										]}
+										value={musicChoice}
+									>
+										{label('musicSound')}
+									</TextSelect>
+								</SettingRow>
+								{main && trackRows(MUSIC_MAIN_TRACK, main, true)}
+								{music &&
+									!single &&
+									Object.entries(music.tracks).map(([name, entry]) => (
+										<div
+											className="scene-settings-track"
+											data-testid={`scene-settings-track-${name}`}
+											key={name}
+										>
+											<SettingRow
+												label={<strong>{name}</strong>}
+												onReset={() => dropTrack(name)}
+												resetLabel={t(key('reset'), {name})}
+												stated
+												testId={`scene-settings-track-${name}-name`}
+											>
+												{entry === null && (
+													<span className="beat-prop-unit">
+														{label('musicStopped')}
+													</span>
+												)}
+											</SettingRow>
+											{entry && trackRows(name, entry, false)}
+										</div>
+									))}
+								{music && (
+									<SettingRow
+										fallback={fallback(label('stopOthersNone'))}
+										label={label('stopOthers')}
+										onReset={() =>
+											writeMusic(formatMusic({...music, stopOthers: undefined}))
+										}
+										resetLabel={resetLabel('stopOthers')}
+										stated={stop !== undefined}
+										testId="scene-settings-stop-others"
+									>
+										<TextSelect
+											onChange={event => {
+												const value = event.target.value;
+
+												if (value === CUSTOM) {
+													return;
+												}
+
+												writeMusic(
+													formatMusic({
+														...music,
+														stopOthers: value === 'all' ? 'all' : undefined
+													})
+												);
+											}}
+											options={[
+												unsetOption,
+												...(stopChoice === CUSTOM
+													? [
+															{
+																label: (stop as string[]).join(', '),
+																value: CUSTOM
+															}
+													  ]
+													: []),
+												{label: label('stopOthersAll'), value: 'all'}
+											]}
+											value={stopChoice}
+										>
+											{label('stopOthers')}
+										</TextSelect>
+									</SettingRow>
+								)}
+							</div>
+
+							{soundBeat && (
+								<div
+									className="scene-preview-beat-props-group"
+									data-testid="scene-settings-sfx-group"
+								>
+									<Heading icon={<IconVolume />}>{label('sfx')}</Heading>
+									<SettingRow
+										fallback={fallback(label('sfxNone'))}
+										label={label('musicSound')}
+										onReset={() => writeSfx(undefined, undefined)}
+										resetLabel={resetLabel('sfx')}
+										stated={!!sfx}
+										testId="scene-settings-sfx"
+									>
+										<TextSelect
+											onChange={event =>
+												writeSfx(event.target.value || undefined, sfx?.amount)
+											}
+											options={[
+												unsetOption,
+												...withCurrent(assetNames?.audio ?? [], sfx?.id).map(
+													id => ({label: id, value: id})
+												)
+											]}
+											value={sfx?.id ?? UNSET}
+										>
+											{label('musicSound')}
+										</TextSelect>
+									</SettingRow>
+									<SettingRow
+										fallback={fallback('1')}
+										label={label('volume')}
+										onReset={() => sfx && writeSfx(sfx.id, undefined)}
+										resetLabel={resetLabel('volume')}
+										stated={!!sfx && sfx.amount !== 1}
+										testId="scene-settings-sfx-volume"
+									>
+										<NumberField
+											disabled={!sfx}
+											label={label('volume')}
+											max={1}
+											min={0}
+											onCommit={amount => sfx && writeSfx(sfx.id, amount)}
+											placeholder="1"
+											step={0.1}
+											value={sfx?.amount}
+										/>
+									</SettingRow>
+								</div>
+							)}
+						</>
+					) : (
+						<p
+							className="scene-sidebar-empty"
+							data-testid="scene-settings-sound-note"
+						>
+							{label(
+								soundBeat?.kind === 'sfx' || soundBeat?.kind === 'music'
+									? 'soundCommand'
+									: 'soundNoBody'
+							)}
+						</p>
+					)}
 				</>
 			)}
 			{pane === 'camera' && (

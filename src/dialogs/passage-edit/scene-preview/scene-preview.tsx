@@ -10,8 +10,10 @@ import {
 	IconLock,
 	IconLockOpen,
 	IconMessage2,
+	IconMusic,
 	IconPlayerPause,
 	IconPlayerPlay,
+	IconPlayerStop,
 	IconPlus,
 	IconSettings,
 	IconStack2,
@@ -137,6 +139,7 @@ import {
 	type SceneWrite
 } from './use-scene-writer';
 import {useWalkHere, WalkHereInfo, WalkHereRequest} from './use-walk-here';
+import {previewSounds, useSoundPreview} from './sound-preview';
 import {gradeTarget} from './grade-write';
 import {MatchBgButton} from './match-bg-button';
 import {applyGradeDraft, useGradeEdit} from './use-grade-edit';
@@ -207,6 +210,15 @@ export interface ScenePreviewProps {
 	 * own "edit walk area" link.
 	 */
 	walkControls?: React.ReactNode;
+	/**
+	 * The dialog header's mute ("preview sounds"). Silences the stage and the Sounds tab's
+	 * Preview alike, without stopping either. Owned by the dialog, which draws the speaker.
+	 */
+	muted?: boolean;
+	/** Preview pressed while muted: a play is a request to hear, so it unmutes. */
+	onMutedChange?: (muted: boolean) => void;
+	/** Whether something here plays, or would but for the mute: the header shows its speaker. */
+	onAudible?: (audible: boolean) => void;
 	/**
 	 * An error row in the stage's error sidebar was clicked: show that line of the passage
 	 * text. Absent means the rows go nowhere.
@@ -359,6 +371,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	walkHere: walkHereRequest,
 	onWalkInfo,
 	walkControls,
+	muted = false,
+	onMutedChange,
+	onAudible,
 	onCreatePassage,
 	onGoToLine
 }) => {
@@ -1404,6 +1419,41 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => decorateWalk(drawnStage),
 		[decorateWalk, drawnStage]
 	);
+	/**
+	 * The Sounds tab's audition: what is heard at the scrubber, from the top. Step 0 = the
+	 * scene's music, a beat = the music in effect there plus its `sfx:`.
+	 */
+	const soundPreview = useSoundPreview(assets, muted);
+	const heardHere = previewSounds(shownStage.music, shownBeat?.sfx);
+	const toggleSoundPreview = () => {
+		if (soundPreview.playing) {
+			soundPreview.stop();
+			return;
+		}
+
+		if (muted) {
+			onMutedChange?.(false);
+		}
+
+		soundPreview.play(heardHere);
+	};
+	// Stopped by a scrub: what it was playing is no longer what is heard here.
+	const stopSoundPreview = soundPreview.stop;
+
+	React.useEffect(() => stopSoundPreview(), [beat, stopSoundPreview]);
+
+	/** Anything to hear in this scene, anywhere — stable while scrubbing. */
+	const sceneHasSound =
+		!!parse.result?.scene.music ||
+		beats.some(one => !!one.sfx || !!one.music) ||
+		Object.keys(shownStage.music ?? {}).length > 0;
+	const audible = soundPreview.playing || (sound && sceneHasSound);
+
+	React.useEffect(() => {
+		onAudible?.(audible);
+	}, [audible, onAudible]);
+	React.useEffect(() => () => onAudible?.(false), [onAudible]);
+
 	const lastWalkInfo = React.useRef<string>();
 
 	// Told only when it changed: the info is a fresh object every render, and a parent that
@@ -2110,7 +2160,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				assets={assets}
 				beat={drawnBeat}
 				bubbleDefaults={bubbleDefaults}
-				muted={!sound}
+				muted={!sound || muted || soundPreview.playing}
 				onLink={handleLink}
 				onRenderer={handleRenderer}
 				sceneEase={parse.result?.scene.ease}
@@ -2176,9 +2226,27 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					selected={grid}
 					tooltipPosition="bottom"
 				/>
-				{/* A click is also the user gesture the browser wants before it will
-				    play anything, so the button that turns sound on is the same one that
-				    unblocks it. */}
+			</div>
+			<SceneSettingsTab
+				assets={assets}
+				editable={editable}
+				onWrite={writes => commit(writes, EDIT_ORIGIN)}
+				scene={parse.result?.scene}
+				templates={templateNames}
+			/>
+		</div>
+	);
+
+	/**
+	 * Sounds tab: hear the scrubber's point, then what it says. Scope-aware like the beat
+	 * tab — Step 0 edits the scene's `music:`, a beat its own `music:` and `sfx:`.
+	 */
+	const soundsTab = (
+		<div className="scene-sidebar-section">
+			<div className="scene-sidebar-row">
+				{/* A click is also the user gesture the browser wants before it
+				    will play anything, so the button that turns sound on is the
+				    same one that unblocks it. */}
 				<IconButton
 					icon={sound ? <IconVolume /> : <IconVolumeOff />}
 					iconOnly
@@ -2192,13 +2260,47 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					selected={sound}
 					tooltipPosition="bottom"
 				/>
+				<IconButton
+					disabled={!soundPreview.playing && heardHere.length === 0}
+					icon={
+						soundPreview.playing ? <IconPlayerStop /> : <IconPlayerPlay />
+					}
+					label={t(
+						soundPreview.playing
+							? 'dialogs.passageEdit.scenePreview.sounds.stop'
+							: 'dialogs.passageEdit.scenePreview.sounds.preview'
+					)}
+					onClick={toggleSoundPreview}
+					tooltipLabel={t(
+						soundPreview.playing
+							? 'dialogs.passageEdit.scenePreview.sounds.stop'
+							: heardHere.length === 0
+							? 'dialogs.passageEdit.scenePreview.sounds.nothing'
+							: beat > 0
+							? 'dialogs.passageEdit.scenePreview.sounds.previewBeat'
+							: 'dialogs.passageEdit.scenePreview.sounds.previewScene'
+					)}
+					tooltipPosition="bottom"
+				/>
 			</div>
 			<SceneSettingsTab
 				assets={assets}
 				editable={editable}
 				onWrite={writes => commit(writes, EDIT_ORIGIN)}
+				onWriteBeat={(key, formatted) =>
+					beat > 0 &&
+					commit(
+						[
+							formatted === undefined
+								? {beat: beat - 1, beatKey: key, value: null}
+								: {beat: beat - 1, beatKey: key, formatted, value: formatted}
+						],
+						EDIT_ORIGIN
+					)
+				}
+				pane="sounds"
 				scene={parse.result?.scene}
-				templates={templateNames}
+				soundBeat={shownBeat}
 			/>
 		</div>
 	);
@@ -2318,6 +2420,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			icon: <IconCamera />,
 			id: 'camera',
 			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.camera')
+		},
+		{
+			content: soundsTab,
+			icon: <IconMusic />,
+			id: 'sounds',
+			label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.sounds'),
+			scope: beat > 0 ? 'beat' : 'global'
 		},
 		{
 			content: (

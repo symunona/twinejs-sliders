@@ -656,6 +656,14 @@
 					"inBeat": "Written in the beat text as [[label->target]]; edit it there",
 					"overridesBeat": "Overrides the beat text's target, {{target}}"
 				},
+				"sounds": {
+					"preview": "Preview",
+					"stop": "Stop",
+					"previewScene": "Play the scene's music",
+					"previewBeat": "Play what is heard on this beat: the music in effect and its sfx",
+					"nothing": "Nothing to hear here",
+					"mute": "Preview sounds"
+				},
 				"addBeat": {
 					"button": "Add a beat after this one",
 					"narrator": "Narrator"
@@ -670,6 +678,7 @@
 					"tabs": {
 						"scene": "Scene settings",
 						"camera": "Camera",
+						"sounds": "Sounds",
 						"character": "Selected character",
 						"object": "Selected object",
 						"walk": "Walk here",
@@ -734,6 +743,7 @@
 					"motion": "Motion",
 					"music": "Music",
 					"musicInherit": "silence, or inherited through from:",
+					"musicKeep": "keeps what is playing",
 					"musicPatch": "patches the running track",
 					"musicPatchOption": "Running track",
 					"musicSilence": "Silence (~)",
@@ -744,6 +754,10 @@
 					"reset": "Remove {{name}}",
 					"restart": "Restart",
 					"restartDetail": "Start over even if this sound is already playing",
+					"sfx": "Sound effect",
+					"sfxNone": "none",
+					"soundCommand": "This beat is a sound command (- sfx: / - music:). Edit its line in the passage source.",
+					"soundNoBody": "This beat has no body map to hold a sound. Pick a line or a set: beat.",
 					"start": "Start at",
 					"stopOthers": "Stop others",
 					"stopOthersAll": "All other tracks",

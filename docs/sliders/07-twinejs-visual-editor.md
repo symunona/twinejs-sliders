@@ -59,9 +59,9 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 ## Layout
 
 ```
-┌ Scene Editor ─────────────────────── </> ⤢ ⛶ ⌄ ✕ ┐   </> = open passage source
+┌ Scene Editor ───────────────────── 🔊 </> ⤢ ⛶ ⌄ ✕ ┐   🔊 = preview sounds, </> = open passage source
 │ ‹ 1/3 › ▶ ●───●──────●  + 〰                     │   beat line, + add beat, 〰 labels
-│ ┌ stage ─────────────── [− 100% + 🔒] ☺ ┐┌ ▣ ⚙ ≡ 💬 👤 🚶 🔗 ⚠ ┐│
+│ ┌ stage ─────────────── [− 100% + 🔒] ☺ ┐┌ ▣ ⚙ 📷 ♫ ≡ 💬 👤 🚶 🔗 ⚠ ┐│
 │ │                                        ││ tab body             ││
 │ └────────────────────────────────────────┘└──────────────────────┘│
 └───────────────────────────────────────────────────────────────────┘
@@ -74,14 +74,16 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 | Stage top right | zoom, stage lock. Dark opaque pill, white icons, border on hover |
 | Stage bottom right | error badge (smiley) |
 | `</>` | dialog header, beside maximize. Opens passage editor on the same Doc |
+| 🔊 | dialog header, left of `</>`. Only while something plays or would (Preview running, or stage sound on + scene has `music:`/`sfx:`). Click = mute / unmute stage + Preview, icon → muted. Hover "Preview sounds". Mute in sessionStorage `sliders.preview.muted`: survives dialog close + reload, not a new tab |
 | Sidebar | collapsible stripe, right. Collapsed = icon column. Open + tab remembered (`sliders.preview.sidebar.*`). Click on open tab = collapse |
 
 Sidebar tabs, top to bottom of the icon row:
 
 | Tab | Holds |
 |---|---|
-| ⚙ scene | grid, sound · then groups: Template from (`from:`, searchable passage list, `?` hover help) · Backdrop (`bg`, searchable, thumbnails) · Arrival · Music · Editor (`locked`). Pacing + Bubbles moved to 💬 at Step 0 |
+| ⚙ scene | grid · then groups: Template from (`from:`, searchable passage list, `?` hover help) · Backdrop (`bg`, searchable, thumbnails) · Arrival · Editor (`locked`). Pacing + Bubbles moved to 💬 at Step 0, Music to ♫ |
 | 📷 camera | camera tool (old bg lock) · Camera x / y / zoom (shown stage camera, live in a pan, inherited under `from:`; writes whole `camera:`, rest = key removed; disabled by `locked: [bg]`) · Motion (`bg` fx, loop length) · Effects (`fx`) |
+| ♫ sounds | stage sound on/off (`sliders.preview.sound`) · Preview / Stop (square) · Music · Sound effect (beat only). Scope-aware. Preview = own `<audio>`, stage muted while it runs: Step 0 = scene music, beat = music in effect there + its `sfx:`. `loop: true`/section loops till Stop, rest plays once, back to Preview when all ended. Scrub = stop. Press while muted = unmute. Sound-command beat (`- sfx:`/`- music:`) or bodyless beat: note, no rows (edit in `</>`) |
 | ≡ layers | layers panel |
 | 💬 beat | beat panel (below). Opened by press on bubble, add beat. Scope-aware |
 | 👤 / ▣ selection | only while something is selected; follows selection, back to previous tab on deselect. name, note · flip, stretch, lock, z, delete · pose · grade: title, match bg + reset grade on top, sliders (hover a slider = min/max preview) |
@@ -98,11 +100,11 @@ Scope-aware tab (`SceneSidebarTab.scope`) = edits follow the scrubber:
 
 | Scrubber | Writes | Tab handle |
 |---|---|---|
-| Step 0 | scene globals: `autoAdvance:` `ease:` `bubble:`. Fallback = story `sliders.bubble.*` | gray |
-| beat N | that beat's own keys. Fallback = story + scene | blue (override blue) |
+| Step 0 | scene globals: `autoAdvance:` `ease:` `bubble:` · ♫ `music:`. Fallback = story `sliders.bubble.*` | gray |
+| beat N | that beat's own keys (♫: `music:` `sfx:`, `music: ~` via `setBeatKeyFormatted`). Fallback = story + scene | blue (override blue) |
 
 Same component both ways (`BeatProps`, `scope: 'beat' \| 'scene'`) — scene globals get every
-bubble row a beat has (size, align, valign…). Now: 💬 beat. Next: sounds. New tab opts in
+bubble row a beat has (size, align, valign…). Now: 💬 beat, ♫ sounds. New tab opts in
 with `scope`.
 
 ## Beat panel
