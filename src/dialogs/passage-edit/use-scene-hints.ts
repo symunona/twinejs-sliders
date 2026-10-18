@@ -1685,7 +1685,7 @@ export function typedNameAt(
 }
 
 /**
- * The `inputRead` handler: a name finished by hand (space, Enter, colon) that the story
+ * Typed-input handler: a name finished by hand (space, Enter, colon) that the story
  * does not resolve attaches the first pack that has it. Dropdowns only offer attached
  * packs, so typing is the one way an unattached name gets in.
  */

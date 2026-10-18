@@ -90,7 +90,12 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 			});
 
 			// A name typed by hand from a pack the story has not attached: attach it.
-			editor.on('inputRead', attachTyped);
+			// `change`, not `inputRead`: Enter is a keymap command and never reads input.
+			editor.on('change', (instance, change) => {
+				if (change.origin === '+input') {
+					attachTyped(instance, change);
+				}
+			});
 
 			// The potential combination of loading a mode and the dialog entrance
 			// animation seems to mess up CodeMirror's cursor rendering. The delay below
