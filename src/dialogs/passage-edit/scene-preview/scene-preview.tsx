@@ -76,6 +76,7 @@ import {
 	unstretchWrites,
 	motionSpeedWrites,
 	motionWrites,
+	opacityWrites,
 	poseWrite,
 	zWrites
 } from './scene-gestures';
@@ -149,6 +150,7 @@ import {previewSounds, useSoundPreview} from './sound-preview';
 import {gradeTarget} from './grade-write';
 import {MatchBgButton} from './match-bg-button';
 import {applyGradeDraft, useGradeEdit} from './use-grade-edit';
+import {applyOpacityDraft, useOpacityDraft} from './use-opacity-draft';
 import './scene-preview.css';
 
 export interface ScenePreviewProps {
@@ -513,13 +515,18 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		scene: parse.result?.scene,
 		states: parse.states
 	});
+	/** The opacity slider's paint, held like the grade's until the parse agrees. */
+	const opacityEdit = useOpacityDraft(parsedStage);
 	const localStage = React.useMemo(
 		() =>
-			applyGradeDraft(
-				applyCameraPatch(applyStagePatch(parsedStage, patch), cameraPatch),
-				gradeEdit.draft
+			applyOpacityDraft(
+				applyGradeDraft(
+					applyCameraPatch(applyStagePatch(parsedStage, patch), cameraPatch),
+					gradeEdit.draft
+				),
+				opacityEdit.draft
 			),
-		[cameraPatch, gradeEdit.draft, parsedStage, patch]
+		[cameraPatch, gradeEdit.draft, opacityEdit.draft, parsedStage, patch]
 	);
 	/**
 	 * The stage as DRAWN: `of` resolved into absolute coordinates. Everything downstream of
@@ -1272,6 +1279,20 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			commit(motionSpeedWrites(stage, selection, speed), EDIT_ORIGIN),
 		[commit, selection, stage]
 	);
+
+	const changeOpacity = React.useCallback(
+		(opacity: number) => opacityEdit.change(selection, opacity),
+		[opacityEdit, selection]
+	);
+
+	const commitOpacity = React.useCallback(() => {
+		const draft = opacityEdit.draft;
+
+		if (draft && !draft.written) {
+			commit(opacityWrites(stage, draft.ids, draft.value), EDIT_ORIGIN);
+			opacityEdit.written();
+		}
+	}, [commit, opacityEdit, stage]);
 
 	const remove = React.useCallback(() => {
 		commit(deleteWrites(stage, selection), EDIT_ORIGIN);
@@ -2485,6 +2506,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onPose={setPose}
 				onMotion={setMotion}
 				onMotionSpeed={setMotionSpeed}
+				onOpacity={changeOpacity}
+				onOpacityCommit={commitOpacity}
 				onOpenLink={onOpenPassage}
 				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}

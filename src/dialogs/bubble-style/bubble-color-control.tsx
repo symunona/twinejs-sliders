@@ -10,6 +10,11 @@
  *   - The WELL is a native `<input type="color">` sitting invisibly on top of the swatch.
  *     Native because the OS picker is better than anything worth building here, and because
  *     it is the one control every author already knows how to use.
+ *   - The ALPHA slider is the opacity channel the well does not have. It and the well each
+ *     keep the other's half: a new hue keeps the alpha, a new alpha keeps the hue. Opaque
+ *     writes `#rrggbb`, anything less `rgba(r, g, b, a)` — the spelling an author would type.
+ *     Disabled for a value it cannot split (`var(--…)`, a colour name), rather than
+ *     overwriting that with a guess.
  *   - The CLEAR button removes the key. It has to be separate: a colour input has no "no
  *     colour" state, so without it an author who set a bubble red could never get back to
  *     "whatever the layer above says", which is the state every one of these starts in.
@@ -30,6 +35,7 @@
 
 import {IconChevronDown} from '@tabler/icons';
 import * as React from 'react';
+import {useTranslation} from 'react-i18next';
 import {CardButton} from '../../components/control/card-button';
 import './bubble-color-control.css';
 
@@ -55,24 +61,89 @@ export interface BubbleColorControlProps {
 /** What the native well shows for a colour it cannot parse. */
 const WELL_FALLBACK = '#000000';
 
-/** `#rgb` and `#rrggbb` are the only things `<input type="color">` will take. */
-function wellValue(value: string | undefined): string {
-	if (!value) {
-		return WELL_FALLBACK;
+/** A colour split into what the well shows and what the alpha slider shows. */
+export interface ColorChannels {
+	/** `#rrggbb`, lower case. */
+	hex: string;
+	/** 0..1. */
+	alpha: number;
+}
+
+function hexByte(value: number): string {
+	return Math.round(Math.min(255, Math.max(0, value)))
+		.toString(16)
+		.padStart(2, '0');
+}
+
+/**
+ * The hex and alpha in a colour, or undefined for one this cannot split: `#rgb`, `#rgba`,
+ * `#rrggbb`, `#rrggbbaa`, numeric `rgb()`/`rgba()` and `transparent`. Names and `var(--…)`
+ * are left alone — the well and the slider would only be guessing.
+ */
+export function colorChannels(
+	value: string | undefined
+): ColorChannels | undefined {
+	const trimmed = value?.trim().toLowerCase();
+
+	if (!trimmed) {
+		return undefined;
 	}
 
-	const trimmed = value.trim();
-
-	if (/^#[0-9a-f]{6}$/i.test(trimmed)) {
-		return trimmed.toLowerCase();
+	if (trimmed === 'transparent') {
+		return {alpha: 0, hex: WELL_FALLBACK};
 	}
 
-	// Expand `#abc`, which the well rejects outright rather than expanding itself.
-	const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(trimmed);
+	const hex = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(trimmed)?.[1];
 
-	return short
-		? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`.toLowerCase()
-		: WELL_FALLBACK;
+	if (hex) {
+		const long =
+			hex.length <= 4
+				? hex
+						.split('')
+						.map(digit => digit + digit)
+						.join('')
+				: hex;
+
+		return {
+			alpha:
+				long.length === 8
+					? Math.round((parseInt(long.slice(6), 16) / 255) * 100) / 100
+					: 1,
+			hex: `#${long.slice(0, 6)}`
+		};
+	}
+
+	const rgb =
+		/^rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*(?:[,/]\s*([\d.]+)(%?)\s*)?\)$/.exec(
+			trimmed
+		);
+
+	if (rgb) {
+		const alpha =
+			rgb[4] === undefined ? 1 : Number(rgb[4]) / (rgb[5] === '%' ? 100 : 1);
+
+		return {
+			alpha: Math.min(1, Math.max(0, alpha)),
+			hex: `#${hexByte(Number(rgb[1]))}${hexByte(Number(rgb[2]))}${hexByte(
+				Number(rgb[3])
+			)}`
+		};
+	}
+
+	return undefined;
+}
+
+/** The spelling written back: `#rrggbb` when opaque, `rgba(…)` otherwise. */
+export function formatColor({alpha, hex}: ColorChannels): string {
+	const a = Math.round(Math.min(1, Math.max(0, alpha)) * 100) / 100;
+
+	if (a === 1) {
+		return hex;
+	}
+
+	const [r, g, b] = [1, 3, 5].map(at => parseInt(hex.slice(at, at + 2), 16));
+
+	return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
 export const BubbleColorControl: React.FC<BubbleColorControlProps> = ({
@@ -86,7 +157,43 @@ export const BubbleColorControl: React.FC<BubbleColorControlProps> = ({
 	swatchesLabel,
 	value
 }) => {
+	const {t} = useTranslation();
+	const alphaLabel = t('common.opacity');
 	const [swatchesOpen, setSwatchesOpen] = React.useState(false);
+	const channels = colorChannels(value);
+	/**
+	 * The alpha while its slider is being dragged. Painted into the swatch on every move,
+	 * written once on release — a drag is one edit, as the text field's typing is.
+	 */
+	const [alphaDraft, setAlphaDraft] = React.useState<number>();
+	const alpha = alphaDraft ?? channels?.alpha ?? 1;
+	const [alphaEl, setAlphaEl] = React.useState<HTMLInputElement | null>(null);
+	const commitAlphaRef = React.useRef<() => void>(() => undefined);
+
+	commitAlphaRef.current = () => {
+		if (alphaDraft === undefined) {
+			return;
+		}
+
+		setAlphaDraft(undefined);
+		onChange(
+			formatColor({alpha: alphaDraft, hex: channels?.hex ?? WELL_FALLBACK})
+		);
+	};
+
+	// A range fires `input` through a drag and `change` once, on release (or per arrow key).
+	// React's `onChange` is `input`, so the release is listened for natively.
+	React.useEffect(() => {
+		if (!alphaEl) {
+			return;
+		}
+
+		const commit = () => commitAlphaRef.current();
+
+		alphaEl.addEventListener('change', commit);
+
+		return () => alphaEl.removeEventListener('change', commit);
+	}, [alphaEl]);
 
 	/**
 	 * What is in the text field while it is being typed in.
@@ -112,6 +219,11 @@ export const BubbleColorControl: React.FC<BubbleColorControlProps> = ({
 		onChange(trimmed === '' ? undefined : trimmed);
 	}
 
+	const shown =
+		alphaDraft !== undefined && channels
+			? formatColor({alpha: alphaDraft, hex: channels.hex})
+			: value;
+
 	return (
 		<span className="bubble-color-control">
 			<span className="bubble-color-control-label">{children}</span>
@@ -119,16 +231,31 @@ export const BubbleColorControl: React.FC<BubbleColorControlProps> = ({
 				<span
 					aria-hidden
 					className="bubble-color-preview"
-					style={{['--swatch' as string]: value || 'transparent'}}
+					style={{['--swatch' as string]: shown || 'transparent'}}
 				/>
 				<input
 					aria-label={String(children)}
 					disabled={disabled}
-					onChange={event => onChange(event.target.value)}
+					onChange={event =>
+						onChange(formatColor({alpha, hex: event.target.value}))
+					}
 					type="color"
-					value={wellValue(value)}
+					value={channels?.hex ?? WELL_FALLBACK}
 				/>
 			</span>
+			<input
+				aria-label={`${String(children)} ${alphaLabel}`}
+				className="bubble-color-control-alpha"
+				disabled={disabled || (!!value && !channels)}
+				max={1}
+				min={0}
+				onChange={event => setAlphaDraft(Number(event.target.value))}
+				ref={setAlphaEl}
+				step={0.05}
+				title={`${alphaLabel} ${Math.round(alpha * 100)}%`}
+				type="range"
+				value={alpha}
+			/>
 			{swatches && swatches.length > 0 && (
 				<CardButton
 					ariaLabel={swatchesLabel ?? ''}

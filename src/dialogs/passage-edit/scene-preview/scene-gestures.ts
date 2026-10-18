@@ -153,6 +153,32 @@ export function zWrites(
 }
 
 // ---------------------------------------------------------------------------
+// opacity
+// ---------------------------------------------------------------------------
+
+/**
+ * Set `opacity:` on everything selected, clamped to 0..1 and kept to two places — a slider
+ * dragged to 0.3000000004 should not write that. Fully opaque deletes the key on the entry
+ * and says `opacity: 1` on a beat, the way unflipping does.
+ */
+export function opacityWrites(
+	stage: Stage,
+	ids: EntityId[],
+	opacity: number
+): EntityKeyWrite[] {
+	const value = Math.round(Math.min(1, Math.max(0, opacity)) * 100) / 100;
+
+	return entitiesOf(stage, ids).map(entity => ({
+		id: entity.id,
+		key: 'opacity',
+		kind: entity.kind,
+		ref: entity.ref,
+		reset: 1,
+		value: value === 1 ? undefined : value
+	}));
+}
+
+// ---------------------------------------------------------------------------
 // pose
 // ---------------------------------------------------------------------------
 

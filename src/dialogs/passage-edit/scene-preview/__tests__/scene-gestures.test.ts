@@ -10,6 +10,7 @@ import {
 	motionSpeedWrites,
 	motionWrites,
 	musicDropWrites,
+	opacityWrites,
 	poseWrite,
 	panCamera,
 	uniqueEntityId,
@@ -67,6 +68,34 @@ describe('flipWrites()', () => {
 
 	it('ignores ids that are not on stage', () => {
 		expect(flipWrites(stage, ['nobody'])).toEqual([]);
+	});
+});
+
+describe('opacityWrites()', () => {
+	it('writes the value on every selected entity, to two places', () => {
+		expect(opacityWrites(stage, ['mira', 'candle'], 0.4000001)).toEqual([
+			{id: 'mira', key: 'opacity', kind: 'cast', ref: 'mira', reset: 1, value: 0.4},
+			{
+				id: 'candle',
+				key: 'opacity',
+				kind: 'prop',
+				ref: 'candle',
+				reset: 1,
+				value: 0.4
+			}
+		]);
+	});
+
+	it('removes the key at fully opaque, and says 1 on a beat', () => {
+		const [write] = opacityWrites(stage, ['mira'], 1);
+
+		expect(write.value).toBeUndefined();
+		expect(write.reset).toBe(1);
+	});
+
+	it('clamps to 0..1', () => {
+		expect(opacityWrites(stage, ['mira'], -2)[0].value).toBe(0);
+		expect(opacityWrites(stage, ['mira'], 3)[0].value).toBeUndefined();
 	});
 });
 
