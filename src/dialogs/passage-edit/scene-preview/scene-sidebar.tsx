@@ -46,6 +46,11 @@ export type SceneSidebarTabScope = 'global' | 'beat';
 export interface SceneSidebarTab {
 	id: SceneSidebarTabId;
 	scope?: SceneSidebarTabScope;
+	/**
+	 * The handle is recoloured: this tab currently means something else than it usually
+	 * does. `object`: the Links tab editing the selected entity's own `link:`.
+	 */
+	accent?: 'object';
 	icon: React.ReactNode;
 	label: string;
 	/** Drawn only while this tab is the open one. */
@@ -165,7 +170,20 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = props => {
 						/>
 					);
 
-					// IconButton takes no class, so a scoped handle is wrapped.
+					// IconButton takes no class, so a scoped or accented handle is wrapped.
+					if (tab.accent) {
+						return (
+							<span
+								className="scene-sidebar-tab-accent"
+								data-accent={tab.accent}
+								data-testid={`scene-sidebar-tab-${tab.id}`}
+								key={tab.id}
+							>
+								{handle}
+							</span>
+						);
+					}
+
 					return tab.scope ? (
 						<span
 							className="scene-sidebar-tab-scope"

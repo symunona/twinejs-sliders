@@ -1,0 +1,48 @@
+@import '../../../styles/colors.css';
+
+/*
+ * Object link mode of the Links tab. Purple, so it can never pass for the scene's `links:`
+ * list it replaces while something is selected. Rows come from `scene-links-panel.css`.
+ */
+.object-link-panel {
+	background: var(--faint-purple);
+	border: 1px solid var(--purple);
+	border-left-width: 4px;
+	border-radius: 3px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 6px;
+}
+
+.object-link-header {
+	align-items: center;
+	color: var(--dark-purple);
+	display: flex;
+	gap: 6px;
+	min-width: 0;
+}
+
+.object-link-header svg {
+	flex: 0 0 auto;
+	height: 18px;
+	width: 18px;
+}
+
+.object-link-title {
+	font-weight: bold;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.object-link-note {
+	color: var(--dark-gray);
+	font-size: 80%;
+	margin: 0 2px;
+}
+
+.object-link-back {
+	display: flex;
+}

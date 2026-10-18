@@ -205,7 +205,7 @@ interface RowProps {
 }
 
 /** One line of the grid, on the beat props' classes so the panels restyle together. */
-const Row: React.FC<RowProps> = ({
+export const Row: React.FC<RowProps> = ({
 	children,
 	className,
 	label,
@@ -256,7 +256,7 @@ interface TextFieldProps {
  *
  * Unchanged text writes nothing, so tabbing through the panel leaves no undo entries.
  */
-const TextField: React.FC<TextFieldProps> = ({
+export const TextField: React.FC<TextFieldProps> = ({
 	disabled,
 	label,
 	list,
@@ -395,7 +395,7 @@ const NumberField: React.FC<NumberFieldProps> = ({
 };
 
 /** A small icon button in a row's control column. */
-const MiniButton: React.FC<{
+export const MiniButton: React.FC<{
 	label: string;
 	onClick: () => void;
 	disabled?: boolean;

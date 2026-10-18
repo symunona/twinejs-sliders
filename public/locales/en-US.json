@@ -679,6 +679,29 @@
 					"inBeat": "Written in the beat text as [[label->target]]; edit it there",
 					"overridesBeat": "Overrides the beat text's target, {{target}}"
 				},
+				"objectLink": {
+					"title": "Link of {{id}}",
+					"titleMany": "{{count}} objects selected",
+					"singleOnly": "Object links are edited one object at a time. Select a single object.",
+					"sceneHint": "This is the object's own link:, not the scene's links: list. Deselect to see the scene links.",
+					"showScene": "Show scene links",
+					"scopeBeat": "Written on beat {{beat}}; later beats keep it until one changes it.",
+					"scopeEntry": "Written on the object's entry: the whole scene, until a beat changes it.",
+					"target": "Goes to",
+					"none": "Nothing (scenery)",
+					"clear": "No link (not clickable)",
+					"scenery": "Not clickable: this object is scenery.",
+					"entryOption": "Scene link {{name}} \u2192 {{to}}",
+					"viaEntry": "Scene link {{name}} \u2192 {{to}}",
+					"viaEntryIf": "Scene link {{name}} \u2192 {{to}}, if {{cond}}",
+					"missing": "No passage named \u201c{{name}}\u201d",
+					"create": "Create passage {{name}}",
+					"open": "Open {{name}}",
+					"highlight": "Highlight",
+					"highlightDefault": "default glow",
+					"clearHighlight": "Default glow",
+					"storyColors": "Colours used in this story"
+				},
 				"sounds": {
 					"preview": "Preview",
 					"stop": "Stop",
@@ -706,6 +729,7 @@
 						"object": "Selected object",
 						"walk": "Walk here",
 						"links": "Links",
+						"objectLink": "Object link (selected object's own link:)",
 						"problems": "Problems"
 					}
 				},
