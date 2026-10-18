@@ -6,6 +6,7 @@ import {
 	UndoableStoriesContext,
 	UndoableStoriesContextProps
 } from '../../../store/undoable-stories';
+import {BackButton as ToolbarBackButton} from '../../../components/route-toolbar/back-button';
 import {LeaveStoryPrompt} from '../leave-story-prompt';
 
 const BackButton: React.FC = () => {
@@ -40,6 +41,7 @@ describe('<LeaveStoryPrompt>', () => {
 							</UndoableStoriesContext.Provider>
 							<div>mock-story-edit</div>
 							<BackButton />
+							<ToolbarBackButton />
 						</Route>
 						<Route path="/">
 							<div>mock-story-list</div>
@@ -65,5 +67,12 @@ describe('<LeaveStoryPrompt>', () => {
 			screen.getByRole('dialog', {name: 'routes.storyEdit.leaveConfirm'})
 		).toBeInTheDocument();
 		expect(screen.getByText('mock-story-edit')).toBeInTheDocument();
+	});
+
+	it("leaves without asking from the toolbar's Back button, changes or not", () => {
+		renderComponent({changeCount: 1});
+		fireEvent.click(screen.getByRole('button', {name: 'common.back'}));
+		expect(screen.getByText('mock-story-list')).toBeInTheDocument();
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 	});
 });

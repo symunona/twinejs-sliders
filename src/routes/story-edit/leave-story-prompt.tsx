@@ -5,9 +5,9 @@ import {useUndoableStoriesContext} from '../../store/undoable-stories';
 
 /**
  * Asks before navigating out of the story editor once the author has changed
- * something. This catches the browser's own Back button as well as the one in
- * the toolbar--both are a history POP, and both are easy to hit by accident
- * with a trackpad swipe.
+ * something. This catches the browser's own Back, a mouse gesture and a
+ * trackpad swipe--all a history POP, all easy to hit by accident. The toolbar's
+ * Back button is deliberate and skips it (`leaveWithoutAsking`).
  *
  * Nothing is lost by leaving: edits are saved as they're made. The undo stack
  * is, which is why the guard keys off the same change count that feeds it.
