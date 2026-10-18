@@ -1,24 +1,67 @@
 @import '../../styles/colors.css';
 @import '../../styles/metrics.css';
 
+/*
+ * Grid, label `display: contents`: name line and reset share row 1, slider spans row 2.
+ * The reset stays out of the <label> (a button is labelable) yet sits on its name line.
+ */
 .adjust-slider {
-	align-items: end;
-	display: flex;
-	gap: var(--control-inner-padding);
+	align-items: center;
+	border-left: 2px solid transparent;
+	border-radius: 2px;
+	column-gap: var(--control-inner-padding);
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	padding: 2px 2px 2px 4px;
+}
+
+/* Off its default. Same look as `.beat-prop-row.overridden`. */
+.adjust-slider.overridden {
+	background: var(--faint-blue);
+	border-left-color: var(--blue);
+}
+
+.adjust-slider.overridden .adjust-slider-name {
+	color: var(--blue);
+	font-weight: bold;
 }
 
 .adjust-slider label {
-	display: flex;
-	flex: 1 1 0;
-	flex-direction: column;
-	min-width: 0;
+	display: contents;
 }
 
 .adjust-slider-label {
+	align-items: center;
 	color: var(--gray);
 	display: flex;
 	font-size: 85%;
-	justify-content: space-between;
+	gap: var(--control-inner-padding);
+	grid-column: 1;
+	grid-row: 1;
+	min-width: 0;
+}
+
+/* Name left, readout + reset right. */
+.adjust-slider-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Small enough to sit on the name line without growing it much. */
+.adjust-slider > .icon-button {
+	grid-column: 2;
+	grid-row: 1;
+	height: 20px;
+	padding: 0 2px;
+}
+
+.adjust-slider > .icon-button .icon svg {
+	height: 14px;
+	top: 1px;
+	width: 14px;
 }
 
 .adjust-slider-value {
@@ -26,6 +69,8 @@
 }
 
 .adjust-slider input[type='range'] {
+	grid-column: 1 / -1;
+	grid-row: 2;
 	width: 100%;
 }
 

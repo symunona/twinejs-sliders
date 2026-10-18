@@ -65,4 +65,46 @@ describe('<AdjustSlider>', () => {
 		fireEvent.click(screen.getByRole('button', {name: 'mock-reset'}));
 		expect(onChange).toHaveBeenCalledWith(1);
 	});
+
+	it('marks itself overridden off its default, like the other "not default" rows', () => {
+		const {container, rerender} = renderComponent({value: 2});
+
+		expect(container.querySelector('.adjust-slider')).toHaveClass('overridden');
+		expect(screen.getByRole('button', {name: 'mock-reset'})).toBeEnabled();
+		rerender(
+			<AdjustSlider
+				label="mock-label"
+				max={3}
+				min={0.2}
+				onChange={jest.fn()}
+				resetLabel="mock-reset"
+				resetTo={1}
+				step={0.01}
+				value={1}
+			/>
+		);
+		expect(container.querySelector('.adjust-slider')).not.toHaveClass(
+			'overridden'
+		);
+		expect(screen.getByRole('button', {name: 'mock-reset'})).toBeDisabled();
+	});
+
+	// Grid places it on the name line; DOM keeps it out of the <label>.
+	it('keeps the reset out of the label', () => {
+		const {container} = renderComponent({value: 2});
+
+		expect(container.querySelector('label button')).not.toBeInTheDocument();
+		expect(container.querySelector('.adjust-slider > button')).toBe(
+			screen.getByRole('button', {name: 'mock-reset'})
+		);
+	});
+
+	// The button is labelable too; the label must still name the slider, not it.
+	it('still names the slider by its label', () => {
+		const {container} = renderComponent();
+
+		expect(screen.getByLabelText(/mock-label/)).toBe(
+			container.querySelector('input[type="range"]')
+		);
+	});
 });

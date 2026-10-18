@@ -1,4 +1,5 @@
 import {IconArrowBackUp} from '@tabler/icons';
+import classNames from 'classnames';
 import * as React from 'react';
 import {IconButton} from '../../components/control/icon-button';
 import './adjust-slider.css';
@@ -22,7 +23,11 @@ export interface AdjustSliderProps {
 	value: number;
 }
 
-/** One labelled adjustment slider, with the reset the sliders all need. */
+/**
+ * One labelled adjustment slider, with the reset the sliders all need. Characters, asset
+ * effects/masks/tiles and stage grades all use this one. Off its default = `overridden`,
+ * the editor's blue "not default" look (`beat-prop-row.overridden`).
+ */
 export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 	const {
 		disabled,
@@ -41,6 +46,7 @@ export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 	 * are not values yet, and echoing the committed number back would fight the typing.
 	 */
 	const [draft, setDraft] = React.useState<string>();
+	const overridden = value !== resetTo;
 
 	function handleTyped(typed: string) {
 		const parsed = Number(typed);
@@ -53,10 +59,10 @@ export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 	}
 
 	return (
-		<div className="adjust-slider">
+		<div className={classNames('adjust-slider', {overridden})}>
 			<label>
 				<span className="adjust-slider-label">
-					<span>{label}</span>
+					<span className="adjust-slider-name">{label}</span>
 					{editable ? (
 						<input
 							aria-label={label}
@@ -85,8 +91,10 @@ export const AdjustSlider: React.FC<AdjustSliderProps> = props => {
 					value={value}
 				/>
 			</label>
+			{/* Outside the label (a button is labelable too), placed on its name line by
+			    the grid in adjust-slider.css. */}
 			<IconButton
-				disabled={disabled || value === resetTo}
+				disabled={disabled || !overridden}
 				icon={<IconArrowBackUp />}
 				iconOnly
 				label={resetLabel}
