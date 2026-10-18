@@ -184,6 +184,28 @@ export function poseWrite(
 	};
 }
 
+/**
+ * Set or stop `motion:` on everything selected. Stopping deletes the key on the entry and
+ * says `motion: ~` on a beat — a beat inherits the motion the one before it left.
+ *
+ * Changing the token keeps each entity's own `speed`: a parallax stack is several layers
+ * at different speeds, and picking a new direction for all of them should not flatten it.
+ */
+export function motionWrites(
+	stage: Stage,
+	ids: EntityId[],
+	motion: string | undefined
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids).map(entity => ({
+		id: entity.id,
+		key: 'motion',
+		kind: entity.kind,
+		ref: entity.ref,
+		reset: null,
+		value: motion ? {id: motion, speed: entity.motion?.speed} : undefined
+	}));
+}
+
 // ---------------------------------------------------------------------------
 // delete
 // ---------------------------------------------------------------------------

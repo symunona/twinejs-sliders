@@ -866,6 +866,9 @@
 				"poseHint": "Pick a pose. Hovering one shows it on the stage.",
 				"poseNamed": "Pose: {{pose}}",
 				"poseAuto": "Automatic",
+				"motion": "Motion",
+				"motionStill": "Still",
+				"motionMixed": "Mixed",
 				"grade": {
 					"button": "Grade",
 					"hint": "Colour grade: tint this sprite to its backdrop without changing the image",

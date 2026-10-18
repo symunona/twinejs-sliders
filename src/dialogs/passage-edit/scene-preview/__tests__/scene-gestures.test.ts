@@ -7,6 +7,7 @@ import {
 	deleteWrites,
 	flipWrites,
 	formatCamera,
+	motionWrites,
 	musicDropWrites,
 	poseWrite,
 	panCamera,
@@ -100,6 +101,44 @@ describe('poseWrite()', () => {
 
 	it('refuses props — they are one image and have no frames', () => {
 		expect(poseWrite(stage.entities.candle, 'lit')).toBeUndefined();
+	});
+});
+
+describe('motionWrites()', () => {
+	const moving = parseSceneText(
+		[
+			'[scene]',
+			'props:',
+			'  hills: {motion: {id: parallax_left, speed: 12}}',
+			'  sky: {}'
+		].join('\n')
+	).states[0];
+
+	it('sets the token on every selected sprite, props included', () => {
+		expect(motionWrites(moving, ['sky'], 'earthquake')).toEqual([
+			{
+				id: 'sky',
+				key: 'motion',
+				kind: 'prop',
+				ref: 'sky',
+				// On a beat, stopping has to say `motion: ~` — the motion is inherited.
+				reset: null,
+				value: {id: 'earthquake', speed: undefined}
+			}
+		]);
+	});
+
+	it("keeps each sprite's own speed", () => {
+		expect(motionWrites(moving, ['hills'], 'circling')[0].value).toEqual({
+			id: 'circling',
+			speed: 12
+		});
+	});
+
+	it('removes the key to stop', () => {
+		expect(
+			motionWrites(moving, ['hills', 'sky'], undefined).map(w => w.value)
+		).toEqual([undefined, undefined]);
 	});
 });
 

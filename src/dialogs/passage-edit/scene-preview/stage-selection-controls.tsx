@@ -8,7 +8,7 @@
  * alone never is.
  *
  * Order, top down: the two one-click grade fixes (match bg, reset), the gesture buttons,
- * then the grade sliders — the long part goes last so the buttons never move. Hovering one
+ * pose and motion, then the grade sliders — the long part goes last so the buttons never move. Hovering one
  * slider shows the sprite at that slider's two ends (`GradeExtremesOverlay`).
  *
  * `pose:` is cast-only and single-selection-only: props are one image and have no poses
@@ -39,7 +39,7 @@ import {
 } from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import {normalizeGrade} from '@sliders/scene-types';
+import {BG_MOTIONS, normalizeGrade} from '@sliders/scene-types';
 import type {
 	AssetResolver,
 	EntityGrade,
@@ -48,6 +48,7 @@ import type {
 } from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
+import {TextSelect} from '../../../components/control/text-select';
 import {GradeExtremesOverlay} from './grade-extremes-overlay';
 import {GradeSliders} from './grade-sliders';
 import {sprite} from './match-bg-dom';
@@ -73,6 +74,11 @@ export interface StageSelectionControlsProps {
 	/** Lock or unlock the selection against the stage's pointer. */
 	onToggleLock?: () => void;
 	onPose: (pose: string | undefined) => void;
+	/**
+	 * Set `motion:` on the whole selection, `undefined` to stop it. Absent hides the menu.
+	 * Same presets as the backdrop's `fx:` — a prop row of hills is a parallax layer.
+	 */
+	onMotion?: (motion: string | undefined) => void;
 	/**
 	 * Draw a pose on the stage without writing it: `AUTO_POSE` for the fallback, a name
 	 * for that pose, `null` to stop previewing and go back to what the scene says.
@@ -124,6 +130,22 @@ function gradeRow(panel: HTMLElement, key: GradeKey): HTMLElement | null {
 
 /** No pose chosen: the renderer falls back to `idle`, or to the manifest's first pose. */
 const AUTO_POSE = '';
+
+/** No `motion:`. */
+const STILL = '';
+
+/** The selection disagrees: shown, never chosen. */
+const MIXED = '\u0000mixed';
+
+/**
+ * The menu's value: the one motion every selected sprite shares, `STILL` when none has one,
+ * `MIXED` otherwise.
+ */
+function sharedMotion(entities: StageEntity[]): string {
+	const ids = new Set(entities.map(entity => entity.motion?.id ?? STILL));
+
+	return ids.size === 1 ? [...ids][0] : MIXED;
+}
 
 /**
  * The pose names a character declares.
@@ -179,6 +201,7 @@ export const StageSelectionControls: React.FC<
 		onDelete,
 		onFlip,
 		onPose,
+		onMotion,
 		onResetStretch,
 		onToggleLock,
 		onOpenLink,
@@ -246,6 +269,7 @@ export const StageSelectionControls: React.FC<
 	}
 
 	const names = entities.map(entity => entity.id).join(', ');
+	const motion = sharedMotion(entities);
 
 	return (
 		<div
@@ -382,6 +406,39 @@ export const StageSelectionControls: React.FC<
 					placement="bottom-end"
 					tooltipLabel={t('dialogs.passageEdit.scenePreview.poseHint')}
 				/>
+			)}
+			{onMotion && (
+				<TextSelect
+					onChange={event =>
+						event.target.value !== MIXED &&
+						onMotion(event.target.value || undefined)
+					}
+					options={[
+						...(motion === MIXED
+							? [
+									{
+										disabled: true,
+										label: t('dialogs.passageEdit.scenePreview.motionMixed'),
+										value: MIXED
+									}
+							  ]
+							: []),
+						{
+							label: t('dialogs.passageEdit.scenePreview.motionStill'),
+							value: STILL
+						},
+						// A story stylesheet's own token is offered back, not dropped.
+						...(motion !== MIXED &&
+						motion !== STILL &&
+						!(BG_MOTIONS as readonly string[]).includes(motion)
+							? [{label: motion, value: motion}]
+							: []),
+						...BG_MOTIONS.map(id => ({label: id, value: id}))
+					]}
+					value={motion}
+				>
+					{t('dialogs.passageEdit.scenePreview.motion')}
+				</TextSelect>
 			)}
 			{single && onGrade && (
 				<GradeSliders

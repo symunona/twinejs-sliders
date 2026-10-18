@@ -309,3 +309,55 @@ describe('grade extremes on slider hover', () => {
 		expect(overlay()).toBeNull();
 	});
 });
+
+describe('motion menu', () => {
+	const motionSelect = () =>
+		screen.getByRole('combobox', {
+			name: 'dialogs.passageEdit.scenePreview.motion'
+		}) as HTMLSelectElement;
+
+	it('is hidden without a handler', () => {
+		renderControls(['candle']);
+		expect(
+			screen.queryByRole('combobox', {
+				name: 'dialogs.passageEdit.scenePreview.motion'
+			})
+		).toBeNull();
+	});
+
+	it('offers the presets on a prop and writes the choice', () => {
+		const onMotion = jest.fn();
+
+		renderControls(['candle'], {onMotion});
+		expect(motionSelect().value).toBe('');
+		fireEvent.change(motionSelect(), {target: {value: 'parallax_left'}});
+		expect(onMotion).toHaveBeenCalledWith('parallax_left');
+	});
+
+	it('stops the motion with Still', () => {
+		const onMotion = jest.fn();
+		const moving = parseSceneText(
+			'[scene]\nprops:\n  hills: {motion: lava_glow}'
+		).states[0];
+
+		render(
+			<FakeStateProvider>
+				<StageSelectionControls
+					assets={assets}
+					editable
+					entities={[moving.entities.hills]}
+					onDelete={jest.fn()}
+					onFlip={jest.fn()}
+					onMotion={onMotion}
+					onPose={jest.fn()}
+					onPreviewPose={jest.fn()}
+					onStepZ={jest.fn()}
+				/>
+			</FakeStateProvider>
+		);
+		// A stylesheet's own token is shown, not swallowed into Still.
+		expect(motionSelect().value).toBe('lava_glow');
+		fireEvent.change(motionSelect(), {target: {value: ''}});
+		expect(onMotion).toHaveBeenCalledWith(undefined);
+	});
+});
