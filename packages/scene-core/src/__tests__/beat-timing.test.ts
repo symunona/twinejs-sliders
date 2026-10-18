@@ -28,6 +28,19 @@ describe('beatTransitions', () => {
 		expect(byId.joren).toMatchObject({duration: 1, ease: 'ease_out'});
 	});
 
+	it('a dur: in the first body is that entity’s; beside the keys it is everyone’s', () => {
+		const own = compile(`${CAST}  - mira: {at: 0.3, dur: 2}\n    joren: {at: -0.3}\n`);
+		const ownTs = beatTransitions(own.states[0], own.states[1], own.scene.beats[0]);
+
+		expect(ownTs.find(t => t.entityId === 'mira')?.duration).toBe(2);
+		expect(ownTs.find(t => t.entityId === 'joren')?.duration).toBe(0.3);
+
+		const shared = compile(`${CAST}  - mira: {at: 0.3}\n    joren: {at: -0.3}\n    dur: 2\n`);
+		const sharedTs = beatTransitions(shared.states[0], shared.states[1], shared.scene.beats[0]);
+
+		expect(sharedTs.map(t => t.duration)).toEqual([2, 2]);
+	});
+
 	it('times an of: child on its parent’s clock', () => {
 		const {scene, states} = compile(
 			'props:\n  table: {at: 0}\n  candle: {of: table, at: 0.1}\ncast:\n  mira: {at: 0.5}\nbeats:\n  - mira: {at: -0.5}\n    table: {at: 0.4, dur: 3}\n'

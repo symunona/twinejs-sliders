@@ -3366,6 +3366,10 @@ function parseBeatItem(
 		}
 	}
 
+	// Timing the first entity wrote in its own body is its own once others share the beat.
+	const bodyDur = beat.dur !== undefined;
+	const bodyEase = beat.ease !== undefined;
+
 	for (const one of extraRiders) {
 		applyBeatRider(ctx, beat, one.key, one.pair);
 	}
@@ -3382,6 +3386,14 @@ function parseBeatItem(
 
 	if (parts.length > 0) {
 		beat.with = parts;
+
+		if (bodyDur && 'who' in beat) {
+			beat.ownDur = true;
+		}
+
+		if (bodyEase && 'who' in beat) {
+			beat.ownEase = true;
+		}
 	}
 
 	return beat;

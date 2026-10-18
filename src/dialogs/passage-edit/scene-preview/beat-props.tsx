@@ -16,6 +16,7 @@ import {
 	IconAlignCenter,
 	IconAlignLeft,
 	IconAlignRight,
+	IconClockPlay,
 	IconHelp,
 	IconLayoutAlignBottom,
 	IconLayoutAlignMiddle,
@@ -84,6 +85,8 @@ export interface BeatPropsProps {
 	beatNumber: number;
 	/** False when there is no CodeMirror to write to. Renders nothing. */
 	editable: boolean;
+	/** Opens the timing overlay. Absent = no button in the Timing heading. */
+	onShowTiming?: () => void;
 	/**
 	 * A key on the beat's own body. `null` removes it. In the `scene` scope only `dur`
 	 * (= `autoAdvance:`) and `ease` arrive.
@@ -399,6 +402,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	inherited,
 	onSetKey,
 	onSetBubble,
+	onShowTiming,
 	scope = 'beat',
 	stageIds,
 	storyColors
@@ -605,6 +609,14 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							>
 								<IconHelp />
 							</span>
+							{onShowTiming && (
+								<IconButton
+									icon={<IconClockPlay />}
+									iconOnly
+									label={t('dialogs.passageEdit.scenePreview.timing.toggle')}
+									onClick={onShowTiming}
+								/>
+							)}
 						</h4>
 						{!isScene && speaks(beat) && (
 							// Only where there is a line to hold on. A stage-only `set` beat's

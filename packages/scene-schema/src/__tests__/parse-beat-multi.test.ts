@@ -26,6 +26,7 @@ describe('multi-entity beat', () => {
 
 		expect(beat.kind).toBe('set');
 		expect(beat.dur).toBe(2);
+		expect(beat.ownDur).toBe(true);
 		expect(beat.with).toEqual([
 			{dur: 1, ease: 'ease_out', patch: {at: {x: -0.3, y: -0.85}}, who: 'joren'}
 		]);

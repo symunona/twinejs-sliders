@@ -608,6 +608,37 @@ No parallax. A plane does not counter-translate with the camera (yet).
 | `- music: …` | change the music from here on. See Music. |
 | `- bob: {say: "…", if: x}` / `- wait: 1` + `if: x` on the next line | beat plays only when `x` holds. See Conditions. |
 
+### Several at once
+
+One beat = one moment. Any number of entities in it, each its own key.
+
+```yaml
+beats:
+  - mira:  {at: 0.3, dur: 2}            # mira walks 2s
+    joren: {at: -0.3, pose: wave}       # joren moves at the same time, default 0.3s
+    sfx: door                           # beside them = the beat's
+  - mira:  "Now!"                       # two speakers, two bubbles, one beat
+    joren: "Now!"
+  - box: "Later."                       # narration + a bubble together
+    mira: "Yawn."
+  - wait: 2                             # move during a wait
+    joren: {at: 0}
+```
+
+| Rule | |
+|---|---|
+| Model | first entity = `who`/`patch`/`text`. Others = `Beat.with` (`BeatPart`). Read all via `beatParts()` / `beatLines()`. |
+| Timing | `dur:`/`ease:` in an entity's body time that entity only (first entity too: `ownDur`/`ownEase`). Beside the keys = every entity without its own. `of:` child = parent's clock. Line hold = the first entity's `dur:`. |
+| Beside the keys | `dur` `ease` `sfx` `bg` `music` = the beat's. Twice (also in a body) = error. |
+| Speakers | any number, never the same id twice (YAML refuses a duplicate key). |
+| Kind | a speaker is moved first (`say`). `sfx`/`bg`/`music` + an entity → the entity's beat, the command rides on it. |
+| `box` | may take speakers and movers. |
+| `wait` / `fx` / `mark` | may take movers. A line beside one = error. |
+| Two commands | `wait` + `mark` etc. = error, split. A command under a speaker (`- mira: "hi"` / `wait: 1`) = error, the speaker keeps the beat. |
+| `if:` in a part body | warning: `if:` gates the whole beat — write it beside the keys. |
+| Gating | entity gated out → its part dropped; the beat's first entity gated out → whole beat dropped. |
+| Editor | drag on somebody else's beat JOINS it (`insertBeatPart`), no new beat. |
+
 ### Inline marks
 
 Say and box text take chat-style marks. Bubble and box alike.
@@ -634,26 +665,39 @@ Renderer: `packages/render-dom/src/markup.ts`. DOM nodes, never HTML strings.
 
 ### Timing — `dur:`
 
-A beat with no `dur:` waits for the reader if it says something, and plays straight on if
-it only stages something. `dur:` times it instead, and because **a beat is the animation**,
-the same number is how long its stage changes take.
+**A beat is the animation.** `dur:` = how long its changes take. How a beat ENDS is
+derived, one rule, `beatTiming` in `scene-core/src/beat-timing.ts` — player, editor play,
+strip and timing overlay all read it.
 
 ```yaml
 beats:
-  - mira: {at: 0.3, dur: 0.8}       # slides over 0.8s, then straight on
-  - mira: {say: "Over here!"}       # waits for a click
+  - mira: {at: 0.3, dur: 0.8}       # slides 0.8s, then straight on
+  - mira: {at: 0}                   # untimed move: on after its 0.3s
+  - mira: {pose: [walk_1, walk_2, idle], poseLoop: once}   # on when the walk ends
+  - mira: {say: "Over here!"}       # auto-advance, or waits for a click
   - mira: {say: "…", dur: 2}        # bubble up, 2s, next beat
-  - box: {text: "Silence.", dur: 2} # long form only
-  - wait: 1.5                       # still the explicit hold
+  - wait: 1.5                       # explicit hold
 ```
+
+| Beat | Ends | `advance` |
+|---|---|---|
+| has a line, last beat | reader's click | `reader` |
+| has a line, `dur:` | after max(`dur`, animation) | `timer` |
+| has a line, auto-advance > 0 | after max(auto, animation) | `auto` |
+| has a line, auto-advance 0 | reader's click | `reader` |
+| `- wait: N` | after max(N, animation) | `timer` |
+| no line, `dur:` > 0 | after max(`dur`, animation) | `timer` |
+| no line | when its animation ends. Nothing moves (`mark`, `sfx`, `dur: 0`) = straight on | `anim` |
 
 | Rule | |
 |---|---|
-| Where | inside a beat body, beside `say:`. An `unknown-key` in `cast:`/`props:` — timing belongs to a moment, not to a sprite. |
-| Beats the reader | `dur:` overrides `sliders.autoAdvance`. The author timed the line; a preference must not stretch it. |
-| `dur: 0` | snap and move straight on. A warning on a line of dialogue — nobody can read it. |
-| Last beat | still waits for the reader whatever its `dur:` — otherwise the links under the stage appear mid-sentence. |
-| No `dur:` on | `wait` (it *is* a duration), `fx`, `mark` — all scalars with no body map, and none of them are read. |
+| Animation length | longest transition of the beat, every entity. `pose:` list with `poseLoop: once` counts its steps. Music fade does not hold. |
+| Click mid-move | snaps to the end (`DomRenderer.finishTransitions`). On a line: stays on the line. Else: on to the next beat. |
+| Changed 2026-10-18 | untimed stage beats used to fall through in 0s, so chains ran in parallel. Now each holds its animation. Parallel = one beat, several keys (Several at once). |
+| Where | inside a beat body, beside `say:`, or beside the beat's keys. `unknown-key` in `cast:`/`props:`. |
+| Beats the reader | `dur:` overrides `sliders.autoAdvance`. |
+| `dur: 0` | snap, straight on. Warning on a line — nobody can read it. |
+| No `dur:` on | `wait` (it *is* a duration), `fx`, `mark` — error beside them. |
 
 ## Speech styles
 

@@ -17,6 +17,7 @@ import {
 	IconPlus,
 	IconSettings,
 	IconStack2,
+	IconClockPlay,
 	IconTimeline,
 	IconUser,
 	IconVolume,
@@ -105,6 +106,8 @@ import {
 	useSceneSidebar
 } from './scene-sidebar';
 import {SceneStage} from './scene-stage';
+import {timingLayout} from './timing-layout';
+import {TimingOverlay} from './timing-overlay';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
@@ -456,6 +459,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
 	const root = React.useRef<HTMLDivElement>(null);
 	const [viewport, setViewport] = React.useState<HTMLDivElement | null>(null);
+	/** The timing overlay over the stage (spec 06, "Timing overlay"). */
+	const [timingOpen, setTimingOpen] = React.useState(false);
 	const viewZoom = useStageViewZoom(viewport);
 	const mounted = React.useRef(true);
 	const [seal, setSeal] = React.useState(0);
@@ -591,6 +596,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				sceneEase: parse.result?.scene.ease
 			}),
 		[beats, holdMs, parse.result, parse.states, sceneAutoMs]
+	);
+	const timingRows = React.useMemo(
+		() =>
+			timingOpen
+				? timingLayout(timeline, [
+						...new Set(parse.states.flatMap(state => Object.keys(state.entities ?? {})))
+				  ])
+				: undefined,
+		[parse.states, timeline, timingOpen]
 	);
 	/** Hold of every state, ms. State 0 is produced by no beat and takes the standard beat. */
 	const holdsMs = React.useMemo(
@@ -2150,6 +2164,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					selectable
 					selected={timelineLabels}
 				/>
+				<IconButton
+					icon={<IconClockPlay />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.timing.toggle')}
+					onClick={() => setTimingOpen(open => !open)}
+					selectable
+					selected={timingOpen}
+				/>
 			</span>
 		</div>
 	);
@@ -2538,6 +2560,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			content: (
 				<BeatPanel
 					autoAdvanceMs={holdMs}
+					onShowTiming={() => setTimingOpen(true)}
 					beat={shownBeat}
 					beatCount={beats.length}
 					beatNumber={beat}
@@ -2649,6 +2672,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onToggle={() => toggleTab('problems')}
 				open={tabShown('problems')}
 			/>
+			{timingRows && (
+				<TimingOverlay
+					beat={beat}
+					layout={timingRows}
+					onBeatChange={goToBeat}
+					onClose={() => setTimingOpen(false)}
+				/>
+			)}
 			<SceneSidebar
 				active={sidebar.active}
 				onActive={setSidebarTab}

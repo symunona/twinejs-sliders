@@ -85,6 +85,23 @@ view.
 - Play stopping does NOT re-apply the stage: a zero-duration re-apply in the same task
   killed the last beat's move (drone landed in one frame). `scene-stage.tsx`.
 
+- Play runs on `sceneTimeline` (scene-core): same hold per beat as the player.
+
+## Timing overlay
+
+Debug view of the whole scene on the player's clock. `timing-overlay.tsx` + `timing-layout.ts`.
+
+| | |
+|---|---|
+| Open | clock button in the scene bar (next to labels toggle), or in the beat panel's Timing heading. Esc / ✕ closes. |
+| Where | over the stage, dim + blur. Sidebar stays usable: retime in the beat panel, bars move live. |
+| Groups | Stage (bg, camera, fx, music), each entity in cast order, Narration. |
+| Rows | per kind of change: `say`, `enter`, `exit`, `move`, `scale`, `rot`, `pose`, `steps`, `flip`, `grade`. Says = bar over the beat with the words. |
+| Bars | start + length in seconds. 0s = white tick (snap). |
+| Beat edges | dashed = auto-advance. Double + mouse = waits for a click. Plain = timer or animation end. |
+| Columns | current beat lit. Click a beat number = scrubber jumps there. |
+| Click wait width | drawn as the scene's standard beat (it has no length). |
+
 ## Test from this beat (Alt+T)
 
 Launch Twine's Test on the passage in the preview, **standing on the beat the scrubber is

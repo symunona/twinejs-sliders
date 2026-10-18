@@ -625,6 +625,22 @@
 			},
 			"scenePreview": {
 				"title": "Scene Editor",
+				"timing": {
+					"toggle": "Timing: every beat on the player's clock, over the stage",
+					"title": "Timing",
+					"empty": "No beats yet.",
+					"legendPlain": "timer / animation end",
+					"stage": "Stage",
+					"box": "Narration",
+					"beatTitle": "Beat {{beat}} — {{length}}, then {{advance}}",
+					"barTitle": "Beat {{beat}}: {{kind}}, {{length}}",
+					"advance": {
+						"auto": "auto-advance",
+						"reader": "waits for a click",
+						"timer": "timer",
+						"anim": "on when the animation ends"
+					}
+				},
 				"openSource": "Open the passage source",
 				"links": {
 					"heading": "Links",

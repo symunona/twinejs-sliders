@@ -1,0 +1,238 @@
+/* The timing overlay: over the stage, never over the sidebar — the beat panel beside it
+   stays usable, and the bars follow its edits. Always dark: it sits on a dimmed picture. */
+.timing-overlay {
+	backdrop-filter: blur(6px) brightness(0.55);
+	background: rgba(10, 10, 16, 0.55);
+	bottom: 0;
+	color: #f2f2f5;
+	display: flex;
+	flex-direction: column;
+	font-size: 12px;
+	left: 0;
+	position: absolute;
+	right: var(--layers-panel-width, 0);
+	top: 0;
+	/* Over the badge (5) and the stage overlay, under the sidebar (6). */
+	z-index: 5;
+	--timing-label: 96px;
+	--timing-auto: #8fd3ff;
+	--timing-reader: #ffd166;
+	--timing-timer: rgba(255, 255, 255, 0.45);
+}
+
+.timing-overlay-head {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	padding: 6px 8px 6px 12px;
+}
+
+.timing-overlay-total {
+	opacity: 0.7;
+}
+
+.timing-legend {
+	display: flex;
+	flex-grow: 1;
+	flex-wrap: wrap;
+	gap: 12px;
+	justify-content: flex-end;
+	opacity: 0.85;
+}
+
+.timing-legend-item {
+	align-items: center;
+	display: inline-flex;
+	gap: 4px;
+}
+
+.timing-legend-line {
+	display: inline-block;
+	height: 14px;
+	width: 6px;
+}
+
+.timing-overlay .timing-overlay-head .icon-button,
+.timing-overlay .timing-overlay-head button {
+	color: inherit;
+}
+
+.timing-overlay-empty {
+	padding: 0 12px;
+}
+
+.timing-overlay-body {
+	flex-grow: 1;
+	overflow: auto;
+	padding: 0 12px 12px;
+}
+
+.timing-row {
+	align-items: stretch;
+	display: flex;
+	min-height: 18px;
+}
+
+.timing-row-label {
+	flex: 0 0 var(--timing-label);
+	opacity: 0.75;
+	overflow: hidden;
+	padding-right: 6px;
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.timing-track {
+	flex-grow: 1;
+	position: relative;
+}
+
+.timing-header {
+	min-height: 22px;
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+.timing-group {
+	border-top: 1px solid rgba(255, 255, 255, 0.12);
+	padding: 3px 0;
+}
+
+.timing-group-name {
+	font-weight: bold;
+	padding: 2px 0;
+}
+
+/* Beat columns behind every row. */
+.timing-grid {
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+}
+
+.timing-column {
+	bottom: 0;
+	position: absolute;
+	top: 0;
+}
+
+.timing-column.current {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+/* The line a beat ENDS on — how it hands over to the next. */
+.timing-edge {
+	bottom: 0;
+	position: absolute;
+	right: -1px;
+	top: 0;
+	width: 0;
+}
+
+.timing-edge.advance-auto,
+.timing-legend-line.advance-auto {
+	border-left: 2px dashed var(--timing-auto);
+}
+
+.timing-edge.advance-reader,
+.timing-legend-line.advance-reader {
+	border-left: 4px double var(--timing-reader);
+	right: -2px;
+}
+
+.timing-edge.advance-timer,
+.timing-edge.advance-anim,
+.timing-legend-line.advance-timer {
+	border-left: 1px solid var(--timing-timer);
+}
+
+.timing-beat {
+	align-items: center;
+	background: none;
+	border: none;
+	bottom: 0;
+	box-sizing: border-box;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	font: inherit;
+	gap: 2px;
+	justify-content: center;
+	min-width: 14px;
+	overflow: hidden;
+	padding: 0;
+	position: absolute;
+	top: 0;
+}
+
+.timing-beat:hover,
+.timing-beat:focus-visible {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+.timing-beat.current {
+	font-weight: bold;
+}
+
+.timing-beat-mouse {
+	color: var(--timing-reader);
+	flex-shrink: 0;
+}
+
+.timing-bar {
+	background: #7aa2f7;
+	border-radius: 3px;
+	box-sizing: border-box;
+	color: #101014;
+	height: 12px;
+	line-height: 12px;
+	min-width: 3px;
+	overflow: hidden;
+	padding: 0 3px;
+	position: absolute;
+	text-overflow: ellipsis;
+	top: 3px;
+	white-space: nowrap;
+}
+
+/* A change with no duration: a tick, so the beat that snapped is still visible. */
+.timing-bar.snap {
+	background: #fff;
+	padding: 0;
+	width: 2px !important;
+}
+
+.kind-say .timing-bar {
+	background: #f2f2f5;
+	font-size: 10px;
+}
+
+.kind-move .timing-bar,
+.kind-steps .timing-bar {
+	background: #9ece6a;
+}
+
+.kind-scale .timing-bar,
+.kind-rot .timing-bar,
+.kind-flip .timing-bar {
+	background: #e0af68;
+}
+
+.kind-pose .timing-bar {
+	background: #bb9af7;
+}
+
+.kind-enter .timing-bar,
+.kind-exit .timing-bar {
+	background: #7dcfff;
+}
+
+.kind-grade .timing-bar {
+	background: #ff9e64;
+}
+
+.kind-music .timing-bar {
+	background: rgba(255, 255, 255, 0.35);
+}

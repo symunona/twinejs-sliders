@@ -33,9 +33,14 @@ function partTiming(
 	beat: Beat,
 	id: EntityId | undefined,
 	stage: Stage | undefined
-): {dur?: number; ease?: BeatEase} | undefined {
+): {dur?: number; ease?: BeatEase} {
+	const shared = {
+		dur: beat.ownDur ? undefined : beat.dur,
+		ease: beat.ownEase ? undefined : beat.ease
+	};
+
 	if (id === undefined || !beat.with) {
-		return undefined;
+		return {dur: beat.dur, ease: beat.ease};
 	}
 
 	const seen = new Set<EntityId>();
@@ -47,18 +52,19 @@ function partTiming(
 		const part = beat.with.find(one => one.who === at);
 
 		if (part) {
-			return part.dur !== undefined || part.ease !== undefined ? part : undefined;
+			return {dur: part.dur ?? shared.dur, ease: part.ease ?? shared.ease};
 		}
 
-		// The primary entity is timed by the beat itself: stop there.
+		// The first entity is timed by the beat's own `dur:` / `ease:`.
 		if ('who' in beat && beat.who === at) {
-			return undefined;
+			return {dur: beat.dur, ease: beat.ease};
 		}
 
 		at = stage?.entities[at]?.of;
 	}
 
-	return undefined;
+	// Somebody the beat does not name (an `of:` child of nobody here): the shared timing.
+	return shared;
 }
 
 /**
@@ -78,9 +84,7 @@ export function timeBeat(
 	}
 
 	return transitions.map(transition => {
-		const part = partTiming(beat, transition.entityId, after);
-		const dur = part?.dur ?? beat.dur;
-		const ease = part?.ease ?? beat.ease;
+		const {dur, ease} = partTiming(beat, transition.entityId, after);
 
 		return easeTransitions(timeTransitions([transition], dur), ease, sceneEase)[0];
 	});

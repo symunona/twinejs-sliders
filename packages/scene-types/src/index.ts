@@ -589,6 +589,13 @@ export interface BeatBase {
 	 * all of them reads `beatParts()` / `beatLines()` instead of this list.
 	 */
 	with?: BeatPart[];
+	/**
+	 * `dur:` / `ease:` were written in the FIRST entity's body, not beside the beat's keys,
+	 * so they time that entity alone and the `with:` parts keep their defaults. Only set
+	 * when the beat has parts — a one-entity beat's own timing is the beat's.
+	 */
+	ownDur?: true;
+	ownEase?: true;
 }
 
 /**
