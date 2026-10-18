@@ -405,6 +405,13 @@ export interface MusicEntry {
  */
 export interface MusicSpec {
 	tracks: Record<string, MusicEntry | null>;
+	/**
+	 * Written in the single form (`music: rain`, `music: {id: rain, …}`): one track,
+	 * `MUSIC_MAIN_TRACK`, which LOOPS when it leaves `loop:` out. Kept as a flag, not
+	 * stamped into the entry, so an absent `loop:` and a stated `loop: true` stay apart —
+	 * the editor shows and writes back what the author typed. `applyMusic` owns the default.
+	 */
+	single?: true;
 	/** `stop-other-tracks:` — `'all'` stops every track not named in `tracks`. */
 	stopOthers?: 'all' | string[];
 }

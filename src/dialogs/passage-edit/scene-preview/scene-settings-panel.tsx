@@ -245,18 +245,17 @@ export function formatSfx(sound: StageSound): string {
 }
 
 /** One `music:` entry as a flow map, or `id@volume` when that is all it says. */
-function musicEntryValue(entry: MusicEntry, single: boolean): unknown {
+function musicEntryValue(entry: MusicEntry): unknown {
 	// A redefinition takes defaults for what it leaves out, so a default need not be
 	// written. A PATCH (no id) changes only what it names: `{volume: 1}` there is a ramp
 	// back up, not a default, and dropping it would silently change the scene.
 	const patch = entry.id === undefined;
 	const amount = !patch && entry.amount === 1 ? undefined : entry.amount;
-	// The single form loops unless told otherwise, a keyed track plays once.
-	const loop =
-		!patch && entry.loop === (single ? true : false) ? undefined : entry.loop;
+	// `loop` is written exactly as stated: the parser keeps an unstated one unstated, so a
+	// stated `loop: true` on the bed is the author's, not a default to tidy away.
 	const rest = {
 		fade: entry.fade,
-		loop,
+		loop: entry.loop,
 		restart: entry.restart || undefined,
 		start: entry.start || undefined
 	};
@@ -280,20 +279,19 @@ function musicEntryValue(entry: MusicEntry, single: boolean): unknown {
 /**
  * Whether a spec can be written as the single form.
  *
- * Only a lone `main` track that names a sound and states its loop: the parser fills
- * `loop: true` into every single form, so a `main` whose loop is undefined was written
- * KEYED, where the default is play-once. Collapsing that one would make it loop.
+ * Only one the parser read as the single form: a keyed `{main: rain}` looks the same but
+ * plays once when it leaves `loop:` out, and collapsing it would make it loop.
  */
 export function isSingleMusic(spec: MusicSpec): boolean {
 	const names = Object.keys(spec.tracks);
 	const main = spec.tracks[MUSIC_MAIN_TRACK];
 
 	return (
+		spec.single === true &&
 		names.length === 1 &&
 		names[0] === MUSIC_MAIN_TRACK &&
 		!!main &&
-		main.id !== undefined &&
-		main.loop !== undefined
+		main.id !== undefined
 	);
 }
 
@@ -306,7 +304,7 @@ export function formatMusic(spec: MusicSpec | null): string | undefined {
 	const stop = spec.stopOthers;
 
 	if (isSingleMusic(spec)) {
-		const value = musicEntryValue(spec.tracks[MUSIC_MAIN_TRACK]!, true);
+		const value = musicEntryValue(spec.tracks[MUSIC_MAIN_TRACK]!);
 
 		if (!stop) {
 			return formatValue('music', value);
@@ -323,7 +321,7 @@ export function formatMusic(spec: MusicSpec | null): string | undefined {
 	const map: Record<string, unknown> = {};
 
 	for (const [name, entry] of Object.entries(spec.tracks)) {
-		map[name] = entry === null ? null : musicEntryValue(entry, false);
+		map[name] = entry === null ? null : musicEntryValue(entry);
 	}
 
 	if (stop) {
@@ -501,9 +499,12 @@ const Heading: React.FC<{
 	</h4>
 );
 
-/** A loop as one dropdown value. Counts and sections are a readout. */
-function loopChoice(loop: MusicLoop | undefined, single: boolean): string {
-	if (loop === undefined || loop === single) {
+/**
+ * A loop as one dropdown value. Counts and sections are a readout. Unset and a stated value
+ * equal to the default are different choices: only unset follows the default.
+ */
+function loopChoice(loop: MusicLoop | undefined): string {
+	if (loop === undefined) {
 		return UNSET;
 	}
 
@@ -623,18 +624,10 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 
 	/** The rows of one track. `single` is the one-bed form, where loop defaults on. */
 	const trackRows = (name: string, entry: MusicEntry, isSingle: boolean) => {
-		const patch = (next: Partial<MusicEntry>) => {
-			const merged = {...entry, ...next};
-
-			// The single form has to keep a stated loop, or it would be written keyed.
-			if (isSingle && merged.loop === undefined) {
-				merged.loop = true;
-			}
-
-			setTrack(name, merged);
-		};
+		const patch = (next: Partial<MusicEntry>) =>
+			setTrack(name, {...entry, ...next});
 		const prefix = `scene-settings-music-${name}`;
-		const loop = loopChoice(entry.loop, isSingle);
+		const loop = loopChoice(entry.loop);
 
 		return (
 			<>

@@ -62,6 +62,15 @@ describe('applyMusic', () => {
 		expect(out).toEqual({main: {amount: 1, fade: 1.5, id: 'storm', loop: false}});
 	});
 
+	it('loops the single form unless it says otherwise, a keyed track plays once', () => {
+		const resolved = (spec: MusicSpec) => applyMusic(undefined, spec, 0)!.main.loop;
+
+		expect(resolved({single: true, tracks: {main: {id: 'rain'}}})).toBe(true);
+		expect(resolved({single: true, tracks: {main: {id: 'rain', loop: false}}})).toBe(false);
+		expect(resolved({single: true, tracks: {main: {id: 'rain', loop: true}}})).toBe(true);
+		expect(resolved({tracks: {main: {id: 'rain'}}})).toBe(false);
+	});
+
 	it('patches a running track without an id', () => {
 		const out = applyMusic({wind: {...rain, id: 'w'}}, {tracks: {wind: {amount: 0.2, fade: 4}}}, 2);
 

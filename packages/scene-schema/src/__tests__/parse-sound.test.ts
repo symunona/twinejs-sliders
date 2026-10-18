@@ -5,9 +5,11 @@ describe('music:', () => {
 		const {scene, errors} = parseScene('music: tavern-loop');
 
 		expect(errors).toEqual([]);
-		// Single form: track `main`, and it LOOPS — the old bed's meaning, kept.
+		// Single form: track `main`, marked single so it LOOPS (applyMusic) — the old bed's
+		// meaning, kept. The loop is not stamped: unstated stays unstated.
 		expect(scene.music).toEqual({
-			tracks: {main: {amount: 1, id: 'tavern-loop', loop: true}}
+			single: true,
+			tracks: {main: {amount: 1, id: 'tavern-loop'}}
 		});
 	});
 
@@ -16,7 +18,8 @@ describe('music:', () => {
 
 		expect(errors).toEqual([]);
 		expect(scene.music).toEqual({
-			tracks: {main: {amount: 0.4, id: 'tavern-loop', loop: true}}
+			single: true,
+			tracks: {main: {amount: 0.4, id: 'tavern-loop'}}
 		});
 	});
 
@@ -25,7 +28,8 @@ describe('music:', () => {
 
 		expect(errors).toEqual([]);
 		expect(scene.music).toEqual({
-			tracks: {main: {amount: 0.25, id: 'rain', loop: true}}
+			single: true,
+			tracks: {main: {amount: 0.25, id: 'rain'}}
 		});
 	});
 
@@ -46,7 +50,7 @@ describe('music:', () => {
 		// named `4` that nobody has.
 		const {scene} = parseScene('music: 04');
 
-		expect(scene.music).toEqual({tracks: {main: {amount: 1, id: '04', loop: true}}});
+		expect(scene.music).toEqual({single: true, tracks: {main: {amount: 1, id: '04'}}});
 	});
 
 	it('rejects a list', () => {
@@ -74,6 +78,7 @@ describe('music: single form, new keys', () => {
 
 		expect(errors).toEqual([]);
 		expect(scene.music).toEqual({
+			single: true,
 			tracks: {
 				main: {amount: 0.4, fade: 3, id: 'rain', loop: false, restart: true, start: 0.5}
 			}
@@ -93,8 +98,9 @@ describe('music: single form, new keys', () => {
 
 		expect(errors).toEqual([]);
 		expect(scene.music).toEqual({
+			single: true,
 			stopOthers: 'all',
-			tracks: {main: {id: 'rain', loop: true}}
+			tracks: {main: {id: 'rain'}}
 		});
 	});
 
@@ -136,6 +142,14 @@ describe('music: loop', () => {
 	it('takes true and false', () => {
 		expect(loopOf('true').scene.music?.tracks.main?.loop).toBe(true);
 		expect(loopOf('false').scene.music?.tracks.main?.loop).toBe(false);
+	});
+
+	it('keeps a stated loop apart from an unstated one, default or not', () => {
+		// Bug report: `loop: true` on the bed equals its default, and the editor showed it as
+		// unset. The parse must say which one the author wrote.
+		expect(loopOf('true').scene.music?.tracks.main).toHaveProperty('loop', true);
+		expect(parseScene('music: {id: x}').scene.music?.tracks.main).not.toHaveProperty('loop');
+		expect(parseScene('music: x').scene.music?.tracks.main).not.toHaveProperty('loop');
 	});
 
 	it('takes a count of plays, and 1 is false', () => {
@@ -295,7 +309,7 @@ describe('music: on beats', () => {
 
 		expect(scene.beats[0]).toMatchObject({
 			kind: 'music',
-			music: {tracks: {main: {id: 'storm', loop: true}}}
+			music: {single: true, tracks: {main: {id: 'storm'}}}
 		});
 	});
 

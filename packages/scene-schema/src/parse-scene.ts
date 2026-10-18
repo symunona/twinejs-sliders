@@ -2529,8 +2529,8 @@ const TRACK_KEYS: readonly string[] = MUSIC_KEYS.filter(key => key !== STOP_OTHE
  * The single form is the old one-bed grammar, kept to its old meaning: it writes the track
  * `MUSIC_MAIN_TRACK` and LOOPS unless told otherwise, because a bed that stopped after one
  * play would silently change every story written before tracks existed. A keyed entry
- * defaults to playing once instead — `applyMusic` owns that default, the parser only
- * stamps the single form's `loop: true` onto it.
+ * defaults to playing once instead. `applyMusic` owns both defaults; the parser only marks
+ * the single form (`MusicSpec.single`) and leaves an unstated `loop` unstated.
  */
 function parseMusicNode(
 	ctx: Ctx,
@@ -2544,7 +2544,7 @@ function parseMusicNode(
 	if (isScalar(node)) {
 		const entry = parseMusicEntry(ctx, node, label, true);
 
-		return entry ? {tracks: {[MUSIC_MAIN_TRACK]: entry}} : undefined;
+		return entry ? {single: true, tracks: {[MUSIC_MAIN_TRACK]: entry}} : undefined;
 	}
 
 	if (!isMap(node)) {
@@ -2585,6 +2585,7 @@ function parseMusicNode(
 
 		return entry
 			? {
+					single: true,
 					tracks: {[MUSIC_MAIN_TRACK]: entry},
 					...(stopOthers ? {stopOthers} : {})
 			  }
@@ -2669,7 +2670,7 @@ function parseMusicEntry(
 
 		const {amount, id} = parseFxToken(token);
 
-		return {amount, id, ...(single ? {loop: true} : {})};
+		return {amount, id};
 	}
 
 	if (isMap(node)) {
@@ -2806,11 +2807,6 @@ function parseMusicMap(
 			hint: `${label}: {id: rain, volume: 0.4}`
 		});
 		return undefined;
-	}
-
-	// The single form keeps the old bed's meaning: it loops unless it says otherwise.
-	if (single && entry.loop === undefined) {
-		entry.loop = true;
 	}
 
 	return entry;

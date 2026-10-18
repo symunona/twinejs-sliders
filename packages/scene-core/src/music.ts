@@ -75,7 +75,10 @@ export function applyMusic(
 				amount: entry.amount ?? 1,
 				fade: entry.fade ?? MUSIC_DEFAULT_FADE,
 				id: entry.id,
-				loop: cloneLoop(entry.loop ?? false),
+				// The single form (`music: rain`) is the old bed and loops; a keyed track
+				// plays once. The parser leaves an unstated loop unstated, so this is the one
+				// place either default lives.
+				loop: cloneLoop(entry.loop ?? spec.single === true),
 				...(entry.start !== undefined ? {start: entry.start} : {}),
 				...(kept !== undefined ? {take: kept} : {})
 			};

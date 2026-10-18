@@ -318,6 +318,57 @@ describe('<SceneSettingsPanel>', () => {
 		]);
 	});
 
+	// Bug report: an explicit `loop: true` on the bed snapped to "—", because it equals the
+	// default. Unset and stated are different things — changing the default must not lose it.
+	describe('loop: stated vs unset', () => {
+		const loopSelect = () => select('scene-settings-music-main-loop');
+
+		it('shows a stated loop as loop, not as unset', () => {
+			sounds('music: {id: rain, loop: true}');
+
+			expect(loopSelect().value).toBe('true');
+		});
+
+		it('shows an unstated loop as unset', () => {
+			sounds('music: rain');
+
+			expect(loopSelect().value).toBe('');
+		});
+
+		it('writes a picked loop out loud, even though it is the default', () => {
+			const {onWrite} = sounds('music: rain');
+
+			fireEvent.change(loopSelect(), {target: {value: 'true'}});
+			expect(onWrite).toHaveBeenCalledWith([
+				{formatted: '{id: rain, loop: true}', sceneKey: 'music'}
+			]);
+		});
+
+		it('picking unset removes the key', () => {
+			const {onWrite} = sounds('music: {id: rain, loop: true}');
+
+			fireEvent.change(loopSelect(), {target: {value: ''}});
+			expect(onWrite).toHaveBeenCalledWith([
+				{formatted: 'rain', sceneKey: 'music'}
+			]);
+		});
+
+		it('keeps a keyed track\'s stated play-once', () => {
+			sounds('music: {drums: {id: rain, loop: false}}');
+
+			expect(select('scene-settings-music-drums-loop').value).toBe('false');
+		});
+
+		it('round-trips a stated default', () => {
+			expect(
+				formatMusic(scene('music: {id: rain, loop: true}').music!)
+			).toBe('{id: rain, loop: true}');
+			expect(
+				formatMusic(scene('music: {drums: {id: x, loop: false}}').music!)
+			).toBe('{drums: {id: x, loop: false}}');
+		});
+	});
+
 	it('removes one keyed track and leaves the other', () => {
 		const {onWrite} = sounds('music: {mellow: strings, drums: rain@0.3}');
 
