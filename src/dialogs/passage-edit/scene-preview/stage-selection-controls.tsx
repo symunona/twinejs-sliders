@@ -8,7 +8,7 @@
  * alone never is.
  *
  * Order, top down: the two one-click grade fixes (match bg, reset), the gesture buttons,
- * pose and motion, then the grade sliders — the long part goes last so the buttons never move. Hovering one
+ * pose, motion and opacity, then the grade sliders — the long part goes last so the buttons never move. Hovering one
  * slider shows the sprite at that slider's two ends (`GradeExtremesOverlay`).
  *
  * `pose:` is cast-only and single-selection-only: props are one image and have no poses
@@ -48,6 +48,7 @@ import type {
 } from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
+import {AdjustSlider} from '../../asset-editor/adjust-slider';
 import {NumberField} from './number-field';
 import {TextSelect} from '../../../components/control/text-select';
 import {GradeExtremesOverlay} from './grade-extremes-overlay';
@@ -82,6 +83,13 @@ export interface StageSelectionControlsProps {
 	onMotion?: (motion: string | undefined) => void;
 	/** Seconds per cycle on the selection's motions, `undefined` for the preset's own. */
 	onMotionSpeed?: (speed: number | undefined) => void;
+	/**
+	 * The opacity slider moved: PAINTS the whole selection at that opacity, writes nothing.
+	 * Absent hides the slider.
+	 */
+	onOpacity?: (opacity: number) => void;
+	/** The opacity slider was let go of, a number typed, or reset: write what is on screen. */
+	onOpacityCommit?: () => void;
 	/**
 	 * Draw a pose on the stage without writing it: `AUTO_POSE` for the fallback, a name
 	 * for that pose, `null` to stop previewing and go back to what the scene says.
@@ -160,6 +168,65 @@ function sharedSpeed(entities: StageEntity[]): number | undefined {
 }
 
 /**
+ * `opacity:` as a slider. Paints on every move and commits on release, typed Enter or
+ * reset, the way the grade sliders do and for the same reason: a drag is one edit.
+ */
+const OpacitySlider: React.FC<{
+	onChange: (opacity: number) => void;
+	onCommit: () => void;
+	value: number;
+}> = ({onChange, onCommit, value}) => {
+	const {t} = useTranslation();
+	const [el, setEl] = React.useState<HTMLDivElement | null>(null);
+	const onCommitRef = React.useRef(onCommit);
+
+	onCommitRef.current = onCommit;
+
+	// Native `change`, which a range fires once on release — React's `onChange` is `input`.
+	// Deferred a tick so the last paint has landed first. See `GradeSliders`.
+	React.useEffect(() => {
+		if (!el) {
+			return;
+		}
+
+		const later = () => window.setTimeout(() => onCommitRef.current(), 0);
+		const onClick = (event: MouseEvent) => {
+			if ((event.target as Element | null)?.closest?.('button')) {
+				later();
+			}
+		};
+
+		el.addEventListener('change', later);
+		el.addEventListener('click', onClick);
+
+		return () => {
+			el.removeEventListener('change', later);
+			el.removeEventListener('click', onClick);
+		};
+	}, [el]);
+
+	return (
+		<div
+			className="scene-preview-selection-opacity"
+			data-testid="scene-preview-selection-opacity"
+			ref={setEl}
+		>
+			<AdjustSlider
+				editable
+				label={t('dialogs.passageEdit.scenePreview.opacity')}
+				max={1}
+				min={0}
+				onChange={opacity => onChange(Math.min(1, Math.max(0, opacity)))}
+				resetLabel={t('dialogs.assetEditor.reset')}
+				resetTo={1}
+				step={0.05}
+				value={value}
+			/>
+		</div>
+	);
+};
+
+/**
  * The pose names a character declares.
  *
  * Read through the resolver, which is the same path the renderer uses, so the list can
@@ -215,6 +282,8 @@ export const StageSelectionControls: React.FC<
 		onPose,
 		onMotion,
 		onMotionSpeed,
+		onOpacity,
+		onOpacityCommit,
 		onResetStretch,
 		onToggleLock,
 		onOpenLink,
@@ -464,6 +533,15 @@ export const StageSelectionControls: React.FC<
 						value={sharedSpeed(entities)}
 					/>
 				</div>
+			)}
+			{onOpacity && (
+				<OpacitySlider
+					onChange={onOpacity}
+					onCommit={() => onOpacityCommit?.()}
+					// The first selected sprite's: a slider has one thumb, and a move sets the
+					// whole selection to wherever it is.
+					value={entities[0].opacity}
+				/>
 			)}
 			{single && onGrade && (
 				<GradeSliders

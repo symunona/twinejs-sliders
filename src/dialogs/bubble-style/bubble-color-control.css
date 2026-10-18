@@ -46,6 +46,13 @@
 	box-shadow: 0 0 0 2px var(--blue);
 }
 
+/* The opacity channel. Narrow: it belongs to the swatch, like the quick list's button. */
+.bubble-color-control-alpha {
+	flex: 0 1 56px;
+	min-width: 32px;
+	width: 56px;
+}
+
 .bubble-color-control-text {
 	background: var(--white-translucent);
 	border-radius: var(--corner-round);
