@@ -53,6 +53,24 @@
 	padding: 6px 8px;
 }
 
+/* "Assign to": label styled like the text box's, the button takes the rest of the row. */
+.beat-panel-speaker .preview-select {
+	display: flex;
+}
+
+.beat-panel-speaker .preview-select-label {
+	color: var(--dark-gray);
+	font-size: 80%;
+	font-weight: bold;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.beat-panel-speaker .preview-select-button {
+	flex: 1 1 auto;
+	max-width: none;
+}
+
 .beat-panel-text {
 	display: flex;
 	flex-direction: column;

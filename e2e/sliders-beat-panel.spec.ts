@@ -176,3 +176,49 @@ test('beat panel: pick the bubble, edit its words, hand its style to the story',
 	await panel.getByRole('button', {name: 'Close'}).click();
 	await expect(panel).toHaveCount(0);
 });
+
+test('beat panel: assign to hands the line to another speaker', async ({
+	page
+}) => {
+	test.setTimeout(180000);
+	await page.setViewportSize({width: 1400, height: 1000});
+	await createStory(page, 'Assign To ' + Date.now());
+	await setStoryFormat(page, 'Sliders');
+	await closeDialogs(page);
+	await openPassage(page, 'Untitled Passage');
+	await setPassageText(
+		page,
+		`[scene]
+cast:
+  mira: {at: -0.3}
+props:
+  lamp: {at: 0.3}
+beats:
+  - mira: {say: "Hello there.", pose: idle, dur: 2}
+`
+	);
+	await showScenePreview(page);
+	await page.locator('.scene-stage').first().waitFor({timeout: 20000});
+	await page.getByRole('button', {name: 'Next beat'}).click();
+	await page.locator('.scene-bubble-editor-body').click();
+
+	const row = page.getByTestId('beat-panel-speaker');
+
+	await expect(row).toContainText('mira');
+	await row.getByRole('button').click();
+	await page.screenshot({path: '/root/tmp/beat-assign-open.png'});
+	await page.getByRole('option', {name: /Narrator/}).click();
+	await expect
+		.poll(() => cmText(page))
+		.toContain('  - box: {text: "Hello there.", dur: 2}');
+	await expect(row).toContainText('Narrator');
+	await expect(page.getByTestId('beat-panel-text')).toHaveValue('Hello there.');
+
+	await row.getByRole('button').click();
+	await page.getByRole('option', {name: /lamp/}).click();
+	await expect
+		.poll(() => cmText(page))
+		.toContain('  - lamp: {say: "Hello there.", dur: 2}');
+	await expect(row).toContainText('lamp');
+	await page.screenshot({path: '/root/tmp/beat-assign-done.png'});
+});

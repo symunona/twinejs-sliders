@@ -39,6 +39,7 @@ import {
 	Camera,
 	Character,
 	EntityId,
+	EntityKind,
 	matchPassageName,
 	Vec2
 } from '@sliders/scene-types';
@@ -547,6 +548,30 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		() => Object.keys(stage.entities ?? {}),
 		[stage]
 	);
+	/**
+	 * Who a line can be handed to: every character and object on stage in ANY state of the
+	 * scene, characters first, then by id -- the add-beat menu's order. Planes are left out:
+	 * a bubble off a plane hangs off the whole stage (spec 02 warns).
+	 */
+	const assignable = React.useMemo(() => {
+		const found = new Map<string, EntityKind>();
+
+		for (const state of parse.states) {
+			for (const entity of Object.values(state.entities ?? {})) {
+				if (entity && !entity.fit && !found.has(entity.id)) {
+					found.set(entity.id, entity.kind);
+				}
+			}
+		}
+
+		return [...found]
+			.map(([id, kind]) => ({id, kind}))
+			.sort(
+				(a, b) =>
+					Number(b.kind === 'cast') - Number(a.kind === 'cast') ||
+					a.id.localeCompare(b.id)
+			);
+	}, [parse.states]);
 	// A stable empty array when there is no scene, so the strip and the props row are not
 	// handed a fresh `[]` on every render.
 	const beats = parse.result?.scene.beats ?? EMPTY_BEATS;
@@ -844,6 +869,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					[{beat: beat - 1, beatText: text}],
 					live ? TYPE_ORIGIN : EDIT_ORIGIN
 				);
+			}
+		},
+		[beat, commit]
+	);
+	/** The beat panel's "Assign to": `who` is an entity id, or `box` for the narrator. */
+	const handleBeatSpeaker = React.useCallback(
+		(who: string) => {
+			if (beat > 0) {
+				commit([{beat: beat - 1, beatSpeaker: who}], EDIT_ORIGIN);
 			}
 		},
 		[beat, commit]
@@ -2464,8 +2498,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					onMakeDefault={makeBeatStyleDefault}
 					onSetBubble={handleBeatBubble}
 					onSetKey={handleBeatKey}
+					onSetSpeaker={handleBeatSpeaker}
 					onSetText={handleBeatText}
 					scope={beat > 0 ? 'beat' : 'scene'}
+					speakers={assignable}
 					stageIds={stageIds}
 					storyColors={swatches}
 				/>

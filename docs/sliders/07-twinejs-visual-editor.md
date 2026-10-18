@@ -114,6 +114,7 @@ sidebar). Not on sprite select — caret in a beat line selects the speaker.
 
 | Part | Writes |
 |---|---|
+| Assign to (above text; say + box beats only, not Step 0) | beat key: `box` (Narrator) or any character / object id on stage in any state, characters first. No planes. Off-stage speaker still listed. `say:` <-> `text:` swapped. To narrator: entity keys (`pose at link …`) dropped. Entity -> entity: all keys kept. `setBeatSpeaker` |
 | Text box (double click bubble = focus) | beat words: scalar, `say:` or `text:`, quote style kept. Live while typing, throttled 300ms, one undo step per burst (`+sliders-type`). Enter = write now, Shift+Enter = newline, Esc = back to text at focus. Ctrl+B `**bold**`, Ctrl+I `_italic_` toggle around selection / word at caret |
 | Timing, Bubble groups | `dur:` `ease:` · `bubble:` keys on the beat. Step 0: `autoAdvance:` (no Auto box) `ease:` `bubble:` on the scene, title says "Scene defaults". Grid rows: label · control · X. X = remove beat's key (back to default). "Default: …" line under each = story + scene value, else built-in. Row highlighted when beat states a value ≠ default. Dropdowns' unset option reads `inherit`. Explained dropdown (`sizing`) pane sized to its tallest explanation: no resize on hover, no flicker. Timing `?` = hover help |
 | "Make beat styles default for project" + confirm | `sliders.bubble.*` in START passage vars, beat's `as font color bg accent sizing anchor size` over existing. No `w h at tail place`. No beat, no other passage touched. Undoable. |

@@ -9,6 +9,10 @@
  * Step 0 has no beat: there the same rows edit the scene's globals (`scope: 'scene'`), the
  * values every beat starts from. Spec 07, "Scope".
  *
+ * Above the words, "Assign to": who says this line -- the narrator (`box:`) or any character
+ * or object in the scene. Dialogue and narration beats only; a beat that only stages
+ * something has no line to hand over. `setBeatSpeaker`.
+ *
  * The text box writes as the author types, throttled: one write per `TEXT_WRITE_MS` at most,
  * so the stage keeps up without a reparse per keystroke. The writes carry a `+` origin and
  * merge into one undo step. Ctrl+B / Ctrl+I toggle `**bold**` / `_italic_`
@@ -18,9 +22,13 @@
 import {IconTemplate, IconX} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
-import type {Beat} from '@sliders/scene-types';
+import type {Beat, EntityId, EntityKind} from '@sliders/scene-types';
 import {ConfirmButton} from '../../../components/control/confirm-button';
 import {IconButton} from '../../../components/control/icon-button';
+import {
+	PreviewSelect,
+	PreviewSelectOption
+} from '../../../components/control/preview-select';
 import {BeatProps, BeatPropsProps} from './beat-props';
 import {MarkupToggle, toggleMarkup} from './beat-text-markup';
 import './beat-panel.css';
@@ -32,6 +40,13 @@ export interface BeatPanelProps extends Omit<BeatPropsProps, 'beatCount'> {
 	 * marks a write made mid-typing, which merges with its neighbours in the undo history.
 	 */
 	onSetText: (text: string, live?: boolean) => void;
+	/**
+	 * Hands the line to another speaker: an entity id, or `box` for the narrator. Absent =
+	 * no "Assign to" row.
+	 */
+	onSetSpeaker?: (who: string) => void;
+	/** Who a line can be handed to, in the order offered. */
+	speakers?: readonly {id: EntityId; kind: EntityKind}[];
 	onClose: () => void;
 	/**
 	 * Bumped to ask for the text box's focus -- a double click on the bubble. A counter so
@@ -52,6 +67,17 @@ function wordsOf(beat: Beat | undefined): string | undefined {
 	return beat?.kind === 'say' || beat?.kind === 'box' ? beat.text : undefined;
 }
 
+/** `box` is the narrator: the beat key narration is written under. */
+const NARRATOR = 'box';
+
+function speakerOf(beat: Beat | undefined): string | undefined {
+	return beat?.kind === 'say'
+		? beat.who
+		: beat?.kind === 'box'
+		? NARRATOR
+		: undefined;
+}
+
 export const BeatPanel: React.FC<BeatPanelProps> = props => {
 	const {
 		beat,
@@ -60,12 +86,45 @@ export const BeatPanel: React.FC<BeatPanelProps> = props => {
 		focusText,
 		onClose,
 		onMakeDefault,
+		onSetSpeaker,
 		onSetText,
 		scope,
+		speakers,
 		...rest
 	} = props;
 	const {t} = useTranslation();
 	const words = wordsOf(beat);
+	const speaker = speakerOf(beat);
+	const speakerOptions = React.useMemo(() => {
+		const options: PreviewSelectOption[] = [
+			{
+				detail: t('dialogs.passageEdit.beatProps.assignNarratorDetail'),
+				label: t('dialogs.passageEdit.beatProps.assignNarrator'),
+				value: NARRATOR
+			},
+			...(speakers ?? []).map(({id, kind}) => ({
+				detail:
+					kind === 'cast'
+						? t('dialogs.passageEdit.beatProps.assignCharacter')
+						: kind === 'prop'
+						? t('dialogs.passageEdit.beatProps.assignObject')
+						: undefined,
+				label: id,
+				value: id
+			}))
+		];
+
+		// A line whose speaker is nowhere on stage still shows who it is.
+		if (speaker && !options.some(option => option.value === speaker)) {
+			options.push({
+				detail: t('dialogs.passageEdit.beatProps.assignMissing'),
+				label: speaker,
+				value: speaker
+			});
+		}
+
+		return options;
+	}, [speaker, speakers, t]);
 	/** The words as last rendered, for a throttled write deciding whether it has news. */
 	const latestWords = React.useRef(words);
 
@@ -212,6 +271,23 @@ export const BeatPanel: React.FC<BeatPanelProps> = props => {
 				/>
 			</div>
 			<div className="beat-panel-body">
+				{speaker !== undefined && onSetSpeaker && scope !== 'scene' && (
+					<div className="beat-panel-speaker" data-testid="beat-panel-speaker">
+						<PreviewSelect
+							disabled={!editable}
+							onChange={value => {
+								if (value !== speaker) {
+									onSetSpeaker(value);
+								}
+							}}
+							options={speakerOptions}
+							searchable={speakerOptions.length > 7}
+							value={speaker}
+						>
+							{t('dialogs.passageEdit.beatProps.assignTo')}
+						</PreviewSelect>
+					</div>
+				)}
 				{words !== undefined && (
 					<label className="beat-panel-text">
 						<span className="beat-panel-text-label">

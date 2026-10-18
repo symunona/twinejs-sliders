@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import * as React from 'react';
 import type {Beat} from '@sliders/scene-types';
 import {BeatPanel, BeatPanelProps, TEXT_WRITE_MS} from '../beat-panel';
@@ -221,6 +221,69 @@ describe('BeatPanel', () => {
 				name: 'dialogs.passageEdit.beatProps.makeDefault'
 			})
 		).toBeNull();
+	});
+
+	describe('assign to', () => {
+		const speakers = [
+			{id: 'mira', kind: 'cast' as const},
+			{id: 'lamp', kind: 'prop' as const}
+		];
+
+		it('sits above the words, offers narrator + scene entities, writes the pick', () => {
+			const onSetSpeaker = jest.fn();
+
+			renderPanel({onSetSpeaker, speakers});
+
+			const row = screen.getByTestId('beat-panel-speaker');
+
+			expect(
+				row.compareDocumentPosition(screen.getByTestId('beat-panel-text')) &
+					Node.DOCUMENT_POSITION_FOLLOWING
+			).toBeTruthy();
+			expect(row).toHaveTextContent('mira');
+			fireEvent.click(row.querySelector('button')!);
+
+			const options = within(screen.getByRole('listbox')).getAllByRole(
+				'option'
+			);
+
+			expect(options.map(option => option.textContent)).toEqual([
+				expect.stringContaining('assignNarrator'),
+				expect.stringContaining('mira'),
+				expect.stringContaining('lamp')
+			]);
+			fireEvent.pointerDown(screen.getByRole('option', {name: /lamp/}));
+			expect(onSetSpeaker).toHaveBeenCalledWith('lamp');
+		});
+
+		it('narration shows the narrator; a speaker off stage is still listed', () => {
+			renderPanel({
+				beat: {index: 0, kind: 'box', text: 'Night.'},
+				onSetSpeaker: jest.fn(),
+				speakers
+			});
+			expect(screen.getByTestId('beat-panel-speaker')).toHaveTextContent(
+				'assignNarrator'
+			);
+
+			renderPanel({
+				beat: {...SAY, who: 'ghost'},
+				onSetSpeaker: jest.fn(),
+				speakers
+			});
+			expect(screen.getAllByTestId('beat-panel-speaker')[1]).toHaveTextContent(
+				'ghost'
+			);
+		});
+
+		it('is not there for a beat with no line', () => {
+			renderPanel({
+				beat: {index: 0, kind: 'set', patch: {flip: true}, who: 'mira'},
+				onSetSpeaker: jest.fn(),
+				speakers
+			});
+			expect(screen.queryByTestId('beat-panel-speaker')).toBeNull();
+		});
 	});
 
 	it('closes', () => {

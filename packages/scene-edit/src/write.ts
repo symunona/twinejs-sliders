@@ -15,6 +15,7 @@
 
 import {isMap, isScalar} from 'yaml';
 import type {Pair, Scalar, YAMLMap} from 'yaml';
+import {BOX_KEYS, ENTITY_KEYS} from '@sliders/scene-schema';
 import type {EntityId, EntityKind, EntityPatch} from '@sliders/scene-types';
 import {formatNumber, formatValue} from './format';
 import {
@@ -1277,6 +1278,133 @@ export function setBeatText(
 	}
 
 	return {from: range[0], insert, to: range[1]};
+}
+
+/**
+ * Hand a dialogue or narration beat to another speaker — the beat panel's "Assign to".
+ *
+ * `who` is an entity id, or `box` for the narrator (same convention as `insertBeatLine`).
+ * The words, their quote style, comments and every other key stay. What changes:
+ *
+ *   - the beat's key: `- mira: …` -> `- bob: …`;
+ *   - the words' key between the map forms, `say:` <-> `text:`;
+ *   - to `box`, the ENTITY keys go (`pose:`, `at:`, `link:` …): they staged the old speaker
+ *     and a box has no sprite to stage. Unknown keys stay, the author's typo to fix.
+ *
+ * Entity -> entity keeps the staging keys: the author asked to move the beat, not to strip it.
+ * A beat with no words (`- mira: {at: 0.3}`) has no speaker to swap: undefined.
+ */
+export function setBeatSpeaker(
+	text: string,
+	index: number,
+	who: string
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+	const beat = parsed && locateBeat(parsed, index);
+
+	if (
+		!beat ||
+		beat.key === who ||
+		who === '' ||
+		(who !== 'box' && (BEAT_COMMANDS as readonly string[]).includes(who))
+	) {
+		return undefined;
+	}
+
+	const fromBox = beat.key === 'box';
+	const toBox = who === 'box';
+	const body = beat.pair.value;
+	const keyRange = rangeOf(beat.pair.key);
+	const words =
+		isMap(body) && findPair(body as YAMLMap, fromBox ? 'text' : 'say');
+
+	if (!keyRange || (isMap(body) ? !words : !isScalar(body))) {
+		return undefined;
+	}
+
+	const edits: TextEdit[] = [
+		{from: keyRange[0], insert: formatBeatKey(who), to: keyRange[1]}
+	];
+
+	if (words && fromBox !== toBox) {
+		const wordsKey = rangeOf(words.key);
+
+		if (!wordsKey) {
+			return undefined;
+		}
+
+		edits.push({
+			from: wordsKey[0],
+			insert: toBox ? 'text' : 'say',
+			to: wordsKey[1]
+		});
+	}
+
+	const renamed = mergeEdits(text, edits);
+
+	if (!renamed) {
+		return undefined;
+	}
+
+	let out =
+		text.slice(0, renamed.from) + renamed.insert + text.slice(renamed.to);
+
+	// One pair at a time, re-parsed between: two neighbouring flow pairs each claim the
+	// comma between them, so their removals cannot be merged.
+	for (let guard = 0; toBox && isMap(body) && guard < 64; guard++) {
+		const next = parseBlock(out);
+		const located = next && locateBeat(next, index);
+		const map = located && located.pair.value;
+		const stale =
+			isMap(map) &&
+			(map as YAMLMap).items.find(pair => {
+				const key = keyName(pair as Pair<unknown, unknown>);
+
+				return (
+					key !== undefined &&
+					(ENTITY_KEYS as readonly string[]).includes(key) &&
+					!(BOX_KEYS as readonly string[]).includes(key)
+				);
+			});
+		const removal =
+			next &&
+			stale &&
+			removePairEdit(next, map as YAMLMap, stale as Pair<unknown, unknown>);
+
+		if (!removal) {
+			break;
+		}
+
+		out = out.slice(0, removal.from) + removal.insert + out.slice(removal.to);
+	}
+
+	// One splice, as small as the change.
+	let from = 0;
+
+	while (from < text.length && from < out.length && text[from] === out[from]) {
+		from++;
+	}
+
+	let tail = 0;
+
+	while (
+		tail < text.length - from &&
+		tail < out.length - from &&
+		text[text.length - 1 - tail] === out[out.length - 1 - tail]
+	) {
+		tail++;
+	}
+
+	return {
+		from,
+		insert: out.slice(from, out.length - tail),
+		to: text.length - tail
+	};
+}
+
+/** A speaker id as a beat key: bare when YAML reads it back unchanged, quoted otherwise. */
+function formatBeatKey(id: string): string {
+	return /^[A-Za-z_][\w.-]*$/.test(id) ? id : JSON.stringify(id);
 }
 
 function formatBubbleMap(

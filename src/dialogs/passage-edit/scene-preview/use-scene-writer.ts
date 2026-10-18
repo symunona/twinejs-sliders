@@ -25,6 +25,7 @@ import {
 	setBeatBubble,
 	setBeatKey,
 	setBeatKeyFormatted,
+	setBeatSpeaker,
 	setBeatText,
 	setEntityKey,
 	setSceneKey
@@ -326,6 +327,15 @@ export interface BeatTextWrite {
 }
 
 /**
+ * Who says one dialogue or narration beat, from the beat panel's "Assign to". `beatSpeaker`
+ * is an entity id, or `box` for the narrator. `setBeatSpeaker`.
+ */
+export interface BeatSpeakerWrite {
+	beat: number;
+	beatSpeaker: string;
+}
+
+/**
  * A new spoken beat, empty, from the beat bar's "add beat": `- who: ""` landing as
  * `beats[insertBeat]`. `who` is `box` for narration, else an entity id.
  */
@@ -337,6 +347,7 @@ export interface BeatInsertWrite {
 export type SceneWrite =
 	| BeatInsertWrite
 	| BeatKeyWrite
+	| BeatSpeakerWrite
 	| BeatTextWrite
 	| BubbleWrite
 	| EntityKeyWrite
@@ -361,6 +372,12 @@ export function isBeatInsertWrite(write: SceneWrite): write is BeatInsertWrite {
 
 export function isBeatTextWrite(write: SceneWrite): write is BeatTextWrite {
 	return 'beatText' in write;
+}
+
+export function isBeatSpeakerWrite(
+	write: SceneWrite
+): write is BeatSpeakerWrite {
+	return 'beatSpeaker' in write;
 }
 
 export function isStructWrite(write: SceneWrite): write is EntityStructWrite {
@@ -510,6 +527,10 @@ export function buildWriteEdit(
 		return setBeatText(context.blockText, write.beat, write.beatText);
 	}
 
+	if (isBeatSpeakerWrite(write)) {
+		return setBeatSpeaker(context.blockText, write.beat, write.beatSpeaker);
+	}
+
 	if (isBubbleWrite(write)) {
 		return setBeatBubble(context.blockText, write.beat, write.bubble);
 	}
@@ -555,6 +576,7 @@ export function buildWriteEdits(
 		if (
 			!isBeatKeyWrite(write) &&
 			!isBeatTextWrite(write) &&
+			!isBeatSpeakerWrite(write) &&
 			!isBubbleWrite(write) &&
 			isStructWrite(write) &&
 			write.struct === 'remove'
@@ -567,6 +589,7 @@ export function buildWriteEdits(
 			!isBeatInsertWrite(write) &&
 			!isBeatKeyWrite(write) &&
 			!isBeatTextWrite(write) &&
+			!isBeatSpeakerWrite(write) &&
 			!isBubbleWrite(write) &&
 			!isSceneKeyWrite(write) &&
 			!isStructWrite(write)
@@ -639,6 +662,7 @@ export function insertedBeatCount(
 		if (
 			isBeatKeyWrite(write) ||
 			isBeatTextWrite(write) ||
+			isBeatSpeakerWrite(write) ||
 			isBubbleWrite(write) ||
 			isSceneKeyWrite(write) ||
 			isStructWrite(write)

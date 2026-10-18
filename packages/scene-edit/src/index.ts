@@ -26,6 +26,7 @@ export {
 	setBeatBubble,
 	setBeatKey,
 	setBeatKeyFormatted,
+	setBeatSpeaker,
 	setBeatText,
 	setEntityKey
 } from './write';

@@ -878,3 +878,32 @@ describe('beat text write', () => {
 		expect(buildWriteEdit(ctx(1), {beat: 0, beatText: 'x'})).toBeUndefined();
 	});
 });
+
+describe('beat speaker write', () => {
+	function ctx(beat: number) {
+		const block = blockOf(passage);
+
+		return {
+			beat,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: sceneOf(passage)
+		};
+	}
+
+	it('hands the line to the narrator, words kept, nothing else touched', () => {
+		const context = ctx(2);
+		const writes: SceneWrite[] = [{beat: 1, beatSpeaker: 'box'}];
+		const after = previewEdits(context.blockText, buildWriteEdits(context, writes));
+
+		expect(after).toContain('  - box: "Hello."');
+		expect(after.replace('box: "Hello."', 'mira: "Hello."')).toBe(
+			context.blockText
+		);
+		expect(insertedBeatCount(context, writes)).toBe(0);
+	});
+
+	it('writes nothing for a beat with no words', () => {
+		expect(buildWriteEdit(ctx(1), {beat: 0, beatSpeaker: 'box'})).toBeUndefined();
+	});
+});

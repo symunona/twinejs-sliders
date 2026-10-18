@@ -563,6 +563,12 @@
 			"sizeWide": "Wide",
 			"beatProps": {
 				"arrival": "Arrival",
+				"assignTo": "Assign to",
+				"assignNarrator": "Narrator",
+				"assignNarratorDetail": "Narration box, no speaker",
+				"assignCharacter": "Character",
+				"assignObject": "Object",
+				"assignMissing": "Not in this scene",
 				"as": "Style",
 				"auto": "Auto",
 				"autoDetail": "Advance automatically, at the scene's own pace \u2014 or the reader's, if the scene sets none. Off holds this beat for the time in Hold.",
