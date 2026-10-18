@@ -421,6 +421,62 @@ renderer layer would start the argument again.
 	background: rgba(255, 216, 74, 0.45);
 }
 
+/* Ruler numbers: the scene value of each grid line, where it meets the bottom or left
+   edge. Each label sits just right of / below its line, so the stage edge itself never
+   clips the first one. Dark pill + shadow so it reads over any backdrop. The x strip is a
+   0-height line AT the bottom edge (or the viewport's), its labels hang above it. */
+.stage-editor-ruler {
+	position: absolute;
+}
+
+.stage-editor-ruler.x {
+	height: 0;
+	left: 0;
+	right: 0;
+}
+
+.stage-editor-ruler.y {
+	bottom: 0;
+	top: 0;
+	width: 0;
+}
+
+.stage-editor-ruler-label {
+	background: rgba(5, 7, 12, 0.62);
+	border-radius: 3px;
+	color: rgba(255, 255, 255, 0.85);
+	font: 10px/12px system-ui, sans-serif;
+	font-variant-numeric: tabular-nums;
+	padding: 0 3px;
+	pointer-events: none;
+	position: absolute;
+	text-shadow: 0 0 2px #000;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.stage-editor-ruler.x .stage-editor-ruler-label {
+	bottom: 2px;
+	margin-left: 2px;
+}
+
+.stage-editor-ruler.y .stage-editor-ruler-label {
+	left: 2px;
+	margin-top: 2px;
+}
+
+.stage-editor-ruler-label.centre {
+	color: rgb(120, 222, 255);
+}
+
+/* The floor's number would land on the -0.83 one: pushed right, and ABOVE its line so
+   it stays clear of the bottom ruler. */
+.stage-editor-ruler.y .stage-editor-ruler-label.baseline {
+	color: rgb(255, 216, 74);
+	left: 40px;
+	margin-top: -14px;
+}
+
 /* Scene (0, 0), drawn as an X so it cannot be mistaken for the two centre lines crossing
    behind it. */
 .stage-editor-grid-centre {

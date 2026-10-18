@@ -47,6 +47,7 @@ import {
 	rotFrom,
 	rotateHandlePoint,
 	roundCoord,
+	rulerMarks,
 	scaleFrom,
 	sceneToMount,
 	sceneTolerance,
@@ -66,6 +67,61 @@ import type {TracePreview} from './stage-trace-layer';
 import {CAMERA_ORIGIN} from './use-scene-writer';
 import type {EntityKeyWrite, SceneWrite, StagePatch} from './use-scene-writer';
 import './stage-editor-overlay.css';
+
+/** Height of the bottom ruler's strip: y numbers inside it would sit on the x ones. */
+const RULER_BAND_PX = 16;
+
+/** A y number's height plus its gap below the line, px — the CSS's line-height + margin. */
+const RULER_LABEL_PX = 14;
+
+/** Nothing scrolled away: the stage box's own edges are the rulers' edges. */
+const UNCLIPPED: Vec2 = {x: 0, y: Infinity};
+
+/**
+ * The scrolling viewport's bottom-left corner in the frame, MOUNT px: x floored at 0, y
+ * Infinity while the frame's bottom is on screen.
+ *
+ * Only moves once the view is zoomed in and scrolled: then the stage box's bottom and left
+ * edges are off screen and the rulers follow this corner instead. `box` undefined = not
+ * wanted (grid off), so nothing listens while nobody looks.
+ */
+function useVisibleCorner(
+	frameRef: React.RefObject<HTMLDivElement>,
+	box: StageBox | undefined
+): Vec2 {
+	const [corner, setCorner] = React.useState<Vec2>(UNCLIPPED);
+
+	React.useEffect(() => {
+		const frame = frameRef.current;
+		const viewport = frame?.closest?.('.scene-stage-viewport');
+
+		if (!box || !frame || !viewport) {
+			setCorner(UNCLIPPED);
+
+			return;
+		}
+
+		const measure = () => {
+			const f = frame.getBoundingClientRect();
+			const v = viewport.getBoundingClientRect();
+			const x = Math.max(0, v.left - f.left);
+			const y = v.bottom < f.bottom ? v.bottom - f.top : Infinity;
+
+			setCorner(c => (c.x === x && c.y === y ? c : {x, y}));
+		};
+
+		measure();
+		viewport.addEventListener('scroll', measure, {passive: true});
+		window.addEventListener('resize', measure);
+
+		return () => {
+			viewport.removeEventListener('scroll', measure);
+			window.removeEventListener('resize', measure);
+		};
+	}, [box, frameRef]);
+
+	return corner;
+}
 
 /**
  * How far the pointer must travel before a press becomes a drag.
@@ -1209,6 +1265,15 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		[box, camera, grid]
 	);
 	const centre = grid && box ? gridCentre(box, camera) : undefined;
+	const rulers = React.useMemo(() => rulerMarks(gridMarks), [gridMarks]);
+	const rulerCorner = useVisibleCorner(frameRef, grid ? box : undefined);
+	// Each ruler rides the stage box's edge, or the viewport's once the view is zoomed in
+	// and that edge has scrolled away — a ruler you have to scroll back to is not one.
+	// Bottom rather than top: the stage tools float over the top edge.
+	const rulerBottom = box
+		? Math.max(0, Math.min(box.height, rulerCorner.y - box.top))
+		: 0;
+	const rulerLeft = box ? Math.max(0, rulerCorner.x - box.left) : 0;
 
 	// Same bargain as the grid lines: the traces move with the camera and with every
 	// relayout, and none of this is computed while the grid is off.
@@ -1325,6 +1390,49 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 								}
 							/>
 						))}
+						<div
+							className="stage-editor-ruler x"
+							data-testid="stage-editor-ruler-x"
+							style={{top: rulerBottom}}
+						>
+							{rulers
+								.filter(mark => mark.axis === 'x')
+								.map(mark => (
+									<span
+										className={`stage-editor-ruler-label ${mark.kind}`}
+										data-scene={mark.scene}
+										key={mark.scene}
+										style={{left: mark.at - box.left}}
+									>
+										{mark.text}
+									</span>
+								))}
+						</div>
+						<div
+							className="stage-editor-ruler y"
+							data-testid="stage-editor-ruler-y"
+							style={{left: rulerLeft}}
+						>
+							{rulers
+								.filter(
+									mark =>
+										mark.axis === 'y' &&
+										// Over the bottom ruler is the corner both would claim.
+										(mark.kind === 'baseline' ||
+											mark.at - box.top + RULER_LABEL_PX <=
+												rulerBottom - RULER_BAND_PX)
+								)
+								.map(mark => (
+									<span
+										className={`stage-editor-ruler-label ${mark.kind}`}
+										data-scene={mark.scene}
+										key={`${mark.kind}:${mark.scene}`}
+										style={{top: mark.at - box.top}}
+									>
+										{mark.text}
+									</span>
+								))}
+						</div>
 						{centre && (
 							<div
 								className="stage-editor-grid-centre"

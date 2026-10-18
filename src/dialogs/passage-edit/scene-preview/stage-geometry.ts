@@ -857,6 +857,54 @@ export function gridLines(box: StageBox, camera: Camera): GridLine[] {
 	return lines;
 }
 
+/**
+ * A ruler number: at most 2 decimals, zeros trimmed, never `-0`.
+ *
+ * Not `roundCoord`: that one is what gets WRITTEN, and a third at 3 decimals (`0.333`) is a
+ * mouthful in a 10px pill. The ruler only has to say which line this is.
+ */
+export function gridLabel(n: number): string {
+	const rounded = Math.round(finite(n) * 100) / 100;
+
+	return String(rounded === 0 ? 0 : rounded);
+}
+
+/** Closest two ruler numbers may sit along each axis before minor ones are thinned, px. */
+export const RULER_MIN_GAP_PX = {x: 34, y: 18};
+
+export interface RulerMark extends GridLine {
+	text: string;
+}
+
+/**
+ * The grid lines that get a ruler number, and the number.
+ *
+ * Every line while there is room; crowded, every 2nd, 3rd or 6th step — strides that keep
+ * the centre and, from 2 on, the thirds. The floor is always labelled: it is the one
+ * horizontal an author aims at. Positions are the lines' own, so camera and view zoom come
+ * for free: whatever moved the line moved its number.
+ */
+export function rulerMarks(lines: GridLine[]): RulerMark[] {
+	const stride = (axis: 'x' | 'y') => {
+		const zero = lines.find(l => l.axis === axis && l.kind === 'centre');
+		const one = lines.find(
+			l => l.axis === axis && l.kind !== 'baseline' && Math.abs(l.scene - GRID_STEP) < EPSILON
+		);
+		const gap = zero && one ? Math.abs(one.at - zero.at) : 0;
+
+		return [1, 2, 3, 6].find(n => gap * n >= RULER_MIN_GAP_PX[axis]) ?? 6;
+	};
+	const strides = {x: stride('x'), y: stride('y')};
+
+	return lines
+		.filter(
+			line =>
+				line.kind === 'baseline' ||
+				Math.round(line.scene / GRID_STEP) % strides[line.axis] === 0
+		)
+		.map(line => ({...line, text: gridLabel(line.scene)}));
+}
+
 /** Scene (0, 0) in MOUNT px — where the centre marker goes. */
 export function gridCentre(box: StageBox, camera: Camera): Vec2 {
 	return sceneToMount(box, camera, ORIGIN);

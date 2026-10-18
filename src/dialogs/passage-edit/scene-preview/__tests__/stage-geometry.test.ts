@@ -7,6 +7,7 @@ import {
 	boxRotation,
 	dragTo,
 	gridCentre,
+	gridLabel,
 	gridLines,
 	handlePoints,
 	hitTest,
@@ -17,6 +18,7 @@ import {
 	rotateHandlePoint,
 	ROT_SNAP_DEGREES,
 	roundCoord,
+	rulerMarks,
 	scaleFrom,
 	sceneToMount,
 	sceneTolerance,
@@ -860,5 +862,54 @@ describe('gridLines', () => {
 
 	it('has nothing to draw in a degenerate box', () => {
 		expect(gridLines({left: 0, top: 0, width: 0, height: 0}, CAMERAS.identity)).toEqual([]);
+	});
+});
+
+describe('gridLabel', () => {
+	it('rounds to 2 decimals, trims zeros, never -0', () => {
+		expect(gridLabel(0)).toBe('0');
+		expect(gridLabel(-0.0001)).toBe('0');
+		expect(gridLabel(THIRD)).toBe('0.33');
+		expect(gridLabel(-1 / 6)).toBe('-0.17');
+		expect(gridLabel(0.5)).toBe('0.5');
+		expect(gridLabel(1)).toBe('1');
+		expect(gridLabel(LAYER_BASELINE)).toBe('-0.85');
+	});
+});
+
+describe('rulerMarks', () => {
+	it('labels every line, in scene units, +y up', () => {
+		const box = {left: 0, top: 0, width: 1280, height: 720};
+		const marks = rulerMarks(gridLines(box, CAMERAS.identity));
+		const x0 = marks.find(m => m.axis === 'x' && m.scene === 0);
+		const yTop = marks.find(m => m.axis === 'y' && m.text === '1');
+
+		expect(marks).toHaveLength(27);
+		expect(x0?.text).toBe('0');
+		expect(x0?.at).toBeCloseTo(640);
+		expect(yTop?.at).toBeCloseTo(0);
+		expect(marks.find(m => m.kind === 'baseline')?.text).toBe('-0.85');
+	});
+
+	it('thins minor numbers when crowded, keeping centre, thirds and the floor', () => {
+		const box = {left: 0, top: 0, width: 300, height: 170};
+		const xs = rulerMarks(gridLines(box, CAMERAS.identity))
+			.filter(m => m.axis === 'x')
+			.map(m => m.text);
+
+		// 25px a step: every 2nd line.
+		expect(xs).toEqual(['-1', '-0.67', '-0.33', '0', '0.33', '0.67', '1']);
+		expect(
+			rulerMarks(gridLines(box, CAMERAS.identity)).some(m => m.kind === 'baseline')
+		).toBe(true);
+	});
+
+	it('follows the camera zoom', () => {
+		const box = {left: 0, top: 0, width: 300, height: 170};
+		const zoomed = {...CAMERAS.identity, zoom: 2};
+
+		expect(
+			rulerMarks(gridLines(box, zoomed)).filter(m => m.axis === 'x')
+		).toHaveLength(13);
 	});
 });

@@ -185,6 +185,20 @@ describe('<StageEditorOverlay>', () => {
 			expect(screen.getByTestId('stage-editor-grid-centre')).toBeInTheDocument();
 		});
 
+		it('numbers the lines along the bottom and left edges', () => {
+			renderOverlay({grid: true});
+
+			const x = screen.getByTestId('stage-editor-ruler-x');
+			const y = screen.getByTestId('stage-editor-ruler-y');
+			const centre = x.querySelector('[data-scene="0"]') as HTMLElement;
+
+			expect(centre).toHaveTextContent(/^0$/);
+			expect(centre.style.left).toBe('320px');
+			expect(y.querySelector('[data-scene="0"]')).toHaveTextContent(/^0$/);
+			expect(y.querySelector('.baseline')).toHaveTextContent('-0.85');
+			expect(x).toHaveTextContent('0.33');
+		});
+
 		it('never takes the pointer away from the hit test', () => {
 			const {frame, onSelect} = renderOverlay({grid: true});
 
