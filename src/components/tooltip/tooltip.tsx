@@ -69,8 +69,7 @@ export const Tooltip: React.FC<TooltipProps> = props => {
 		anchor.addEventListener('pointerleave', handleOnLeave);
 
 		// The timer has to die with the component, not only with a pointerleave. A button
-		// that is unmounted or reparented while the pointer is still on it — the scene
-		// preview portalling itself to the body when it goes full screen — never gets one,
+		// that is unmounted or reparented while the pointer is still on it never gets one,
 		// and the pending timer would then set state on something that is gone.
 		return () => {
 			clearAppear();

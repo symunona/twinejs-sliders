@@ -29,8 +29,7 @@ Live render of the scene under the passage text (D12). The highest-value fork fe
 | Position | below the passage text |
 | Collapsible | yes |
 | Remembers | open/closed state persists across passages and sessions (prefs) |
-| `⛶` | full screen |
-| First open | comes up **full screen**, then remembers the docked state after |
+| Bigger | the dialog's own maximize |
 
 ## What it runs
 
@@ -70,23 +69,11 @@ Stepping beats is also how an author checks `mark:` points before pointing a `fr
 Editing shows the **end state**, not the transition — otherwise every keystroke replays an
 animation. Transitions play only when: stepping beats, pressing play, or hitting "replay".
 
-## Full screen
+## Full screen — removed 2026-10-18
 
-Same component, same state, `position: fixed`. Esc exits. Keep the beat scrubber.
-Also the surface the [visual editor](07-twinejs-visual-editor.md) builds on.
-
-Full screen is also **the player** — nothing else is on the screen, so it is read rather
-than edited:
-
-| Rule | Why |
-|---|---|
-| Tap empty stage → next beat | reading is a page turn, and there is no scrubber to aim at |
-| A tap with a selection clears it instead | same escalation as Esc: let go of the stage, then read on |
-| A tap on a sprite still selects | the visual editor does not stop existing at full size |
-| No advance while the beat shows links | the click belongs to the choice (D3) |
-| No advance on the last beat | passage-to-passage flow is Twine's Play, not ours |
-| Double click does **not** leave full screen | two page turns are two page turns; Esc and `⛶` are the way out |
-| Corner navigator, bottom right, faint until hovered | steps both ways without laying chrome across the scene |
+Was a second size past maximize (`⛶`, `shift+f`, double click, tap-to-advance player,
+corner navigator). Confusing next to the dialog's own maximize. Gone. Maximize is the big
+view. `autoAdvance: 0` in editor playback = standard beat.
 
 ## Test from this beat (Alt+T)
 

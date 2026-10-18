@@ -27,9 +27,8 @@ describe('sceneAutoAdvanceMs()', () => {
 		expect(sceneAutoAdvanceMs(scene(1.5))).toBe(1500);
 	});
 
-	// Kept, not collapsed: zero is the author asking the reader to click, and the only
-	// caller that can act on that -- full-screen playback, where a tap IS the click --
-	// cannot see it if this folds it into a length.
+	// Kept, not collapsed: zero is the author asking the reader to click. `sceneHoldMs`
+	// is where it becomes a length.
 	it('keeps wait-for-a-click as a zero', () => {
 		expect(sceneAutoAdvanceMs(scene(0))).toBe(0);
 	});

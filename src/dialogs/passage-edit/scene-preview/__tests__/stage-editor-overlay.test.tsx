@@ -136,8 +136,8 @@ describe('<StageEditorOverlay>', () => {
 			onCommit: jest.fn(),
 			onDropAsset: jest.fn(),
 			onPatch: jest.fn(),
-			onSelect: jest.fn(),
-			onToggleFullScreen: jest.fn()
+			onOpenEntity: jest.fn(),
+			onSelect: jest.fn()
 		};
 
 		const element = (
@@ -215,69 +215,24 @@ describe('<StageEditorOverlay>', () => {
 		expect(onSelect).toHaveBeenCalledWith([]);
 	});
 
-	it('goes full screen on a double click, not a single one', () => {
-		const {frame, onToggleFullScreen} = renderOverlay();
+	// Full screen is gone (2026-10-18). Double click on empty stage used to enter it; now
+	// it does nothing, and on a sprite it still opens the entity.
+	it('does nothing on a double click on empty stage', () => {
+		const {frame, onOpenEntity, onSelect} = renderOverlay();
 
-		fireEvent(frame, pointer('pointerdown', 500, 20));
-		expect(onToggleFullScreen).not.toHaveBeenCalled();
-
-		fireEvent.doubleClick(frame);
-		expect(onToggleFullScreen).toHaveBeenCalled();
+		fireEvent.doubleClick(frame, {clientX: 500, clientY: 20});
+		expect(onOpenEntity).not.toHaveBeenCalled();
+		expect(onSelect).not.toHaveBeenCalled();
 	});
 
-	it('steps forward on a tap on empty stage in the player', () => {
-		const onAdvance = jest.fn();
-		const {frame} = renderOverlay({onAdvance, player: true});
-
-		fireEvent(frame, pointer('pointerdown', 500, 20));
-		expect(onAdvance).not.toHaveBeenCalled();
-
-		fireEvent(window, pointer('pointerup', 500, 20));
-		expect(onAdvance).toHaveBeenCalledTimes(1);
-	});
-
-	it('pans instead of stepping forward when the tap became a drag', () => {
-		const onAdvance = jest.fn();
-		const {frame, onCameraPatch} = renderOverlay({onAdvance, player: true});
+	it('pans on a drag over empty stage', () => {
+		const {frame, onCameraPatch} = renderOverlay();
 
 		fireEvent(frame, pointer('pointerdown', 500, 20));
 		fireEvent(window, pointer('pointermove', 420, 20));
 		fireEvent(window, pointer('pointerup', 420, 20));
 
 		expect(onCameraPatch).toHaveBeenCalled();
-		expect(onAdvance).not.toHaveBeenCalled();
-	});
-
-	it('spends the first tap on the selection, not on the next beat', () => {
-		const onAdvance = jest.fn();
-		const {frame, onSelect} = renderOverlay({
-			onAdvance,
-			player: true,
-			selection: ['mira']
-		});
-
-		fireEvent(frame, pointer('pointerdown', 500, 20));
-		fireEvent(window, pointer('pointerup', 500, 20));
-
-		expect(onSelect).toHaveBeenCalledWith([]);
-		expect(onAdvance).not.toHaveBeenCalled();
-	});
-
-	it('does not step forward on a tap on a sprite', () => {
-		const onAdvance = jest.fn();
-		const {frame} = renderOverlay({onAdvance, player: true});
-
-		fireEvent(frame, pointer('pointerdown', 120, 120));
-		fireEvent(window, pointer('pointerup', 120, 120));
-
-		expect(onAdvance).not.toHaveBeenCalled();
-	});
-
-	it('leaves full screen alone on a double click in the player', () => {
-		const {frame, onToggleFullScreen} = renderOverlay({player: true});
-
-		fireEvent.doubleClick(frame);
-		expect(onToggleFullScreen).not.toHaveBeenCalled();
 	});
 
 	it('patches while dragging and commits one write on release', () => {

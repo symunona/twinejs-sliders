@@ -36,15 +36,10 @@ interface Size {
  *
  * @param viewport The scrolling element the stage sits in. State, not a ref: the
  * preview renders no stage at all until the passage has a scene.
- * @param enabled When false the view is held at 100%
  */
-export function useStageViewZoom(
-	viewport: HTMLElement | null,
-	enabled: boolean
-) {
-	const [zoomState, setZoomState] = React.useState(1);
+export function useStageViewZoom(viewport: HTMLElement | null) {
+	const [zoom, setZoomState] = React.useState(1);
 	const [size, setSize] = React.useState<Size>();
-	const zoom = enabled ? zoomState : 1;
 	const zoomRef = React.useRef(zoom);
 	// Where to scroll once the stage is drawn at the new size.
 	const pendingScroll = React.useRef<Point>();
@@ -126,7 +121,7 @@ export function useStageViewZoom(
 	React.useEffect(() => {
 		const element = viewport;
 
-		if (!element || !enabled) {
+		if (!element) {
 			return;
 		}
 
@@ -170,7 +165,7 @@ export function useStageViewZoom(
 			element.removeEventListener('wheel', handleWheel);
 			window.clearTimeout(gestureTimeout);
 		};
-	}, [enabled, viewport, zoomTo]);
+	}, [viewport, zoomTo]);
 
 	const stepZoom = React.useCallback(
 		(direction: 1 | -1) =>

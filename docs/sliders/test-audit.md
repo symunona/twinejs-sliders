@@ -224,9 +224,8 @@ Every sibling is tested; the orchestrator is not. Untested logic that only it ho
   `insertedBeatCount` is unit-tested; **its use is not**, and getting it wrong snaps the
   stage to the wrong state.
 - `:302-303` derived locks — scene `locked:` laid over localStorage, one-way.
-- Playback: `autoAdvance: 0` honoured **only in full screen**. The two-zeros rule
-  (`dur: 0` = go now, `autoAdvance: 0` = wait for click) is pinned in `beat-hold.ts`;
-  the **consumption** of it is not.
+- Playback: `autoAdvance: 0` never honoured in the editor (full screen, its only reader,
+  removed 2026-10-18) -- plays as the standard beat. Two-zeros rule pinned in `beat-hold.ts`.
 
 ### 4.3 The character editor — `sliders-characters/` (1722 LOC, 1 test)
 

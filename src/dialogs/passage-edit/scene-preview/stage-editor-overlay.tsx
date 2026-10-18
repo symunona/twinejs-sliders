@@ -97,10 +97,9 @@ const WHEEL_COMMIT_DELAY_MS = 220;
  * A press that belongs to something else, not to the stage.
  *
  * Links inside bubbles are real anchors (D3) and the marker layer does not cover them, so a
- * click on one is a click on the link. The player's corner controls, the selection row and
- * the bubble editor sit INSIDE the stage for the same reason and are read the same way: a
- * press on them is theirs, and must not also pan, clear the selection the row is speaking
- * for, or turn the page.
+ * click on one is a click on the link. The selection row and the bubble editor sit INSIDE
+ * the stage for the same reason and are read the same way: a press on them is theirs, and
+ * must not also pan or clear the selection the row is speaking for.
  *
  * `.menu-button-menu` is the odd one, and the reason this is a constant rather than two
  * literals. A `MenuButton`'s popover is portalled to `document.body` — but React bubbles a
@@ -115,7 +114,7 @@ const WHEEL_COMMIT_DELAY_MS = 220;
  * It only ever worked while the panel happened to overlap its own sprite.
  */
 const OWN_PRESS_SELECTOR =
-	'a, .scene-preview-nav, .scene-preview-selection, .scene-bubble-editor, .scene-bubble-editor-anchor, .menu-button-menu, .preview-select-list, .stage-editor-trace-readout, .scene-sidebar, .scene-stage-tools, .scene-error-badge, .scene-error-panel';
+	'a, .scene-preview-selection, .scene-bubble-editor, .scene-bubble-editor-anchor, .menu-button-menu, .preview-select-list, .stage-editor-trace-readout, .scene-sidebar, .scene-stage-tools, .scene-error-badge, .scene-error-panel';
 
 /** Feet, bottom centre — the fallback when there is no rect to invert an origin out of. */
 const DEFAULT_ORIGIN_FRAC = {x: 0.5, y: 1};
@@ -178,13 +177,6 @@ interface Gesture {
 	/** The `stretch:` the entity had when a squeeze began. Never accumulated. */
 	startStretch: Vec2;
 	moved: boolean;
-	/**
-	 * This press steps the scene forward if it turns out to be a tap.
-	 *
-	 * Decided at pointerdown, when what the press landed on is still known, and spent on
-	 * pointerup — a press that grew into a pan is a pan and nothing else.
-	 */
-	advance?: boolean;
 }
 
 export interface StageEditorOverlayProps {
@@ -212,18 +204,6 @@ export interface StageEditorOverlayProps {
 	/** One gesture, one write. `origin` decides how CodeMirror groups it for undo. */
 	onCommit: (writes: SceneWrite[], origin?: string) => void;
 	onCancel: () => void;
-	onToggleFullScreen: () => void;
-	/**
-	 * True while the stage IS the full screen player rather than the strip under the passage
-	 * text. Clicks there are read as a reader's, not an author's.
-	 */
-	player?: boolean;
-	/**
-	 * A tap on empty stage steps the scene forward. Absent when it must not — on the last
-	 * beat, or while the beat on screen offers links, which are the reader's own click to
-	 * spend.
-	 */
-	onAdvance?: () => void;
 	/** The camera a live pan or zoom is painting with. `undefined` drops it. */
 	onCameraPatch?: (camera: Camera | undefined) => void;
 	/** A tile from the asset panel landed on the stage, at this scene position. */
@@ -420,7 +400,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		focusRequest,
 		grid,
 		hidden,
-		onAdvance,
 		onCameraPatch,
 		onCancel,
 		onCommit,
@@ -434,9 +413,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		origStage,
 		parentOffsets,
 		prevStage,
-		onToggleFullScreen,
 		overscan,
-		player,
 		renderer,
 		seal,
 		selection,
@@ -485,7 +462,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		cameraLocked,
 		box,
 		editable,
-		onAdvance,
 		onCameraPatch,
 		onCommit,
 		onPatch,
@@ -497,7 +473,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		cameraLocked,
 		box,
 		editable,
-		onAdvance,
 		onCameraPatch,
 		onCommit,
 		onPatch,
@@ -643,12 +618,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			) {
 				if (commit) {
 					endGesture();
-
-					// The press never became a drag, so it was a tap on empty stage: in the
-					// full screen player that is how the reader turns the page.
-					if (gesture.advance) {
-						current.onAdvance?.();
-					}
 				}
 
 				return;
@@ -664,8 +633,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			}
 
 			if (gesture.kind === 'pan') {
-				// The gesture is still begun with the camera locked, because a tap on empty
-				// stage is how the full screen player turns the page. It just moves nothing.
+				// The gesture is still begun with the camera locked. It just moves nothing.
 				if (current.cameraLocked) {
 					if (commit) {
 						endGesture();
@@ -901,9 +869,8 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		[box, camera, endGesture]
 	);
 
-	// Window listeners rather than pointer capture: the preview portals itself to the body
-	// when it goes full screen, and a capture set on an element that is then reparented is
-	// lost mid-drag.
+	// Window listeners rather than pointer capture: a capture set on an element that is
+	// then reparented is lost mid-drag.
 	React.useEffect(() => {
 		const move = (event: PointerEvent) => {
 			if (gestureRef.current?.pointerId === event.pointerId) {
@@ -1107,13 +1074,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			// click that cleared the selection.
 			beginGesture(event, 'pan', []);
 
-			// Clearing a selection is what the tap was FOR when there was one, so stepping
-			// forward waits for the next tap. Same escalation Escape has: let go of the
-			// stage first, then read on.
-			if (gestureRef.current) {
-				gestureRef.current.advance = selection.length === 0;
-			}
-
 			return;
 		}
 
@@ -1228,13 +1188,6 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			return;
 		}
 
-		// In the player a click is a page turn, so two of them are two page turns — leaving
-		// full screen under the reader mid-sentence is not what they asked for. Escape and
-		// the toolbar button are the way out; double click is only the way IN.
-		if (player) {
-			return;
-		}
-
 		// On a sprite, double click means "show me this thing": the same rect hit test the
 		// press used, so what opens is what is drawn on top, not what the DOM says.
 		const frame = frameOffset();
@@ -1243,13 +1196,9 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 			y: event.clientY - frame.top
 		});
 
-		if (hit !== undefined && onOpenEntity) {
-			onOpenEntity(hit);
-
-			return;
+		if (hit !== undefined) {
+			onOpenEntity?.(hit);
 		}
-
-		onToggleFullScreen();
 	}
 
 	// Recomputed only when the grid is on: the lines move with the camera and with every

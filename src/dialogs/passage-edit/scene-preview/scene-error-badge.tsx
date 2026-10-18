@@ -15,7 +15,7 @@ export interface SceneErrorBadgeProps {
 }
 
 /**
- * The scene's health, in the stage's top-right corner: red count for errors, yellow for
+ * The scene's health, in the stage's bottom-right corner: red count for errors, yellow for
  * warnings, a green smiley when there are neither. Notes (`info`) do not count -- an old
  * spelling that still works is not a reason to look worried.
  *

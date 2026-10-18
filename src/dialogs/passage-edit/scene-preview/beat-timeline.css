@@ -1,5 +1,5 @@
 /* A strip of time under the bar, not a second row of controls: it keeps the bar's height
-   out of it, because in full screen the stage takes whatever the chrome leaves. Collapsed
+   out of it, because the stage takes whatever the chrome leaves. Collapsed
    it is the marker row alone; expanded it grows downward by however many label rows the
    placement pass actually needed. */
 .scene-preview-timeline {

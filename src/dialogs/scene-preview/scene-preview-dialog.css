@@ -12,17 +12,11 @@
 	min-height: 0;
 }
 
-.scene-preview-dialog .scene-preview:not(.full-screen) .scene-stage-view {
+.scene-preview-dialog .scene-preview .scene-stage-view {
 	flex: 1 1 auto;
 	height: auto;
 	/* Below this the stage is not worth looking at, and the card scrolls instead. */
 	min-height: 180px;
-}
-
-/* Full screen portals the preview to the body, so what is left inside the card is an
-   empty box that would otherwise paint a bar and a background over the column. */
-.scene-preview-dialog .scene-preview.full-screen {
-	display: none;
 }
 
 /* Walk-here's walker picker and its note live in the sidebar's walk tab. The note wraps:

@@ -1,6 +1,5 @@
 import {
 	IconAlertTriangle,
-	IconArrowsMinimize,
 	IconBox,
 	IconCamera,
 	IconCameraOff,
@@ -26,7 +25,6 @@ import {
 } from '@tabler/icons';
 import classNames from 'classnames';
 import * as React from 'react';
-import {createPortal} from 'react-dom';
 import {useTranslation} from 'react-i18next';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
@@ -42,7 +40,7 @@ import {
 	matchPassageName,
 	Vec2
 } from '@sliders/scene-types';
-import {mergeBubbleStyle, parseLinkText} from '@sliders/render-dom';
+import {mergeBubbleStyle} from '@sliders/render-dom';
 import {
 	beatStyleForDefaults,
 	storyBubbleDefaults,
@@ -56,7 +54,7 @@ import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import {isAudioFile} from '@sliders/asset-store';
 import type {AssetDragPayload} from './asset-drag';
-import {beatHoldMs, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
+import {beatHoldMs, sceneHoldMs} from './beat-hold';
 import {BeatPanel} from './beat-panel';
 import {applySceneFix} from '../scene-errors/apply-scene-fix';
 import {SceneErrorBadge, SceneErrorPanel} from './scene-error-badge';
@@ -193,14 +191,6 @@ export interface ScenePreviewProps {
 	 */
 	storyId: string;
 	/**
-	 * Covering the whole window, toolbar included. The one state the dialog system does
-	 * not provide, so it is the one state that is still ours: normal and maximized are
-	 * the card's own, and this is owned by `ScenePreviewDialog` because leaving it has to
-	 * put the card back where it came from.
-	 */
-	fullScreen: boolean;
-	onFullScreenChange: (next: boolean) => void;
-	/**
 	 * Walk-here (point-and-click/walk-area.md): a click on the stage walks a cast member
 	 * over the current backdrop's walk area. Preview only, never a text edit. Owned by the
 	 * dialog, which also owns the walker picker.
@@ -301,9 +291,6 @@ const TIMELINE_LABELS_KEY = 'sliders.preview.timelineLabels';
 /** Stable identity, so the timeline's memo does not rebuild on every parse. */
 const EMPTY_BEATS: Beat[] = [];
 
-/** Stable identity for the same reason: `drawnStage` memoises on the set. */
-const NOTHING_HIDDEN: ReadonlySet<EntityId> = new Set();
-
 /** Arrow-key nudge, in scene units. Shift multiplies it. */
 const NUDGE_STEP = 0.01;
 const NUDGE_SHIFT_MULTIPLIER = 10;
@@ -356,8 +343,6 @@ async function textChanged(
 export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	assets,
 	doc,
-	fullScreen,
-	onFullScreenChange,
 	onOpenPassage,
 	parse,
 	passageId,
@@ -445,20 +430,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [hidden, setHidden] = React.useState<ReadonlySet<EntityId>>(
 		() => new Set()
 	);
-	/**
-	 * What the stage actually leaves out. Nothing in full screen: that is the reader's view,
-	 * and a reader sees every sprite the scene puts there. The set itself is kept, so coming
-	 * back out finds the author's hides where they left them.
-	 */
-	const shownHidden = fullScreen ? NOTHING_HIDDEN : hidden;
 	const [beat, setBeat] = React.useState(0);
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
 	const root = React.useRef<HTMLDivElement>(null);
 	const [viewport, setViewport] = React.useState<HTMLDivElement | null>(null);
-	// Full screen is the player, and a player shows the whole shot.
-	const viewZoom = useStageViewZoom(viewport, !fullScreen);
+	const viewZoom = useStageViewZoom(viewport);
 	const mounted = React.useRef(true);
 	const [seal, setSeal] = React.useState(0);
 	const {clearPatch, holdPatch, mergePatch, patch, setPatch} = useScenePatch();
@@ -479,15 +457,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const block = React.useMemo(() => extractSceneBlock(text), [text]);
 	const lastBeat = Math.max(0, parse.states.length - 1);
 	/**
-	 * The scene's own pace, for every beat that did not time itself. Primitives, so they are
-	 * safe in an effect's dependency list where `parse.result` is a fresh object per parse.
-	 *
-	 * Two of them because the zero splits them. `autoAdvanceMs` is the scene's raw answer,
-	 * `0` included, and only the play timer reads it — it is the one thing here that can
-	 * decline to schedule. `holdMs` is the same answer as a LENGTH, for drawing the strip
-	 * and for the number unchecking Auto writes.
+	 * The scene's own pace, for every beat that did not time itself, as a LENGTH: `0` reads
+	 * as the standard beat. A primitive, so it is safe in an effect's dependency list where
+	 * `parse.result` is a fresh object per parse.
 	 */
-	const autoAdvanceMs = sceneAutoAdvanceMs(parse.result?.scene);
 	const holdMs = sceneHoldMs(parse.result?.scene);
 	const parsedStage = parse.states[Math.min(beat, lastBeat)];
 	/**
@@ -587,20 +560,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			: shownBeat;
 	}, [bubbleDraft, shownBeat]);
 
-	/**
-	 * Does the beat on screen ask the reader to choose?
-	 *
-	 * A tap steps forward only when it does not. Links are the one thing on the stage a
-	 * click already means something to, and a stage that advanced under them would take
-	 * the choice away on the way to pressing one.
-	 */
-	const beatHasLink = React.useMemo(() => {
-		if (shownBeat?.kind !== 'say' && shownBeat?.kind !== 'box') {
-			return false;
-		}
-
-		return parseLinkText(shownBeat.text).some(token => token.kind === 'link');
-	}, [shownBeat]);
 	const kindOf = React.useCallback(
 		(id: EntityId) => stage.entities?.[id]?.kind ?? 'cast',
 		[stage]
@@ -1355,7 +1314,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		if (
 			!(posePreview !== null && previewId && entity) &&
 			!traced &&
-			shownHidden.size === 0
+			hidden.size === 0
 		) {
 			return stage;
 		}
@@ -1366,7 +1325,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		// `of:` children, its selection outline and the renderer's own enter/exit bookkeeping
 		// all carry on as if nothing happened — and showing it again is a style change, not a
 		// sprite being created. The overlay is told separately so a press goes through it.
-		for (const id of shownHidden) {
+		for (const id of hidden) {
 			const shown = entities[id];
 
 			// Steps too: the renderer lets a step's own `opacity:` win over the entity's while
@@ -1410,7 +1369,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		}
 
 		return {...stage, entities};
-	}, [posePreview, previewId, shownHidden, stage, tracePreview]);
+	}, [posePreview, previewId, hidden, stage, tracePreview]);
 
 	/**
 	 * Walk-here, laid over what is drawn and nothing else: the overlay, the selection and
@@ -1509,15 +1468,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		beat > 0 ? parse.result?.beatSpans?.[beat - 1] : undefined,
 		block?.lineOffset ?? 0
 	);
-	/**
-	 * The beat a bubble gesture writes to: the scrubber position, less the S0 stage.
-	 *
-	 * Never in full screen. That is reading mode — a tap anywhere steps forward — and the
-	 * bubble frame would swallow every tap that landed on the words.
-	 */
+	/** The beat a bubble gesture writes to: the scrubber position, less the S0 stage. */
 	const bubbleBeat =
 		editable &&
-		!fullScreen &&
 		(shownBeat?.kind === 'say' || shownBeat?.kind === 'box')
 			? beat - 1
 			: undefined;
@@ -1628,24 +1581,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		stepBeat();
 	}
 
-	/**
-	 * The full-screen tap, which is the reader asking for the next beat rather than the
-	 * author scrubbing — so unlike the Next button it does NOT stop playback.
-	 *
-	 * That only matters in a scene whose `autoAdvance:` is 0: playback parks on every
-	 * untimed beat waiting for this tap, and a beat the author DID time has to run on its
-	 * own afterwards, exactly as it does in the player. Stopping playback here would make
-	 * the tap the only thing that ever moves, and a `dur:` beat would sit there needing one
-	 * too.
-	 */
-	function advanceAsReader() {
-		if (autoAdvanceMs !== 0) {
-			setPlaying(false);
-		}
-
-		stepBeat();
-	}
-
 	function stepBeat() {
 		// Past the last beat the scene is over, and a scene with exactly one way out has
 		// only one place "next" could mean: the passage that link goes to. Two or more and
@@ -1698,22 +1633,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 		const producedBy = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
 
-		// `autoAdvance: 0` is the author asking the READER to click, and full screen is the
-		// only place in the editor where there is a reader to ask: the stage is a tap target
-		// there (see `canAdvance`), exactly as it is in the player. So playback stops on
-		// this beat and the tap moves it on, which is what the published story does.
-		//
-		// Docked, that affordance does not exist, so honouring the wait would be a stage
-		// that freezes for no visible reason. It takes the standard beat instead, and the
-		// author sees the pacing of everything they DID time.
-		if (
-			producedBy?.dur === undefined &&
-			producedBy?.kind !== 'wait' &&
-			autoAdvanceMs === 0 &&
-			fullScreen
-		) {
-			return;
-		}
+		// `autoAdvance: 0` asks the READER to click. The editor has no reader to ask, so
+		// honouring the wait would be a stage that freezes for no visible reason. It takes
+		// the standard beat instead, and the author sees the pacing of everything they DID
+		// time.
 
 		const timer = window.setTimeout(
 			() => setBeat(b => b + 1),
@@ -1721,39 +1644,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		);
 
 		return () => window.clearTimeout(timer);
-	}, [autoAdvanceMs, beat, fullScreen, holdMs, lastBeat, parse.result, playing]);
-
-	// Full screen takes focus, for two reasons that happen to want the same thing: the
-	// preview's own keys resolve from where focus is, and Escape has to be the preview's
-	// rather than the dialog card's -- a header button still holding focus would close the
-	// whole dialog on the first press.
-	React.useEffect(() => {
-		if (fullScreen) {
-			root.current?.focus();
-		}
-	}, [fullScreen]);
-
-	React.useEffect(() => {
-		if (!fullScreen) {
-			return;
-		}
-
-		const onKey = (event: KeyboardEvent) => {
-			// `scene.deselect` owns Escape while something is selected and calls
-			// preventDefault, so the first Escape drops the selection and the second one
-			// leaves full screen.
-			if (event.key === 'Escape' && !event.defaultPrevented) {
-				onFullScreenChange(false);
-			}
-		};
-
-		// The document rather than the window: full screen portals the preview to the body,
-		// and a listener on the window would sit above anything that stops propagation on
-		// the way up. Listeners on the document itself still run.
-		document.addEventListener('keydown', onKey);
-
-		return () => document.removeEventListener('keydown', onKey);
-	}, [fullScreen, onFullScreenChange]);
+	}, [beat, holdMs, lastBeat, parse.result, playing]);
 
 	// Viewer keys, unmodified, in the preview's own scope: they only fire once
 	// focus is inside the preview, so left and right still move the cursor
@@ -1816,13 +1707,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		id: 'scene.play',
 		label: t('hotkeys.commands.scene.play'),
 		run: togglePlaying,
-		scope: 'scene-preview'
-	});
-
-	useCommand({
-		id: 'scene.fullScreen',
-		label: t('hotkeys.commands.scene.fullScreen'),
-		run: () => onFullScreenChange(!fullScreen),
 		scope: 'scene-preview'
 	});
 
@@ -1954,7 +1838,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	// Above the no-scene return: hooks must run on every render, or a passage gaining its
 	// [scene] block crashes the dialog (React #310).
-	// Full screen is the reader's view and gets the whole width; the pref stays as it was.
 	const showLayers = tabShown('layers');
 	/**
 	 * Which pinned rows' "back to auto" would not unpin from here. Asked of the writer itself
@@ -1992,15 +1875,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		return null;
 	}
 
-	/**
-	 * Full screen is the player: there is nothing else on the screen to click, so a tap on
-	 * the stage is the reader asking for the next beat. Small screen keeps the plain
-	 * editor behaviour — a click there is aimed at the passage the preview sits under.
-	 *
-	 * Same reach as the next button, link guard aside: past the last beat a scene with one
-	 * way out steps into it, and one with several stops and lets the reader pick.
-	 */
-	const canAdvance = fullScreen && !beatHasLink && (beat < lastBeat || !!nextScene);
 
 	/**
 	 * "Make beat styles default for project": this beat's bubble style, laid over the
@@ -2123,58 +1997,44 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					selectable
 					selected={timelineLabels}
 				/>
-				{/* Entering full screen is a header control on the dialog card, next to
-				    maximize. LEAVING it cannot be: full screen portals out of the card and
-				    the header goes with it, so the way back has to live in the bar. */}
-				{fullScreen && (
-					<IconButton
-						commandId="scene.fullScreen"
-						icon={<IconArrowsMinimize />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-						onClick={() => onFullScreenChange(false)}
-					/>
-				)}
 			</span>
 		</div>
 	);
 
 	/**
-	 * Top right of the stage, beside the error badge: how big the stage is drawn here and
-	 * whether it may be edited. Neither is anything the scene says.
+	 * Top right of the stage: how big the stage is drawn here and whether it may be
+	 * edited. Neither is anything the scene says.
 	 */
 	const stageTools = (
 		<div className="scene-stage-tools" data-testid="scene-stage-tools">
 			{/* How big the stage is drawn here, not what the camera frames: nothing
 			    about it is written to the scene. */}
-			{!fullScreen && (
-				<span className="scene-preview-zoom">
-					<IconButton
-						disabled={viewZoom.zoom <= viewZoom.minZoom}
-						icon={<IconZoomOut />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.zoomOut')}
-						onClick={() => viewZoom.stepZoom(-1)}
-						tooltipPosition="bottom"
-					/>
-					<button
-						className="scene-preview-zoom-percent"
-						onClick={viewZoom.resetZoom}
-						title={t('dialogs.passageEdit.scenePreview.zoomReset')}
-						type="button"
-					>
-						{Math.round(viewZoom.zoom * 100)}%
-					</button>
-					<IconButton
-						disabled={viewZoom.zoom >= viewZoom.maxZoom}
-						icon={<IconZoomIn />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.zoomIn')}
-						onClick={() => viewZoom.stepZoom(1)}
-						tooltipPosition="bottom"
-					/>
-				</span>
-			)}
+			<span className="scene-preview-zoom">
+				<IconButton
+					disabled={viewZoom.zoom <= viewZoom.minZoom}
+					icon={<IconZoomOut />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.zoomOut')}
+					onClick={() => viewZoom.stepZoom(-1)}
+					tooltipPosition="bottom"
+				/>
+				<button
+					className="scene-preview-zoom-percent"
+					onClick={viewZoom.resetZoom}
+					title={t('dialogs.passageEdit.scenePreview.zoomReset')}
+					type="button"
+				>
+					{Math.round(viewZoom.zoom * 100)}%
+				</button>
+				<IconButton
+					disabled={viewZoom.zoom >= viewZoom.maxZoom}
+					icon={<IconZoomIn />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.zoomIn')}
+					onClick={() => viewZoom.stepZoom(1)}
+					tooltipPosition="bottom"
+				/>
+			</span>
 			{/* Always here, selection or not: the lock is how the author stops
 			    the stage editing the file, so it cannot be a control that only
 			    appears once something has been grabbed. */}
@@ -2206,10 +2066,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			editable={editable}
 			focusRequest={focusRequest}
 			grid={grid}
-			hidden={shownHidden}
+			hidden={hidden}
 			origStage={origStage}
 			prevStage={prevStage}
-			onAdvance={canAdvance ? advanceAsReader : undefined}
 			onCameraPatch={setCamera}
 			onCancel={handleCancel}
 			onCommit={handleCommit}
@@ -2223,9 +2082,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			onPatch={setPatch}
 			parentOffsets={offsets}
 			onSelect={select}
-			onToggleFullScreen={() => onFullScreenChange(!fullScreen)}
 			overscan={viewZoom.stageScale < 1}
-			player={fullScreen}
 			renderer={renderer}
 			seal={seal}
 			selection={selection}
@@ -2248,9 +2105,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			{walkHere.layer}
 			{/* Over the stage rather than above it. A row that appeared with the
 			    selection would resize the stage under the pointer, and the whole scene
-			    would jump on the very click that selected a sprite. A click on the
-			    stage selects, so full screen moved to a double click; the bar button
-			    above is still the keyboard-accessible path. */}
+			    would jump on the very click that selected a sprite. */}
 			<BubbleEditor
 				beat={bubbleBeat}
 				editable={editable}
@@ -2270,40 +2125,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					onChoose={choice => runDropChoice(dropRequest, choice)}
 					point={dropRequest.point}
 				/>
-			)}
-			{/* The player's own controls, in the corner the stage needs least.
-			    Faint until asked for: full screen exists so the scene can fill
-			    the screen, and a bar of chrome across it would undo that. Inside
-			    the stage rather than under it, so the error list — which is the
-			    author's, not the reader's — never pushes it off the corner. */}
-			{fullScreen && lastBeat > 0 && (
-				<div className="scene-preview-nav" data-testid="scene-preview-nav">
-					<button
-						aria-label={t('dialogs.passageEdit.scenePreview.previousBeat')}
-						disabled={beat <= 0}
-						onClick={goToPreviousBeat}
-						type="button"
-					>
-						<IconChevronLeft />
-					</button>
-					<span className="scene-preview-nav-count">
-						{beat} / {lastBeat}
-					</span>
-					<button
-						aria-label={
-							beat >= lastBeat && nextScene
-								? t('dialogs.passageEdit.scenePreview.nextScene', {
-										name: nextScene
-								  })
-								: t('dialogs.passageEdit.scenePreview.nextBeat')
-						}
-						disabled={beat >= lastBeat && !nextScene}
-						onClick={goToNextBeat}
-						type="button"
-					>
-						<IconChevronRight />
-					</button>
-				</div>
 			)}
 		</StageEditorOverlay>
 	);
@@ -2570,14 +2391,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				</div>
 			</div>
 			{stageTools}
-			{/* The reader's view has no problems to show. */}
-			{!fullScreen && (
-				<SceneErrorBadge
-					errors={parse.errors}
-					onToggle={() => toggleTab('problems')}
-					open={tabShown('problems')}
-				/>
-			)}
+			<SceneErrorBadge
+				errors={parse.errors}
+				onToggle={() => toggleTab('problems')}
+				open={tabShown('problems')}
+			/>
 			<SceneSidebar
 				active={sidebar.active}
 				onActive={setSidebarTab}
@@ -2588,24 +2406,18 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		</div>
 	);
 
-	const body = (
+	return (
 		<div
-			className={classNames('scene-preview', {'full-screen': fullScreen})}
+			className="scene-preview"
 			data-hotkey-scope="scene-preview"
 			data-testid="scene-preview"
 			ref={root}
-			// So full screen can take focus off the dialog card's chrome. Never in the tab
-			// order: everything here is reachable through the controls in the bar.
+			// Focusable, so a click on the stage puts focus in the preview's key scope. Never
+			// in the tab order: everything here is reachable through the controls in the bar.
 			tabIndex={-1}
 		>
 			{bar}
 			{stageBody}
 		</div>
 	);
-
-	// Full screen has to escape the dialog stack, which is a transformed ancestor: a
-	// `position: fixed` box inside one resolves against the ancestor, not the viewport, so
-	// the preview would be trapped in the card. Portalling to the body is what makes the
-	// state work at all -- from the normal card and the maximized one alike.
-	return fullScreen ? createPortal(body, document.body) : body;
 };

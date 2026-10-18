@@ -1,7 +1,7 @@
 # 07 — Visual editor (twinejs fork)
 
 Drag things on the [preview](06-twinejs-preview.md), get YAML written back (D15).
-Built on the preview surface. Works docked or full screen.
+Built on the preview surface. Works docked or maximized.
 
 ## The one rule
 
@@ -69,11 +69,12 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 
 | Part | Notes |
 |---|---|
-| Beat line | prev · count · next · play · strip · `+` add beat · labels toggle (default ON). `+` and toggle pinned right, strip or not (strip hidden under 2 beats). Full screen: exit button at end |
+| Beat line | prev · count · next · play · strip · `+` add beat · labels toggle (default ON). `+` and toggle pinned right, strip or not (strip hidden under 2 beats) |
 | `+` add beat | menu: Narrator (`box`), characters on stage, then props. Writes `- who: ""` after the beat on screen, steps to it, beat tab, text focused |
-| Stage top right | zoom, stage lock, error badge |
-| `</>` | dialog header, beside full screen. Opens passage editor on the same Doc |
-| Sidebar | collapsible stripe, right. Collapsed = icon column. Open + tab remembered (`sliders.preview.sidebar.*`). Click on open tab = collapse. Shown in full screen too |
+| Stage top right | zoom, stage lock. Dark opaque pill, white icons, border on hover |
+| Stage bottom right | error badge (smiley) |
+| `</>` | dialog header, beside maximize. Opens passage editor on the same Doc |
+| Sidebar | collapsible stripe, right. Collapsed = icon column. Open + tab remembered (`sliders.preview.sidebar.*`). Click on open tab = collapse |
 
 Sidebar tabs, top to bottom of the icon row:
 

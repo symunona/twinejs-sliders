@@ -99,15 +99,13 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'scene.previousBeat': {bindings: ['left']},
 	'scene.nextBeat': {bindings: ['right']},
 	'scene.play': {bindings: ['k']},
-	// `f` belongs to flip (spec 07's gesture table), so full screen took the shifted key.
-	'scene.fullScreen': {bindings: ['shift+f']},
 	// `mod+l` is what a lock wants to be and the one thing it cannot be: Chrome keeps it for
 	// the address bar and will not let a page have it (§2.1 of the hotkey defaults doc), so
 	// the chord is the shifted one. The bare `l` is the key that actually gets used, in the
-	// same family as `f` and `k` above.
+	// same family as `k` above.
 	'scene.toggleLock': {bindings: ['l', 'mod+shift+l']},
 	// Layers. Inkscape's `mod+shift+l` is the lock's already, so the panel takes the
-	// shifted bare key beside it -- the same family as `f` / `shift+f`.
+	// shifted bare key beside it.
 	'scene.layersPanel': {bindings: ['shift+l']},
 	'scene.walkHere': {bindings: ['w']},
 

@@ -8,22 +8,8 @@
 	flex-shrink: 0;
 }
 
-/* The same surface the toolbar and the menus are painted on, so full screen looks like
-   part of the app in either theme. `--dialog-background-color` used to be named here and
-   is defined nowhere, which is why full screen was literally white. */
-.scene-preview.full-screen {
-	background: var(--white);
-	bottom: 0;
-	left: 0;
-	position: fixed;
-	right: 0;
-	top: 0;
-	z-index: 1000;
-}
-
-/* The beat line: step buttons, the strip, the labels toggle. Pinned: in full screen the
-   stage takes the rest of the column. Top-aligned, because the strip grows downward when
-   its labels are on and the buttons stay on the marker row. */
+/* The beat line: step buttons, the strip, the labels toggle. Top-aligned, because the
+   strip grows downward when its labels are on and the buttons stay on the marker row. */
 .scene-preview-bar {
 	background: var(--white);
 	align-items: flex-start;
@@ -45,7 +31,7 @@
 	padding: calc((var(--control-height) - 14px) / 2) 8px 0;
 }
 
-/* Add beat, labels toggle, leave full screen: always at the right end, strip or not. */
+/* Add beat, labels toggle: always at the right end, strip or not. */
 .scene-preview-bar-end {
 	display: flex;
 	flex: none;
@@ -104,19 +90,36 @@
 	font-size: 85%;
 }
 
-/* Zoom and the stage lock, top right of the stage, left of the error badge. Outside the
-   viewport's scroll, so a zoomed-in view never carries them away. */
+/* Zoom and the stage lock, top right of the stage. Outside the viewport's scroll, so a
+   zoomed-in view never carries them away. Dark and opaque like the stage under it, white
+   icons, border only on hover. */
 .scene-stage-tools {
 	align-items: center;
-	background: rgba(255, 255, 255, 0.82);
+	background: #101014;
+	border: 1px solid transparent;
 	border-radius: var(--corner-round);
+	color: #fff;
 	display: flex;
 	gap: 2px;
 	padding: 1px 2px;
 	position: absolute;
-	right: calc(var(--layers-panel-width) + 42px);
+	right: calc(var(--layers-panel-width) + 6px);
 	top: 6px;
+	transition: border-color 150ms ease;
 	z-index: 5;
+}
+
+.scene-stage-tools:hover,
+.scene-stage-tools:focus-within {
+	border-color: rgba(255, 255, 255, 0.6);
+}
+
+.scene-stage-tools .icon-button:not(.selected) {
+	color: #fff;
+}
+
+.scene-stage-tools .icon-button:hover:not(:disabled):not(.selected) {
+	background: rgba(255, 255, 255, 0.16);
 }
 
 .scene-preview-badge svg {
@@ -196,7 +199,7 @@
 }
 
 .scene-preview-zoom-percent:hover {
-	background-color: var(--light-gray);
+	background-color: rgba(255, 255, 255, 0.16);
 }
 
 /* Lines the selected entity occupies, marked in the passage text. Selecting a sprite and
@@ -208,75 +211,6 @@
 
 .CodeMirror .sliders-selected-beat {
 	background: rgba(74, 212, 255, 0.12);
-}
-
-.scene-preview.full-screen .scene-stage-view {
-	flex: 1 1 auto;
-	height: auto;
-	max-height: none;
-}
-
-/* The player's step controls, absolute against `.stage-editor` — the frame the stage is
-   drawn in, which is already `position: relative`. Pinned to the corner the scene needs
-   least: characters stand centred on the floor, and a bubble's tail never reaches the
-   bottom right. */
-.scene-preview-nav {
-	align-items: center;
-	background: rgba(16, 16, 20, 0.55);
-	border-radius: 999px;
-	bottom: 16px;
-	color: #fff;
-	display: flex;
-	gap: 2px;
-	opacity: 0.28;
-	padding: 2px;
-	position: absolute;
-	right: 16px;
-	transition: opacity 150ms ease;
-	z-index: 2;
-}
-
-/* Faint until wanted. `focus-within` is the keyboard's version of reaching for it — the
-   controls have to be visible while they are being tabbed through. */
-.scene-preview-nav:hover,
-.scene-preview-nav:focus-within {
-	opacity: 0.92;
-}
-
-.scene-preview-nav button {
-	align-items: center;
-	background: none;
-	border: none;
-	border-radius: 999px;
-	color: inherit;
-	cursor: pointer;
-	display: flex;
-	height: 28px;
-	justify-content: center;
-	padding: 0;
-	width: 28px;
-}
-
-.scene-preview-nav button:hover:not(:disabled) {
-	background: rgba(255, 255, 255, 0.18);
-}
-
-.scene-preview-nav button:disabled {
-	cursor: default;
-	opacity: 0.35;
-}
-
-.scene-preview-nav button svg {
-	height: 18px;
-	width: 18px;
-}
-
-.scene-preview-nav-count {
-	font-size: 12px;
-	font-variant-numeric: tabular-nums;
-	min-width: 3.5em;
-	opacity: 0.85;
-	text-align: center;
 }
 
 .scene-preview-errors {

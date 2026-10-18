@@ -226,10 +226,9 @@ so exactly one of the two owns the arrow keys and Escape hands them back.
 |---|---|
 | `p` | show/hide preview |
 | `k` | play / pause beats |
-| `shift+f` | full screen — **moved off `f`**, which flip now owns |
 | `←` `→` | previous / next beat, when nothing is selected |
 | arrows | nudge 0.01, when something is selected. Shift ×10 |
-| `escape` | deselect (a second Escape leaves full screen) |
+| `escape` | deselect |
 | `f` | flip |
 | `backspace` / `delete` | remove the entity, or `~` in a `from:` scene |
 | `[` `]` | nudge `z:` within the layer |
@@ -253,7 +252,7 @@ lifts the whole entity a layer instead. Brackets stay bound as well — a keyboa
 | drag empty stage, or middle-drag | pan the camera |
 | `ctrl`/`cmd` + wheel | zoom the camera about the pointer, 0.2–8 |
 | drag an asset tile onto the stage | new `cast:` / `props:` entry, or `bg:` for a backdrop |
-| double-click | full screen |
+| double-click | on a sprite: open it. Empty stage: nothing (full screen removed 2026-10-18) |
 
 A bare wheel is deliberately left alone — the preview sits mid-column in a scrolling dialog
 and the pointer crosses it on the way elsewhere; a stage that swallowed plain scroll would

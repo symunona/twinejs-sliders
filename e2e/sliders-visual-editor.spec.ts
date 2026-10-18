@@ -242,20 +242,18 @@ test.describe('visual scene editor', () => {
 	/**
 	 * The selection's controls live in the sidebar's selection tab. The sidebar keeps one
 	 * width whatever tab is up, so selecting a sprite — which switches to that tab — never
-	 * resizes the stage. In full screen the stage takes whatever is left, and a resize
-	 * there would make the whole scene jump on the very click that selected a sprite.
+	 * resizes the stage. A resize would make the whole scene jump on the very click that
+	 * selected a sprite.
 	 */
-	test('selecting in full screen opens the selection tab without resizing the stage', async ({
+	test('selecting opens the selection tab without resizing the stage', async ({
 		page
 	}) => {
 		test.setTimeout(180000);
-		await openSceneEditor(page, 'Visual Editor Full Screen ' + Date.now());
+		await openSceneEditor(page, 'Visual Editor Select Keeps Size ' + Date.now());
 
 		await page.locator('.sliders-entity[data-entity-id="mira"]').waitFor({
 			timeout: 20000
 		});
-		await page.getByRole('button', {name: 'Full screen'}).click();
-		await page.waitForTimeout(500);
 
 		const stage = page.locator('.scene-stage');
 		const before = (await stage.boundingBox())!;
@@ -284,11 +282,11 @@ test.describe('visual scene editor', () => {
 	});
 
 	/**
-	 * Normal, maximized and full screen are three sizes of one preview, not three previews.
+	 * Normal and maximized are two sizes of one preview, not two previews.
 	 * Maximize used to wrap the dialog in a new element, which React reads as a different
 	 * tree: the preview unmounted and came back with nothing selected.
 	 */
-	test('the selection survives maximize and full screen', async ({page}) => {
+	test('the selection survives maximize', async ({page}) => {
 		test.setTimeout(180000);
 		await openSceneEditor(page, 'Visual Editor Resize Keeps Selection ' + Date.now());
 
@@ -307,15 +305,6 @@ test.describe('visual scene editor', () => {
 		await preview.getByRole('button', {name: 'Maximize'}).click();
 		await expect(page.locator('.dialogs > .maximized .scene-preview-dialog')).toBeVisible();
 		await expect(handles).toHaveCount(9);
-		await page.getByRole('button', {name: 'Full screen'}).click();
-		await expect(page.locator('.scene-preview.full-screen')).toBeVisible();
-		await expect(handles).toHaveCount(9);
-		// The full screen preview has its own exit, beside the card's still-mounted one.
-		await page
-			.getByTestId('scene-preview')
-			.getByRole('button', {name: 'Full screen'})
-			.click();
-		await expect(page.locator('.scene-preview.full-screen')).toHaveCount(0);
 		await preview.getByRole('button', {name: 'Restore Size'}).click();
 		await expect(page.locator('.dialogs > .maximized')).toHaveCount(0);
 		await expect(handles).toHaveCount(9);
@@ -386,7 +375,7 @@ test.describe('visual scene editor', () => {
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 		await page.waitForTimeout(300);
 
-		// f flips. Full screen had to move to shift+f to free this key up.
+		// f flips.
 		await page.keyboard.press('f');
 		await page.waitForTimeout(600);
 		expect(await cmText(page)).toContain('flip: true');

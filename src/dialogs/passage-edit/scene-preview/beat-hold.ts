@@ -20,9 +20,8 @@ export const AUTO_ADVANCE_MS = 3000;
  * when the scene expresses no opinion.
  *
  * `0` is kept as `0`, because it is an answer: "wait for a click", the same thing the
- * reader's own zero means. Collapsing it here would destroy it before the one caller that
- * can act on it — full-screen playback, where tapping the stage IS the click — ever sees
- * it. Callers that need a LENGTH want `sceneHoldMs` instead.
+ * reader's own zero means. The editor has no reader to wait for, so it reads this only
+ * through `sceneHoldMs`.
  */
 export function sceneAutoAdvanceMs(scene: Scene | undefined): number | undefined {
 	const own = scene?.autoAdvance;

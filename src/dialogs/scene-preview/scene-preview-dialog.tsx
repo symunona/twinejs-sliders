@@ -1,9 +1,4 @@
-import {
-	IconArrowsMaximize,
-	IconArrowsMinimize,
-	IconCode,
-	IconWalk
-} from '@tabler/icons';
+import {IconCode, IconWalk} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {DialogCard} from '../../components/container/dialog-card';
@@ -44,8 +39,7 @@ export interface ScenePreviewDialogProps extends DialogComponentProps {
  *
  * It is an ordinary dialog: normal is a card in the right-hand column beside the passage
  * editor, bigger is the dialog system's own maximize, and neither is geometry this file
- * knows anything about. Full screen is the exception, and the only reason there is a
- * header control here at all.
+ * knows anything about.
  *
  * It shows whichever passage the author is working in: the passage editor at the front of
  * the dialog stack if one is open, and otherwise the single passage selected on the map.
@@ -62,7 +56,6 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const assets = usePreviewResolver();
 	const {lock, stealPassage} = useServerSyncContext();
 	const published = useScenePreviewSource();
-	const [fullScreen, setFullScreen] = React.useState(false);
 	/**
 	 * Walk-here: preview only, never written. Off by default, and not remembered -- it is
 	 * a question asked of one backdrop, not a way of working.
@@ -244,13 +237,6 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 						}
 						tooltipPosition="bottom"
 					/>
-					<IconButton
-						icon={fullScreen ? <IconArrowsMinimize /> : <IconArrowsMaximize />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.fullScreen')}
-						onClick={() => setFullScreen(!fullScreen)}
-						tooltipPosition="bottom"
-					/>
 				</>
 			}
 			headerLabel={t('dialogs.passageEdit.scenePreview.title')}
@@ -258,11 +244,9 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 			maximizable
 			onClose={handleClose}
 		>
-			{/* Escape belongs to the preview, not to the card. React 16 bubbles events
-			    up the React TREE, so a keypress in the full screen portal--which is
-			    mounted on the body--still arrives here, and `DialogCard` reads Escape as
-			    "close". Inside the preview it means leave full screen, or drop the
-			    selection; either way the dialog must stay open. */}
+			{/* Escape belongs to the preview, not to the card: `DialogCard` reads Escape
+			    as "close", and inside the preview it means drop the selection. The
+			    dialog must stay open. */}
 			<div
 				className="scene-preview-dialog-keys"
 				onKeyDown={event => {
@@ -288,8 +272,6 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					onGoToLine={handleGoToLine}
 					walkHere={{on: walkOn, walker}}
 					doc={handle?.doc}
-					fullScreen={fullScreen}
-					onFullScreenChange={setFullScreen}
 					onOpenPassage={source?.onOpenPassage ?? handleOpenPassage}
 					parse={parse}
 					passageId={passageId}
