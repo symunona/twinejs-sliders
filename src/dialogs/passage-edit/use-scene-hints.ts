@@ -56,6 +56,11 @@ import {AssetLibrary, useAssetLibrary} from '../sliders-assets/asset-store-conte
 import {noteNameUsed, orderByRecent} from '../../util/sliders-recent-names';
 import {hintsForSlot, LibraryHintExtras, libraryHints} from './library-hints';
 import {useLibraryEngine} from '../../store/asset-library/library-provider';
+import {
+	attachCollections,
+	collectionForTypedName,
+	TypedNameKind
+} from '../../store/asset-library/auto-attach';
 
 /**
  * Every effect the DOM renderer knows how to draw, from
@@ -1400,7 +1405,7 @@ export function sceneCompletion(
 	passages: string[] = [],
 	/** What `from:` can name across the story — see `sceneTemplateNames`. */
 	templates: string[] = [],
-	/** Shadowed `coll/name` forms and unattached team names — see `library-hints.ts`. */
+	/** Shadowed `coll/name` forms — see `library-hints.ts`. */
 	extras?: LibraryHintExtras
 ) {
 	const text = editor.getValue();
@@ -1531,8 +1536,7 @@ export function sceneCompletion(
 	for (const hint of extraHints) {
 		completion.list.push({
 			...itemFor(hint.insert, false),
-			className:
-				hint.source === 'team' ? 'sliders-hint-team' : 'sliders-hint-shadowed',
+			className: 'sliders-hint-shadowed',
 			displayText: hint.label
 		});
 	}
@@ -1550,11 +1554,6 @@ export function sceneCompletion(
 		const hint = extraHints.find(extra => extra.label === picked.displayText);
 
 		if (hint) {
-			// A team name only resolves once its collection is attached.
-			if (hint.collection) {
-				extras?.attach(hint.collection);
-			}
-
 			noteNameUsed(bucket, hint.insert);
 			return;
 		}
@@ -1597,19 +1596,7 @@ export function useSceneHints(
 			const storyId = libraryRef.current.store?.storyId;
 			const extras: LibraryHintExtras | undefined =
 				lib && storyId
-					? {
-							attach: collection => {
-								const binding = lib.binding(storyId);
-
-								void libraryRef.current.store.ownCollection().then(() =>
-									lib.bind(storyId, [
-										...(binding?.collections ?? []),
-										collection
-									])
-								);
-							},
-							hints: libraryHints(lib, storyId)
-					  }
+					? {hints: libraryHints(lib, storyId)}
 					: undefined;
 			const result = sceneCompletion(
 				editor,
@@ -1656,5 +1643,87 @@ export function useSceneHints(
 		}
 
 		editor.showHint({completeSingle: false, hint: complete});
+	}, []);
+}
+
+/** Slots whose value is a library name, and what that name is looked for as first. */
+const TYPED_SLOT_KINDS: Partial<Record<HintSlot['kind'], TypedNameKind>> = {
+	bg: 'bg',
+	cast: 'character',
+	// Characters first, as the resolver tries them.
+	entities: 'character',
+	props: 'object'
+};
+
+/**
+ * The library name the author just finished typing by hand, and the slot it was typed
+ * into. `at` is where the closing space, newline or colon went in: the name ends there.
+ */
+export function typedNameAt(
+	text: string,
+	at: {ch: number; line: number}
+): {kind: TypedNameKind; name: string} | undefined {
+	const block = extractSceneBlock(text);
+
+	if (!block) {
+		return undefined;
+	}
+
+	const lines = text.split('\n');
+	const context = sceneHintContext(
+		lines,
+		block.lineOffset,
+		block.lineOffset + block.text.split('\n').length,
+		at
+	);
+	const kind = context && TYPED_SLOT_KINDS[context.slot.kind];
+	const name = context
+		? (lines[at.line] ?? '').slice(context.start, context.end).trim()
+		: '';
+
+	return kind && name && context!.end === at.ch ? {kind, name} : undefined;
+}
+
+/**
+ * The `inputRead` handler: a name finished by hand (space, Enter, colon) that the story
+ * does not resolve attaches the first pack that has it. Dropdowns only offer attached
+ * packs, so typing is the one way an unattached name gets in.
+ */
+export function useTypedNameAttach(): (
+	editor: Editor,
+	change: CodeMirror.EditorChange
+) => void {
+	const library = useAssetLibrary();
+	const engine = useLibraryEngine();
+	const libraryRef = React.useRef(library);
+	const engineRef = React.useRef(engine);
+
+	libraryRef.current = library;
+	engineRef.current = engine;
+
+	return React.useCallback((editor: Editor, change: CodeMirror.EditorChange) => {
+		const lib = engineRef.current;
+		const store = libraryRef.current.store;
+		const storyId = store?.storyId;
+		const inserted = change.text.join('\n');
+
+		if (!lib || !storyId || !/^[ \n:]/.test(inserted)) {
+			return;
+		}
+
+		const typed = typedNameAt(editor.getValue(), change.from);
+		const collection =
+			typed && collectionForTypedName(lib, storyId, typed.name, typed.kind);
+
+		if (!collection) {
+			return;
+		}
+
+		void store
+			.ownCollection()
+			.then(() => attachCollections(lib, storyId, [collection]))
+			.catch(error =>
+				console.warn('asset library: could not attach typed pack', error)
+			);
 	}, []);
 }

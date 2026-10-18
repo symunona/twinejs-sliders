@@ -98,18 +98,11 @@ li.CodeMirror-hint.sliders-hint-snippet {
 
 /*
 Library names outside the story's plain view. Shadowed / ambiguous ones are only
-reachable as `collection/name`: grey. Team collections the story does not attach sit
-at the bottom, and a pick attaches the collection: italic, with a dashed marker.
+reachable as `collection/name`: grey.
 */
 
 li.CodeMirror-hint.sliders-hint-shadowed {
 	color: var(--gray);
-}
-
-li.CodeMirror-hint.sliders-hint-team {
-	box-shadow: inset 2px 0 var(--light-gray);
-	color: var(--dark-gray);
-	font-style: italic;
 }
 
 /*

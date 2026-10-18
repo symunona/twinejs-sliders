@@ -28,8 +28,7 @@ beforeAll(() => {
 
 /**
  * Scene autocomplete beyond the story's plain names (plan 1): `coll/name` for names two
- * collections in the order hold, and unattached team names at the bottom — a pick
- * attaches the collection.
+ * collections in the order hold. Unattached packs are never offered.
  */
 
 async function library() {
@@ -65,54 +64,37 @@ describe('library hints', () => {
 		const {ana} = await library();
 		const hints = libraryHints(ana.engine, 'S');
 
-		expect(
-			hints.filter(hint => hint.source === 'qualified').map(hint => hint.insert)
-		).toEqual(['tavern-set/night', 'fantasy/night']);
-	});
-
-	it('lists unattached team names with the collection a pick attaches', async () => {
-		const {ana, ui} = await library();
-		const team = libraryHints(ana.engine, 'S').filter(
-			hint => hint.source === 'team'
-		);
-
-		expect(team).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({collection: ui.id, insert: 'arrow', kind: 'object'}),
-				expect.objectContaining({collection: ui.id, insert: 'dawn', kind: 'bg'})
-			])
-		);
-		// bg: gets backdrops only, qualified first, team last.
-		expect(hintsForSlot('bg', libraryHints(ana.engine, 'S')).map(h => h.label)).toEqual([
-			'fantasy/night',
+		expect(hints.map(hint => hint.insert)).toEqual([
 			'tavern-set/night',
-			'dawn — ui-icons'
+			'fantasy/night'
 		]);
 	});
 
-	it('sceneCompletion puts them under the plain names; picking a team name attaches', async () => {
-		const {ana, ui} = await library();
-		const attach = jest.fn();
+	it('never offers names from unattached packs', async () => {
+		const {ana} = await library();
+		const inserts = libraryHints(ana.engine, 'S').map(hint => hint.insert);
+
+		expect(inserts).not.toContain('dawn');
+		expect(inserts).not.toContain('arrow');
+		expect(hintsForSlot('bg', libraryHints(ana.engine, 'S')).map(h => h.label)).toEqual([
+			'fantasy/night',
+			'tavern-set/night'
+		]);
+	});
+
+	it('sceneCompletion puts them under the plain names, attached only', async () => {
+		const {ana} = await library();
 		const completion = sceneCompletion(
 			editorAt('[scene]\nbg: |'),
 			{all: [], characters: []},
 			[],
 			[],
-			{attach, hints: libraryHints(ana.engine, 'S')}
+			{hints: libraryHints(ana.engine, 'S')}
 		)!;
 
 		expect(completion.list.map(item => [item.displayText, item.className])).toEqual([
 			['fantasy/night', 'sliders-hint-shadowed'],
-			['tavern-set/night', 'sliders-hint-shadowed'],
-			['dawn — ui-icons', 'sliders-hint-team']
+			['tavern-set/night', 'sliders-hint-shadowed']
 		]);
-		expect(completion.list[2].text).toContain('dawn');
-
-		const pick = (CodeMirror.on as jest.Mock).mock.calls.find(
-			([target, event]) => target === completion && event === 'pick'
-		)![2];
-
-		pick({displayText: 'dawn — ui-icons'});
-		expect(attach).toHaveBeenCalledWith(ui.id);
 	});
 });

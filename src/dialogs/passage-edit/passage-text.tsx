@@ -9,7 +9,11 @@ import {StoryFormat} from '../../store/story-formats';
 import {useCodeMirrorPassageHints} from '../../store/use-codemirror-passage-hints';
 import {useFormatCodeMirrorMode} from '../../store/use-format-codemirror-mode';
 import {codeMirrorOptionsFromPrefs} from '../../util/codemirror-options';
-import {sceneTemplateNames, useSceneHints} from './use-scene-hints';
+import {
+	sceneTemplateNames,
+	useSceneHints,
+	useTypedNameAttach
+} from './use-scene-hints';
 
 export interface PassageTextProps {
 	disabled?: boolean;
@@ -58,6 +62,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 		[passage.name, story.passages]
 	);
 	const autocompleteSceneNames = useSceneHints(passageNames, sceneTemplates);
+	const attachTyped = useTypedNameAttach();
 	const mode =
 		useFormatCodeMirrorMode(storyFormat.name, storyFormat.version) ?? 'text';
 	const codeAreaContainerRef = React.useRef<HTMLDivElement>(null);
@@ -84,6 +89,9 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 				}
 			});
 
+			// A name typed by hand from a pack the story has not attached: attach it.
+			editor.on('inputRead', attachTyped);
+
 			// The potential combination of loading a mode and the dialog entrance
 			// animation seems to mess up CodeMirror's cursor rendering. The delay below
 			// is intended to run after the animation completes.
@@ -96,7 +104,7 @@ export const PassageText: React.FC<PassageTextProps> = props => {
 				editor.refresh();
 			}, 400);
 		},
-		[onEditorChange]
+		[attachTyped, onEditorChange]
 	);
 
 	// Emulate the above behavior re: focus if we aren't using CodeMirror.

@@ -136,7 +136,16 @@ Story toolbar **Assets** → Library dialog, opens maximized.
 
 - Story list top bar: same chip, whole library. Conflicts → Library Conflicts dialog.
 - Toasts only: name taken on create (saved `-2`), remote delete of art open in editor, conflict.
-- Scene autocomplete: `coll/name` for names two collections hold (grey); unattached team names last (italic), pick = attach.
+- Scene autocomplete (Ctrl-Space) + scene editor dropdowns: attached packs ONLY. `coll/name` for names two collections hold (grey).
+- Typed name (space / Enter / `:` after it), not resolving → first unattached pack holding it gets attached (`collectionForTypedName`).
+
+| slot | search order |
+|---|---|
+| `bg:` (scene, beat) | bg → object/fx → character |
+| `props:` id, `ref:` | object/fx → bg → character |
+| `cast:`, `entities:` | character → object/fx → bg |
+
+  Packs: shared first, then by name. Kind beats pack order. `coll/name` → `coll`.
 - Story rename → own collection renamed (numbered if taken), unless renamed by hand.
 - Story delete (never synced, or removed from server) → binding tombstoned. Own collection kept.
 
