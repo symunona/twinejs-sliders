@@ -1886,7 +1886,11 @@ export class DomRenderer implements Renderer {
 			return;
 		}
 
-		const key = `${art.innerHTML}\u0000${art.getAttribute('style') ?? ''}`;
+		// The motion id too: it is an attribute, not style, and a twin cloned under the old
+		// one would keep scrolling the old way.
+		const key = `${motion!.id}\u0000${art.innerHTML}\u0000${
+			art.getAttribute('style') ?? ''
+		}`;
 
 		if (rec.motionTwin?.key === key && rec.motionTwin.el.parentNode === rec.el) {
 			return;
@@ -1900,6 +1904,7 @@ export class DomRenderer implements Renderer {
 		rec.motionTwin?.el.remove();
 		rec.el.appendChild(twin);
 		rec.motionTwin = {el: twin, key};
+		matchLoopPhase(art, twin);
 	}
 
 	/**
@@ -2077,6 +2082,10 @@ export class DomRenderer implements Renderer {
 				'--sliders-bg-speed',
 				fx?.speed === undefined ? '' : `${fx.speed}s`
 			);
+		}
+
+		if (this.bgEl && this.bgTwinEl) {
+			matchLoopPhase(this.bgEl, this.bgTwinEl);
 		}
 	}
 
@@ -2555,6 +2564,42 @@ function boxDurations(el: HTMLElement, duration: number): string {
 	return el.dataset.slidersLink === undefined
 		? seconds
 		: `${seconds}, ${seconds}, ${seconds}, ${seconds}, ${GLOW_FADE}s`;
+}
+
+/**
+ * Put a scroll twin's loop on the same clock as the copy it trails.
+ *
+ * The pair are two CSS animations, and a CSS animation starts when its element gets it. A
+ * twin rebuilt mid-lap (a grade, a pose, a step changed the art it was cloned from) started
+ * at 0 while the original carried on, so the hand-off point drifted off the frame edge and
+ * the stage showed through as a stripe the width of the phase difference. Same timeline,
+ * same duration: one shared start time keeps them a frame apart for good.
+ */
+function matchLoopPhase(source: Element, twin: Element): void {
+	if (typeof source.getAnimations !== 'function') {
+		return; // jsdom
+	}
+
+	const loop = (el: Element) =>
+		el
+			.getAnimations()
+			.find(
+				a =>
+					a instanceof CSSAnimation &&
+					a.animationName.startsWith('sliders-bg-scroll-')
+			);
+	const from = loop(source);
+	const to = loop(twin);
+
+	if (!from || !to) {
+		return;
+	}
+
+	if (from.startTime !== null) {
+		to.startTime = from.startTime;
+	} else {
+		to.currentTime = from.currentTime;
+	}
 }
 
 function clamp01(n: number): number {

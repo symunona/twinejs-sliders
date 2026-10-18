@@ -2175,6 +2175,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					tooltipPosition="bottom"
 				/>
 			</span>
+			{/* The grid is how the author reads the stage, and nothing has to be
+			    selected to want to read it. A view toggle like zoom, so beside it. */}
+			<IconButton
+				icon={<IconGridDots />}
+				iconOnly
+				label={t('dialogs.passageEdit.scenePreview.grid')}
+				onClick={toggleGrid}
+				selectable
+				selected={grid}
+				tooltipPosition="bottom"
+			/>
 			{/* Always here, selection or not: the lock is how the author stops
 			    the stage editing the file, so it cannot be a control that only
 			    appears once something has been grabbed. */}
@@ -2289,19 +2300,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	/** Settings tab: how this preview behaves for me, then what the scene says. */
 	const sceneTab = (
 		<div className="scene-sidebar-section">
-			<div className="scene-sidebar-row">
-				{/* The grid is how the author reads the stage, and nothing has to be
-				    selected to want to read it. */}
-				<IconButton
-					icon={<IconGridDots />}
-					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.grid')}
-					onClick={toggleGrid}
-					selectable
-					selected={grid}
-					tooltipPosition="bottom"
-				/>
-			</div>
 			<SceneSettingsTab
 				assets={assets}
 				editable={editable}
