@@ -1,5 +1,6 @@
 import {
 	IconAlertTriangle,
+	IconArrowsMove,
 	IconBox,
 	IconCamera,
 	IconCameraOff,
@@ -111,6 +112,7 @@ import {
 import {SceneStage} from './scene-stage';
 import {timingLayout} from './timing-layout';
 import {TimingOverlay} from './timing-overlay';
+import {TransformPanel} from './transform-panel';
 import {scrubStage, TimingScrub} from './timing-scrub';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
@@ -1397,7 +1399,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				tabBeforeSelection.current = active;
 				setSidebarTab('selection');
 			}
-		} else if (active === 'selection') {
+		} else if (active === 'selection' || active === 'transform') {
+			// Both tabs go with the selection they were about.
 			setSidebarTab(tabBeforeSelection.current);
 		}
 	}, [hasSelection, setSidebarTab]);
@@ -2662,6 +2665,22 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 								? 'dialogs.passageEdit.scenePreview.sidebar.tabs.character'
 								: 'dialogs.passageEdit.scenePreview.sidebar.tabs.object'
 						)
+					},
+					{
+						accent: true,
+						content: (
+							<TransformPanel
+								authored={localStage}
+								drawn={stage}
+								editable={editable}
+								ids={selection}
+								note={beatNote}
+								onWrite={writes => commit(writes, EDIT_ORIGIN)}
+							/>
+						),
+						icon: <IconArrowsMove />,
+						id: 'transform' as const,
+						label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.transform')
 					}
 			  ]
 			: []),

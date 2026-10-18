@@ -706,8 +706,20 @@
 						"object": "Selected object",
 						"walk": "Walk here",
 						"links": "Links",
-						"problems": "Problems"
+						"problems": "Problems",
+						"transform": "Transform: exact position, scale, rotation, z"
 					}
+				},
+				"transform": {
+					"plane": "A fit: plane fills the stage. Only z applies.",
+					"relative": "x, y are an offset from {{parent}} (of:).",
+					"rot": "Rotation",
+					"scale": "Scale",
+					"singleOnly": "Select one sprite to type its numbers.",
+					"x": "X",
+					"y": "Y",
+					"z": "Z",
+					"zAuto": "auto {{z}}"
 				},
 				"settings": {
 					"arrival": "Arrival",
