@@ -15,6 +15,7 @@ import {
 	beatLines
 } from '@sliders/scene-types';
 import {diffStages, timeBeat} from '@sliders/scene-core';
+import type {ScrubChannel} from './timing-scrub';
 
 export interface SceneStageProps {
 	assets: AssetResolver;
@@ -84,6 +85,11 @@ export interface SceneStageProps {
 	 * renderer's cue, the same one the player shows the reader.
 	 */
 	waitingForClick?: boolean;
+	/**
+	 * The timing overlay's hover: frames drawn straight onto the renderer, no re-render.
+	 * While one is up the stage shows it; `undefined` puts back the stage and lines above.
+	 */
+	scrub?: ScrubChannel;
 }
 
 /**
@@ -102,6 +108,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	onLink,
 	onRenderer,
 	sceneEase,
+	scrub,
 	stage,
 	stylesheet,
 	viewScale = 1,
@@ -346,16 +353,24 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 
 	React.useEffect(() => () => styleRef.current?.remove(), []);
 
-	React.useEffect(() => {
+	/**
+	 * Draw one beat's lines. A ref so the scrub channel can draw ANOTHER beat's lines with
+	 * the same defaults; returns the cancel for a late off-stage lookup.
+	 */
+	const showLinesRef = React.useRef<
+		(shown: Beat | undefined) => (() => void) | undefined
+	>();
+
+	showLinesRef.current = shown => {
 		const dialogue = dialogueRef.current;
 
-		if (!dialogue || !ready) {
-			return;
+		if (!dialogue) {
+			return undefined;
 		}
 
 		// Every line the beat shows, at once: the box and each speaker's bubble. Anything a
 		// beat does not say is cleared, so stale text can't linger.
-		const lines = beat ? beatLines(beat) : [];
+		const lines = shown ? beatLines(shown) : [];
 		const box = lines.find(line => line.who === undefined);
 		const speakers = lines.filter(line => line.who !== undefined);
 		const specs = (characterBubble: (who: string) => BubbleStyle | undefined) =>
@@ -400,7 +415,67 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 				live = false;
 			};
 		}
+
+		return undefined;
+	};
+
+	React.useEffect(() => {
+		if (!ready) {
+			return;
+		}
+
+		return showLinesRef.current?.(beat);
 	}, [beat, bubbleDefaults, ready, stage]);
+
+	React.useEffect(() => {
+		if (!scrub || !ready) {
+			return;
+		}
+
+		// `scrubbing` is false between hovers; `linesOf` is the beat whose lines are up.
+		let scrubbing = false;
+		let linesOf: number | undefined;
+		let cancelLines: (() => void) | undefined;
+		const off = scrub.subscribe(frame => {
+			const renderer = rendererRef.current;
+
+			if (!renderer) {
+				return;
+			}
+
+			if (frame) {
+				void renderer.apply(frame.stage, []);
+
+				// Lines only when the hovered BEAT changes: re-sizing every bubble on every
+				// mouse move was the other half of the lag.
+				if (!scrubbing || linesOf !== frame.beat?.index) {
+					cancelLines?.();
+					cancelLines = showLinesRef.current?.(frame.beat);
+					linesOf = frame.beat?.index;
+				}
+
+				scrubbing = true;
+				return;
+			}
+
+			if (!scrubbing) {
+				return;
+			}
+
+			scrubbing = false;
+			cancelLines?.();
+			cancelLines = showLinesRef.current?.(beatRef.current);
+
+			if (prevStageRef.current) {
+				void renderer.apply(prevStageRef.current, []);
+			}
+		});
+
+		return () => {
+			off();
+			cancelLines?.();
+		};
+	}, [ready, scrub]);
 
 	return <div className="scene-stage" ref={hostRef} />;
 };

@@ -120,7 +120,7 @@ import {SceneStage} from './scene-stage';
 import {timingLayout} from './timing-layout';
 import {TimingOverlay} from './timing-overlay';
 import {TransformPanel} from './transform-panel';
-import {scrubStage, TimingScrub} from './timing-scrub';
+import {ScrubChannel, scrubStage, TimingScrub} from './timing-scrub';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
@@ -475,8 +475,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const [viewport, setViewport] = React.useState<HTMLDivElement | null>(null);
 	/** The timing overlay over the stage (spec 06, "Timing overlay"). */
 	const [timingOpen, setTimingOpen] = React.useState(false);
-	/** The timing overlay's hovered moment: the stage draws it still while it is set. */
-	const [timingScrub, setTimingScrub] = React.useState<TimingScrub>();
+	/** The timing overlay's hover, straight to the stage: see `ScrubChannel`. */
+	const scrubChannel = React.useMemo(() => new ScrubChannel(), []);
 	const viewZoom = useStageViewZoom(viewport);
 	const mounted = React.useRef(true);
 	const [seal, setSeal] = React.useState(0);
@@ -1550,34 +1550,44 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		stage
 	});
 	const {decorate: decorateWalk, info: walkInfo} = walkHere;
-	const walkedStage = React.useMemo(
+	const shownStage = React.useMemo(
 		() => decorateWalk(drawnStage),
 		[decorateWalk, drawnStage]
 	);
 	/**
-	 * A timing-overlay hover wins over everything drawn: it is a look at another moment, and
-	 * nothing the editor does reads it back — the overlay, selection and writes stay on
-	 * `stage`.
+	 * A timing-overlay hover: drawn over everything, read back by nothing — the overlay,
+	 * selection and writes stay on `stage`. Inputs through a ref so the callback is stable
+	 * and a hover never re-renders this component.
 	 */
-	const scrubbedStage = React.useMemo(
-		() =>
-			timingOpen && timingScrub
-				? scrubStage(
-						parse.states,
-						timeline.beats,
-						timingScrub,
-						parse.result?.scene.ease
-				  )
-				: undefined,
-		[parse.result, parse.states, timeline, timingOpen, timingScrub]
+	const scrubNow = {
+		beats,
+		ease: parse.result?.scene.ease,
+		states: parse.states,
+		timeline
+	};
+	const scrubInputs = React.useRef(scrubNow);
+
+	scrubInputs.current = scrubNow;
+
+	const handleScrub = React.useCallback(
+		(scrub: TimingScrub | undefined) => {
+			const inputs = scrubInputs.current;
+			const scrubbed = scrub
+				? scrubStage(inputs.states, inputs.timeline.beats, scrub, inputs.ease)
+				: undefined;
+
+			scrubChannel.emit(
+				scrubbed && scrub ? {beat: inputs.beats[scrub.beat], stage: scrubbed} : undefined
+			);
+		},
+		[scrubChannel]
 	);
-	const shownStage = scrubbedStage ?? walkedStage;
 	/**
 	 * The Sounds tab's audition: what is heard at the scrubber, from the top. Step 0 = the
 	 * scene's music, a beat = the music in effect there plus its `sfx:`.
 	 */
 	const soundPreview = useSoundPreview(assets, muted);
-	const heardHere = previewSounds(walkedStage.music, shownBeat?.sfx);
+	const heardHere = previewSounds(shownStage.music, shownBeat?.sfx);
 	const toggleSoundPreview = () => {
 		if (soundPreview.playing) {
 			soundPreview.stop();
@@ -1599,7 +1609,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const sceneHasSound =
 		!!parse.result?.scene.music ||
 		beats.some(one => !!one.sfx || !!one.music) ||
-		Object.keys(walkedStage.music ?? {}).length > 0;
+		Object.keys(shownStage.music ?? {}).length > 0;
 	const audible = soundPreview.playing || (sound && sceneHasSound);
 
 	React.useEffect(() => {
@@ -2360,15 +2370,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			stage={stage}
 		>
 			<SceneStage
-				animate={playing && !scrubbedStage}
+				animate={playing}
 				assetRevision={libraryVersion}
 				assets={assets}
-				beat={scrubbedStage ? beats[timingScrub!.beat] : drawnBeat}
+				beat={drawnBeat}
 				bubbleDefaults={bubbleDefaults}
 				muted={!sound || muted || soundPreview.playing}
 				onLink={handleLink}
 				onRenderer={handleRenderer}
 				sceneEase={parse.result?.scene.ease}
+				scrub={scrubChannel}
 				stage={shownStage}
 				stylesheet={stylesheet}
 				viewScale={viewZoom.stageScale}
@@ -2809,7 +2820,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					layout={timingRows}
 					onBeatChange={goToBeat}
 					onClose={() => setTimingOpen(false)}
-					onScrub={setTimingScrub}
+					onScrub={handleScrub}
 				/>
 			)}
 			<SceneSidebar

@@ -79,19 +79,39 @@ describe('<TimingOverlay>', () => {
 	});
 });
 
+/** rAF by hand: hover coalesces to one scrub per frame. */
+function frames() {
+	let queued: FrameRequestCallback[] = [];
+
+	jest.spyOn(window, 'requestAnimationFrame').mockImplementation(cb => {
+		queued.push(cb);
+		return queued.length;
+	});
+	jest.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
+		queued = [];
+	});
+
+	return () => {
+		const run = queued;
+
+		queued = [];
+		run.forEach(cb => cb(0));
+	};
+}
+
 describe('<TimingOverlay> hover', () => {
 	it('is sized to its beat columns', () => {
-		const {container} = render(
+		render(
 			<TimingOverlay beat={1} layout={layout(0)} onBeatChange={jest.fn()} onClose={jest.fn()} />
 		);
 		const overlay = screen.getByTestId('timing-overlay');
 
 		expect(overlay.style.getPropertyValue('--timing-beats')).toBe('4');
-		expect(TIMING_COLUMN_PX).toBeGreaterThan(0);
-		expect(container.querySelector('.timing-cursor')).toBeNull();
+		expect(overlay.style.getPropertyValue('--timing-column')).toBe(`${TIMING_COLUMN_PX}px`);
 	});
 
 	it('scrubs: x on a track is a moment of a beat, a bar names its entity, leave clears', () => {
+		const flush = frames();
 		const onScrub = jest.fn();
 		const {container} = render(
 			<TimingOverlay
@@ -102,25 +122,31 @@ describe('<TimingOverlay> hover', () => {
 				onScrub={onScrub}
 			/>
 		);
+		const body = container.querySelector<HTMLElement>('.timing-overlay-body')!;
+		const header = container.querySelector('.timing-header .timing-track')!;
 
 		stubTracks(container);
 
 		// Total 8.5s over 850px. 100px = 1s = halfway through beat 0's 2s.
-		fireEvent.mouseMove(container.querySelector('.timing-header .timing-track')!, {
-			clientX: 100
-		});
+		fireEvent.mouseMove(header, {clientX: 100});
+		expect(onScrub).not.toHaveBeenCalled();
+		flush();
 		expect(onScrub).toHaveBeenLastCalledWith({beat: 0, t: 1});
-		expect(container.querySelector('.timing-cursor')).not.toBeNull();
+		expect(body.classList.contains('scrubbing')).toBe(true);
+		expect(body.style.getPropertyValue('--timing-cursor')).toBe(`${(100 / 850) * 100}%`);
 
-		// 300px = 3s = 1s into beat 1.
-		fireEvent.mouseMove(container.querySelector('.timing-header .timing-track')!, {
-			clientX: 300
-		});
+		// Many moves in one frame: one scrub, the latest. 300px = 3s = 1s into beat 1.
+		onScrub.mockClear();
+		fireEvent.mouseMove(header, {clientX: 200});
+		fireEvent.mouseMove(header, {clientX: 300});
+		flush();
+		expect(onScrub).toHaveBeenCalledTimes(1);
 		expect(onScrub).toHaveBeenLastCalledWith({beat: 1, t: 1});
 
 		const bar = container.querySelector('[data-group="mira"] [data-kind="move"] .timing-bar')!;
 
 		fireEvent.mouseMove(bar, {clientX: 50});
+		flush();
 		expect(onScrub).toHaveBeenLastCalledWith({beat: 0, entity: 'mira', t: 0.5});
 		expect(bar.classList.contains('hovered')).toBe(true);
 
@@ -128,11 +154,17 @@ describe('<TimingOverlay> hover', () => {
 		fireEvent.mouseMove(container.querySelector('[data-group="stage"] .timing-bar')!, {
 			clientX: 560
 		});
+		flush();
 		expect(onScrub.mock.calls[onScrub.mock.calls.length - 1][0].entity).toBeUndefined();
+		expect(bar.classList.contains('hovered')).toBe(false);
 
-		fireEvent.mouseOut(container.querySelector('.timing-overlay-body')!);
+		// Leaving mid-frame: the pending scrub is dropped, the stage put back at once.
+		fireEvent.mouseMove(header, {clientX: 100});
+		fireEvent.mouseOut(body);
 		expect(onScrub).toHaveBeenLastCalledWith(undefined);
-		expect(container.querySelector('.timing-cursor')).toBeNull();
+		flush();
+		expect(onScrub).toHaveBeenLastCalledWith(undefined);
+		expect(body.classList.contains('scrubbing')).toBe(false);
 	});
 });
 

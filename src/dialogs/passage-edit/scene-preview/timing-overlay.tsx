@@ -34,7 +34,7 @@ export interface TimingOverlayProps {
 }
 
 /** Each beat column's share of the overlay's width, px — the overlay is only that wide. */
-export const TIMING_COLUMN_PX = 88;
+export const TIMING_COLUMN_PX = 176;
 
 /** Percent of the scene's length, for `left` / `width`. */
 function pct(seconds: number, total: number): string {
@@ -71,20 +71,46 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 		return () => window.removeEventListener('keydown', onKey, true);
 	}, [onClose]);
 
-	/** Scene seconds under the pointer, for the cursor line. */
-	const [hoverAt, setHoverAt] = React.useState<number>();
-	const [hoverBar, setHoverBar] = React.useState<string>();
+	/**
+	 * Hover is IMPERATIVE: no state here, nothing re-renders on a mouse move. The cursor is
+	 * a CSS variable on the body, the hovered bar a class, and `onScrub` is called at most
+	 * once a frame with the latest position. A move that re-rendered the overlay (or worse,
+	 * the editor around it) per event is what made the first version lag.
+	 */
+	const bodyRef = React.useRef<HTMLDivElement>(null);
+	const hoveredRef = React.useRef<HTMLElement | null>(null);
+	const frameRef = React.useRef<number>();
+	const pendingRef = React.useRef<TimingScrub>();
 	const onScrubRef = React.useRef(onScrub);
 
 	onScrubRef.current = onScrub;
 
+	const hoverBar = (bar: HTMLElement | null) => {
+		if (hoveredRef.current === bar) {
+			return;
+		}
+
+		hoveredRef.current?.classList.remove('hovered');
+		bar?.classList.add('hovered');
+		hoveredRef.current = bar;
+	};
+
 	// Closing mid-hover must not leave the stage on the hovered moment.
-	React.useEffect(() => () => onScrubRef.current?.(undefined), []);
+	React.useEffect(
+		() => () => {
+			if (frameRef.current !== undefined) {
+				cancelAnimationFrame(frameRef.current);
+			}
+
+			onScrubRef.current?.(undefined);
+		},
+		[]
+	);
 
 	const scrubAt = (
 		event: React.MouseEvent<HTMLElement>,
-		entity?: string,
-		bar?: {beat: number; key: string}
+		entity: string | undefined,
+		bar: HTMLElement | null
 	) => {
 		const rect = event.currentTarget.getBoundingClientRect();
 
@@ -94,39 +120,46 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 
 		const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
 		const at = x * total;
+		const barBeat = bar?.dataset.beat;
 		// A bar names its own beat: a move that outlasts the column is still that beat's.
 		const column =
-			(bar && columns.find(each => each.beat === bar.beat)) ??
-			columns.find(each => at < each.start + each.length) ??
+			(barBeat !== undefined && columns.find(each => each.beat === Number(barBeat))) ||
+			columns.find(each => at < each.start + each.length) ||
 			columns[columns.length - 1];
 
-		setHoverAt(at);
-		setHoverBar(bar?.key);
-		onScrub?.({
+		bodyRef.current?.style.setProperty('--timing-cursor', `${x * 100}%`);
+		bodyRef.current?.classList.add('scrubbing');
+		hoverBar(bar);
+		pendingRef.current = {
 			beat: column.beat,
 			t: Math.max(0, at - column.start),
-			...(entity !== undefined ? {entity} : {})
-		});
+			...(bar && entity !== undefined ? {entity} : {})
+		};
+
+		if (frameRef.current === undefined) {
+			frameRef.current = requestAnimationFrame(() => {
+				frameRef.current = undefined;
+				onScrubRef.current?.(pendingRef.current);
+			});
+		}
 	};
 	const scrubTrack = (entity?: string) => ({
-		onMouseMove: (event: React.MouseEvent<HTMLElement>) => {
-			const target = (event.target as HTMLElement).closest<HTMLElement>(
-				'.timing-bar'
-			);
-			const beat = target?.dataset.beat;
-
+		onMouseMove: (event: React.MouseEvent<HTMLElement>) =>
 			scrubAt(
 				event,
-				target ? entity : undefined,
-				target && beat !== undefined
-					? {beat: Number(beat), key: target.dataset.key ?? ''}
-					: undefined
-			);
-		}
+				entity,
+				(event.target as HTMLElement).closest<HTMLElement>('.timing-bar')
+			)
 	});
 	const endScrub = () => {
-		setHoverAt(undefined);
-		setHoverBar(undefined);
+		if (frameRef.current !== undefined) {
+			cancelAnimationFrame(frameRef.current);
+			frameRef.current = undefined;
+		}
+
+		pendingRef.current = undefined;
+		bodyRef.current?.classList.remove('scrubbing');
+		hoverBar(null);
 		onScrub?.(undefined);
 	};
 
@@ -144,9 +177,7 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 					<span className={`timing-edge advance-${column.advance}`} />
 				</div>
 			))}
-			{hoverAt !== undefined && (
-				<span className="timing-cursor" style={{left: pct(hoverAt, total)}} />
-			)}
+			<span className="timing-cursor" />
 		</div>
 	);
 
@@ -157,7 +188,12 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 			onPointerDown={event => event.stopPropagation()}
 			role="dialog"
 			aria-label={label('title')}
-			style={{'--timing-beats': columns.length} as React.CSSProperties}
+			style={
+				{
+					'--timing-beats': columns.length,
+					'--timing-column': `${TIMING_COLUMN_PX}px`
+				} as React.CSSProperties
+			}
 		>
 			<div className="timing-overlay-head">
 				<strong>{label('title')}</strong>
@@ -187,7 +223,7 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 			{columns.length === 0 ? (
 				<p className="timing-overlay-empty">{label('empty')}</p>
 			) : (
-				<div className="timing-overlay-body" onMouseLeave={endScrub}>
+				<div className="timing-overlay-body" onMouseLeave={endScrub} ref={bodyRef}>
 					<div className="timing-row timing-header">
 						<span className="timing-row-label" />
 						<div className="timing-track" {...scrubTrack()}>
@@ -243,16 +279,12 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 									>
 										{grid}
 										{row.bars.map(bar => {
-											const key = `${group.special ?? 'e'}:${group.id}:${row.kind}:${bar.beat}:${bar.start}`;
-
 											return (
 												<span
 													className={classNames('timing-bar', {
-														hovered: hoverBar === key,
 														snap: bar.duration === 0
 													})}
 													data-beat={bar.beat}
-													data-key={key}
 													key={`${bar.beat}:${bar.start}`}
 													style={{
 														left: pct(bar.start, total),

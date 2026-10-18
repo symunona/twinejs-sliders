@@ -94,7 +94,7 @@ Debug view of the whole scene on the player's clock. `timing-overlay.tsx` + `tim
 | | |
 |---|---|
 | Open | clock button in the scene bar (next to labels toggle), or in the beat panel's Timing heading. Esc / ✕ closes. |
-| Where | docked to stage bottom-left. Width = label + 88px per beat (max: stage minus sidebar). Height = rows, max 50%, scrolls. Sidebar stays usable: retime in the beat panel, bars move live. |
+| Where | docked to preview bottom-left. Width = label + 176px per beat (`TIMING_COLUMN_PX`), max = whole preview, over the sidebar. Height = rows, max 50%, scrolls. Retime in the beat panel, bars move live. |
 | Groups | Stage (bg, camera, fx, music), each entity in cast order, Narration. |
 | Rows | per kind of change: `say`, `enter`, `exit`, `move`, `scale`, `rot`, `pose`, `steps`, `flip`, `grade`. Says = bar over the beat with the words. |
 | Bars | start + length in seconds. 0s = white tick (snap). |
@@ -104,6 +104,7 @@ Debug view of the whole scene on the player's clock. `timing-overlay.tsx` + `tim
 | Hover a track | pointer x = scene time → beat + seconds in. Stage draws that moment still: `stageAt` (`scene-core`) eases + lerps `move`/`scale`/`rot`/`camera`/enter-exit fade; `pose`/`flip`/`grade`/`bg`/`fx` switch at midpoint. White cursor line. |
 | Hover an entity bar | same, at the bar's own beat, plus that entity's beat start + end as ghosts (opacity × 0.35, ids `__timing-ghost-from/to-<id>`). Unchanged entity = no ghosts. |
 | Leave / close | stage back on the scrubber's beat. Hover never writes: overlay, selection, writes stay on `stage`. Playback snaps while hovering. |
+| Hover perf | no React state on move. Overlay: cursor = CSS var, bar = class, `onScrub` once per rAF. Preview → `ScrubChannel` → `SceneStage` → `renderer.apply` direct. Lines re-set only when hovered beat changes. Was: setState per move re-rendered whole editor, ~150 ms/move dev. Now ~30. |
 
 ## Test from this beat (Alt+T)
 

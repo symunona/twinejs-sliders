@@ -8,7 +8,7 @@
 
 import {beatTransitions, resolveStage, resolveZ, stageAt} from '@sliders/scene-core';
 import type {TimelineBeat} from '@sliders/scene-core';
-import type {BeatEase, Stage, StageEntity} from '@sliders/scene-types';
+import type {Beat, BeatEase, Stage, StageEntity} from '@sliders/scene-types';
 
 export interface TimingScrub {
 	/** Beat index, 0-based: the beat that turns state `beat` into state `beat + 1`. */
@@ -101,4 +101,35 @@ export function scrubStage(
 	}
 
 	return {...now, entities};
+}
+
+/** One scrubbed picture: the stage to draw and the beat whose lines go with it. */
+export interface ScrubFrame {
+	stage: Stage;
+	beat?: Beat;
+}
+
+/**
+ * Hands scrubbed frames straight to the mounted stage, around React.
+ *
+ * A hover moves many times a frame. Routed through the preview's state, every move
+ * re-rendered the whole scene editor — toolbars, sidebar, the editing overlay — and that,
+ * not the renderer, was most of the lag. `undefined` = back to what the stage was showing.
+ */
+export class ScrubChannel {
+	private listeners = new Set<(frame: ScrubFrame | undefined) => void>();
+
+	emit(frame: ScrubFrame | undefined): void {
+		for (const fn of this.listeners) {
+			fn(frame);
+		}
+	}
+
+	subscribe(fn: (frame: ScrubFrame | undefined) => void): () => void {
+		this.listeners.add(fn);
+
+		return () => {
+			this.listeners.delete(fn);
+		};
+	}
 }

@@ -64,8 +64,11 @@ test('timing overlay: rows per entity, both speakers, click waits marked', async
 
 	expect(Math.abs(box.y + box.height - (stageBox.y + stageBox.height))).toBeLessThan(4);
 	expect(box.height).toBeLessThan(stageBox.height * 0.6);
-	// Label 96 + 3 x 88 + padding 24: never wider, however wide the stage.
-	expect(box.width).toBeLessThanOrEqual(384 + 1);
+	// Label 96 + 3 x 176 + padding 24, at most the whole preview (sidebar included).
+	const preview = (await page.locator('.scene-stage-view').first().boundingBox())!;
+
+	expect(box.width).toBeLessThanOrEqual(Math.min(648, preview.width) + 1);
+	expect(box.width).toBeGreaterThan(Math.min(648, preview.width) - 2);
 
 	// Hover halfway through beat 1's 2s move: mira is drawn between where she starts and ends.
 	const sprite = page.locator('[data-entity-id="mira"]').first();

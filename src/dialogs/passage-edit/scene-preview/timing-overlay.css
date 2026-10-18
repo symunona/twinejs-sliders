@@ -1,7 +1,7 @@
-/* The timing overlay: docked to the stage's bottom edge, never over the sidebar — the beat
-   panel beside it stays usable, and the bars follow its edits. Only as wide as its beat
-   columns and as tall as its rows, so the stage above stays visible: hovering it scrubs
-   that stage. Always dark: it sits on whatever picture is under it. */
+/* The timing overlay: docked to the preview's bottom edge. Only as wide as its beat columns
+   (at most the whole preview, sidebar included) and as tall as its rows, so the stage
+   above stays visible: hovering it scrubs that stage. Always dark: it sits on whatever
+   picture is under it. */
 .timing-overlay {
 	backdrop-filter: blur(6px) brightness(0.55);
 	background: rgba(10, 10, 16, 0.78);
@@ -14,17 +14,17 @@
 	font-size: 12px;
 	left: 0;
 	max-height: 50%;
-	min-width: min(360px, calc(100% - var(--layers-panel-width, 0px)));
-	max-width: calc(100% - var(--layers-panel-width, 0px));
+	min-width: min(360px, 100%);
+	max-width: 100%;
 	position: absolute;
 	/* Label column + one share per beat + the body's side padding. */
 	width: calc(
 		var(--timing-label) + var(--timing-beats, 1) * var(--timing-column) + 24px
 	);
-	/* Over the badge (5) and the stage overlay, under the sidebar (6). */
-	z-index: 5;
+	/* Over the badge (5), the stage overlay and the sidebar (6): it may be as wide as the
+	   whole preview. */
+	z-index: 7;
 	--timing-label: 96px;
-	--timing-column: 88px;
 	--timing-auto: #8fd3ff;
 	--timing-reader: #ffd166;
 	--timing-timer: rgba(255, 255, 255, 0.45);
@@ -162,13 +162,20 @@
 	cursor: col-resize;
 }
 
-/* The hovered moment: the time the stage above is showing. */
+/* The hovered moment: the time the stage above is showing. Placed by a variable on the
+   body, so a mouse move re-renders nothing. */
 .timing-cursor {
 	background: #fff;
 	bottom: 0;
+	display: none;
+	left: var(--timing-cursor, 0);
 	position: absolute;
 	top: 0;
 	width: 1px;
+}
+
+.timing-overlay-body.scrubbing .timing-cursor {
+	display: block;
 }
 
 .timing-bar.hovered {
