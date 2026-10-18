@@ -12,7 +12,7 @@
  */
 
 import {resolveZ} from '@sliders/render-dom';
-import type {StageEntity} from '@sliders/scene-types';
+import type {EntityId, Stage, StageEntity} from '@sliders/scene-types';
 import {roundCoord} from './stage-geometry';
 import type {EntityKeyWrite} from './use-scene-writer';
 
@@ -133,4 +133,80 @@ export function zKeyWrite(
 	}
 
 	return keyWrite(drawn, 'z', next);
+}
+
+/**
+ * Who `id` may hang off: every other sprite on the stage, minus its own descendants (that
+ * would be a cycle, which the parser refuses) and minus `fit:` planes (no box to hang
+ * from — `FIT_IGNORES`). `cast:` and `props:` share one id space, so a prop may follow a
+ * character. Stage order, which is the order the YAML lists them in.
+ */
+export function parentChoices(authored: Stage, id: EntityId): EntityId[] {
+	const entities = authored?.entities ?? {};
+	const hangsOff = (child: EntityId) => {
+		const seen = new Set<EntityId>();
+
+		for (
+			let at: EntityId | undefined = child;
+			at !== undefined && !seen.has(at);
+			at = entities[at]?.of
+		) {
+			if (at === id) {
+				return true;
+			}
+
+			seen.add(at);
+		}
+
+		return false;
+	};
+
+	return Object.keys(entities).filter(
+		other => entities[other].fit === undefined && !hangsOff(other)
+	);
+}
+
+/**
+ * `of:` set, changed or cleared, with the `at` that keeps the sprite where it stands.
+ *
+ * The offset is taken from the DRAWN stage (`resolveStage`): new `at` = where it is now
+ * minus where the new parent is, or just where it is once it hangs off nothing. Both go in
+ * one batch, so the `at` says outright which space it is in (`relative`) rather than
+ * letting the writer read a parent out of text that does not have it yet — the difference
+ * matters exactly when y lands on the baseline and the bare form would be read the other
+ * way.
+ *
+ * Clearing is `of: ~` in a patch scene (`from:`), where an absent key would keep a parent
+ * inherited from the other passage, and on a beat, which inherits the one before it.
+ * Anywhere else it deletes the key.
+ */
+export function parentWrites(
+	authored: StageEntity,
+	drawn: Stage,
+	parent: EntityId | undefined,
+	patchScene: boolean
+): EntityKeyWrite[] {
+	const self = drawn?.entities?.[authored.id];
+	const anchor = parent === undefined ? undefined : drawn?.entities?.[parent];
+
+	if (
+		!self ||
+		parent === authored.id ||
+		(parent ?? undefined) === (authored.of ?? undefined) ||
+		(parent !== undefined && !anchor)
+	) {
+		return [];
+	}
+
+	const at = {
+		x: roundCoord(self.at.x - (anchor?.at.x ?? 0)),
+		y: roundCoord(self.at.y - (anchor?.at.y ?? 0))
+	};
+
+	return [
+		parent === undefined
+			? keyWrite(authored, 'of', patchScene ? null : undefined, null)
+			: keyWrite(authored, 'of', parent),
+		{...keyWrite(authored, 'at', at), relative: parent !== undefined}
+	];
 }

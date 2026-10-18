@@ -416,12 +416,18 @@ function writeKey(
 	return insertValueAfterKey(text, pair, `{${key}: ${formatted}}`);
 }
 
-/** Change or add one key on an entity. undefined when the entry does not exist. */
+/**
+ * Change or add one key on an entity. undefined when the entry does not exist.
+ *
+ * `options.relative` overrides what the text says about an `of:` parent — for an `at`
+ * written in the same batch as the `of:` change itself, which the text does not hold yet.
+ */
 export function setEntityKey(
 	text: string,
 	target: EntityTarget,
 	key: string,
-	value: unknown
+	value: unknown,
+	options: {relative?: boolean} = {}
 ): TextEdit | undefined {
 	const parsed = parseBlock(text);
 
@@ -439,7 +445,9 @@ export function setEntityKey(
 		parsed,
 		located.pair,
 		key,
-		formatValue(key, value, {relative: hasParent(located.pair)}),
+		formatValue(key, value, {
+			relative: options.relative ?? hasParent(located.pair)
+		}),
 		target.beat !== undefined
 	);
 }

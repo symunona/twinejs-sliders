@@ -735,6 +735,8 @@
 					}
 				},
 				"transform": {
+					"parent": "Parent",
+					"parentNone": "None",
 					"plane": "A fit: plane fills the stage. Only z applies.",
 					"relative": "x, y are an offset from {{parent}} (of:).",
 					"rot": "Rotation",

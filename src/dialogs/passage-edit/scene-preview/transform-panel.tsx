@@ -14,6 +14,7 @@
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {EntityId, Stage} from '@sliders/scene-types';
+import {TextSelect} from '../../../components/control/text-select';
 import {NumberField} from './number-field';
 import {
 	TRANSFORM_MAX_ROT,
@@ -21,6 +22,8 @@ import {
 	TRANSFORM_MIN_SCALE,
 	atAxisWrite,
 	derivedZ,
+	parentChoices,
+	parentWrites,
 	rotKeyWrite,
 	scaleKeyWrite,
 	zKeyWrite
@@ -37,11 +40,13 @@ export interface TransformPanelProps {
 	drawn: Stage;
 	/** Why a write would go somewhere unexpected (a beat about to be inserted). */
 	note?: string;
+	/** The scene has `from:`: clearing a parent has to say `of: ~`, not delete. */
+	patchScene?: boolean;
 	onWrite: (writes: EntityKeyWrite[]) => void;
 }
 
 export const TransformPanel: React.FC<TransformPanelProps> = props => {
-	const {authored, drawn, editable, ids, note, onWrite} = props;
+	const {authored, drawn, editable, ids, note, onWrite, patchScene} = props;
 	const {t} = useTranslation();
 	const id = ids.length === 1 ? ids[0] : undefined;
 	const entity = id === undefined ? undefined : authored?.entities?.[id];
@@ -75,6 +80,38 @@ export const TransformPanel: React.FC<TransformPanelProps> = props => {
 				<p className="scene-sidebar-empty">{label('plane')}</p>
 			) : (
 				<>
+					<div className="scene-sidebar-row" data-testid="transform-of">
+						<TextSelect
+							disabled={disabled}
+							onChange={event => {
+								const writes = parentWrites(
+									entity,
+									drawn,
+									event.target.value || undefined,
+									!!patchScene
+								);
+
+								if (writes.length > 0) {
+									onWrite(writes);
+								}
+							}}
+							options={[
+								{label: label('parentNone'), value: ''},
+								...parentChoices(authored, entity.id).map(other => ({
+									label: other,
+									value: other
+								})),
+								// A parent the stage cannot show (inherited, or a typo) stays
+								// selectable rather than reading as "none".
+								...(entity.of !== undefined && !authored.entities[entity.of]
+									? [{label: entity.of, value: entity.of}]
+									: [])
+							]}
+							value={entity.of ?? ''}
+						>
+							{label('parent')}
+						</TextSelect>
+					</div>
 					{entity.of !== undefined && (
 						<p className="scene-sidebar-empty">
 							{t('dialogs.passageEdit.scenePreview.transform.relative', {
