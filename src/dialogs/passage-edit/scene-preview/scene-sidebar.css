@@ -92,3 +92,24 @@
 	font-size: 85%;
 	margin: 0;
 }
+
+/* A scope-aware tab's handle (`SceneSidebarTab.scope`). Gray: it edits the scene's
+   globals (Step 0). Blue: it edits the beat on screen — the beat rows' override blue. */
+.scene-sidebar-tab-scope {
+	display: inline-flex;
+}
+
+.scene-sidebar-tab-scope[data-scope='global'] .icon-button.selected {
+	background: var(--light-gray);
+	color: var(--dark-gray);
+}
+
+.scene-sidebar-tab-scope[data-scope='beat'] .icon-button {
+	background: var(--faint-blue);
+	color: var(--dark-blue);
+}
+
+.scene-sidebar-tab-scope[data-scope='beat'] .icon-button.selected {
+	background: var(--light-blue);
+	box-shadow: inset 0 -2px 0 var(--blue);
+}

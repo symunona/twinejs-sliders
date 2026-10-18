@@ -56,6 +56,25 @@ describe('BeatPanel', () => {
 		).toBeInTheDocument();
 	});
 
+	it('Step 0: says it edits the scene defaults, no text box', () => {
+		renderPanel({
+			beat: undefined,
+			beatNumber: 0,
+			globals: {bubble: {align: 'centre'}},
+			scope: 'scene'
+		});
+
+		expect(screen.getByTestId('beat-panel')).toHaveAttribute(
+			'data-scope',
+			'scene'
+		);
+		expect(screen.getByTestId('beat-panel-scope')).toHaveTextContent(
+			'dialogs.passageEdit.beatProps.sceneScope'
+		);
+		expect(screen.queryByTestId('beat-panel-text')).toBeNull();
+		expect(screen.getByTestId('beat-prop-align')).toHaveClass('overridden');
+	});
+
 	describe('typing', () => {
 		beforeEach(() => jest.useFakeTimers());
 		afterEach(() => jest.useRealTimers());

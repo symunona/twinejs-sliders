@@ -10,6 +10,9 @@
  * icon opens straight onto that tab. Open, the icons run across the top (Blender's
  * properties editor) and the toggle sits at their head (Inkscape's dock).
  *
+ * A tab whose edits follow the scrubber says so on its handle (`scope`): gray while it
+ * writes the scene's globals (Step 0), blue while it writes the beat on screen.
+ *
  * Stateless. `useSceneSidebar` holds which tab and whether open, remembered.
  */
 
@@ -33,8 +36,15 @@ export type SceneSidebarTabId =
 	| 'links'
 	| 'problems';
 
+/**
+ * Where a scope-aware tab's edits land right now. `global`: the scene's own keys, every
+ * beat's default. `beat`: the beat on screen, overriding them. Absent: not scope-aware.
+ */
+export type SceneSidebarTabScope = 'global' | 'beat';
+
 export interface SceneSidebarTab {
 	id: SceneSidebarTabId;
+	scope?: SceneSidebarTabScope;
 	icon: React.ReactNode;
 	label: string;
 	/** Drawn only while this tab is the open one. */
@@ -127,30 +137,46 @@ export const SceneSidebar: React.FC<SceneSidebarProps> = props => {
 					onClick={() => onOpenChange(!open)}
 					tooltipPosition={open ? 'bottom' : 'left'}
 				/>
-				{tabs.map(tab => (
-					<IconButton
-						icon={tab.icon}
-						iconOnly
-						key={tab.id}
-						label={tab.label}
-						onClick={() => {
-							// A click on the open tab collapses, like Blender's: the icon is
-							// the panel's handle either way.
-							if (open && tab.id === shown?.id) {
-								onOpenChange(false);
+				{tabs.map(tab => {
+					const handle = (
+						<IconButton
+							icon={tab.icon}
+							iconOnly
+							key={tab.id}
+							label={tab.label}
+							onClick={() => {
+								// A click on the open tab collapses, like Blender's: the icon is
+								// the panel's handle either way.
+								if (open && tab.id === shown?.id) {
+									onOpenChange(false);
 
-								return;
-							}
+									return;
+								}
 
-							onActive(tab.id);
-							onOpenChange(true);
-						}}
-						role="tab"
-						selectable
-						selected={open && tab.id === shown?.id}
-						tooltipPosition={open ? 'bottom' : 'left'}
-					/>
-				))}
+								onActive(tab.id);
+								onOpenChange(true);
+							}}
+							role="tab"
+							selectable
+							selected={open && tab.id === shown?.id}
+							tooltipPosition={open ? 'bottom' : 'left'}
+						/>
+					);
+
+					// IconButton takes no class, so a scoped handle is wrapped.
+					return tab.scope ? (
+						<span
+							className="scene-sidebar-tab-scope"
+							data-scope={tab.scope}
+							data-testid={`scene-sidebar-tab-${tab.id}`}
+							key={tab.id}
+						>
+							{handle}
+						</span>
+					) : (
+						handle
+					);
+				})}
 			</div>
 			{open && shown && (
 				<div

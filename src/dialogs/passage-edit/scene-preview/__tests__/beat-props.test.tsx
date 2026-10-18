@@ -8,6 +8,7 @@ import {
 	sizeNoteKey,
 	valignNoteKey
 } from '../beat-props';
+import type {SceneGlobals} from '../beat-props';
 
 function say(dur?: number): Beat {
 	return {
@@ -842,6 +843,72 @@ describe('<BeatProps> enter animation', () => {
 		expect(enterDurField()).toBeDisabled();
 		expect(screen.getByTestId('beat-prop-enterDur')).toHaveTextContent(
 			key('enterNone')
+		);
+	});
+});
+
+describe('<BeatProps> scene scope (Step 0)', () => {
+	function renderScene(globals: SceneGlobals, beatCount = 1) {
+		const onSetBubble = jest.fn();
+		const onSetKey = jest.fn();
+
+		render(
+			<BeatProps
+				beatCount={beatCount}
+				beatNumber={0}
+				editable
+				globals={globals}
+				onSetBubble={onSetBubble}
+				onSetKey={onSetKey}
+				scope="scene"
+			/>
+		);
+
+		return {onSetBubble, onSetKey};
+	}
+
+	it('offers the full bubble rows, alignment included, not the arrival note', () => {
+		renderScene({});
+		expect(screen.queryByTestId('scene-preview-beat-props-none')).toBeNull();
+
+		for (const row of ['as', 'size', 'align', 'valign', 'anchor', 'enter']) {
+			expect(screen.getByTestId(`beat-prop-${row}`)).toBeInTheDocument();
+		}
+	});
+
+	it('is there even with no beats yet', () => {
+		renderScene({}, 0);
+		expect(screen.getByTestId('beat-prop-align')).toBeInTheDocument();
+	});
+
+	it('reads the scene bubble and highlights what it states', () => {
+		renderScene({bubble: {align: 'right'}});
+		expect(screen.getByTestId('beat-prop-align')).toHaveClass('overridden');
+		expect(screen.getByTestId('beat-prop-valign')).not.toHaveClass(
+			'overridden'
+		);
+	});
+
+	it('has no Auto checkbox; the hold box is autoAdvance', () => {
+		const {onSetKey} = renderScene({autoAdvance: 2});
+
+		expect(screen.queryByTestId('beat-prop-auto')).toBeNull();
+
+		const box = within(screen.getByTestId('beat-prop-dur')).getByRole(
+			'spinbutton'
+		) as HTMLInputElement;
+
+		expect(box.value).toBe('2');
+		expect(box).not.toBeDisabled();
+		fireEvent.change(box, {target: {value: '3'}});
+		fireEvent.blur(box);
+		expect(onSetKey).toHaveBeenCalledWith('dur', 3);
+	});
+
+	it('never greys anchor out: no speaker to be off stage', () => {
+		renderScene({});
+		expect(screen.getByTestId('beat-prop-anchor')).not.toHaveAttribute(
+			'data-disabled'
 		);
 	});
 });

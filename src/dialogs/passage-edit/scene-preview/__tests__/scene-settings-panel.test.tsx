@@ -8,6 +8,8 @@ import {
 	formatFx,
 	formatMusic,
 	formatTransition,
+	sceneBubbleWrite,
+	sceneGlobalKeyWrite,
 	splitTransition
 } from '../scene-settings-panel';
 
@@ -142,6 +144,57 @@ describe('formatting', () => {
 	});
 });
 
+describe('Step 0 writes (beat tab, scene scope)', () => {
+	it('maps dur to autoAdvance and ease to ease, null removes', () => {
+		expect(sceneGlobalKeyWrite('dur', 2.5)).toEqual({
+			formatted: '2.5',
+			sceneKey: 'autoAdvance'
+		});
+		expect(sceneGlobalKeyWrite('dur', 0)).toEqual({
+			formatted: '0',
+			sceneKey: 'autoAdvance'
+		});
+		expect(sceneGlobalKeyWrite('dur', null)).toEqual({
+			formatted: undefined,
+			sceneKey: 'autoAdvance'
+		});
+		expect(sceneGlobalKeyWrite('ease', 'ease_out')).toEqual({
+			formatted: 'ease_out',
+			sceneKey: 'ease'
+		});
+		expect(sceneGlobalKeyWrite('ease', null)).toEqual({
+			formatted: undefined,
+			sceneKey: 'ease'
+		});
+		expect(sceneGlobalKeyWrite('pose', 'x')).toBeUndefined();
+	});
+
+	it('writes one bubble key into the scene bubble map, alignment too', () => {
+		const bubble = scene('bubble: {as: yell}').bubble;
+
+		expect(sceneBubbleWrite(bubble, 'place', 'top')).toEqual({
+			formatted: '{as: yell, place: top}',
+			sceneKey: 'bubble'
+		});
+		expect(sceneBubbleWrite(bubble, 'align', 'right')).toEqual({
+			formatted: '{as: yell, align: right}',
+			sceneKey: 'bubble'
+		});
+		expect(sceneBubbleWrite(bubble, 'as', null)).toEqual({
+			formatted: undefined,
+			sceneKey: 'bubble'
+		});
+	});
+
+	it('round-trips through the parser', () => {
+		const write = sceneBubbleWrite({}, 'valign', 'bottom');
+
+		expect(scene(`bubble: ${write.formatted}`).bubble).toEqual({
+			valign: 'bottom'
+		});
+	});
+});
+
 describe('<SceneSettingsPanel>', () => {
 	it('renders nothing when not editable', () => {
 		renderPanel('bg: cellar', false);
@@ -190,42 +243,24 @@ describe('<SceneSettingsPanel>', () => {
 	});
 
 	it('commits a number on blur, not per keystroke', () => {
-		const {onWrite} = renderPanel('bg: cellar');
-		const box = number('scene-settings-auto-advance');
+		const {onWrite} = renderPanel('transition: fade');
+		const box = number('scene-settings-transition-dur');
 
-		fireEvent.change(box, {target: {value: '2'}});
-		fireEvent.change(box, {target: {value: '2.5'}});
+		fireEvent.change(box, {target: {value: '0.4'}});
+		fireEvent.change(box, {target: {value: '0.5'}});
 		expect(onWrite).not.toHaveBeenCalled();
 		fireEvent.blur(box);
 		expect(onWrite).toHaveBeenCalledTimes(1);
 		expect(onWrite).toHaveBeenCalledWith([
-			{formatted: '2.5', sceneKey: 'autoAdvance'}
+			{formatted: 'fade 0.5s', sceneKey: 'transition'}
 		]);
 	});
 
-	it('removes autoAdvance when the box is emptied', () => {
-		const {onWrite} = renderPanel('autoAdvance: 0');
-		const box = number('scene-settings-auto-advance');
-
-		expect(box.value).toBe('0');
-		fireEvent.change(box, {target: {value: ''}});
-		fireEvent.keyDown(box, {key: 'Enter'});
-		expect(onWrite).toHaveBeenCalledWith([
-			{formatted: undefined, sceneKey: 'autoAdvance'}
-		]);
-	});
-
-	it('shows a per-kind ease map as a readout that writes nothing', () => {
-		const {onWrite} = renderPanel('ease: {move: back_out}');
-		const box = select('scene-settings-ease');
-
-		expect(box.selectedOptions[0].textContent).toBe(
-			'dialogs.passageEdit.scenePreview.settings.easePerKind'
-		);
-		fireEvent.change(box, {target: {value: 'ease_out'}});
-		expect(onWrite).toHaveBeenCalledWith([
-			{formatted: 'ease_out', sceneKey: 'ease'}
-		]);
+	it('leaves the beat defaults (pacing, bubble) to the beat tab', () => {
+		renderPanel('autoAdvance: 2\nease: ease_out\nbubble: {as: yell}');
+		expect(screen.queryByTestId('scene-settings-auto-advance')).toBeNull();
+		expect(screen.queryByTestId('scene-settings-ease')).toBeNull();
+		expect(screen.queryByTestId('scene-settings-bubble-group')).toBeNull();
 	});
 
 	it('adds and removes an effect', () => {
@@ -280,17 +315,6 @@ describe('<SceneSettingsPanel>', () => {
 		fireEvent.click(reset('scene-settings-track-drums-name'));
 		expect(onWrite).toHaveBeenCalledWith([
 			{formatted: '{mellow: strings}', sceneKey: 'music'}
-		]);
-	});
-
-	it('writes one bubble key into the scene bubble map', () => {
-		const {onWrite} = renderPanel('bubble: {as: yell}');
-
-		fireEvent.change(select('scene-settings-bubble-place'), {
-			target: {value: 'top'}
-		});
-		expect(onWrite).toHaveBeenCalledWith([
-			{formatted: '{as: yell, place: top}', sceneKey: 'bubble'}
 		]);
 	});
 

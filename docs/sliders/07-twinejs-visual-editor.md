@@ -80,10 +80,10 @@ Sidebar tabs, top to bottom of the icon row:
 
 | Tab | Holds |
 |---|---|
-| ⚙ scene | grid, sound · then groups: Template from (`from:`, searchable passage list, `?` hover help) · Backdrop (`bg`, searchable, thumbnails) · Arrival · Pacing · Music · Bubbles · Editor (`locked`) |
+| ⚙ scene | grid, sound · then groups: Template from (`from:`, searchable passage list, `?` hover help) · Backdrop (`bg`, searchable, thumbnails) · Arrival · Music · Editor (`locked`). Pacing + Bubbles moved to 💬 at Step 0 |
 | 📷 camera | camera tool (old bg lock) · Camera x / y / zoom (shown stage camera, live in a pan, inherited under `from:`; writes whole `camera:`, rest = key removed; disabled by `locked: [bg]`) · Motion (`bg` fx, loop length) · Effects (`fx`) |
 | ≡ layers | layers panel |
-| 💬 beat | beat panel (below). Opened by press on bubble, add beat |
+| 💬 beat | beat panel (below). Opened by press on bubble, add beat. Scope-aware |
 | 👤 / ▣ selection | only while something is selected; follows selection, back to previous tab on deselect. name, note · flip, stretch, lock, z, delete · pose · grade: title, match bg + reset grade on top, sliders (hover a slider = min/max preview) |
 | 🚶 walk | walk-here toggle, walker, note · "Edit walk area" = bg asset in asset editor, walk tool |
 | 🔗 links | scene `links:` editable list |
@@ -91,6 +91,19 @@ Sidebar tabs, top to bottom of the icon row:
 
 Every group heading in the sidebar has an icon (`Heading` in `scene-settings-panel.tsx`). New
 pane = new tab id + `SceneSettingsPane` value.
+
+## Scope
+
+Scope-aware tab (`SceneSidebarTab.scope`) = edits follow the scrubber:
+
+| Scrubber | Writes | Tab handle |
+|---|---|---|
+| Step 0 | scene globals: `autoAdvance:` `ease:` `bubble:`. Fallback = story `sliders.bubble.*` | gray |
+| beat N | that beat's own keys. Fallback = story + scene | blue (override blue) |
+
+Same component both ways (`BeatProps`, `scope: 'beat' \| 'scene'`) — scene globals get every
+bubble row a beat has (size, align, valign…). Now: 💬 beat. Next: sounds. New tab opts in
+with `scope`.
 
 ## Beat panel
 
@@ -100,7 +113,7 @@ sidebar). Not on sprite select — caret in a beat line selects the speaker.
 | Part | Writes |
 |---|---|
 | Text box (double click bubble = focus) | beat words: scalar, `say:` or `text:`, quote style kept. Live while typing, throttled 300ms, one undo step per burst (`+sliders-type`). Enter = write now, Shift+Enter = newline, Esc = back to text at focus. Ctrl+B `**bold**`, Ctrl+I `_italic_` toggle around selection / word at caret |
-| Timing, Bubble groups | `dur:` `ease:` · `bubble:` keys on the beat. Grid rows: label · control · X. X = remove beat's key (back to default). "Default: …" line under each = story + scene value, else built-in. Row highlighted when beat states a value ≠ default. Dropdowns' unset option reads `inherit`. Explained dropdown (`sizing`) pane sized to its tallest explanation: no resize on hover, no flicker. Timing `?` = hover help |
+| Timing, Bubble groups | `dur:` `ease:` · `bubble:` keys on the beat. Step 0: `autoAdvance:` (no Auto box) `ease:` `bubble:` on the scene, title says "Scene defaults". Grid rows: label · control · X. X = remove beat's key (back to default). "Default: …" line under each = story + scene value, else built-in. Row highlighted when beat states a value ≠ default. Dropdowns' unset option reads `inherit`. Explained dropdown (`sizing`) pane sized to its tallest explanation: no resize on hover, no flicker. Timing `?` = hover help |
 | "Make beat styles default for project" + confirm | `sliders.bubble.*` in START passage vars, beat's `as font color bg accent sizing anchor size` over existing. No `w h at tail place`. No beat, no other passage touched. Undoable. |
 
 ## What is NOT editable visually

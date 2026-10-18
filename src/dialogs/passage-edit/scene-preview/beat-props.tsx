@@ -33,7 +33,7 @@ import {
 	EASE_NAMES,
 	bubbleFontStack
 } from '@sliders/scene-types';
-import type {Beat, BubbleStyle} from '@sliders/scene-types';
+import type {Beat, BeatEase, BubbleStyle} from '@sliders/scene-types';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {IconButton} from '../../../components/control/icon-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
@@ -51,7 +51,26 @@ import {
 } from '../../bubble-style/bubble-previews';
 import './beat-props.css';
 
+/**
+ * Who the panel writes to. `beat`: the beat on screen, its own keys. `scene`: Step 0, no
+ * beat — the scene's globals (`autoAdvance:`, `ease:`, `bubble:`) every beat starts from.
+ * Same rows either way, so a key set once for the scene and overridden on one line is
+ * edited in the same place.
+ */
+export type BeatPropsScope = 'beat' | 'scene';
+
+/** The scene keys the `scene` scope edits, as the parser read them. */
+export interface SceneGlobals {
+	autoAdvance?: number;
+	ease?: BeatEase;
+	bubble?: BubbleStyle;
+}
+
 export interface BeatPropsProps {
+	/** Default `beat`. `scene` reads `globals` and ignores `beat`. */
+	scope?: BeatPropsScope;
+	/** The scene's own globals, for the `scene` scope. */
+	globals?: SceneGlobals;
 	/** The beat that PRODUCED the state on screen, i.e. `beats[scrubber - 1]`. */
 	beat?: Beat;
 	/**
@@ -65,9 +84,12 @@ export interface BeatPropsProps {
 	beatNumber: number;
 	/** False when there is no CodeMirror to write to. Renders nothing. */
 	editable: boolean;
-	/** A key on the beat's own body. `null` removes it. */
+	/**
+	 * A key on the beat's own body. `null` removes it. In the `scene` scope only `dur`
+	 * (= `autoAdvance:`) and `ease` arrive.
+	 */
 	onSetKey: (key: string, value: unknown) => void;
-	/** One key of the beat's `bubble:` map. `null` removes it. */
+	/** One key of the beat's `bubble:` map (scene scope: the scene's). `null` removes it. */
 	onSetBubble: (key: keyof BubbleStyle, value: unknown) => void;
 	/**
 	 * What this beat's bubble looks like before it states anything: the story's
@@ -373,9 +395,11 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	beatCount,
 	beatNumber,
 	editable,
+	globals,
 	inherited,
 	onSetKey,
 	onSetBubble,
+	scope = 'beat',
 	stageIds,
 	storyColors
 }) => {
@@ -404,14 +428,22 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	React.useEffect(() => {
 		setDraft(undefined);
 		setSizeDraft(undefined);
-	}, [beat]);
+	}, [beat, scope]);
 
-	if (!editable || beatCount === 0) {
+	const isScene = scope === 'scene';
+
+	// No beats: nothing to override. The scene's globals are still there to set.
+	if (!editable || (!isScene && beatCount === 0)) {
 		return null;
 	}
 
-	const style = styleOf(beat);
-	const dur = draft ?? (beat?.dur === undefined ? '' : String(beat.dur));
+	const style = isScene ? globals?.bubble : styleOf(beat);
+	/** `dur:` on a beat, `autoAdvance:` on the scene: how long a beat holds. */
+	const ownDur = isScene ? globals?.autoAdvance : beat?.dur;
+	const ownEase = isScene ? globals?.ease : beat?.ease;
+	/** The scene scope paints every line, so every bubble row means something. */
+	const talks = isScene || speaks(beat);
+	const dur = draft ?? (ownDur === undefined ? '' : String(ownDur));
 	/**
 	 * Auto-advance is exactly "this beat names no `dur`".
 	 *
@@ -424,13 +456,9 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 * timer in the player (`waitForReader` in stage-element.ts), so it advances at once. The
 	 * only wait-for-a-click there is the READER's setting, which an author does not own.
 	 */
-	const auto = beat?.dur === undefined;
+	const auto = ownDur === undefined;
 	const ease =
-		typeof beat?.ease === 'string'
-			? beat.ease
-			: beat?.ease
-			? PER_KIND
-			: INHERIT;
+		typeof ownEase === 'string' ? ownEase : ownEase ? PER_KIND : INHERIT;
 	/**
 	 * What this beat is actually drawn in: the inherited look with the beat's own keys over
 	 * it, merged the way `mergeBubbleStyle` merges them — key by key, narrower winning.
@@ -449,15 +477,17 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	 */
 	const sizeNote = sizeNoteKey(merged.sizing);
 	const valignNote = valignNoteKey(merged.sizing);
-	const anchorOff = anchorDisabledKey(beat, merged.tail, stageIds);
+	const anchorOff = isScene
+		? undefined
+		: anchorDisabledKey(beat, merged.tail, stageIds);
 	const enterOff = merged.enter === 'none';
 	const size =
 		sizeDraft ?? (style?.size === undefined ? '' : String(style.size));
-	const emptyKey = emptyReasonKey(beat, beatNumber);
+	const emptyKey = isScene ? undefined : emptyReasonKey(beat, beatNumber);
 	// The one genuinely disabled control here. Its reason lives on the field itself as well
 	// as on the checkbox that causes it: an author who notices the grey box looks at the
 	// grey box, not at the control two places to its left.
-	const holdDisabled = speaks(beat) && auto;
+	const holdDisabled = !isScene && speaks(beat) && auto;
 
 	function commitDur() {
 		setDraft(undefined);
@@ -466,7 +496,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 
 		if (trimmed === '') {
 			// Clearing the box means "untime this beat", which is a removal, not a zero.
-			if (beat?.dur !== undefined) {
+			if (ownDur !== undefined) {
 				onSetKey('dur', null);
 			}
 
@@ -476,7 +506,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 		const next = Number(trimmed);
 
 		// Refuse rather than write nonsense the parser would only reject back at them.
-		if (!Number.isFinite(next) || next < 0 || next === beat?.dur) {
+		if (!Number.isFinite(next) || next < 0 || next === ownDur) {
 			return;
 		}
 
@@ -566,17 +596,17 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 						<h4 className="scene-preview-beat-props-heading">
 							{label('timing')}
 							<span
-								aria-label={t('dialogs.passageEdit.beatProps.timingHelp')}
+								aria-label={label(isScene ? 'sceneTimingHelp' : 'timingHelp')}
 								className="beat-prop-help"
 								data-testid="beat-props-timing-help"
 								role="img"
 								tabIndex={0}
-								title={t('dialogs.passageEdit.beatProps.timingHelp')}
+								title={label(isScene ? 'sceneTimingHelp' : 'timingHelp')}
 							>
 								<IconHelp />
 							</span>
 						</h4>
-						{speaks(beat) && (
+						{!isScene && speaks(beat) && (
 							// Only where there is a line to hold on. A stage-only `set` beat's
 							// `dur` is how long its movement TAKES, not how long the reader
 							// looks at it, so "advance automatically" is not a question that
@@ -607,16 +637,18 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 						)}
 						<PropRow
 							fallback={fallback(
-								speaks(beat)
+								isScene
+									? label('sceneDurFallback')
+									: speaks(beat)
 									? t('dialogs.passageEdit.beatProps.autoFallback', {
 											seconds: defaultHold(autoAdvanceMs)
 									  })
 									: undefined
 							)}
-							label={label('dur')}
+							label={label(isScene ? 'sceneDur' : 'dur')}
 							onReset={() => onSetKey('dur', null)}
 							overridden={!auto}
-							resetLabel={resetLabel('dur')}
+							resetLabel={resetLabel(isScene ? 'sceneDur' : 'dur')}
 							stated={!auto}
 							testId="beat-prop-dur"
 						>
@@ -644,12 +676,14 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 										}
 									}}
 									placeholder={
-										speaks(beat) ? String(defaultHold(autoAdvanceMs)) : undefined
+										!isScene && speaks(beat)
+											? String(defaultHold(autoAdvanceMs))
+											: undefined
 									}
 									type="number"
 									value={dur}
 								>
-									{label('dur')}
+									{label(isScene ? 'sceneDur' : 'dur')}
 								</TextInput>
 							</span>
 							<span className="beat-prop-unit">s</span>
@@ -658,9 +692,9 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							fallback={fallback(undefined)}
 							label={label('ease')}
 							onReset={() => onSetKey('ease', null)}
-							overridden={beat?.ease !== undefined}
+							overridden={ownEase !== undefined}
 							resetLabel={resetLabel('ease')}
-							stated={beat?.ease !== undefined}
+							stated={ownEase !== undefined}
 							testId="beat-prop-ease"
 						>
 							<TextSelect
@@ -685,7 +719,7 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 							</TextSelect>
 						</PropRow>
 					</div>
-					{speaks(beat) && (
+					{talks && (
 						<div className="scene-preview-beat-props-group">
 							<h4 className="scene-preview-beat-props-heading">
 								{label('bubble')}

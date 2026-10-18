@@ -6,6 +6,9 @@
  * author changes most; then the beat's timing and bubble (`BeatProps` in its panel layout);
  * then the one story-wide act, handing this beat's look up as the story's default.
  *
+ * Step 0 has no beat: there the same rows edit the scene's globals (`scope: 'scene'`), the
+ * values every beat starts from. Spec 07, "Scope".
+ *
  * The text box writes as the author types, throttled: one write per `TEXT_WRITE_MS` at most,
  * so the stage keeps up without a reparse per keystroke. The writes carry a `+` origin and
  * merge into one undo step. Ctrl+B / Ctrl+I toggle `**bold**` / `_italic_`
@@ -58,6 +61,7 @@ export const BeatPanel: React.FC<BeatPanelProps> = props => {
 		onClose,
 		onMakeDefault,
 		onSetText,
+		scope,
 		...rest
 	} = props;
 	const {t} = useTranslation();
@@ -180,7 +184,11 @@ export const BeatPanel: React.FC<BeatPanelProps> = props => {
 	}
 
 	return (
-		<div className="beat-panel" data-testid="beat-panel">
+		<div
+			className="beat-panel"
+			data-scope={scope ?? 'beat'}
+			data-testid="beat-panel"
+		>
 			<div className="beat-panel-title">
 				<span className="beat-panel-which">
 					{beatNumber === 0
@@ -188,6 +196,12 @@ export const BeatPanel: React.FC<BeatPanelProps> = props => {
 						: t('dialogs.passageEdit.beatProps.beat', {number: beatNumber})}
 					{beat?.kind === 'say' && (
 						<span className="beat-panel-who"> · {beat.who}</span>
+					)}
+					{scope === 'scene' && (
+						<span className="beat-panel-scope" data-testid="beat-panel-scope">
+							{' '}
+							· {t('dialogs.passageEdit.beatProps.sceneScope')}
+						</span>
 					)}
 				</span>
 				<IconButton
@@ -248,6 +262,7 @@ export const BeatPanel: React.FC<BeatPanelProps> = props => {
 				)}
 				<BeatProps
 					{...rest}
+					scope={scope}
 					beat={beat}
 					beatNumber={beatNumber}
 					editable={editable}

@@ -611,6 +611,10 @@
 				"defaultIs": "Default:",
 				"reset": "Reset {{name}} to default",
 				"timingHelp": "Hold: how long this beat stays before the next. Auto (no Hold of its own) advances at the scene's autoAdvance pace, or the reader's if the scene sets none. A number holds that many seconds. On a stage-only beat, Hold is how long its movement takes. Ease: the curve of any movement this beat starts; Default uses the scene's or the built-in curve.",
+				"sceneScope": "Scene defaults",
+				"sceneDur": "Auto-advance",
+				"sceneDurFallback": "the reader's setting. 0 waits for a click",
+				"sceneTimingHelp": "Step 0: these are the scene's own defaults (autoAdvance, ease, bubble). Every beat starts from them; pick a beat to override one line.",
 				"makeDefaultPrompt": "Write this beat's bubble style (style, font, colours, sizing, alignment, enter animation, anchor, size) into the start passage as the story's defaults? No beat or passage is changed."
 			},
 			"scenePreview": {

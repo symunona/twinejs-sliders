@@ -2,9 +2,13 @@
  * Scene settings: the scene-level keys, edited beside the stage without going to the YAML.
  *
  * One group per key the parser reads at the top of a scene (`TOP_LEVEL_KEYS`) that is a
- * SETTING rather than content: `from`, `bg`, `transition`, `ease`, `autoAdvance`, `fx`,
- * `music`, `bubble`, `locked`, `camera`. Cast, props, beats and links have their own
- * editors and are not here.
+ * SETTING rather than content: `from`, `bg`, `transition`, `fx`, `music`, `locked`,
+ * `camera`. Cast, props, beats and links have their own editors and are not here.
+ *
+ * The beat defaults — `autoAdvance`, `ease`, `bubble` — are NOT here: they live in the beat
+ * tab at Step 0 (`BeatProps` with `scope: 'scene'`), on the same rows a beat overrides
+ * them with. `sceneGlobalKeyWrite` / `sceneBubbleWrite` below turn those rows' writes
+ * into scene keys.
  *
  * Split over sidebar panes (`pane`): `scene` is the scene's own settings, `camera` is the
  * shot — where it looks, how the backdrop moves, what weather is over it. A new pane is a
@@ -26,9 +30,7 @@ import {
 	IconCloudRain,
 	IconDoorEnter,
 	IconHelp,
-	IconHourglass,
 	IconLock,
-	IconMessageCircle,
 	IconMusic,
 	IconPhoto,
 	IconTemplate,
@@ -39,18 +41,13 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {
 	BG_MOTIONS,
-	BUBBLE_ANCHORS,
-	BUBBLE_ENTERS,
 	BUBBLE_KEYS,
-	BUBBLE_PLACES,
-	DEFAULT_BUBBLE_ENTER_DUR,
 	EASE_NAMES,
 	MUSIC_DEFAULT_FADE,
 	MUSIC_MAIN_TRACK,
 	SCENE_LOCKS,
 	SCENE_TRANSITION_ALIASES,
-	SCENE_TRANSITION_KINDS,
-	bubbleFontStack
+	SCENE_TRANSITION_KINDS
 } from '@sliders/scene-types';
 import type {
 	AssetResolver,
@@ -69,13 +66,6 @@ import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {PreviewSelect} from '../../../components/control/preview-select';
 import {TextSelect} from '../../../components/control/text-select';
 import {NumberField} from './number-field';
-import {BubbleColorControl} from '../../bubble-style/bubble-color-control';
-import {
-	BubbleFontSwatch,
-	bubbleFontOptions,
-	bubbleStyleOptions
-} from '../../bubble-style/bubble-previews';
-import {bubbleSizingOptions} from '../../bubble-style/bubble-sizing';
 import {useAssetLibrary} from '../../sliders-assets/asset-store-context';
 import {FX_IDS} from '../use-scene-hints';
 import {AssetPreview} from '../../sliders-assets/asset-preview';
@@ -355,6 +345,47 @@ export function formatBubble(style: BubbleStyle): string | undefined {
 		: formatValue('bubble', value);
 }
 
+/**
+ * A Step 0 beat-row write (`BeatProps` in the `scene` scope) as the scene key it means:
+ * `dur` is `autoAdvance:`, `ease` is `ease:`. `null` removes. Anything else: `undefined`.
+ */
+export function sceneGlobalKeyWrite(
+	key: string,
+	value: unknown
+): SceneKeyWrite | undefined {
+	const gone = value === null || value === undefined || value === '';
+
+	switch (key) {
+		case 'dur':
+			return {
+				formatted: gone ? undefined : formatNumber(value as number),
+				sceneKey: 'autoAdvance'
+			};
+		case 'ease':
+			return {
+				formatted: gone ? undefined : formatValue('ease', value),
+				sceneKey: 'ease'
+			};
+	}
+
+	return undefined;
+}
+
+/** One key of the scene's `bubble:`, the rest kept. `null` removes the key. */
+export function sceneBubbleWrite(
+	bubble: BubbleStyle | undefined,
+	key: keyof BubbleStyle,
+	value: unknown
+): SceneKeyWrite {
+	return {
+		formatted: formatBubble({
+			...bubble,
+			[key]: value === null || value === '' ? undefined : value
+		}),
+		sceneKey: 'bubble'
+	};
+}
+
 /** `locked:` — `true`, or the list of what is pinned. */
 export function formatLocked(locked: true | SceneLock[]): string {
 	return locked === true ? 'true' : formatValue('locked', locked);
@@ -510,11 +541,6 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 	const setTransition = (patch: Partial<TransitionParts>) =>
 		write('transition', formatTransition({...transition, ...patch}));
 	const transitionEases = withCurrent(EASE_NAMES, transition.ease);
-
-	// --- ease ---------------------------------------------------------------
-
-	const ease =
-		typeof scene.ease === 'string' ? scene.ease : scene.ease ? CUSTOM : UNSET;
 
 	// --- fx -----------------------------------------------------------------
 
@@ -698,26 +724,6 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 
 	const stop = music?.stopOthers;
 	const stopChoice = stop === 'all' ? 'all' : stop ? CUSTOM : UNSET;
-
-	// --- bubble -------------------------------------------------------------
-
-	const bubble = scene.bubble ?? {};
-	const setBubble = (name: keyof BubbleStyle, value: unknown) =>
-		write(
-			'bubble',
-			formatBubble({
-				...bubble,
-				[name]: value === null || value === '' ? undefined : value
-			})
-		);
-	const bubbleRow = (name: keyof BubbleStyle) => ({
-		fallback: fallback(label('storyDefault')),
-		label: label(`bubble_${name}`),
-		onReset: () => setBubble(name, null),
-		resetLabel: resetLabel(`bubble_${name}`),
-		stated: bubble[name] !== undefined,
-		testId: `scene-settings-bubble-${name}`
-	});
 
 	// --- locked -------------------------------------------------------------
 
@@ -910,64 +916,6 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 						</SettingRow>
 					</div>
 
-					<div className="scene-preview-beat-props-group">
-						<Heading icon={<IconHourglass />}>{label('pacing')}</Heading>
-						<SettingRow
-							fallback={fallback(label('autoAdvanceInherit'))}
-							label={label('autoAdvance')}
-							onReset={() => write('autoAdvance')}
-							resetLabel={resetLabel('autoAdvance')}
-							stated={scene.autoAdvance !== undefined}
-							testId="scene-settings-auto-advance"
-						>
-							<NumberField
-								label={label('autoAdvance')}
-								min={0}
-								onCommit={seconds =>
-									write(
-										'autoAdvance',
-										seconds === undefined ? undefined : formatNumber(seconds)
-									)
-								}
-								step={0.5}
-								unit="s"
-								value={scene.autoAdvance}
-							/>
-						</SettingRow>
-						<SettingRow
-							fallback={fallback(label('easeInherit'))}
-							label={label('ease')}
-							onReset={() => write('ease')}
-							resetLabel={resetLabel('ease')}
-							stated={scene.ease !== undefined}
-							testId="scene-settings-ease"
-						>
-							<TextSelect
-								onChange={event => {
-									const value = event.target.value;
-
-									// The map form is a readout, not a value to write back.
-									if (value === CUSTOM) {
-										return;
-									}
-
-									write('ease', value ? formatValue('ease', value) : undefined);
-								}}
-								options={[
-									unsetOption,
-									...(ease === CUSTOM ? [customOption('easePerKind')] : []),
-									...withCurrent(
-										EASE_NAMES,
-										ease === CUSTOM ? undefined : ease || undefined
-									).map(name => ({label: name, value: name}))
-								]}
-								value={ease}
-							>
-								{label('ease')}
-							</TextSelect>
-						</SettingRow>
-					</div>
-
 					<div
 						className="scene-preview-beat-props-group"
 						data-testid="scene-settings-music-group"
@@ -1084,116 +1032,6 @@ export const SceneSettingsPanel: React.FC<SceneSettingsPanelProps> = ({
 								</TextSelect>
 							</SettingRow>
 						)}
-					</div>
-
-					<div
-						className="scene-preview-beat-props-group"
-						data-testid="scene-settings-bubble-group"
-					>
-						<Heading icon={<IconMessageCircle />}>{label('bubble')}</Heading>
-						<SettingRow {...bubbleRow('as')}>
-							<PreviewSelect
-								onChange={value => setBubble('as', value || null)}
-								options={bubbleStyleOptions({
-									colors: {
-										accent: bubble.accent,
-										bg: bubble.bg,
-										color: bubble.color,
-										font: bubble.font
-									},
-									emptyLabel: label('unset')
-								})}
-								value={bubble.as ?? UNSET}
-							>
-								{label('bubble_as')}
-							</PreviewSelect>
-						</SettingRow>
-						<SettingRow {...bubbleRow('font')}>
-							<PreviewSelect
-								onChange={value => setBubble('font', value || null)}
-								options={bubbleFontOptions({
-									current: bubble.font,
-									customLabel: label('fontCustom'),
-									emptyLabel: label('unset'),
-									emptyPreview: (
-										<BubbleFontSwatch
-											label={label('fontSample')}
-											stack={bubbleFontStack(undefined)}
-										/>
-									)
-								})}
-								searchable
-								value={bubble.font ?? UNSET}
-							>
-								{label('bubble_font')}
-							</PreviewSelect>
-						</SettingRow>
-						{(['color', 'bg', 'accent'] as const).map(name => (
-							<SettingRow {...bubbleRow(name)} key={name}>
-								<BubbleColorControl
-									clearLabel={label('clearColor')}
-									onChange={value => setBubble(name, value ?? null)}
-									value={bubble[name]}
-								>
-									{label(`bubble_${name}`)}
-								</BubbleColorControl>
-							</SettingRow>
-						))}
-						{/* Sizing sits between place and anchor, as in the beat row. */}
-						{(
-							[
-								['place', BUBBLE_PLACES],
-								['sizing', undefined],
-								['anchor', BUBBLE_ANCHORS],
-								['enter', BUBBLE_ENTERS]
-							] as const
-						).map(([name, values]) =>
-							values === undefined ? (
-								<SettingRow {...bubbleRow(name)} key={name}>
-									<PreviewSelect
-										onChange={value => setBubble(name, value || null)}
-										options={bubbleSizingOptions({
-											emptyLabel: label('unset'),
-											emptyNote: t('components.bubbleSizing.storyDefault'),
-											emptyValue: UNSET,
-											t
-										})}
-										value={bubble.sizing ?? UNSET}
-									>
-										{label(`bubble_${name}`)}
-									</PreviewSelect>
-								</SettingRow>
-							) : (
-								<SettingRow {...bubbleRow(name)} key={name}>
-									<TextSelect
-										onChange={event =>
-											setBubble(name, event.target.value || null)
-										}
-										options={[
-											unsetOption,
-											...(values as readonly string[]).map(value => ({
-												label: value,
-												value
-											}))
-										]}
-										value={(bubble[name] as string | undefined) ?? UNSET}
-									>
-										{label(`bubble_${name}`)}
-									</TextSelect>
-								</SettingRow>
-							)
-						)}
-						<SettingRow {...bubbleRow('enterDur')}>
-							<NumberField
-								label={label('bubble_enterDur')}
-								min={0}
-								onCommit={value => setBubble('enterDur', value ?? null)}
-								placeholder={String(DEFAULT_BUBBLE_ENTER_DUR)}
-								step={0.05}
-								unit="s"
-								value={bubble.enterDur}
-							/>
-						</SettingRow>
 					</div>
 
 					<div className="scene-preview-beat-props-group">

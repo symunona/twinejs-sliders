@@ -90,7 +90,11 @@ import {useStoryLaunch} from '../../../store/use-story-launch';
 import {zResetBlocks} from './layer-order';
 import {LayersPanel} from './layers-panel';
 import {SceneLinksPanel} from './scene-links-panel';
-import {SceneSettingsTab} from './scene-settings-panel';
+import {
+	SceneSettingsTab,
+	sceneBubbleWrite,
+	sceneGlobalKeyWrite
+} from './scene-settings-panel';
 import {
 	SceneSidebar,
 	SceneSidebarTab,
@@ -792,17 +796,29 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		(key: string, value: unknown) => {
 			if (beat > 0) {
 				commit([{beat: beat - 1, beatKey: key, value}], EDIT_ORIGIN);
+				return;
+			}
+
+			// Step 0: the same rows edit the scene's globals.
+			const write = sceneGlobalKeyWrite(key, value);
+
+			if (write) {
+				commit([write], EDIT_ORIGIN);
 			}
 		},
 		[beat, commit]
 	);
+	const sceneBubble = parse.result?.scene.bubble;
 	const handleBeatBubble = React.useCallback(
 		(key: keyof BubbleStyle, value: unknown) => {
 			if (beat > 0) {
 				commit([{beat: beat - 1, bubble: {[key]: value}}], EDIT_ORIGIN);
+				return;
 			}
+
+			commit([sceneBubbleWrite(sceneBubble, key, value)], EDIT_ORIGIN);
 		},
-		[beat, commit]
+		[beat, commit, sceneBubble]
 	);
 
 	/** The beat panel's text box. Live writes while typing merge into one undo step. */
@@ -1174,13 +1190,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * absent in a bare preview, and then a scene gets its own `bubble:` and nothing wider,
 	 * which is the same answer as a story that declared none.
 	 */
+	const storyBubble = React.useMemo(
+		() => (passages ? storyBubbleDefaults(passages) : undefined),
+		[passages]
+	);
 	const bubbleDefaults = React.useMemo(
-		() =>
-			mergeBubbleStyle(
-				passages ? storyBubbleDefaults(passages) : undefined,
-				parse.result?.scene.bubble
-			),
-		[parse.result, passages]
+		() => mergeBubbleStyle(storyBubble, parse.result?.scene.bubble),
+		[parse.result, storyBubble]
 	);
 
 	/**
@@ -2332,19 +2348,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					beatNumber={beat}
 					editable={editable}
 					focusText={beatTextFocus}
-					inherited={bubbleDefaults}
+					globals={parse.result?.scene}
+					// Step 0 edits the scene's globals; they sit over the story's defaults only.
+					inherited={beat > 0 ? bubbleDefaults : storyBubble}
 					onClose={() => setSidebarOpen(false)}
 					onMakeDefault={makeBeatStyleDefault}
 					onSetBubble={handleBeatBubble}
 					onSetKey={handleBeatKey}
 					onSetText={handleBeatText}
+					scope={beat > 0 ? 'beat' : 'scene'}
 					stageIds={stageIds}
 					storyColors={swatches}
 				/>
 			),
 			icon: <IconMessage2 />,
 			id: 'beat',
-			label: t('dialogs.passageEdit.scenePreview.beatPanel')
+			label: t('dialogs.passageEdit.scenePreview.beatPanel'),
+			scope: beat > 0 ? 'beat' : 'global'
 		},
 		...(hasSelection
 			? [
