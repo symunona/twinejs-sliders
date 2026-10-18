@@ -89,18 +89,21 @@ view.
 
 ## Timing overlay
 
-Debug view of the whole scene on the player's clock. `timing-overlay.tsx` + `timing-layout.ts`.
+Debug view of the whole scene on the player's clock. `timing-overlay.tsx` + `timing-layout.ts` + `timing-scrub.ts`.
 
 | | |
 |---|---|
 | Open | clock button in the scene bar (next to labels toggle), or in the beat panel's Timing heading. Esc / ✕ closes. |
-| Where | over the stage, dim + blur. Sidebar stays usable: retime in the beat panel, bars move live. |
+| Where | docked to stage bottom-left. Width = label + 88px per beat (max: stage minus sidebar). Height = rows, max 50%, scrolls. Sidebar stays usable: retime in the beat panel, bars move live. |
 | Groups | Stage (bg, camera, fx, music), each entity in cast order, Narration. |
 | Rows | per kind of change: `say`, `enter`, `exit`, `move`, `scale`, `rot`, `pose`, `steps`, `flip`, `grade`. Says = bar over the beat with the words. |
 | Bars | start + length in seconds. 0s = white tick (snap). |
 | Beat edges | dashed = auto-advance. Double + mouse = waits for a click. Plain = timer or animation end. |
 | Columns | current beat lit. Click a beat number = scrubber jumps there. |
 | Click wait width | drawn as the scene's standard beat (it has no length). |
+| Hover a track | pointer x = scene time → beat + seconds in. Stage draws that moment still: `stageAt` (`scene-core`) eases + lerps `move`/`scale`/`rot`/`camera`/enter-exit fade; `pose`/`flip`/`grade`/`bg`/`fx` switch at midpoint. White cursor line. |
+| Hover an entity bar | same, at the bar's own beat, plus that entity's beat start + end as ghosts (opacity × 0.35, ids `__timing-ghost-from/to-<id>`). Unchanged entity = no ghosts. |
+| Leave / close | stage back on the scrubber's beat. Hover never writes: overlay, selection, writes stay on `stage`. Playback snaps while hovering. |
 
 ## Test from this beat (Alt+T)
 

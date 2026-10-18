@@ -1,5 +1,5 @@
 /**
- * The timing overlay: the whole scene on the player's clock, drawn over the stage.
+ * The timing overlay: the whole scene on the player's clock, docked under the stage.
  *
  * A debugging view for "why does this beat take so long / move at once / wait here". One
  * group per thing that moves, one row per kind of change, the lines as `say` rows. Beat
@@ -8,6 +8,10 @@
  *
  * Reads `timingLayout(sceneTimeline(…))` — the same schedule the play button runs, so what
  * it draws is what plays. Live: retime a beat in the panel beside it and the bars move.
+ *
+ * Hover scrubs: the pointer's x is a moment of the scene, handed out as `onScrub`, and the
+ * stage above draws that moment still. Over one entity's bar the scrub names the entity, so
+ * the stage can ghost where it starts and ends. Leaving hands back `undefined`.
  */
 
 import {IconMouse, IconX} from '@tabler/icons';
@@ -16,6 +20,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {IconButton} from '../../../components/control/icon-button';
 import type {TimingLayout} from './timing-layout';
+import type {TimingScrub} from './timing-scrub';
 import './timing-overlay.css';
 
 export interface TimingOverlayProps {
@@ -24,7 +29,12 @@ export interface TimingOverlayProps {
 	beat: number;
 	onBeatChange: (beat: number) => void;
 	onClose: () => void;
+	/** The hovered moment, or `undefined` when the pointer leaves. */
+	onScrub?: (scrub: TimingScrub | undefined) => void;
 }
+
+/** Each beat column's share of the overlay's width, px — the overlay is only that wide. */
+export const TIMING_COLUMN_PX = 88;
 
 /** Percent of the scene's length, for `left` / `width`. */
 function pct(seconds: number, total: number): string {
@@ -39,7 +49,8 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 	beat,
 	layout,
 	onBeatChange,
-	onClose
+	onClose,
+	onScrub
 }) => {
 	const {t} = useTranslation();
 	const {columns, groups, total} = layout;
@@ -60,6 +71,65 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 		return () => window.removeEventListener('keydown', onKey, true);
 	}, [onClose]);
 
+	/** Scene seconds under the pointer, for the cursor line. */
+	const [hoverAt, setHoverAt] = React.useState<number>();
+	const [hoverBar, setHoverBar] = React.useState<string>();
+	const onScrubRef = React.useRef(onScrub);
+
+	onScrubRef.current = onScrub;
+
+	// Closing mid-hover must not leave the stage on the hovered moment.
+	React.useEffect(() => () => onScrubRef.current?.(undefined), []);
+
+	const scrubAt = (
+		event: React.MouseEvent<HTMLElement>,
+		entity?: string,
+		bar?: {beat: number; key: string}
+	) => {
+		const rect = event.currentTarget.getBoundingClientRect();
+
+		if (rect.width <= 0 || columns.length === 0) {
+			return;
+		}
+
+		const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+		const at = x * total;
+		// A bar names its own beat: a move that outlasts the column is still that beat's.
+		const column =
+			(bar && columns.find(each => each.beat === bar.beat)) ??
+			columns.find(each => at < each.start + each.length) ??
+			columns[columns.length - 1];
+
+		setHoverAt(at);
+		setHoverBar(bar?.key);
+		onScrub?.({
+			beat: column.beat,
+			t: Math.max(0, at - column.start),
+			...(entity !== undefined ? {entity} : {})
+		});
+	};
+	const scrubTrack = (entity?: string) => ({
+		onMouseMove: (event: React.MouseEvent<HTMLElement>) => {
+			const target = (event.target as HTMLElement).closest<HTMLElement>(
+				'.timing-bar'
+			);
+			const beat = target?.dataset.beat;
+
+			scrubAt(
+				event,
+				target ? entity : undefined,
+				target && beat !== undefined
+					? {beat: Number(beat), key: target.dataset.key ?? ''}
+					: undefined
+			);
+		}
+	});
+	const endScrub = () => {
+		setHoverAt(undefined);
+		setHoverBar(undefined);
+		onScrub?.(undefined);
+	};
+
 	// Behind every row: the beat columns, the current one lit, and the line each one ends on.
 	const grid = (
 		<div aria-hidden className="timing-grid">
@@ -74,6 +144,9 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 					<span className={`timing-edge advance-${column.advance}`} />
 				</div>
 			))}
+			{hoverAt !== undefined && (
+				<span className="timing-cursor" style={{left: pct(hoverAt, total)}} />
+			)}
 		</div>
 	);
 
@@ -84,6 +157,7 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 			onPointerDown={event => event.stopPropagation()}
 			role="dialog"
 			aria-label={label('title')}
+			style={{'--timing-beats': columns.length} as React.CSSProperties}
 		>
 			<div className="timing-overlay-head">
 				<strong>{label('title')}</strong>
@@ -113,10 +187,10 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 			{columns.length === 0 ? (
 				<p className="timing-overlay-empty">{label('empty')}</p>
 			) : (
-				<div className="timing-overlay-body">
+				<div className="timing-overlay-body" onMouseLeave={endScrub}>
 					<div className="timing-row timing-header">
 						<span className="timing-row-label" />
-						<div className="timing-track">
+						<div className="timing-track" {...scrubTrack()}>
 							{grid}
 							{columns.map(column => (
 								<button
@@ -163,30 +237,40 @@ export const TimingOverlay: React.FC<TimingOverlayProps> = ({
 									key={row.kind}
 								>
 									<span className="timing-row-label">{row.kind}</span>
-									<div className="timing-track">
+									<div
+										className="timing-track"
+										{...scrubTrack(group.special ? undefined : group.id)}
+									>
 										{grid}
-										{row.bars.map(bar => (
-											<span
-												className={classNames('timing-bar', {
-													snap: bar.duration === 0
-												})}
-												key={`${bar.beat}:${bar.start}`}
-												style={{
-													left: pct(bar.start, total),
-													width: pct(bar.duration, total)
-												}}
-												title={
-													bar.text ??
-													label('barTitle', {
-														beat: bar.beat + 1,
-														kind: row.kind,
-														length: seconds(bar.duration)
-													})
-												}
-											>
-												{bar.text}
-											</span>
-										))}
+										{row.bars.map(bar => {
+											const key = `${group.special ?? 'e'}:${group.id}:${row.kind}:${bar.beat}:${bar.start}`;
+
+											return (
+												<span
+													className={classNames('timing-bar', {
+														hovered: hoverBar === key,
+														snap: bar.duration === 0
+													})}
+													data-beat={bar.beat}
+													data-key={key}
+													key={`${bar.beat}:${bar.start}`}
+													style={{
+														left: pct(bar.start, total),
+														width: pct(bar.duration, total)
+													}}
+													title={
+														bar.text ??
+														label('barTitle', {
+															beat: bar.beat + 1,
+															kind: row.kind,
+															length: seconds(bar.duration)
+														})
+													}
+												>
+													{bar.text}
+												</span>
+											);
+										})}
 									</div>
 								</div>
 							))}

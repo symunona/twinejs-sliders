@@ -27,6 +27,7 @@ export {
 	timeTransitions
 } from './diff-stages';
 export type {Placement} from './diff-stages';
+export {easeAt, stageAt} from './stage-at';
 export {applyMusic, cloneMusic, sameMusic} from './music';
 export {collectMarks, runBeats} from './run-beats';
 export {parentOffsets, resolveStage, worldPositions} from './resolve-stage';
