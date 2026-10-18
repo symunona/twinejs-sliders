@@ -151,25 +151,14 @@ describe('prefillSceneAutoAdvance()', () => {
 	// and the line this rewrites are the same line.
 	it('fills in the skeleton line', () => {
 		expect(line(prefillSceneAutoAdvance(SCENE_SKELETON, 1.5))).toMatch(
-			/^autoAdvance: 1\.5 +#/
+			/^autoAdvance: 1\.5$/
 		);
 	});
 
 	it('writes a zero, which is the wait-for-a-click setting', () => {
 		expect(line(prefillSceneAutoAdvance(SCENE_SKELETON, 0))).toMatch(
-			/^autoAdvance: 0 +#/
+			/^autoAdvance: 0$/
 		);
-	});
-
-	// The skeleton's comments sit on one column and a seeded value must not shove them off
-	// it -- the line is a teaching document before it is a setting.
-	it('keeps the comment column', () => {
-		const before = SCENE_SKELETON.split('\n').find(each =>
-			each.startsWith('autoAdvance:')
-		)!;
-		const after = line(prefillSceneAutoAdvance(SCENE_SKELETON, 2))!;
-
-		expect(after.indexOf('#')).toBe(before.indexOf('#'));
 	});
 
 	// An unset preference must leave no trace: a scene with no key of its own is the

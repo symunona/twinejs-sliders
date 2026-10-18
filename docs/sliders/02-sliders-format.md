@@ -1146,9 +1146,8 @@ beats:
 ```
 
 The editor writes this for you: **Scene ▸ Overlay on '…'** inserts a patch
-`from: <Passage>` of the LAST scene you edited, pre-filled with the cast it inherits.
-**Scene ▸ Insert Last Scene** inserts a verbatim copy instead, headed
-`# Copy of the scene in '<Passage>'.`
+`from: <Passage>` of the LAST scene you edited, stub delta on its first cast member.
+**Scene ▸ Insert Last Scene** inserts a verbatim copy instead. Inserts carry no comments.
 
 ### ⚠️ `from:` flips the merge semantics — the one rule to memorise
 

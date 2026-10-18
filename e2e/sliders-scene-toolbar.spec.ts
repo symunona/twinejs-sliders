@@ -107,7 +107,7 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 
 	const copied = await editorValue(page);
 
-	expect(copied).toContain("# Copy of the scene in 'Untitled Passage'.");
+	expect(copied).not.toContain('#');
 	expect(copied).toContain('bg: tavern-night');
 	expect(copied).toContain('The last thing I edited.');
 	// A scene has no id: the copy is verbatim, nothing to collide.
@@ -124,6 +124,5 @@ test('the Scene menu inserts, remembers and overlays scenes', async ({page}) => 
 	expect(overlay).not.toMatch(/^id:/m);
 	expect(overlay).toContain('from: Untitled Passage 1');
 	// The stub patches a character the base scene actually has.
-	expect(overlay).toContain('Inherited cast: mira');
 	expect(overlay).toContain('mira: {at: -0.4}');
 });

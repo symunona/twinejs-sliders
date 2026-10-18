@@ -6,6 +6,7 @@ import {
 	LastSceneRecord
 } from '../sliders/last-scene';
 import {SCENE_MENU_LABEL} from '../sliders/scene-toolbar';
+import {SCENE_SKELETON} from '../sliders/skeletons';
 
 interface Menu {
 	label: string;
@@ -155,7 +156,7 @@ describe('the scene commands', () => {
 		expect(lines[start + 1]).toMatch(/^\s+\w[\w .-]*:/);
 	});
 
-	it('pastes the stored scene, naming where it came from', () => {
+	it('pastes the stored scene', () => {
 		store({passageName: 'Alley', text: 'bg: dusk\n'});
 
 		const {editor, replaceSelection} = fakeEditor();
@@ -164,7 +165,6 @@ describe('the scene commands', () => {
 
 		const text = replaceSelection.mock.calls[0][0] as string;
 
-		expect(text).toContain("# Copy of the scene in 'Alley'.");
 		expect(text).toContain('bg: dusk');
 	});
 
@@ -179,8 +179,7 @@ describe('the scene commands', () => {
 
 		expect(text).not.toMatch(/^id:/m);
 		expect(text).toContain('from: Alley');
-		expect(text).toContain('# Inherited cast: mira');
-		expect(text).toContain('# Inherited props: candle');
+		expect(text).toContain('  mira: {at: -0.4}');
 	});
 
 	it('falls back to the skeleton when nothing is stored', () => {
@@ -190,7 +189,7 @@ describe('the scene commands', () => {
 		(commands as any).insertLastSceneOverlay(editor);
 
 		for (const call of replaceSelection.mock.calls) {
-			expect(call[0]).toContain('# Every key Sliders understands.');
+			expect(call[0]).toBe(SCENE_SKELETON);
 		}
 	});
 

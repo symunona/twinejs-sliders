@@ -261,15 +261,7 @@ export function prefillSceneAutoAdvance(
 		return skeleton;
 	}
 
-	// Keeping the column the comments are aligned on: the value replaces `~` in place, and
-	// the padding after it shrinks by however much longer the number is. A number wider
-	// than the padding just pushes the comment right, which is what any other long value
-	// in the skeleton already does.
-	return skeleton.replace(
-		/^(autoAdvance:\s*)~( *)/m,
-		(_, head: string, pad: string) =>
-			`${head}${seconds}${' '.repeat(Math.max(1, pad.length - String(seconds).length + 1))}`
-	);
+	return skeleton.replace(/^(autoAdvance:\s*)~$/m, `$1${seconds}`);
 }
 
 /**
