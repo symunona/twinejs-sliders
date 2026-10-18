@@ -11,7 +11,8 @@ const mockRenderer = {
 	invalidate: jest.fn(),
 	mount: jest.fn(),
 	setMuted: jest.fn(),
-	setViewScale: jest.fn()
+	setViewScale: jest.fn(),
+	setWaitingForClick: jest.fn()
 };
 
 const mockDialogue = {
@@ -115,5 +116,70 @@ describe('SceneStage asset revision', () => {
 		await mounted();
 
 		expect(mockRenderer.invalidate).not.toHaveBeenCalled();
+	});
+});
+
+describe('SceneStage play stop', () => {
+	const entity = {id: 'hero', opacity: 1, ref: 'hero-idle', scale: 1, z: 1};
+	const start: Stage = {
+		camera: {at: {x: 0, y: 0}, zoom: 1},
+		entities: {hero: {...entity, at: {x: -1.2, y: 0}}},
+		fx: []
+	} as unknown as Stage;
+	const landed: Stage = {
+		...start,
+		entities: {hero: {...entity, at: {x: 0.5, y: 0}}}
+	} as unknown as Stage;
+
+	it('lets the last beat finish moving when playback stops on it', async () => {
+		// The bug: play reaches the last beat, the preview stops playing in the same tick,
+		// and `animate` going false re-applied the SAME stage with zero durations. Applied in
+		// the same task as the move, it wrote `transition-duration: 0s` before the browser
+		// ever started the move — the drone landed in one frame instead of three seconds.
+		const {rerender} = render(
+			<SceneStage animate assets={assets} stage={start} />
+		);
+
+		await mounted();
+		rerender(<SceneStage animate assets={assets} stage={landed} />);
+		await mounted();
+		mockRenderer.apply.mockClear();
+
+		rerender(<SceneStage animate={false} assets={assets} stage={landed} />);
+		await mounted();
+
+		expect(mockRenderer.apply).not.toHaveBeenCalled();
+	});
+
+	it('still snaps the next stage once playback stopped', async () => {
+		const {rerender} = render(
+			<SceneStage animate assets={assets} stage={start} />
+		);
+
+		await mounted();
+		rerender(<SceneStage animate={false} assets={assets} stage={start} />);
+		rerender(<SceneStage animate={false} assets={assets} stage={landed} />);
+		await mounted();
+
+		const [, transitions] = mockRenderer.apply.mock.calls[
+			mockRenderer.apply.mock.calls.length - 1
+		];
+
+		expect(transitions.length).toBeGreaterThan(0);
+		expect(transitions.every((t: {duration: number}) => t.duration === 0)).toBe(
+			true
+		);
+	});
+});
+
+describe('SceneStage wait cue', () => {
+	it('hands the wait to the renderer', async () => {
+		const {rerender} = render(<SceneStage assets={assets} stage={stage} />);
+
+		await mounted();
+		expect(mockRenderer.setWaitingForClick).toHaveBeenLastCalledWith(false);
+
+		rerender(<SceneStage assets={assets} stage={stage} waitingForClick />);
+		expect(mockRenderer.setWaitingForClick).toHaveBeenLastCalledWith(true);
 	});
 });

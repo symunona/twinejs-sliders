@@ -20,8 +20,8 @@ export const AUTO_ADVANCE_MS = 3000;
  * when the scene expresses no opinion.
  *
  * `0` is kept as `0`, because it is an answer: "wait for a click", the same thing the
- * reader's own zero means. The editor has no reader to wait for, so it reads this only
- * through `sceneHoldMs`.
+ * reader's own zero means. Playback honours it through `beatWaitsForClick`; the strip and
+ * the scrubber read it through `sceneHoldMs`.
  */
 export function sceneAutoAdvanceMs(scene: Scene | undefined): number | undefined {
 	const own = scene?.autoAdvance;
@@ -70,4 +70,23 @@ export function beatHoldMs(
 	}
 
 	return defaultMs;
+}
+
+/**
+ * Whether playback stops on the state `beat` produced until somebody clicks.
+ *
+ * The player's rule (`waitForReader`): a line (`say`/`box`) that did not time itself, in a
+ * scene whose `autoAdvance:` is `0`. `sceneAutoMs` is the RAW scene answer from
+ * `sceneAutoAdvanceMs`, not the length `sceneHoldMs` turns it into. Position 0 was produced
+ * by no beat and never waits, the same way the player runs straight to its first line.
+ */
+export function beatWaitsForClick(
+	beat: Beat | undefined,
+	sceneAutoMs: number | undefined
+): boolean {
+	return (
+		sceneAutoMs === 0 &&
+		(beat?.kind === 'say' || beat?.kind === 'box') &&
+		beat.dur === undefined
+	);
 }

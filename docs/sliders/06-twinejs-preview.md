@@ -73,7 +73,17 @@ animation. Transitions play only when: stepping beats, pressing play, or hitting
 
 Was a second size past maximize (`⛶`, `shift+f`, double click, tap-to-advance player,
 corner navigator). Confusing next to the dialog's own maximize. Gone. Maximize is the big
-view. `autoAdvance: 0` in editor playback = standard beat.
+view.
+
+## Playback waits
+
+- `autoAdvance: 0` honoured again: untimed `say`/`box` stops play (`beatWaitsForClick`,
+  `beat-hold.ts`). Press on stage = go on. Last beat = play ends, no wait.
+- Waiting = mouse-in-ring cue, bottom right of the stage, fade + spin in. Renderer's own
+  (`DomRenderer.setWaitingForClick`), same in player. Editor moves it left of the error
+  badge (`--sliders-wait-cue-right`).
+- Play stopping does NOT re-apply the stage: a zero-duration re-apply in the same task
+  killed the last beat's move (drone landed in one frame). `scene-stage.tsx`.
 
 ## Test from this beat (Alt+T)
 

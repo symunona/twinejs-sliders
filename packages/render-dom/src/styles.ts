@@ -519,6 +519,48 @@ export const RENDER_DOM_CSS = `
 
 .sliders-root[data-guides='true'] .sliders-guides { display: block; }
 
+/* "Waiting for you": a mouse in a ring, bottom right of the stage, while a beat waits for
+   a click (DomRenderer.setWaitingForClick). Laid over the stage box at the box's rect, over
+   the dialogue layer (50) and the link list (55). A host moves it with the two custom
+   properties -- the editor does, to clear its own badge in that corner. */
+.sliders-wait-cue {
+	position: absolute;
+	z-index: 60;
+	pointer-events: none;
+	display: none;
+}
+
+.sliders-wait-cue[data-shown] { display: block; }
+
+.sliders-wait-cue-icon {
+	position: absolute;
+	right: var(--sliders-wait-cue-right, 12px);
+	bottom: var(--sliders-wait-cue-bottom, 12px);
+	width: 34px;
+	height: 34px;
+	padding: 3px;
+	box-sizing: border-box;
+	border-radius: 50%;
+	background: rgba(10, 12, 18, 0.5);
+	color: #fff;
+	filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+	animation: sliders-wait-cue-in 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.sliders-wait-cue-ring { opacity: 0.6; }
+
+@keyframes sliders-wait-cue-in {
+	from { opacity: 0; transform: rotate(-200deg) scale(0.4); }
+	to { opacity: 0.9; transform: rotate(0deg) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	@keyframes sliders-wait-cue-in {
+		from { opacity: 0; }
+		to { opacity: 0.9; }
+	}
+}
+
 .sliders-guides::before,
 .sliders-guides::after {
 	content: '';

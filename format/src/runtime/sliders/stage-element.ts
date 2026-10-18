@@ -484,6 +484,7 @@ export class SlidersStage extends CustomElement {
 	/** Run beats until one of them needs to be read, or the scene is over. */
 	async play() {
 		window.clearTimeout(this.timer);
+		this.renderer?.setWaitingForClick?.(false);
 
 		const beats: Beat[] = this.scene?.beats ?? [];
 
@@ -635,14 +636,25 @@ export class SlidersStage extends CustomElement {
 		// inside it are the same choices in two markups, and a step that moved one without
 		// the other would either spoil the scene or strand the reader in it.
 		if (this.beatIndex < beats.length) {
-			this.setAttribute('data-waiting', 'beat');
+			this.waitForClick();
 			holdLinkListAgain(this.linkList);
 			this.hideLinkList();
 		} else {
 			this.removeAttribute('data-waiting');
+			this.renderer?.setWaitingForClick?.(false);
 			releaseLinkList(this.linkList);
 			this.revealLinkList();
 		}
+	}
+
+	/**
+	 * Nothing will move on without the reader: `data-waiting='click'` and the renderer's
+	 * mouse cue, bottom right. `'beat'` (the small triangle) is the same wait with a timer
+	 * still running, which needs no "your turn".
+	 */
+	private waitForClick() {
+		this.setAttribute('data-waiting', 'click');
+		this.renderer?.setWaitingForClick?.(true);
 	}
 
 	/**
@@ -760,6 +772,7 @@ export class SlidersStage extends CustomElement {
 		this.setAttribute('data-waiting', 'beat');
 
 		if (this.beatIndex >= (this.scene?.beats?.length ?? 0)) {
+			this.waitForClick();
 			return;
 		}
 
@@ -781,6 +794,8 @@ export class SlidersStage extends CustomElement {
 
 		if (delay > 0) {
 			this.timer = window.setTimeout(() => void this.play(), delay);
+		} else {
+			this.waitForClick();
 		}
 	}
 }

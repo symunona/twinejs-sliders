@@ -57,7 +57,12 @@ import type {DomRenderer} from '@sliders/render-dom';
 import type {BubbleGeometry} from '@sliders/scene-edit';
 import {isAudioFile} from '@sliders/asset-store';
 import type {AssetDragPayload} from './asset-drag';
-import {beatHoldMs, sceneHoldMs} from './beat-hold';
+import {
+	beatHoldMs,
+	beatWaitsForClick,
+	sceneAutoAdvanceMs,
+	sceneHoldMs
+} from './beat-hold';
 import {BeatPanel} from './beat-panel';
 import {applySceneFix} from '../scene-errors/apply-scene-fix';
 import {SceneErrorBadge, SceneErrorPanel} from './scene-error-badge';
@@ -1721,6 +1726,20 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		setBeat(current => Math.min(current, lastBeat));
 	}, [lastBeat]);
 
+	/**
+	 * Playback stopped on a line until somebody clicks: `autoAdvance: 0`, the player's
+	 * rule (`beatWaitsForClick`). The stage shows the same mouse cue the reader gets, and a
+	 * press anywhere on the stage goes on. The last beat is not a wait here: playback just
+	 * ends there, there are no links under the stage to hold back.
+	 */
+	const waitingForClick =
+		playing &&
+		beat < lastBeat &&
+		beatWaitsForClick(
+			shownBeat,
+			sceneAutoAdvanceMs(parse.result?.scene)
+		);
+
 	React.useEffect(() => {
 		if (!playing) {
 			return;
@@ -1731,20 +1750,41 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
+		if (waitingForClick) {
+			return;
+		}
+
 		const producedBy = beat > 0 ? parse.result?.scene.beats[beat - 1] : undefined;
-
-		// `autoAdvance: 0` asks the READER to click. The editor has no reader to ask, so
-		// honouring the wait would be a stage that freezes for no visible reason. It takes
-		// the standard beat instead, and the author sees the pacing of everything they DID
-		// time.
-
 		const timer = window.setTimeout(
 			() => setBeat(b => b + 1),
 			beatHoldMs(producedBy, holdMs)
 		);
 
 		return () => window.clearTimeout(timer);
-	}, [beat, holdMs, lastBeat, parse.result, playing]);
+	}, [beat, holdMs, lastBeat, parse.result, playing, waitingForClick]);
+
+	// The press that ends a wait. Native and CAPTURING on the viewport, so it lands before
+	// the overlay's own React handler and is swallowed there: the click means "go on", not
+	// "select what is under the pointer".
+	React.useEffect(() => {
+		if (!viewport || !waitingForClick) {
+			return;
+		}
+
+		const goOn = (event: PointerEvent) => {
+			if (event.button !== 0) {
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+			setBeat(b => b + 1);
+		};
+
+		viewport.addEventListener('pointerdown', goOn, true);
+
+		return () => viewport.removeEventListener('pointerdown', goOn, true);
+	}, [viewport, waitingForClick]);
 
 	// Viewer keys, unmodified, in the preview's own scope: they only fire once
 	// focus is inside the preview, so left and right still move the cursor
@@ -2201,6 +2241,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				stage={shownStage}
 				stylesheet={stylesheet}
 				viewScale={viewZoom.stageScale}
+				waitingForClick={waitingForClick}
 			/>
 			{walkHere.layer}
 			{/* Over the stage rather than above it. A row that appeared with the

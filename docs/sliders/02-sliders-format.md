@@ -79,6 +79,10 @@ The last beat always waits for the reader (never auto-advances). That click used
 nothing but clear the `▸` marker; now it ends the scene and brings the list up. So the
 final line is read before the choices exist.
 
+Nothing moves on without a click (last beat, `autoAdvance: 0`, stepped back) →
+`data-waiting="click"` + mouse-in-ring cue, bottom right, fades/spins in. Timer still
+running → `data-waiting="beat"`, the `▸`.
+
 `sliders.showLinks: true` decides **whether**, not **when** — a forced list is still held
 until the beats are done. Same spoiler either way, and a second variable for a case nobody
 asked for is worse than the rule. A story that truly wants a way out visible from beat 1

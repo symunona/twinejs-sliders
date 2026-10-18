@@ -78,6 +78,11 @@ export interface SceneStageProps {
 	 * host and sprites off the frame stay visible. See `DomRenderer.setViewScale`.
 	 */
 	viewScale?: number;
+	/**
+	 * Playback is stopped on this beat until the author clicks (`autoAdvance: 0`). Shows the
+	 * renderer's cue, the same one the player shows the reader.
+	 */
+	waitingForClick?: boolean;
 }
 
 /**
@@ -98,7 +103,8 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	sceneEase,
 	stage,
 	stylesheet,
-	viewScale = 1
+	viewScale = 1,
+	waitingForClick = false
 }) => {
 	const hostRef = React.useRef<HTMLDivElement>(null);
 	const rendererRef = React.useRef<DomRenderer>();
@@ -129,6 +135,10 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		sceneEase ?? null
 	)}`;
 	const easeRef = React.useRef<{beat?: BeatEase; scene?: BeatEase}>({});
+	/** What the last `apply` was given, so a flip of `animate` alone can be told apart. */
+	const appliedRef = React.useRef<{beatDur?: number; easeKey: string; stage?: Stage}>({
+		easeKey: ''
+	});
 
 	easeRef.current = {beat: beat?.ease, scene: sceneEase};
 	assetsRef.current = assets;
@@ -180,6 +190,7 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			rendererRef.current = undefined;
 			dialogueRef.current = undefined;
 			prevStageRef.current = undefined;
+			appliedRef.current = {easeKey: ''};
 			onRendererRef.current?.(undefined);
 		};
 	}, []);
@@ -192,6 +203,23 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		}
 
 		const prev = prevStageRef.current;
+		const applied = appliedRef.current;
+
+		// Only `animate` moved: playback stopped (or started) on the stage already drawn.
+		// Re-applying it would write zero durations in the SAME task as the move that is
+		// just starting, so the browser never runs it -- the last beat of a scene, the
+		// drone landing, snapped instead of gliding. Nothing to redraw, so draw nothing.
+		if (
+			prev === stage &&
+			applied.stage === stage &&
+			applied.beatDur === beatDur &&
+			applied.easeKey === easeKey
+		) {
+			return;
+		}
+
+		appliedRef.current = {beatDur, easeKey, stage};
+
 		let transitions: Transition[] = [];
 
 		if (prev) {
@@ -256,6 +284,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 			rendererRef.current?.setViewScale(viewScale);
 		}
 	}, [ready, viewScale]);
+
+	React.useEffect(() => {
+		if (ready) {
+			rendererRef.current?.setWaitingForClick(waitingForClick);
+		}
+	}, [ready, waitingForClick]);
 
 	/**
 	 * Fire a beat's one-shot when the scrubber ARRIVES on it.

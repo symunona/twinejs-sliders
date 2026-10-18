@@ -177,6 +177,8 @@
 	overflow: hidden;
 	position: relative;
 	width: 100%;
+	/* The renderer's wait cue, moved left of the error badge in the same corner. */
+	--sliders-wait-cue-right: 44px;
 }
 
 .scene-preview-zoom {

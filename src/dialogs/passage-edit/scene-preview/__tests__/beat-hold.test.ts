@@ -2,6 +2,7 @@ import type {Beat, Scene} from '@sliders/scene-types';
 import {
 	AUTO_ADVANCE_MS,
 	beatHoldMs,
+	beatWaitsForClick,
 	sceneAutoAdvanceMs,
 	sceneHoldMs
 } from '../beat-hold';
@@ -65,5 +66,34 @@ describe('beatHoldMs() with a scene default', () => {
 
 	it('lets wait: beat the scene default', () => {
 		expect(beatHoldMs({index: 0, kind: 'wait', seconds: 2}, 1200)).toBe(2000);
+	});
+});
+
+describe('beatWaitsForClick()', () => {
+	it('waits on an untimed line when the scene asks for clicks', () => {
+		expect(beatWaitsForClick(say(), 0)).toBe(true);
+		expect(
+			beatWaitsForClick({index: 0, kind: 'box', text: 'Night.'} as Beat, 0)
+		).toBe(true);
+	});
+
+	it('does not wait when the line timed itself', () => {
+		expect(beatWaitsForClick(say(2), 0)).toBe(false);
+		expect(beatWaitsForClick(say(0), 0)).toBe(false);
+	});
+
+	it('does not wait when the scene has a pace or no opinion', () => {
+		expect(beatWaitsForClick(say(), 1500)).toBe(false);
+		expect(beatWaitsForClick(say(), undefined)).toBe(false);
+	});
+
+	it('never waits on the opening state or a stage move', () => {
+		expect(beatWaitsForClick(undefined, 0)).toBe(false);
+		expect(
+			beatWaitsForClick(
+				{index: 0, kind: 'set', patch: {}, who: 'mira'} as unknown as Beat,
+				0
+			)
+		).toBe(false);
 	});
 });

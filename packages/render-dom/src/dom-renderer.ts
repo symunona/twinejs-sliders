@@ -276,6 +276,9 @@ export class DomRenderer implements Renderer {
 	private boxEl?: HTMLDivElement;
 	private cameraEl?: HTMLDivElement;
 	private fxStackEl?: HTMLDivElement;
+	/** The "click to go on" cue — see `setWaitingForClick`. Laid over the stage box. */
+	private waitCueEl?: HTMLDivElement;
+	private waitingForClick = false;
 	/** Two containers, drawn in order: the backdrop, then every entity in one z space. */
 	private bgLayerEl?: HTMLDivElement;
 	private entityLayerEl?: HTMLDivElement;
@@ -377,6 +380,21 @@ export class DomRenderer implements Renderer {
 
 		box.append(camera, fxStack, guides);
 		root.appendChild(box);
+
+		// A sibling of the box, not a child: the box clips and contains paint, so anything
+		// inside it sorts UNDER the dialogue layer's 50, and a narration bar spanning the
+		// bottom of the stage would cover the cue exactly where it sits.
+		const waitCue = this.el('div', 'sliders-wait-cue');
+
+		waitCue.setAttribute('aria-hidden', 'true');
+		waitCue.innerHTML = WAIT_CUE_SVG;
+
+		if (this.waitingForClick) {
+			waitCue.dataset.shown = 'true';
+		}
+
+		root.appendChild(waitCue);
+		this.waitCueEl = waitCue;
 		el.appendChild(root);
 
 		this.rootEl = root;
@@ -584,6 +602,7 @@ export class DomRenderer implements Renderer {
 		this.boxEl = undefined;
 		this.cameraEl = undefined;
 		this.fxStackEl = undefined;
+		this.waitCueEl = undefined;
 		this.bgFxEl?.remove();
 		this.bgFxEl = undefined;
 		this.bgLayerEl = undefined;
@@ -673,6 +692,28 @@ export class DomRenderer implements Renderer {
 		}
 
 		this.relayout();
+	}
+
+	/**
+	 * Show or hide the "waiting for you" cue: a mouse in a ring, bottom right of the stage.
+	 *
+	 * The host says when — only it knows whether a timer is about to advance the beat. The
+	 * player shows it while a line waits for the reader's click, the editor while playback
+	 * waits on `autoAdvance: 0`. Pointer-transparent: the click that answers it lands on
+	 * whatever the host already listens on. Remembered across a remount.
+	 */
+	setWaitingForClick(on: boolean): void {
+		this.waitingForClick = on;
+
+		if (!this.waitCueEl) {
+			return;
+		}
+
+		if (on) {
+			this.waitCueEl.dataset.shown = 'true';
+		} else {
+			delete this.waitCueEl.dataset.shown;
+		}
 	}
 
 	setGuides(on: boolean): void {
@@ -2334,6 +2375,13 @@ export class DomRenderer implements Renderer {
 		this.boxEl.style.width = `${this.box.width}px`;
 		this.boxEl.style.height = `${this.box.height}px`;
 
+		if (this.waitCueEl) {
+			this.waitCueEl.style.left = `${this.box.left}px`;
+			this.waitCueEl.style.top = `${this.box.top}px`;
+			this.waitCueEl.style.width = `${this.box.width}px`;
+			this.waitCueEl.style.height = `${this.box.height}px`;
+		}
+
 		for (const rec of this.entities.values()) {
 			rec.metrics = this.metricsFor({
 				entity: rec.entity,
@@ -2385,6 +2433,14 @@ export class DomRenderer implements Renderer {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** A mouse with its wheel, inside a ring. `currentColor`, so CSS picks the colour. */
+const WAIT_CUE_SVG =
+	'<svg class="sliders-wait-cue-icon" viewBox="0 0 32 32" fill="none" ' +
+	'stroke="currentColor" stroke-linecap="round" stroke-width="1.6">' +
+	'<circle class="sliders-wait-cue-ring" cx="16" cy="16" r="14.2"/>' +
+	'<rect x="11" y="8" width="10" height="16" rx="5"/>' +
+	'<path d="M16 11.2v3"/></svg>';
 
 /** How long a change takes and what shape it takes, which always travel together. */
 interface TransitionTiming {
