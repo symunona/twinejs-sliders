@@ -18,6 +18,7 @@ import {LeaveStoryPrompt} from './leave-story-prompt';
 import {MarqueeablePassageMap} from './marqueeable-passage-map';
 import {PassageFuzzyFinder} from './passage-fuzzy-finder';
 import {ScenePreviewAutoOpen} from './scene-preview-auto-open';
+import {TestCurrentPassageCommand} from './test-current-passage-command';
 import {ScenePreviewSourceProvider} from './scene-preview-source-context';
 import {PassageDocsProvider} from '../../store/passage-docs';
 import {StoryEditToolbar} from './toolbar';
@@ -155,6 +156,7 @@ export const StoryEditRoute: React.FC = () => {
 						<DialogsContextProvider>
 							<InnerStoryEditRoute />
 							<ScenePreviewAutoOpen storyId={storyId} />
+							<TestCurrentPassageCommand storyId={storyId} />
 						</DialogsContextProvider>
 					</ScenePreviewSourceProvider>
 				</PassageDocsProvider>

@@ -59,6 +59,7 @@ export const commandCatalog: CatalogEntry[] = [
 	{id: 'sliders.characters', scope: 'global'},
 	{id: 'sliders.generator', scope: 'global'},
 	{id: 'scene.togglePreview', scope: 'global'},
+	{id: 'passage.testCurrent', scope: 'global'},
 
 	{id: 'story.create', scope: 'story-list'},
 	{id: 'story.edit', scope: 'story-list'},

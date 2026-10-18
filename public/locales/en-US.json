@@ -1926,6 +1926,7 @@
 				"rename": "Rename Passage",
 				"delete": "Delete Passage",
 				"test": "Test From Passage",
+				"testCurrent": "Test From Current Passage (New Tab)",
 				"startAt": "Start Story Here",
 				"goTo": "Go To / Search Passage",
 				"find": "Search Passages Anywhere",

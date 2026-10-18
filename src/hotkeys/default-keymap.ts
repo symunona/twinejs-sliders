@@ -49,6 +49,11 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'sliders.characters': {bindings: ['alt+c']},
 	'sliders.generator': {bindings: ['alt+g']},
 	'scene.togglePreview': {bindings: ['alt+p']},
+	// Test from the passage being worked on (front editor, else the map's solo selection),
+	// new tab. Everywhere, so it took `mod+enter` off `build.play`: the map scope sits inside
+	// global and would have kept the key there. The asset generator's own `mod+enter` still
+	// wins inside that dialog.
+	'passage.testCurrent': {bindings: ['mod+enter']},
 
 	// Dialogs. Dialogs are mostly text fields, so this has to be a chord that
 	// produces no character and that CodeMirror doesn't use.
@@ -81,7 +86,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	'view.zoomIn': {bindings: ['=', '+']},
 	'view.zoomOut': {bindings: ['-']},
 	'view.zoomReset': {bindings: ['0']},
-	'build.play': {bindings: ['mod+enter']},
+	'build.play': {bindings: []},
 	'build.test': {bindings: ['mod+shift+enter']},
 
 	// Passage editor. Focus lives in CodeMirror the whole time these are wanted, so
