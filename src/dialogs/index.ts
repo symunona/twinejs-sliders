@@ -16,6 +16,7 @@ export * from './scene-preview';
 export * from './server-conflict';
 export * from './sliders-assets';
 export * from './sliders-characters';
+export * from './sliders-particles';
 export * from './story-import';
 export * from './story-javascript';
 export * from './story-defaults';

@@ -907,6 +907,8 @@
 				"poseAuto": "Automatic",
 				"poseLoop": "Step loop",
 				"poseLoopDefault": "Default (all)",
+				"emit": "Particles",
+				"emitReset": "Use the emitter's own settings",
 				"fit": "Fit",
 				"fitSprite": "Sprite",
 				"condition": "Only if",
@@ -1222,6 +1224,39 @@
 			"renameError": "Could not rename this to “{{name}}”.",
 			"editImageHint": "Double-click to edit this image",
 			"renameChange": "rename asset {{name}}"
+		},
+		"slidersParticles": {
+			"applyPreset": "Start From Preset",
+			"blends": {"add": "Glow (add)", "normal": "Paint (normal)"},
+			"boxH": "Box height px",
+			"boxW": "Box width px",
+			"deletePrompt": "Delete emitter {{name}}? Scenes that place it show a placeholder.",
+			"hint": "Place it in a scene like a prop: props: {{name}}: {at: 0}. Tune per scene with emit:.",
+			"keys": {
+				"angle": "Angle",
+				"area": "Spawn area",
+				"blend": "Blend",
+				"color": "Start colour",
+				"colorEnd": "End colour",
+				"fade": "Fade",
+				"gravity": "Gravity",
+				"grow": "Grow",
+				"life": "Life (s)",
+				"rate": "Rate (/s)",
+				"size": "Size",
+				"speed": "Speed",
+				"spin": "Spin",
+				"spread": "Spread"
+			},
+			"new": "New Emitter",
+			"none": "No particle emitters yet. New Emitter makes one from a preset.",
+			"originX": "Origin x",
+			"originY": "Origin y",
+			"presets": {"fire": "Fire", "magic": "Magic", "smoke": "Smoke", "snow": "Snow", "sparks": "Sparks"},
+			"reset": "Reset",
+			"restart": "Restart",
+			"sprite": "Sprite",
+			"title": "Particles"
 		},
 		"slidersCharacters": {
 			"addAnchor": "Add Anchor",
@@ -1710,6 +1745,7 @@
 				"scenePreview": "Scene Editor",
 				"slidersAssets": "Assets",
 				"slidersCharacters": "Characters",
+				"slidersParticles": "Particles",
 				"snapToGrid": "Snap to Grid",
 				"startStoryHere": "Start Story Here",
 				"stylesheet": "Stylesheet",
@@ -1963,6 +1999,7 @@
 			"sliders": {
 				"assets": "Asset Manager",
 				"characters": "Character Editor",
+				"particles": "Particle Editor",
 				"generator": "Asset Generator"
 			},
 			"scene": {

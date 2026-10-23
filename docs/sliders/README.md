@@ -24,6 +24,7 @@ Visual-novel scene authoring for Twine. Two forks, one shared parser.
 | 16 | [seamless-loop.md](16-seamless-loop.md) | Folding a backdrop's far edge over its near one, either way, so `scroll_infinite_*` has art that tiles. |
 | 17 | [keyboard.md](17-keyboard.md) | Reading with the arrow keys: beats, passage history, choosing between links. |
 | 18 | [player-loading.md](18-player-loading.md) | Art priority tree, boot screen for sound, click stop, preload debugger. |
+| 19 | [particles.md](19-particles.md) | Particle emitters: an `fx` asset, the Particles dialog, `emit:`, the pack. WebGL. |
 
 ## Open bugs
 

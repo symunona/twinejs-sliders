@@ -47,10 +47,13 @@ import {
 	BG_MOTIONS,
 	ENTITY_FITS,
 	POSE_LOOPS,
-	normalizeGrade
+	normalizeGrade,
+	resolveEmit
 } from '@sliders/scene-types';
 import type {
 	AssetResolver,
+	EmitPatch,
+	ParticleSpec,
 	EntityFit,
 	EntityGrade,
 	GradeKey,
@@ -66,6 +69,7 @@ import {TextSelect} from '../../../components/control/text-select';
 import {GradeExtremesOverlay} from './grade-extremes-overlay';
 import {GradeSliders} from './grade-sliders';
 import {sprite} from './match-bg-dom';
+import {EmitControls} from '../../sliders-particles/emit-controls';
 
 export interface StageSelectionControlsProps {
 	assets: AssetResolver;
@@ -151,6 +155,11 @@ export interface StageSelectionControlsProps {
 	gradeNote?: string;
 	/** The Match bg button, at the top beside Reset. */
 	matchBg?: React.ReactNode;
+	/**
+	 * A knob on the selected EMITTER moved: merge this into its `emit:`, `null` to clear
+	 * every override. Absent, or a selection that is not one emitter, hides the knobs.
+	 */
+	onEmit?: (patch: EmitPatch | null) => void;
 }
 
 /** The slider row for one key, found by its data attribute. */
@@ -316,6 +325,33 @@ function useCharacterPoses(
 	return poses;
 }
 
+/** The emitter behind an asset name, or undefined when it is not one. */
+function useEmitterSpec(
+	assets: AssetResolver,
+	ref: string | undefined
+): ParticleSpec | undefined {
+	const [spec, setSpec] = React.useState<{ref: string; spec?: ParticleSpec}>();
+
+	React.useEffect(() => {
+		if (!ref) {
+			return;
+		}
+
+		let cancelled = false;
+
+		assets
+			.meta(ref)
+			.then(meta => !cancelled && setSpec({ref, spec: meta?.particles}))
+			.catch(() => !cancelled && setSpec({ref}));
+
+		return () => {
+			cancelled = true;
+		};
+	}, [assets, ref]);
+
+	return spec && spec.ref === ref ? spec.spec : undefined;
+}
+
 export const StageSelectionControls: React.FC<
 	StageSelectionControlsProps
 > = props => {
@@ -345,10 +381,15 @@ export const StageSelectionControls: React.FC<
 		onGrade,
 		onGradeCommit,
 		onGradeHover,
-		onGradeOpenChange
+		onGradeOpenChange,
+		onEmit
 	} = props;
 	const {t} = useTranslation();
 	const single = entities.length === 1 ? entities[0] : undefined;
+	const emitter = useEmitterSpec(
+		assets,
+		single && single.kind !== 'cast' ? single.ref : undefined
+	);
 	const poses = useCharacterPoses(
 		assets,
 		single && single.kind !== 'prop' ? single.ref : undefined
@@ -631,6 +672,27 @@ export const StageSelectionControls: React.FC<
 					// whole selection to wherever it is.
 					value={entities[0].opacity}
 				/>
+			)}
+			{single && emitter && onEmit && (
+				<div
+					className="scene-preview-emit"
+					data-testid="scene-preview-emit"
+				>
+					<div className="scene-preview-emit-head">
+						<span>{t('dialogs.passageEdit.scenePreview.emit')}</span>
+						<IconButton
+							disabled={!single.emit}
+							icon={<IconArrowBackUp />}
+							label={t('dialogs.passageEdit.scenePreview.emitReset')}
+							onClick={() => onEmit(null)}
+						/>
+					</div>
+					<EmitControls
+						base={resolveEmit(emitter, undefined)}
+						onChange={onEmit}
+						value={resolveEmit(emitter, single.emit)}
+					/>
+				</div>
 			)}
 			{single && onGrade && (
 				<GradeSliders

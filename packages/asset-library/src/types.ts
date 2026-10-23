@@ -6,6 +6,7 @@ import type {
 	CutoutTuning,
 	Frac2,
 	ImageEdits,
+	ParticleSpec,
 	WalkArea
 } from '@sliders/scene-types';
 
@@ -76,6 +77,7 @@ export interface AssetRecipe {
 	effect?: AssetEffect;
 	walk?: WalkArea;
 	origin?: Frac2;
+	particles?: ParticleSpec;
 	[key: string]: unknown;
 }
 

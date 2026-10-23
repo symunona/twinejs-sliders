@@ -16,6 +16,7 @@ import {
 	formatCamera,
 	motionSpeedWrites,
 	motionWrites,
+	emitWrites,
 	musicDropWrites,
 	opacityWrites,
 	poseLoopWrites,
@@ -139,6 +140,27 @@ describe('poseWrite()', () => {
 
 	it('refuses props — they are one image and have no frames', () => {
 		expect(poseWrite(stage.entities.candle, 'lit')).toBeUndefined();
+	});
+});
+
+describe('emitWrites()', () => {
+	const lit = parseSceneText(
+		['[scene]', 'props:', "  fire: {emit: {rate: 50, color: '#ff0000'}}"].join('\n')
+	).states[0];
+
+	it('merges the knob into what the entity already overrides', () => {
+		expect(emitWrites(lit, ['fire'], {rate: 0})[0]).toEqual({
+			id: 'fire',
+			key: 'emit',
+			kind: 'prop',
+			ref: 'fire',
+			reset: null,
+			value: {color: '#ff0000', rate: 0}
+		});
+	});
+
+	it('removes the key on null', () => {
+		expect(emitWrites(lit, ['fire'], null)[0].value).toBeUndefined();
 	});
 });
 

@@ -8,6 +8,7 @@
 
 import {stringify} from 'yaml';
 import {
+	EMIT_KEYS,
 	GRADE_KEYS,
 	LAYER_BASELINE,
 	type EntityLink,
@@ -169,6 +170,16 @@ export function formatValue(
 		const grade = value as Record<string, unknown>;
 		const parts = GRADE_KEYS.filter(name => grade[name] !== undefined).map(
 			name => `${name}: ${formatScalar(grade[name])}`
+		);
+
+		return `{${parts.join(', ')}}`;
+	}
+
+	// Same for an emitter, in the particle editor's order.
+	if (key === 'emit' && isPlainObject(value)) {
+		const emit = value as Record<string, unknown>;
+		const parts = EMIT_KEYS.filter(name => emit[name] !== undefined).map(
+			name => `${name}: ${formatScalar(emit[name])}`
 		);
 
 		return `{${parts.join(', ')}}`;

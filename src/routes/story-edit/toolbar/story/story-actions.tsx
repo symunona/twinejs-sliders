@@ -11,6 +11,7 @@ import {PassageTagsButton} from './passage-tags-button';
 import {ScenePreviewButton} from './scene-preview-button';
 import {SlidersAssetsButton} from './sliders-assets-button';
 import {SlidersCharactersButton} from './sliders-characters-button';
+import {SlidersParticlesButton} from './sliders-particles-button';
 import {SlidersGeneratorButton} from './sliders-generator-button';
 import {StylesheetButton} from './stylesheet-button';
 
@@ -38,6 +39,7 @@ export const StoryActions: React.FC<StoryActionsProps> = props => {
 			<ScenePreviewButton story={story} />
 			<SlidersAssetsButton />
 			<SlidersCharactersButton />
+			<SlidersParticlesButton />
 			<SlidersGeneratorButton />
 			<JavaScriptButton story={story} />
 			<StylesheetButton story={story} />

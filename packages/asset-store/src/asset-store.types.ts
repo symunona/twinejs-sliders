@@ -10,6 +10,7 @@ import type {
 	Frac2,
 	ImageEdits,
 	SidecarKind,
+	ParticleSpec,
 	WalkArea
 } from '@sliders/scene-types';
 
@@ -54,6 +55,8 @@ export interface PutAssetOptions {
 	effect?: AssetEffect;
 	/** Where a character may walk on this backdrop. Absent means nowhere drawn. */
 	walk?: WalkArea;
+	/** Present makes the asset a particle emitter; its bytes are the sprite. */
+	particles?: ParticleSpec;
 	/** What the asset editor baked these bytes with, so the edit can be re-opened. */
 	edits?: ImageEdits;
 	/** What the cutout controls were set to. Only meaningful with a `cutout` sidecar. */

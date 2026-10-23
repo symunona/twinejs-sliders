@@ -254,6 +254,7 @@ export class BackedAssetStore implements AssetStore {
 				origin: options.origin,
 				effect: options.effect,
 				walk: options.walk,
+				particles: options.particles,
 				edits: options.edits,
 				tuning: options.tuning,
 				mask: options.mask,

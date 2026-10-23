@@ -66,6 +66,7 @@ export const ENTITY_KEY_ORDER = [
 	'opacity',
 	// How it looks, after whether it can be seen at all.
 	'grade',
+	'emit',
 	'motion',
 	// Editor only, and about the editor rather than the picture.
 	'locked',

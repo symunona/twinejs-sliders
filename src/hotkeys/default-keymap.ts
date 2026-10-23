@@ -47,6 +47,7 @@ export const defaultKeymap: Record<string, DefaultBinding> = {
 	// rebound--see the passage editor note below.
 	'sliders.assets': {bindings: ['alt+a']},
 	'sliders.characters': {bindings: ['alt+c']},
+	'sliders.particles': {bindings: ['alt+x']},
 	'sliders.generator': {bindings: ['alt+g']},
 	'scene.togglePreview': {bindings: ['alt+p']},
 	// Test from the passage being worked on (front editor, else the map's solo selection),

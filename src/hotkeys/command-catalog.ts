@@ -57,6 +57,7 @@ export const commandCatalog: CatalogEntry[] = [
 	// The Story toolbar's tools, on one Alt chord each everywhere; see `default-keymap.ts`.
 	{id: 'sliders.assets', scope: 'global'},
 	{id: 'sliders.characters', scope: 'global'},
+	{id: 'sliders.particles', scope: 'global'},
 	{id: 'sliders.generator', scope: 'global'},
 	{id: 'scene.togglePreview', scope: 'global'},
 	{id: 'passage.testCurrent', scope: 'global'},

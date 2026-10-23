@@ -384,6 +384,12 @@ export const RENDER_DOM_CSS = `
 	height: 100%;
 }
 
+/* A particle emitter: its <img> is the particle sprite, not something to show. The
+   canvas places itself (particle-host.ts). */
+.sliders-entity-art[data-particles] > img {
+	visibility: hidden;
+}
+
 .sliders-entity-art > img {
 	/* Box fit, not stretch: a frame whose aspect differs from the character's manifest
 	   size keeps its own shape inside the sprite box. Pinned by object-position, which

@@ -41,6 +41,7 @@ import {
 	BubbleStyle,
 	Camera,
 	Character,
+	EmitPatch,
 	EntityFit,
 	EntityId,
 	EntityKind,
@@ -82,6 +83,7 @@ import {
 	unstretchWrites,
 	motionSpeedWrites,
 	motionWrites,
+	emitWrites,
 	fitWrites,
 	poseLoopWrites,
 	conditionWrites,
@@ -1306,6 +1308,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const setFit = React.useCallback(
 		(fit: EntityFit | undefined) =>
 			commit(fitWrites(stage, selection, fit), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
+	// Slider bursts merge into one undo step, like the grade sliders (`GRADE_ORIGIN`).
+	const setEmit = React.useCallback(
+		(patch: EmitPatch | null) =>
+			commit(emitWrites(stage, selection, patch), '+sliders-emit'),
 		[commit, selection, stage]
 	);
 
@@ -2677,6 +2686,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				}
 				onGradeCommit={gradeEdit.commit}
 				onGradeOpenChange={gradeEdit.openChange}
+				onEmit={setEmit}
 			/>
 		</div>
 	);

@@ -15,8 +15,9 @@ import {entityKey} from '@sliders/asset-store';
 import {formatValue} from '@sliders/scene-edit';
 import {resolveZ} from '@sliders/render-dom';
 import type {StageBox} from '@sliders/render-dom';
-import {beatParts} from '@sliders/scene-types';
+import {beatParts, mergeEmit} from '@sliders/scene-types';
 import type {
+	EmitPatch,
 	Camera,
 	EntityFit,
 	EntityId,
@@ -570,4 +571,24 @@ export function wheelZoomFactor(deltaY: number, deltaMode = 0): number {
 	const pixels = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
 
 	return Math.exp(-Math.max(-400, Math.min(400, pixels)) * 0.0025);
+}
+
+/**
+ * Merge `patch` into the selected emitter's `emit:`. Writes the WHOLE merged map: on a beat
+ * it merges over the one before, so restating inherited keys changes nothing. `null` (or a
+ * patch that leaves every key at the asset's own value) removes the key.
+ */
+export function emitWrites(
+	stage: Stage,
+	ids: EntityId[],
+	patch: EmitPatch | null
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids).map(entity => ({
+		id: entity.id,
+		key: 'emit',
+		kind: entity.kind,
+		ref: entity.ref,
+		reset: null,
+		value: patch === null ? undefined : mergeEmit(entity.emit, patch)
+	}));
 }

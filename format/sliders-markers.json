@@ -29,6 +29,7 @@
     {"feature": "Click waits for its destination's art (navigation stop)", "find": "sliders-nav-wait"},
     {"feature": "Boot screen asks for a click when the opening scene has sound", "find": "sliders-boot__play"},
     {"feature": "Preload debugger toggled from localStorage", "find": "sliders.preload.debug"},
-    {"feature": "Test bar: Restart and a collapsed warning count in test play", "find": "sliders-test-bar__restart"}
+    {"feature": "Test bar: Restart and a collapsed warning count in test play", "find": "sliders-test-bar__restart"},
+    {"feature": "Particle emitters drawn by the player (GPU point sprites)", "find": "sliders-particles"}
   ]
 }

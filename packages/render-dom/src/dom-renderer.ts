@@ -34,6 +34,8 @@ import {
 	FIT_Z,
 	bgMotionTiles,
 	cssEase,
+	emitBox,
+	resolveEmit,
 	splitPoseImage
 } from '@sliders/scene-types';
 import {
@@ -62,6 +64,7 @@ import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 import {injectEffectSupport, syncEffect} from './effect-host';
 import {effectIsIdle} from './effects';
+import {ParticleHost} from './particle-host';
 import {GRADE_PX_VAR, holdGrade, type GradeHandle} from './grade';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
@@ -152,6 +155,8 @@ interface EntityRecord {
 	 * asset change and this has to go back in afterwards.
 	 */
 	fx?: HTMLElement;
+	/** The particle canvas, when this entity's asset is an emitter. */
+	particles?: ParticleHost;
 	/** Asset currently shown, so we only touch `src` when it actually changes. */
 	assetId?: string;
 	url?: string;
@@ -593,6 +598,7 @@ export class DomRenderer implements Renderer {
 
 			this.stopAnim(rec);
 			this.dropGrade(rec);
+			this.dropParticles(rec);
 		}
 
 		this.rootEl?.removeEventListener('click', this.handleLinkClick);
@@ -1135,6 +1141,7 @@ export class DomRenderer implements Renderer {
 		this.setContent(rec, res);
 		this.applyPoseFit(rec, res);
 		this.applyEffect(rec, res);
+		this.applyParticles(rec, res);
 		// Snapped: the enter fade is the arrival, and a grade fading in under it would read
 		// as the sprite changing colour on its way in.
 		this.syncGrade(rec, res.entity, 0);
@@ -1289,6 +1296,7 @@ export class DomRenderer implements Renderer {
 		);
 		this.applyPoseFit(rec, res);
 		this.applyEffect(rec, res);
+		this.applyParticles(rec, res);
 		this.layout(rec, duration, undefined, ease);
 	}
 
@@ -1447,6 +1455,7 @@ export class DomRenderer implements Renderer {
 			rec.el.remove();
 			this.entities.delete(rec.id);
 			this.dropGrade(rec);
+			this.dropParticles(rec);
 		};
 
 		if (duration <= 0) {
@@ -1626,6 +1635,48 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
+	 * A particle emitter (`meta.particles`): a canvas over the art, the art's own <img>
+	 * hidden — its bytes are the particle sprite, not a picture of the thing.
+	 *
+	 * The host is kept across applies: the editor re-applies on every keystroke, and a
+	 * restarted field would flicker back to its prewarm each time. New numbers just change
+	 * what the next particles do.
+	 */
+	private applyParticles(rec: EntityRecord, res: ResolvedEntity): void {
+		const spec = res.meta?.particles;
+
+		if (!spec || !this.doc) {
+			if (rec.particles) {
+				this.dropParticles(rec);
+			}
+
+			return;
+		}
+
+		if (!rec.particles) {
+			rec.particles = new ParticleHost(this.doc, {seed: hashSeedOf(rec.id)});
+		}
+
+		rec.art.dataset.particles = '';
+		// After the <img>: setContent clears the art on an asset change.
+		if (rec.particles.el.parentElement !== rec.art) {
+			rec.art.appendChild(rec.particles.el);
+		}
+
+		rec.particles.set(
+			resolveEmit(spec, res.entity.emit),
+			res.url,
+			res.meta?.origin ?? DEFAULT_ORIGIN
+		);
+	}
+
+	private dropParticles(rec: EntityRecord): void {
+		rec.particles?.destroy();
+		rec.particles = undefined;
+		delete rec.art.dataset.particles;
+	}
+
+	/**
 	 * The entity's `grade:`, as the `filter` of its art wrapper (`rec.art`).
 	 *
 	 * WRAPPER-level, never on the `<img>`: the picture inside is swapped all the time — a
@@ -1773,10 +1824,15 @@ export class DomRenderer implements Renderer {
 		}
 
 		// A prop's origin is its asset's, so an author pins the art once in the asset
-		// editor rather than in every scene that places it.
+		// editor rather than in every scene that places it. An emitter's size is its box,
+		// not its sprite's pixels.
 		return propMetrics(
 			this.box,
-			res.meta && res.meta.w > 0 && res.meta.h > 0 ? res.meta : PLACEHOLDER_PROP,
+			res.meta?.particles
+				? emitBox(res.meta.particles)
+				: res.meta && res.meta.w > 0 && res.meta.h > 0
+				? res.meta
+				: PLACEHOLDER_PROP,
 			res.meta?.origin ?? DEFAULT_ORIGIN,
 			res.entity.scale
 		);
@@ -2626,4 +2682,15 @@ function matchLoopPhase(source: Element, twin: Element): void {
 
 function clamp01(n: number): number {
 	return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
+}
+
+/** A stable seed from an entity id, so one fire does not burn in step with the next. */
+function hashSeedOf(id: string): number {
+	let h = 2166136261;
+
+	for (let i = 0; i < id.length; i++) {
+		h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+	}
+
+	return h >>> 0;
 }

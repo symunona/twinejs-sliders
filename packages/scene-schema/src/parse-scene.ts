@@ -26,6 +26,13 @@ import {
 	GRADE_KEYS,
 	GRADE_RANGES,
 	clampGradeValue,
+	EMIT_BLENDS,
+	EMIT_KEYS,
+	EMIT_RANGES,
+	clampEmitValue,
+	normalizeHex,
+	type EmitNumberKey,
+	type EmitPatch,
 	FIT_Z,
 	LAYERS,
 	LAYER_BASELINE,
@@ -117,6 +124,7 @@ export const ENTITY_KEYS = [
 	'z',
 	'opacity',
 	'grade',
+	'emit',
 	'motion',
 	'locked',
 	'ref',
@@ -2042,6 +2050,22 @@ function parseEntityBody(
 				break;
 			}
 
+			case 'emit': {
+				// Like `grade:`: a map merged per key, `emit: ~` clears.
+				if (isNullNode(pair.value)) {
+					body.patch.emit = null;
+					break;
+				}
+
+				const emit = parseEmit(ctx, pair.value);
+
+				if (emit) {
+					body.patch.emit = emit;
+				}
+
+				break;
+			}
+
 			case 'ref': {
 				const ref = asSourceString(ctx, pair.value, 'ref');
 
@@ -2333,6 +2357,103 @@ function parseGrade(ctx: Ctx, node: unknown): EntityGrade | undefined {
 	}
 
 	return grade;
+}
+
+/**
+ * `emit: {rate: 80, color: '#ff8800'}` — a particle emitter's numbers, over the asset's own
+ * (`EMIT_RANGES`). Same rules as `grade:`: out of range clamps with a warning, unknown keys
+ * warn and drop, empty warns.
+ */
+function parseEmit(ctx: Ctx, node: unknown): EmitPatch | undefined {
+	if (!isMap(node)) {
+		addError(
+			ctx,
+			'bad-value',
+			'emit: must be a map of emitter settings, e.g. `emit: {rate: 80, color: "#ff8800"}`.',
+			node,
+			{hint: `Keys: ${EMIT_KEYS.join(', ')}. emit: ~ clears it.`}
+		);
+		return undefined;
+	}
+
+	const map = node as YAMLMap;
+	const emit: EmitPatch = {};
+
+	for (const pair of map.items as Pair<unknown, unknown>[]) {
+		const key = keyName(pair);
+
+		if (key === undefined) {
+			addError(ctx, 'bad-value', 'Keys must be plain text.', pair.key);
+			continue;
+		}
+
+		if (!(EMIT_KEYS as readonly string[]).includes(key)) {
+			const fix = keyFix(key, EMIT_KEYS);
+
+			addError(ctx, 'unknown-key', `Unknown emit key '${key}'.`, pair.key, {
+				...fix,
+				hint: fix.hint ?? `emit takes ${EMIT_KEYS.join(', ')}.`
+			});
+			continue;
+		}
+
+		if (key === 'color' || key === 'colorEnd') {
+			const raw = asString(ctx, pair.value, `emit ${key}`);
+			const hex = normalizeHex(raw);
+
+			if (raw !== undefined && !hex) {
+				addError(ctx, 'bad-value', `emit ${key} must be a hex colour like '#ff8800'.`, pair.value);
+			} else if (hex) {
+				emit[key] = hex;
+			}
+
+			continue;
+		}
+
+		if (key === 'blend') {
+			const raw = asString(ctx, pair.value, 'emit blend');
+
+			if (raw !== undefined && (EMIT_BLENDS as readonly string[]).includes(raw)) {
+				emit.blend = raw as EmitPatch['blend'];
+			} else if (raw !== undefined) {
+				addError(ctx, 'bad-value', `emit blend must be ${EMIT_BLENDS.join(' or ')}.`, pair.value);
+			}
+
+			continue;
+		}
+
+		const value = asNumber(ctx, pair.value, `emit ${key}`);
+
+		if (value === undefined) {
+			continue;
+		}
+
+		const numberKey = key as EmitNumberKey;
+		const clamped = clampEmitValue(numberKey, value);
+
+		if (clamped !== value) {
+			const {max, min} = EMIT_RANGES[numberKey];
+
+			addError(
+				ctx,
+				'bad-value',
+				`emit ${key} of ${value} is outside ${min} to ${max}; drawn as ${clamped}.`,
+				pair.value,
+				{severity: 'warning'}
+			);
+		}
+
+		emit[numberKey] = clamped;
+	}
+
+	if (map.items.length === 0) {
+		addError(ctx, 'bad-value', 'An empty emit: changes nothing.', node, {
+			hint: 'A beat\u2019s emit merges over the one before it. emit: ~ clears it.',
+			severity: 'warning'
+		});
+	}
+
+	return emit;
 }
 
 function parseEntityMap(

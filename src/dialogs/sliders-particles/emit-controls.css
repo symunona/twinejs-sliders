@@ -1,0 +1,23 @@
+.emit-controls-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--grid-size);
+	padding: calc(var(--grid-size) / 2) 0;
+}
+
+.emit-controls-row label {
+	align-items: center;
+	display: flex;
+	gap: 4px;
+}
+
+.emit-controls-row label.overridden span {
+	font-weight: bold;
+}
+
+.scene-preview-emit-head {
+	align-items: center;
+	display: flex;
+	font-weight: bold;
+	justify-content: space-between;
+}

@@ -307,6 +307,7 @@ beats:
 | `layer` | `back` / `mid` / `front`. Optional. |
 | `z` | numeric escape hatch within a layer |
 | `grade` | live colour grade on the art, bytes untouched. Map, merges per key on a beat. See Colour grade. |
+| `emit` | particle emitter overrides, on an emitter asset only. Map, merges per key on a beat, `emit: ~` clears. See [19](19-particles.md). |
 | `if` | on stage only when the condition holds. Its beats go with it. See Conditions. |
 
 ### Poses — `pose:`

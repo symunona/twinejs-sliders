@@ -130,3 +130,12 @@ export {
 	syncEffect
 } from './effect-host';
 export type {SyncEffectOptions} from './effect-host';
+export {
+	MAX_PARTICLES,
+	PARTICLE_STRIDE,
+	ParticleSim,
+	hexRgb,
+	mulberry32
+} from './particles';
+export {PARTICLE_PAD, ParticleHost} from './particle-host';
+export type {ParticleHostOptions} from './particle-host';

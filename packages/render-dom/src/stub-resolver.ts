@@ -9,6 +9,7 @@
 
 import type {
 	AssetEffect,
+	ParticleSpec,
 	AssetKind,
 	AssetMeta,
 	AssetResolver,
@@ -26,6 +27,8 @@ export interface StubAssetSpec {
 	animated?: boolean;
 	/** The live look this stub asset carries, for exercising the effect overlay. */
 	effect?: AssetEffect;
+	/** Makes the stub asset a particle emitter. */
+	particles?: ParticleSpec;
 }
 
 export interface StubResolverOptions {
@@ -193,7 +196,8 @@ export function createStubResolver(
 				bytes: 0,
 				hash: `stub-${id}`,
 				mime: 'image/svg+xml',
-				effect: spec.effect
+				effect: spec.effect,
+				particles: spec.particles
 			};
 		},
 

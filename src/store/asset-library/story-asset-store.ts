@@ -182,7 +182,8 @@ const RECIPE_KEYS = [
 	'mask',
 	'effect',
 	'walk',
-	'origin'
+	'origin',
+	'particles'
 ] as const;
 
 type RecipeKey = (typeof RECIPE_KEYS)[number];
@@ -1028,7 +1029,7 @@ export class LibraryAssetStore implements AssetStore {
 				: undefined;
 		const recipe: AssetRecipe = {};
 
-		for (const key of ['effect', 'walk', 'origin'] as RecipeKey[]) {
+		for (const key of ['effect', 'walk', 'origin', 'particles'] as RecipeKey[]) {
 			if (meta[key] !== undefined) {
 				(recipe as Record<string, unknown>)[key] = JSON.parse(
 					JSON.stringify(meta[key])

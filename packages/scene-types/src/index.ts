@@ -11,6 +11,7 @@
 
 import type {WalkArea} from './walk';
 import type {EntityGrade} from './grade';
+import type {EmitPatch, ParticleSpec} from './particles';
 
 /**
  * Legacy layer vocabulary. NOT a stage concept any more — entities live in one z space and
@@ -294,6 +295,12 @@ export interface StageEntity {
 	 * left is absent. State, like `pose`: every later beat inherits it.
 	 */
 	grade?: EntityGrade;
+	/**
+	 * Overrides for a particle emitter's numbers (`AssetMeta.particles`), per key. Ignored
+	 * on anything that is not an emitter. State, like `grade`: merged per key by every
+	 * later beat, `emit: ~` clears. `emit: {rate: 0}` is how a fire goes out.
+	 */
+	emit?: EmitPatch;
 }
 
 /**
@@ -629,7 +636,15 @@ export interface BeatPart {
 export type EntityPatchBody = Partial<
 	Omit<
 		StageEntity,
-		'id' | 'kind' | 'ref' | 'of' | 'link' | 'highlight' | 'grade' | 'motion'
+		| 'id'
+		| 'kind'
+		| 'ref'
+		| 'of'
+		| 'link'
+		| 'highlight'
+		| 'grade'
+		| 'motion'
+		| 'emit'
 	>
 > & {
 	/**
@@ -655,6 +670,8 @@ export type EntityPatchBody = Partial<
 	 * that one key; `null` (`grade: ~`) clears the whole grade.
 	 */
 	grade?: EntityGrade | null;
+	/** Merged per key like `grade`; `null` (`emit: ~`) clears every override. */
+	emit?: EmitPatch | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -2055,6 +2072,11 @@ export interface AssetMeta {
 	 */
 	walk?: WalkArea;
 	/**
+	 * Present = this asset is a particle EMITTER, and its bytes are the particle sprite.
+	 * Like `effect`: says how to draw the bytes, so it survives `replace` and bundles.
+	 */
+	particles?: ParticleSpec;
+	/**
 	 * Which extra blobs this asset owns, and what is known about each. An explicit index
 	 * rather than a probe, so that `remove` can delete them without any backend having to
 	 * scan for keys by prefix.
@@ -2108,3 +2130,4 @@ export * from './bubble-fonts';
 export * from './walk';
 export * from './scene-transition';
 export * from './grade';
+export * from './particles';

@@ -1,0 +1,101 @@
+# 19 — Particles
+
+Fire, smoke, sparks, snow. GPU particle emitters, placed in a scene like a prop.
+Model: RPG Maker particle plugins (Sang Hendrix style) — sprite + a few numbers, presets.
+
+## What it is
+
+| | |
+|---|---|
+| Emitter | an ASSET. Kind `fx`. Bytes = the particle sprite. `particles` metadata = the emitter. |
+| Placed | as an entity, by name: `props: {fire: {at: 0}}`. Position, scale, z, opacity, beats, drag: free. |
+| Tuned per scene | entity key `emit:`, per key over the asset's numbers. |
+| Made | Particles dialog (toolbar, `alt+x`). |
+| Drawn | `render-dom` — WebGL point sprites, one draw call per emitter. 2D canvas fallback. |
+
+Why an asset, not a new record type: sync, bundles, library collections, name resolution,
+lint, published player — all already carry `AssetMeta`. `particles` is a recipe key like
+`effect`/`walk`: survives `replace`, travels in bundles. Zero server change.
+
+## Parameters
+
+Source of truth: `packages/scene-types/src/particles.ts` (`EMIT_RANGES`, `EMIT_DEFAULTS`,
+`EMIT_PRESETS`). Not restated in UI.
+
+| Key | Means |
+|---|---|
+| `rate` | particles / s. `0` stops new ones, the rest finish. |
+| `life` | seconds each lives (±25% jitter) |
+| `speed` | launch speed, box widths / s (±20%) |
+| `angle` | direction, degrees. 0 = up, 90 = right (same sense as `rot:`) |
+| `spread` | cone width, degrees. 360 = all ways |
+| `gravity` | box widths / s², + down, − floats |
+| `size` | birth size, fraction of box width |
+| `grow` | death size × `size` |
+| `fade` | opacity lost by death. 1 = gone |
+| `spin` | deg / s, random share each way. 0 = upright (flames point up) |
+| `area` | spawn disc radius, fraction of box width |
+| `color` / `colorEnd` | tint birth → death, `#rrggbb`. Multiplies the sprite: white art takes it exactly |
+| `blend` | `add` glows (fire, magic). `normal` paints (smoke, snow) |
+
+Asset only: `box: {w, h}` px at scale 1 — the entity's size, what the editor selects and
+drags. Emission point = the asset's `origin` (default bottom centre). Particles may leave
+the box: canvas = box + half a box each side (`PARTICLE_PAD`), beyond that clipped.
+
+No pixels in the numbers: distances are box fractions, so `scale:` is the only size knob.
+
+## Scene
+
+```yaml
+props:
+  campfire: {ref: fire, at: [0.2, -0.7], scale: 0.6}
+beats:
+  - box: "The fire dies down."
+    campfire: {emit: {rate: 5, size: 0.08}}
+  - campfire: {emit: {rate: 0}}      # out. Embers finish.
+  - campfire: {emit: ~}              # back to the asset's own
+```
+
+- `emit:` merges per key, like `grade:`. State: later beats inherit.
+- On a non-emitter: parsed, ignored.
+- Changes snap. In-flight particles keep going; field never restarts on an apply.
+
+## Editors
+
+| Where | What |
+|---|---|
+| Particles dialog | list of emitters · live preview (same `ParticleHost` as the stage) · knobs · box · origin · sprite strip · presets |
+| Scene editor, selection tab | one emitter selected → same knobs, write `emit:`. Highlighted = overridden. Reset = `emit: ~`. Slider bursts = one undo step (`+sliders-emit`). |
+
+New Emitter = preset + its pack sprite (`EMIT_PRESETS[*].texture`), copied as the new
+asset's bytes. Sprite swap = `replace` (keeps `particles`).
+
+## The pack
+
+`scripts/particle-pack.mjs` → shared collection `particles` on the library server.
+Attach it to a story in the asset manager.
+
+| Name | |
+|---|---|
+| `p-dot` `p-glow` `p-flame` `p-puff` `p-spark` `p-star` `p-flake` `p-ring` `p-pixel` `p-drop` `p-leaf` | 64², white on transparent, tag `particle-sprite` |
+| `fire` `smoke` `sparks` `snow` `magic` | ready emitters (kind `fx`, tag `particles`) |
+
+Shapes are CODE (`SPRITES` in the script). Iterate: edit, `--out /root/tmp/pp --dry-run`
+to look, re-run without `--dry-run` to push. Idempotent: only changed bytes / numbers move.
+
+## Files
+
+| File | Job |
+|---|---|
+| `packages/scene-types/src/particles.ts` | params, ranges, presets, merge |
+| `packages/render-dom/src/particles.ts` | PURE sim, seeded. Tested. |
+| `packages/render-dom/src/particle-host.ts` | WebGL / 2D draw, one shared rAF loop |
+| `dom-renderer.ts` `applyParticles` | canvas into the entity art, `<img>` hidden |
+| `src/dialogs/sliders-particles/` | dialog, `EmitControls` (shared with scene editor) |
+
+## Limits (v1)
+
+- One WebGL context per emitter. Browsers cap ~16; a lost context falls back to 2D (no tint).
+- One sprite per emitter. No sprite sheets, no colour/size curves beyond start→end.
+- Editor stage "still" mode does not freeze particles (rAF, not CSS).
+- `twine-cli` lint knows `emit:` (shared parser), not whether the ref is an emitter.
