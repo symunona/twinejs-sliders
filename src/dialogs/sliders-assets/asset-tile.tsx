@@ -103,8 +103,9 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 	// YAML addresses assets by name, and `a_8f21` is unwritable. An `fx` asset is not
 	// draggable: `fx:` is a list of effects on the whole stage, not something with a
 	// position, so there is nowhere on the stage for it to land.
+	// An `fx` asset is a particle emitter: placed like a prop, drawn as particles.
 	const dragPayload: AssetDragPayload | undefined =
-		meta.kind === 'bg' || meta.kind === 'object' || isSound
+		meta.kind === 'bg' || meta.kind === 'object' || meta.kind === 'fx' || isSound
 			? {
 					label: meta.name,
 					ref: meta.name,

@@ -139,7 +139,7 @@ describe('dragging a tile onto the stage', () => {
 		expect(transfer.getData('text/plain')).toBe('music: rain-heavy');
 	});
 
-	it('leaves an fx asset undraggable — there is nowhere on the stage for it', () => {
+	it('sends an fx asset (a particle emitter) as a prop', () => {
 		render(
 			<FakeStateProvider>
 				<AssetTile
@@ -153,7 +153,11 @@ describe('dragging a tile onto the stage', () => {
 			</FakeStateProvider>
 		);
 
-		expect(tile('.sliders-tile').getAttribute('draggable')).toBe('false');
+		expect(readAssetDragData(drag(tile('.sliders-tile')))).toEqual({
+			label: 'rain',
+			ref: 'rain',
+			target: 'prop'
+		});
 	});
 
 	it('sends a character as cast, addressed by its id rather than its name', () => {
