@@ -195,7 +195,7 @@ export const EMIT_PRESETS: Record<
 			grow: 1,
 			life: 6,
 			rate: 25,
-			size: 0.04,
+			size: 0.025,
 			speed: 0.12,
 			spin: 90,
 			spread: 40
