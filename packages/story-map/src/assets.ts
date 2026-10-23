@@ -373,6 +373,34 @@ export function resolveSceneAssets(
 			if (patch.kind === 'prop' || (auto && !catalog.characters.has(ref))) {
 				// 2 — props resolve straight to an asset through `ref` (default = the key).
 				push(rowFor(catalog, ref, via, id, inherited, 'object'));
+
+				// 2b — an emitter's particle sprite is art by name: the asset's own, and any
+				// scene `emit: {sprite:}` on the entry or a beat.
+				const sprites = new Map<string, string>();
+				const own = (catalog.byId.get(ref) ?? catalog.byName.get(ref))?.particles
+					?.sprite;
+
+				if (own) {
+					sprites.set(own, `${via} sprite`);
+				}
+
+				if (patch.emit?.sprite) {
+					sprites.set(patch.emit.sprite, `${via} emit sprite:`);
+				}
+
+				for (const beat of current.beats ?? []) {
+					const sprite = beatParts(beat).find(part => part.who === id)?.patch
+						?.emit?.sprite;
+
+					if (sprite && !sprites.has(sprite)) {
+						sprites.set(sprite, `beats/${beat.index} emit sprite:`);
+					}
+				}
+
+				for (const [sprite, spriteVia] of sprites) {
+					push(rowFor(catalog, sprite, spriteVia, id, inherited, 'object'));
+				}
+
 				continue;
 			}
 

@@ -143,20 +143,19 @@ export const EMIT_DEFAULTS: EmitParams = {
 export const DEFAULT_EMIT_BOX = {h: 320, w: 200};
 
 /**
- * Starting points in the particle editor. Numbers only — the sprite is the asset's own
- * bytes, picked separately (`texture` names the pack sprite each one was tuned on).
+ * Starting points in the particle editor: the numbers plus the pack sprite each was tuned
+ * on (`params.sprite`, a pack name — a story without the pack draws the soft dot).
  * `box`/`origin` are for a NEW emitter; applying a preset to one keeps its own.
  */
 export const EMIT_PRESETS: Record<
 	string,
 	{
 		params: EmitParams;
-		texture: string;
 		box?: {w: number; h: number};
 		origin?: {x: number; y: number};
 	}
 > = {
-	fire: {params: EMIT_DEFAULTS, texture: 'p-flame'},
+	fire: {params: {...EMIT_DEFAULTS, sprite: 'p-flame'}},
 	smoke: {
 		params: {
 			angle: 0,
@@ -172,9 +171,9 @@ export const EMIT_PRESETS: Record<
 			size: 0.25,
 			speed: 0.15,
 			spin: 30,
-			spread: 30
-		},
-		texture: 'p-puff'
+			spread: 30,
+			sprite: 'p-puff'
+		}
 	},
 	sparks: {
 		params: {
@@ -191,9 +190,9 @@ export const EMIT_PRESETS: Record<
 			size: 0.12,
 			speed: 1.1,
 			spin: 0,
-			spread: 70
-		},
-		texture: 'p-spark'
+			spread: 70,
+			sprite: 'p-spark'
+		}
 	},
 	snow: {
 		params: {
@@ -210,12 +209,12 @@ export const EMIT_PRESETS: Record<
 			size: 0.025,
 			speed: 0.12,
 			spin: 90,
-			spread: 40
+			spread: 40,
+			sprite: 'p-flake'
 		},
 		// Falls from the top edge across a wide box.
 		box: {h: 400, w: 600},
-		origin: {x: 0.5, y: 0},
-		texture: 'p-flake'
+		origin: {x: 0.5, y: 0}
 	},
 	magic: {
 		params: {
@@ -232,11 +231,11 @@ export const EMIT_PRESETS: Record<
 			size: 0.08,
 			speed: 0.1,
 			spin: 180,
-			spread: 360
+			spread: 360,
+			sprite: 'p-star'
 		},
 		// Hangs round its middle.
-		origin: {x: 0.5, y: 0.5},
-		texture: 'p-star'
+		origin: {x: 0.5, y: 0.5}
 	}
 };
 

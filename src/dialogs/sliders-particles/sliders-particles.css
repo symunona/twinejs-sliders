@@ -30,8 +30,8 @@
 	background: var(--light-blue);
 }
 
-.sliders-particles-list img,
-.sliders-particles-sprites img {
+.sliders-particles-list .asset-preview,
+.sliders-particles-list .asset-preview img {
 	background: #111;
 	border-radius: 2px;
 	height: 24px;
@@ -77,24 +77,6 @@
 	color: var(--gray);
 	font-size: 85%;
 	margin: 0;
-}
-
-.sliders-particles-sprites {
-	align-items: center;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-}
-
-.sliders-particles-sprites button {
-	border: 2px solid transparent;
-	border-radius: 4px;
-	cursor: pointer;
-	padding: 1px;
-}
-
-.sliders-particles-sprites button.selected {
-	border-color: var(--blue);
 }
 
 .sliders-particles-knobs {

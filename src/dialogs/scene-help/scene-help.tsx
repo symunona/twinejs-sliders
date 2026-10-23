@@ -94,7 +94,7 @@ const ENTITY_HELP: KeyHelp<typeof ENTITY_KEYS> = {
 	fit: `Draw this entity as a full-bleed PLANE instead of a sprite: it fills the stage and its picture is fitted to it. ${ENTITY_FITS.join(
 		' or '
 	)} — cover fills and crops, contain fits the whole picture in. A plane sits in the same z space as the cast, so a transparent PNG at z: 1 is a wall to stand behind. at:, of:, scale: and rot: do nothing on one; z:, opacity: and flip: still do. Without a z: it sits at ${FIT_Z}, behind everyone.`,
-	emit: `Overrides a particle emitter\u2019s settings for this entity — emit: {rate: 80, color: '#ff8800'}. Only on a particle asset (made in the Particles dialog). Keys: ${EMIT_KEYS.join(
+	emit: `Overrides a particle emitter\u2019s settings for this entity — emit: {rate: 80, color: '#ff8800', sprite: lamp-glow}. Only on a particle emitter (an fx asset made in the Particles dialog: a preset, not a picture). sprite: is ANY still image asset, by name. Keys: ${EMIT_KEYS.join(
 		', '
 	)}. Distances are fractions of the emitter box, angle 0 is up. A beat\u2019s emit merges over the one before it, key by key; emit: {rate: 0} stops new particles, emit: ~ clears the overrides.`,
 	flip: 'true mirrors the sprite horizontally.',

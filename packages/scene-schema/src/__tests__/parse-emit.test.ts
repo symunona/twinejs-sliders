@@ -20,6 +20,13 @@ describe('emit: on an entity', () => {
 		});
 	});
 
+	it('takes sprite: any image asset, by name', () => {
+		const {scene, errors} = parseScene(PROP('{emit: {sprite: lamp-glow, rate: 5}}'));
+
+		expect(errors).toEqual([]);
+		expect(scene.entities.fire?.emit).toEqual({rate: 5, sprite: 'lamp-glow'});
+	});
+
 	it('clamps out of range with a warning', () => {
 		const {scene, errors} = parseScene(PROP('{emit: {rate: 5000}}'));
 

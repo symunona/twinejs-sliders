@@ -169,6 +169,31 @@ describe('resolveBundleRefs', () => {
 		expect(resolved.assets.map(meta => meta.id)).toEqual([id]);
 	});
 
+	it("ships an emitter's sprite, which it names rather than holds", async () => {
+		const store = newStore();
+		const sprite = await store.put(file(pngBytes(4, 4), 'lamp.png', 'image/png'), {
+			kind: 'object',
+			name: 'lamp-glow'
+		});
+		const emitter = await store.put(file(pngBytes(5, 5), 'fire.png', 'image/png'), {
+			kind: 'fx',
+			name: 'fire',
+			particles: {rate: 10, sprite: 'lamp-glow'}
+		});
+		const resolved = await resolveBundleRefs(store, {
+			assetRefs: ['fire'],
+			autoRefs: [],
+			characterRefs: [],
+			poseRefs: {},
+			fxRefs: []
+		});
+
+		expect(resolved.assets.map(meta => meta.id).sort()).toEqual(
+			[emitter, sprite].sort()
+		);
+		expect(resolved.unresolved).toEqual([]);
+	});
+
 	it('reports names the library does not have', async () => {
 		const store = newStore();
 

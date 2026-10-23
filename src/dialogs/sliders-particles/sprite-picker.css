@@ -1,0 +1,61 @@
+@import '../../styles/colors.css';
+
+.sprite-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0;
+}
+
+.sprite-picker.overridden .sprite-picker-head span {
+	font-weight: bold;
+}
+
+.sprite-picker-head {
+	align-items: center;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+}
+
+.sprite-picker-head input {
+	min-width: 0;
+	width: 9em;
+}
+
+.sprite-picker-tiles {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	max-height: 12em;
+	overflow-y: auto;
+}
+
+.sprite-picker-tiles button {
+	background: #111;
+	border: 2px solid transparent;
+	border-radius: 4px;
+	cursor: pointer;
+	height: 32px;
+	padding: 1px;
+	width: 32px;
+}
+
+.sprite-picker-tiles button.selected {
+	border-color: var(--blue);
+}
+
+.sprite-picker-tiles .asset-preview,
+.sprite-picker-tiles img {
+	display: block;
+	height: 100%;
+	object-fit: contain;
+	width: 100%;
+}
+
+.sprite-picker-dot {
+	background: radial-gradient(circle, #fff 0, transparent 70%);
+	display: block;
+	height: 100%;
+	width: 100%;
+}

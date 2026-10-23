@@ -7,7 +7,8 @@ Model: RPG Maker particle plugins (Sang Hendrix style) — sprite + a few number
 
 | | |
 |---|---|
-| Emitter | an ASSET. Kind `fx`. Bytes = the particle sprite. `particles` metadata = the emitter. |
+| Emitter | an ASSET, kind `fx` = a PRESET. `particles` metadata = the emitter. Its bytes = thumbnail only. |
+| Sprite | `sprite:` = ANY still image asset, by name. Absent / unknown = built-in soft dot. |
 | Placed | as an entity, by name: `props: {fire: {at: 0}}`. Position, scale, z, opacity, beats, drag: free. |
 | Tuned per scene | entity key `emit:`, per key over the asset's numbers. |
 | Made | Particles dialog (toolbar, `alt+x`). |
@@ -37,6 +38,7 @@ Source of truth: `packages/scene-types/src/particles.ts` (`EMIT_RANGES`, `EMIT_D
 | `area` | spawn disc radius, fraction of box width |
 | `color` / `colorEnd` | tint birth → death, `#rrggbb`. Multiplies the sprite: white art takes it exactly |
 | `blend` | `add` glows (fire, magic). `normal` paints (smoke, snow) |
+| `sprite` | the particle picture: any still image asset name (pack `p-*`, a prop, a backdrop…). Resolved like every scene name: own collection, then attached. |
 
 Asset only: `box: {w, h}` px at scale 1 — the entity's size, what the editor selects and
 drags. Emission point = the asset's `origin` (default bottom centre). Particles may leave
@@ -57,6 +59,7 @@ beats:
 ```
 
 - `emit:` merges per key, like `grade:`. State: later beats inherit.
+- `emit: {sprite: lamp-glow}` swaps the picture for this scene; the preset stays.
 - On a non-emitter: parsed, ignored.
 - Changes snap. In-flight particles keep going; field never restarts on an apply.
 
@@ -67,8 +70,13 @@ beats:
 | Particles dialog | list of emitters · live preview (same `ParticleHost` as the stage) · knobs · box · origin · sprite strip · presets |
 | Scene editor, Particles tab (stars) | own sidebar tab, only while ONE emitter is selected, orange like Transform → same knobs, write `emit:`. Highlighted = overridden. Reset = `emit: ~`. Slider bursts = one undo step (`+sliders-emit`). |
 
-New Emitter = preset + its pack sprite (`EMIT_PRESETS[*].texture`), copied as the new
-asset's bytes. Sprite swap = `replace` (keeps `particles`).
+New Emitter = preset numbers + `sprite:` = the preset's pack sprite. Bytes = that sprite
+(or a dot) as thumbnail. Sprite pick = `particles.sprite = name`, bytes untouched.
+Picker: any still visual asset, pack (`particle-sprite` tag) first, filter box past 24.
+Not offered: animated files, emitters, character pose images.
+
+Scene Particles tab: own sprite picker (first tile = the emitter's own), pencil = open
+this emitter in the Particles dialog (`particle-focus.ts` bus, like `character-focus.ts`).
 
 ## The pack
 
@@ -78,7 +86,7 @@ Attach it to a story in the asset manager.
 | Name | |
 |---|---|
 | `p-dot` `p-glow` `p-flame` `p-puff` `p-spark` `p-star` `p-flake` `p-ring` `p-pixel` `p-drop` `p-leaf` | 64², white on transparent, tag `particle-sprite` |
-| `fire` `smoke` `sparks` `snow` `magic` | ready emitters (kind `fx`, tag `particles`) |
+| `fire` `smoke` `sparks` `snow` `magic` | ready emitters = presets (kind `fx`, tag `particles`), `sprite:` → a `p-*` |
 
 Shapes are CODE (`SPRITES` in the script). Iterate: edit, `--out /root/tmp/pp --dry-run`
 to look, re-run without `--dry-run` to push. Idempotent: only changed bytes / numbers move.
@@ -99,3 +107,5 @@ to look, re-run without `--dry-run` to push. Idempotent: only changed bytes / nu
 - One sprite per emitter. No sprite sheets, no colour/size curves beyond start→end.
 - Editor stage "still" mode does not freeze particles (rAF, not CSS).
 - `twine-cli` lint knows `emit:` (shared parser), not whether the ref is an emitter.
+- Refs: `emit.sprite` + emitter `particles.sprite` count as art (bundle, usage refs, story-map
+  rows). Ctrl-click on a sprite name in the passage editor: not wired.

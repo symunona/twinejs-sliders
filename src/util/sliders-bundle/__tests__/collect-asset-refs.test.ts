@@ -307,3 +307,19 @@ describe('collectAssetRefs', () => {
 		});
 	});
 });
+
+describe('particle sprites', () => {
+	it('counts emit: sprite names as art, on the entry and on a beat', () => {
+		const refs = collectPassageRefs(
+			[
+				'[scene]',
+				'props:',
+				'  fire: {at: 0, emit: {sprite: p-flame}}',
+				'beats:',
+				'  - fire: {emit: {sprite: lamp-glow}}'
+			].join('\n')
+		);
+
+		expect(refs.assetRefs).toEqual(['fire', 'lamp-glow', 'p-flame']);
+	});
+});

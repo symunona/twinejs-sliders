@@ -57,9 +57,23 @@ describe('mergeEmit / resolveEmit', () => {
 });
 
 describe('presets', () => {
-	it('are full, in-range parameter sets', () => {
+	it('are full, in-range parameter sets, each naming a pack sprite', () => {
 		for (const {params} of Object.values(EMIT_PRESETS)) {
 			expect(resolveEmit(params, undefined)).toEqual(params);
+			expect(params.sprite).toMatch(/^p-/);
 		}
+	});
+});
+
+describe('sprite', () => {
+	it('is a name: kept trimmed, blank dropped, overridable per scene', () => {
+		expect(normalizeEmit({sprite: ' p-star '})).toEqual({sprite: 'p-star'});
+		expect(normalizeEmit({sprite: '  '})).toBeUndefined();
+		expect(resolveEmit({sprite: 'p-flame'}, {sprite: 'lamp'}).sprite).toBe('lamp');
+		expect(resolveEmit(undefined, undefined).sprite).toBeUndefined();
+	});
+
+	it('goes back to the asset sprite when a scene drops its override', () => {
+		expect(mergeEmit({rate: 5, sprite: 'lamp'}, {sprite: undefined})).toEqual({rate: 5});
 	});
 });
