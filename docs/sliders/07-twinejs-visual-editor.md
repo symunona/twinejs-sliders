@@ -50,6 +50,8 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 | Drag from asset panel onto stage | new entry under `cast:` / `props:` |
 | Drop a background | `bg:` |
 | Delete key | remove the entry — or `~` if the scene has `from:` (see [02](02-sliders-format.md)) |
+| Delete, entity has beats | popup: delete with its beats (parts go, beat left empty goes) / keep beats, delete only entry / cancel. No beats = no popup. |
+| Delete, bubble selected | words → `""`. Beat stays, no bubble drawn. |
 | `F` / context menu | `flip:` |
 | Send to back / front | `layer:` (D11 — `back` / `mid` / `front`) |
 | Bracket keys | `z:` nudge within a layer |

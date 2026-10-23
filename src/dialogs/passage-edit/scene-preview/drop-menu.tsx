@@ -52,68 +52,7 @@ export function SceneDropMenu(props: SceneDropMenuProps) {
 	const {characters, count, onCancel, onChoose, point} = props;
 	const [poses, setPoses] = React.useState(false);
 	const {t} = useTranslation();
-	const rootRef = React.useRef<HTMLDivElement>(null);
-	const [offset, setOffset] = React.useState<Vec2>();
-
-	// Measured after mount, so the clamp knows the menu's real size — and again when the
-	// character list opens, since that changes the height it has to fit.
-	React.useLayoutEffect(() => {
-		const root = rootRef.current;
-
-		if (!root) {
-			return;
-		}
-
-		const margin = 8;
-
-		setOffset({
-			x: Math.max(
-				margin,
-				Math.min(point.x, window.innerWidth - root.offsetWidth - margin)
-			),
-			y: Math.max(
-				margin,
-				Math.min(point.y, window.innerHeight - root.offsetHeight - margin)
-			)
-		});
-	}, [poses, point.x, point.y]);
-
-	// Escape cancels wherever focus is. Bound to the document rather than the menu because
-	// the drop leaves focus on whatever the pointer started from, which may be outside it.
-	React.useEffect(() => {
-		function onKeyDown(event: KeyboardEvent) {
-			if (event.key === 'Escape') {
-				event.stopPropagation();
-				onCancel();
-			}
-		}
-
-		document.addEventListener('keydown', onKeyDown, true);
-		return () => document.removeEventListener('keydown', onKeyDown, true);
-	}, [onCancel]);
-
-	React.useEffect(() => {
-		// A press anywhere else means "not this". Captured on the document so a press on the
-		// stage below cannot also begin a gesture.
-		function onPointerDown(event: PointerEvent) {
-			if (!rootRef.current?.contains(event.target as Node)) {
-				event.preventDefault();
-				event.stopPropagation();
-				onCancel();
-			}
-		}
-
-		document.addEventListener('pointerdown', onPointerDown, true);
-		return () => document.removeEventListener('pointerdown', onPointerDown, true);
-	}, [onCancel]);
-
-	// The first button takes focus, so the whole menu is reachable by keyboard from a drop
-	// that never touched one.
-	React.useEffect(() => {
-		rootRef.current
-			?.querySelector<HTMLButtonElement>('button')
-			?.focus();
-	}, []);
+	const {offset, rootRef} = useStageMenu(point, onCancel, poses);
 
 	const key = 'dialogs.passageEdit.scenePreview.dropMenu';
 
@@ -199,4 +138,79 @@ export function SceneDropMenu(props: SceneDropMenuProps) {
 		</div>,
 		document.body
 	);
+}
+
+/**
+ * What every stage popup shares: placed at `point` and clamped into the viewport, Escape and
+ * a press outside cancel, the first button takes focus.
+ */
+export function useStageMenu(
+	point: Vec2,
+	onCancel: () => void,
+	layoutKey?: unknown
+) {
+	const rootRef = React.useRef<HTMLDivElement>(null);
+	const [offset, setOffset] = React.useState<Vec2>();
+
+	// Measured after mount, so the clamp knows the menu's real size — and again when
+	// `layoutKey` changes (the drop menu's character list), since that changes the height.
+	React.useLayoutEffect(() => {
+		const root = rootRef.current;
+
+		if (!root) {
+			return;
+		}
+
+		const margin = 8;
+
+		setOffset({
+			x: Math.max(
+				margin,
+				Math.min(point.x, window.innerWidth - root.offsetWidth - margin)
+			),
+			y: Math.max(
+				margin,
+				Math.min(point.y, window.innerHeight - root.offsetHeight - margin)
+			)
+		});
+	}, [layoutKey, point.x, point.y]);
+
+	// Escape cancels wherever focus is. Bound to the document rather than the menu because
+	// the drop leaves focus on whatever the pointer started from, which may be outside it.
+	React.useEffect(() => {
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key === 'Escape') {
+				event.stopPropagation();
+				onCancel();
+			}
+		}
+
+		document.addEventListener('keydown', onKeyDown, true);
+		return () => document.removeEventListener('keydown', onKeyDown, true);
+	}, [onCancel]);
+
+	React.useEffect(() => {
+		// A press anywhere else means "not this". Captured on the document so a press on the
+		// stage below cannot also begin a gesture.
+		function onPointerDown(event: PointerEvent) {
+			if (!rootRef.current?.contains(event.target as Node)) {
+				event.preventDefault();
+				event.stopPropagation();
+				onCancel();
+			}
+		}
+
+		document.addEventListener('pointerdown', onPointerDown, true);
+		return () => document.removeEventListener('pointerdown', onPointerDown, true);
+	}, [onCancel]);
+
+	// The first button takes focus, so the whole menu is reachable by keyboard from a drop
+	// that never touched one.
+	React.useEffect(() => {
+		rootRef.current
+			?.querySelector<HTMLButtonElement>('button')
+			?.focus();
+	}, []);
+
+	return {offset, rootRef};
 }

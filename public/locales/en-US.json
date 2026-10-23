@@ -940,6 +940,12 @@
 				"cameraToolOff": "Camera tool: turn it on to pan the shot by dragging empty ground, and to zoom with ctrl+wheel",
 				"cameraToolOn": "Camera tool is on \u2014 dragging empty ground pans the shot. Click to put the camera down",
 				"openAsset": "Open in the asset manager",
+				"deleteMenu": {
+					"title": "{{name}} has beats in this scene",
+					"title_plural": "{{name}} have beats in this scene",
+					"withBeats": "Delete with its beats",
+					"keepBeats": "Keep the beats, delete only this"
+				},
 				"dropMenu": {
 					"title": "Add {{count}} image as…",
 					"title_plural": "Add {{count}} images as…",

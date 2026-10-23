@@ -11,6 +11,7 @@ import {
 	conditionWrites,
 	deleteWrites,
 	fitWrites,
+	idsWithBeats,
 	flipWrites,
 	formatCamera,
 	motionSpeedWrites,
@@ -527,5 +528,28 @@ describe('wheelZoomFactor()', () => {
 
 	it('treats a wheel line as more than a trackpad pixel', () => {
 		expect(wheelZoomFactor(-3, 1)).toBeGreaterThan(wheelZoomFactor(-3, 0));
+	});
+});
+
+describe('idsWithBeats()', () => {
+	const scene = parseSceneText(
+		[
+			passage,
+			'beats:',
+			'  - mira: "Hi."',
+			'  - wait: 1',
+			'    candle: {at: 0}'
+		].join('\n')
+	).result!.scene;
+
+	it('names entities with a beat part, spoken or not', () => {
+		expect(idsWithBeats(scene, ['mira', 'joren', 'candle'])).toEqual([
+			'mira',
+			'candle'
+		]);
+	});
+
+	it('is empty with no scene', () => {
+		expect(idsWithBeats(undefined, ['mira'])).toEqual([]);
 	});
 });

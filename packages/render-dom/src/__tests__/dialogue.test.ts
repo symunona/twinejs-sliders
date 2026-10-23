@@ -287,6 +287,19 @@ describe('DialogueLayer', () => {
 		expect(mount.querySelectorAll('.sliders-bubble')).toHaveLength(0);
 	});
 
+	it('draws no bubble and no box for an empty line', () => {
+		const {mount, dialogue} = setup();
+
+		dialogue.setBubbles([{who: 'mira', text: 'a'}]);
+		dialogue.setBubbles([
+			{who: 'mira', text: ''},
+			{who: 'joren', text: ' '}
+		]);
+		dialogue.setBox('');
+		expect(mount.querySelectorAll('.sliders-bubble')).toHaveLength(0);
+		expect(mount.querySelector('.sliders-box')).toBeNull();
+	});
+
 	it('repositions when the renderer says something moved', () => {
 		const mount = document.createElement('div');
 		let x = 400;

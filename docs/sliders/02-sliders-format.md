@@ -598,6 +598,7 @@ No parallax. A plane does not counter-translate with the camera (yet).
 | Form | Means |
 |---|---|
 | `- mira: "text"` | mira speaks. Bubble at her `bubble` anchor. |
+| `- mira: ""` | empty line: beat plays, no bubble. What "add beat" writes, what deleting a bubble leaves. |
 | `- mira: {pose: angry, at: -0.25, say: "…"}` | mutate stage **and** speak, one beat |
 | `- box: "text"` | narration box, no speaker |
 | `- wait: 0.5` | pause, seconds |

@@ -15,12 +15,14 @@ import {entityKey} from '@sliders/asset-store';
 import {formatValue} from '@sliders/scene-edit';
 import {resolveZ} from '@sliders/render-dom';
 import type {StageBox} from '@sliders/render-dom';
+import {beatParts} from '@sliders/scene-types';
 import type {
 	Camera,
 	EntityFit,
 	EntityId,
 	EntityPatch,
 	PoseLoop,
+	Scene,
 	Stage,
 	StageEntity,
 	Vec2
@@ -331,17 +333,33 @@ export function conditionWrites(
 
 /**
  * Delete everything selected. Whether that removes the entry or rewrites it as `id: ~` is
- * decided by `from:` at write time — see `buildWriteEdit`.
+ * decided by `from:` at write time — see `buildWriteEdit`. `withBeats` takes their beat
+ * parts too.
  */
 export function deleteWrites(
 	stage: Stage,
-	ids: EntityId[]
+	ids: EntityId[],
+	withBeats = false
 ): EntityStructWrite[] {
 	return entitiesOf(stage, ids).map(entity => ({
 		id: entity.id,
 		kind: entity.kind,
-		struct: 'remove' as const
+		struct: 'remove' as const,
+		...(withBeats ? {withBeats} : {})
 	}));
+}
+
+/** Which of these ids any beat in the scene names — a part of its own, spoken or not. */
+export function idsWithBeats(scene: Scene | undefined, ids: EntityId[]): EntityId[] {
+	const named = new Set<EntityId>();
+
+	for (const beat of scene?.beats ?? []) {
+		for (const part of beatParts(beat)) {
+			named.add(part.who);
+		}
+	}
+
+	return ids.filter(id => named.has(id));
 }
 
 // ---------------------------------------------------------------------------

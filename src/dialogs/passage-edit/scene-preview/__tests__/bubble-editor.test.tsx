@@ -48,6 +48,7 @@ interface SetupOptions {
 	anchorMode?: string;
 	anchor?: {x: number; y: number} | null;
 	onSelectBeat?: () => void;
+	onSelectedChange?: (selected: boolean) => void;
 	onEditText?: () => void;
 }
 
@@ -73,6 +74,7 @@ function setup(options: SetupOptions = {}) {
 				onDraft={style => drafts.push(style)}
 				onEditText={options.onEditText}
 				onSelectBeat={options.onSelectBeat}
+				onSelectedChange={options.onSelectedChange}
 				style={options.style}
 			/>
 		</div>
@@ -342,5 +344,21 @@ describe('BubbleEditor and the beat panel', () => {
 
 		fireEvent.doubleClick(body);
 		expect(onEditText).toHaveBeenCalledTimes(1);
+	});
+
+	it('reports its selection, so Delete can empty the line', async () => {
+		const onSelectedChange = jest.fn();
+		const {view} = setup({onSelectedChange});
+
+		await measured();
+
+		const body = view.container.querySelector('.scene-bubble-editor-body')!;
+
+		fireEvent(body, pointer('pointerdown', 400, 225));
+		fireEvent(window, pointer('pointerup', 400, 225));
+		expect(onSelectedChange).toHaveBeenLastCalledWith(true);
+
+		fireEvent.keyDown(window, {key: 'Escape'});
+		expect(onSelectedChange).toHaveBeenLastCalledWith(false);
 	});
 });

@@ -771,6 +771,101 @@ export function removeEntity(
 	return removeEntities(text, kind, [id], isPatchScene);
 }
 
+/**
+ * Beat keys that cannot hold a beat up on their own. A beat left with only these once its
+ * entities are gone is deleted whole; one left with `sfx:`, `bg:`, `wait:` … keeps them as
+ * a beat of its own.
+ */
+const BEAT_RIDER_KEYS = ['dur', 'ease', 'if'];
+
+/**
+ * Remove every beat part these entities have, as ONE edit — deleting a character "with its
+ * beats".
+ *
+ * Per beat: the entities' own keys go. A beat with nothing left that stands on its own is
+ * deleted, line and all; anybody else in it keeps the beat (`- mira: …` / `joren: …` loses
+ * mira and becomes `- joren: …`). Block sequences only, like `insertBeatEntity`.
+ */
+export function removeEntityBeats(
+	text: string,
+	ids: EntityId[]
+): TextEdit | undefined {
+	const parsed = parseBlock(text);
+	const beats = parsed && beatsSeqOf(parsed);
+
+	if (!parsed || !beats || beats.flow) {
+		return undefined;
+	}
+
+	const wanted = new Set<string>(ids);
+	const edits: TextEdit[] = [];
+
+	for (const item of beats.items) {
+		if (!isMap(item)) {
+			continue;
+		}
+
+		const map = item as YAMLMap;
+		const pairs = map.items as Pair<unknown, unknown>[];
+		const gone = pairs.map(pair => wanted.has(keyName(pair) ?? ''));
+
+		if (!gone.includes(true)) {
+			continue;
+		}
+
+		const stands = pairs.some(
+			(pair, index) =>
+				!gone[index] && !BEAT_RIDER_KEYS.includes(keyName(pair) ?? '')
+		);
+
+		if (!stands) {
+			const range = rangeOf(item);
+
+			if (!range) {
+				return undefined;
+			}
+
+			edits.push({
+				from: lineStartAt(text, range[0]),
+				insert: '',
+				to: Math.min(
+					text.length,
+					lineEndAt(text, trimEnd(text, range[1], range[0])) + 1
+				)
+			});
+			continue;
+		}
+
+		const kept = gone.indexOf(false);
+
+		// A block item's first key shares its line with the `- `, so deleting that line would
+		// take the dash with it. Splice from the first key to the first kept one instead: the
+		// kept key moves up behind the dash.
+		if (!map.flow && kept > 0) {
+			const from = rangeOf(pairs[0].key);
+			const to = rangeOf(pairs[kept].key);
+
+			if (!from || !to) {
+				return undefined;
+			}
+
+			edits.push({from: from[0], insert: '', to: to[0]});
+		}
+
+		pairs.forEach((pair, index) => {
+			if (gone[index] && (map.flow || index > kept)) {
+				const edit = removePairEdit(parsed, map, pair);
+
+				if (edit) {
+					edits.push(edit);
+				}
+			}
+		});
+	}
+
+	return mergeEdits(text, edits);
+}
+
 // ---------------------------------------------------------------------------
 // setBeatBubble
 // ---------------------------------------------------------------------------

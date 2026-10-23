@@ -42,6 +42,9 @@ export interface BubbleEditorProps {
 	onSelectBeat?: () => void;
 	/** A double click on the bubble: edit the words, in the beat panel's text box. */
 	onEditText?: () => void;
+	/** Controlled selection, so Delete can reach the bubble. Own state when absent. */
+	selected?: boolean;
+	onSelectedChange?: (selected: boolean) => void;
 }
 
 interface Rect {
@@ -211,17 +214,27 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 	onDraft,
 	onEditText,
 	onSelectBeat,
+	onSelectedChange,
+	selected: selectedProp,
 	style
 }) => {
 	const {t} = useTranslation();
 	const ref = React.useRef<HTMLDivElement>(null);
 	const gestureRef = React.useRef<Gesture>();
-	const [selected, setSelected] = React.useState(false);
+	const [ownSelected, setOwnSelected] = React.useState(false);
+	const selected = selectedProp ?? ownSelected;
+	const setSelected = React.useCallback(
+		(value: boolean) => {
+			setOwnSelected(value);
+			onSelectedChange?.(value);
+		},
+		[onSelectedChange]
+	);
 	const [measured, setMeasured] = React.useState<Measured>();
 	const active = editable && beat !== undefined;
 
 	// A different line is a different bubble, so the selection does not carry over.
-	React.useEffect(() => setSelected(false), [beat]);
+	React.useEffect(() => setSelected(false), [beat, setSelected]);
 
 	/**
 	 * Re-measure on every animation frame while the bubble is on screen.
@@ -302,7 +315,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 			window.removeEventListener('pointerdown', handleDown, true);
 			window.removeEventListener('keydown', handleKey);
 		};
-	}, [selected]);
+	}, [selected, setSelected]);
 
 	/**
 	 * The stage frame carries DRAGGING_CLASS for as long as a gesture is live.
@@ -480,6 +493,9 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 		event.preventDefault();
 		setSelected(true);
 		onSelectBeat?.();
+		// preventDefault kept focus where it was; the stage takes it, as its own press does,
+		// so Delete resolves in the `scene-preview` scope and reaches the bubble.
+		ref.current?.parentElement?.focus({preventScroll: true});
 
 		const rect = ref.current?.parentElement?.getBoundingClientRect();
 		const {bubble} = measured;

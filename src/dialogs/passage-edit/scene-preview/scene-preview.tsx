@@ -70,10 +70,12 @@ import {effectiveLocks, lockReason} from './scene-lock';
 import {useStageViewZoom} from './use-stage-view-zoom';
 import {BeatTimeline} from './beat-timeline';
 import {BubbleEditor} from './bubble-editor';
+import {SceneDeleteMenu} from './delete-menu';
 import {SceneDropMenu, type DropChoice} from './drop-menu';
 import {
 	assetDropWrites,
 	deleteWrites,
+	idsWithBeats,
 	flipWrites,
 	lockWrites,
 	musicDropWrites,
@@ -469,6 +471,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 	const [beat, setBeat] = React.useState(0);
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
+	/** Delete hit entities that have beats: the menu asking whether the beats go too. */
+	const [deleteRequest, setDeleteRequest] = React.useState<{
+		ids: EntityId[];
+		point: Vec2;
+		/** The whole selection at the press. A click in the menu may have cleared it. */
+		selection: EntityId[];
+	}>();
+	/** The speech bubble's own selection (its frame and handles), for Delete. */
+	const [bubbleSelected, setBubbleSelected] = React.useState(false);
 	const [playing, setPlaying] = React.useState(false);
 	const [renderer, setRenderer] = React.useState<DomRenderer>();
 	const root = React.useRef<HTMLDivElement>(null);
@@ -1324,10 +1335,69 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		}
 	}, [commit, opacityEdit, stage]);
 
+	/**
+	 * Delete. A selected bubble empties its line (`""`, what "add beat" writes) and the beat
+	 * stays. An entity with beats asks first whether they go too; one without is gone at once.
+	 */
 	const remove = React.useCallback(() => {
-		commit(deleteWrites(stage, selection), EDIT_ORIGIN);
-		clear();
-	}, [clear, commit, selection, stage]);
+		if (selection.length === 0) {
+			// The beat the bubble editor writes to — `bubbleBeat`, declared further down.
+			const spoken = shownBeat?.kind === 'say' || shownBeat?.kind === 'box';
+
+			if (bubbleSelected && spoken) {
+				commit([{beat: beat - 1, beatText: ''}], EDIT_ORIGIN);
+				setBubbleSelected(false);
+			}
+
+			return;
+		}
+
+		const ids = idsWithBeats(parse.result?.scene, selection);
+
+		if (ids.length === 0) {
+			commit(deleteWrites(stage, selection), EDIT_ORIGIN);
+			clear();
+			return;
+		}
+
+		// Near the selection row, where the Delete button is; the clamp keeps it on screen.
+		const anchor = document
+			.querySelector('.scene-preview-selection')
+			?.getBoundingClientRect();
+
+		setDeleteRequest({
+			ids,
+			point: anchor
+				? {x: anchor.left, y: anchor.bottom + 4}
+				: {x: window.innerWidth / 2 - 120, y: window.innerHeight / 3},
+			selection: [...selection]
+		});
+	}, [
+		beat,
+		bubbleSelected,
+		clear,
+		commit,
+		parse.result,
+		selection,
+		shownBeat,
+		stage
+	]);
+
+	const confirmDelete = React.useCallback(
+		(withBeats: boolean) => {
+			if (deleteRequest) {
+				commit(
+					deleteWrites(stage, deleteRequest.selection, withBeats),
+					EDIT_ORIGIN
+				);
+				clear();
+			}
+
+			setDeleteRequest(undefined);
+		},
+		[clear, commit, deleteRequest, stage]
+	);
+	const cancelDelete = React.useCallback(() => setDeleteRequest(undefined), []);
 
 	/**
 	 * The look every line in this scene starts from: the story's `sliders.bubble.*`
@@ -2048,7 +2118,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	});
 
 	useCommand({
-		enabled: editable && selection.length > 0,
+		enabled:
+			editable &&
+			(selection.length > 0 || (bubbleSelected && bubbleBeat !== undefined)),
 		id: 'scene.delete',
 		label: t('hotkeys.commands.scene.delete'),
 		run: remove,
@@ -2396,8 +2468,18 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onDraft={setBubbleDraft}
 				onEditText={handleEditBeatText}
 				onSelectBeat={handleSelectBeat}
+				onSelectedChange={setBubbleSelected}
+				selected={bubbleSelected}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
+			{deleteRequest && (
+				<SceneDeleteMenu
+					ids={deleteRequest.ids}
+					onCancel={cancelDelete}
+					onChoose={confirmDelete}
+					point={deleteRequest.point}
+				/>
+			)}
 			{/* A dropped file is not a background, an object, a cast member or a pose until
 			    the author says which, so the drop stops here and asks. */}
 			{dropRequest && (

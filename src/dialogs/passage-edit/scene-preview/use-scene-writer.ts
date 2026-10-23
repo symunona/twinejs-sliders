@@ -21,6 +21,7 @@ import {
 	insertBeatLine,
 	mergeEdits,
 	removeEntities,
+	removeEntityBeats,
 	removeEntityKey,
 	removeSceneKey,
 	setBeatBubble,
@@ -267,6 +268,8 @@ export interface EntityStructWrite {
 	struct: 'add' | 'remove';
 	/** For `add`: the whole entry to write. */
 	patch?: EntityPatch;
+	/** For `remove`: every beat part of this entity goes too (`removeEntityBeats`). */
+	withBeats?: boolean;
 }
 
 /**
@@ -569,7 +572,14 @@ export function buildWriteEdit(
 				: undefined;
 		}
 
-		return buildRemoveEdit(context, write.kind, [write.id]);
+		const entry = buildRemoveEdit(context, write.kind, [write.id]);
+		const beats = write.withBeats
+			? removeEntityBeats(context.blockText, [write.id])
+			: undefined;
+
+		return entry && beats
+			? mergeEdits(context.blockText, [entry, beats])
+			: entry ?? beats;
 	}
 
 	return buildEntityEdit(context, write);
@@ -588,6 +598,9 @@ export function buildWriteEdits(
 ): TextEdit[] {
 	const edits: TextEdit[] = [];
 	const removed = new Map<EntityKind, EntityId[]>();
+	// One seq, so one edit for every kind: two edits that each delete a beat both entities
+	// share would overlap.
+	const beatsOf: EntityId[] = [];
 	// Insertion order, so a multi-select drag writes its new beats in the order the entities
 	// were picked rather than in map order — every insert lands on the same offset, and
 	// `mergeEdits` concatenates same-offset inserts in the order it is handed them.
@@ -606,6 +619,11 @@ export function buildWriteEdits(
 			write.struct === 'remove'
 		) {
 			removed.set(write.kind, [...(removed.get(write.kind) ?? []), write.id]);
+
+			if (write.withBeats) {
+				beatsOf.push(write.id);
+			}
+
 			continue;
 		}
 
@@ -654,6 +672,14 @@ export function buildWriteEdits(
 
 	for (const [kind, ids] of removed) {
 		const edit = buildRemoveEdit(context, kind, ids);
+
+		if (edit) {
+			edits.push(edit);
+		}
+	}
+
+	if (beatsOf.length > 0) {
+		const edit = removeEntityBeats(context.blockText, beatsOf);
 
 		if (edit) {
 			edits.push(edit);

@@ -218,7 +218,9 @@ export class DialogueLayer {
 
 		const seen = new Set<EntityId>();
 
-		for (const spec of specs) {
+		// An empty line has no bubble: it is what deleting a bubble leaves, and what "add
+		// beat" writes before the words are typed. The beat still plays.
+		for (const spec of specs.filter(spec => spec.text.trim() !== '')) {
 			seen.add(spec.who);
 
 			let rec = this.bubbles.get(spec.who);
@@ -254,7 +256,7 @@ export class DialogueLayer {
 			return;
 		}
 
-		if (text === null || text === undefined) {
+		if (text === null || text === undefined || text.trim() === '') {
 			this.boxEl?.remove();
 			this.boxEl = undefined;
 			this.boxBody = undefined;

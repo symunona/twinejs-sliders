@@ -907,3 +907,51 @@ describe('beat speaker write', () => {
 		expect(buildWriteEdit(ctx(1), {beat: 0, beatSpeaker: 'box'})).toBeUndefined();
 	});
 });
+
+describe('delete writes', () => {
+	function ctx() {
+		const block = blockOf(passage);
+
+		return {
+			beat: 0,
+			blockOffset: block.offset,
+			blockText: block.text,
+			scene: sceneOf(passage)
+		};
+	}
+
+	it('keeps the beats unless asked', () => {
+		const context = ctx();
+		const after = previewEdits(
+			context.blockText,
+			buildWriteEdits(context, [{id: 'mira', kind: 'cast', struct: 'remove'}])
+		);
+
+		expect(after).not.toContain('  mira: {at: -0.4');
+		expect(after).toContain('  - mira: {at: 0.2}\n  - mira: "Hello."');
+	});
+
+	it('takes the beats with the entry in one edit', () => {
+		const context = ctx();
+		const after = previewEdits(
+			context.blockText,
+			buildWriteEdits(context, [
+				{id: 'mira', kind: 'cast', struct: 'remove', withBeats: true},
+				{id: 'candle', kind: 'prop', struct: 'remove', withBeats: true}
+			])
+		);
+
+		expect(after).toBe('bg: tavern\nbeats:\n');
+	});
+
+	it('empties a bubble, the beat stays', () => {
+		const context = ctx();
+		const after = previewEdits(
+			context.blockText,
+			buildWriteEdits(context, [{beat: 1, beatText: ''}])
+		);
+
+		expect(after).toContain('  - mira: ""');
+		expect(sceneOf(`[scene]\n${after}`).beats).toHaveLength(2);
+	});
+});

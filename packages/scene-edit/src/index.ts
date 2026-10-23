@@ -23,6 +23,7 @@ export {
 	mergeEdits,
 	removeEntities,
 	removeEntity,
+	removeEntityBeats,
 	removeEntityKey,
 	setBeatBubble,
 	setBeatKey,
