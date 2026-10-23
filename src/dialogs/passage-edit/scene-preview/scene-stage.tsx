@@ -479,12 +479,12 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 	}, [ready, scrub]);
 
 	/**
-	 * Stopped is STILL: no CSS transition or animation anywhere on the stage.
+	 * Stopped is STILL for the dialogue: no CSS transition or animation on a bubble.
 	 *
-	 * The editor redraws on every drag frame and every keystroke, and each redraw that
-	 * eased toward its value left the picture trailing the pointer. Durations are already
-	 * zeroed per apply, but the stylesheet's own easings (the bubble follow, enter
-	 * animations, backdrop loops) are not the renderer's to zero.
+	 * The editor redraws on every drag frame and every keystroke, and a bubble that eased
+	 * toward its value trailed the pointer. Entity durations are already zeroed per apply;
+	 * the bubble's follow and enter animation live in the stylesheet, not the renderer's
+	 * to zero. Entity loops (parallax, `motion:`) keep running — scene-stage.css.
 	 *
 	 * On a stop the class waits for the transitions already running: the last beat of a
 	 * playback glides to rest instead of snapping (see the apply effect above).
