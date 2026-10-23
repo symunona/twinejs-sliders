@@ -1,8 +1,10 @@
-/* Not playing: nothing eases, nothing loops. See `still` in scene-stage.tsx. The
-   renderer writes durations inline, hence !important. */
-.scene-stage.still *,
-.scene-stage.still *::before,
-.scene-stage.still *::after {
+/* Not playing: bubbles and the box sit exactly where the YAML says, every frame. See
+   `still` in scene-stage.tsx. Dialogue only: entities already snap (the renderer zeroes
+   their durations when not animating), and their loops — parallax, motion: — are a
+   preview the author needs while stopped. */
+.scene-stage.still .sliders-dialogue *,
+.scene-stage.still .sliders-dialogue *::before,
+.scene-stage.still .sliders-dialogue *::after {
 	transition: none !important;
 	animation: none !important;
 }
