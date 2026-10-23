@@ -1,0 +1,8 @@
+/* Not playing: nothing eases, nothing loops. See `still` in scene-stage.tsx. The
+   renderer writes durations inline, hence !important. */
+.scene-stage.still *,
+.scene-stage.still *::before,
+.scene-stage.still *::after {
+	transition: none !important;
+	animation: none !important;
+}
