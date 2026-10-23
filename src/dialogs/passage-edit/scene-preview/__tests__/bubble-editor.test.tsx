@@ -309,6 +309,20 @@ describe('BubbleEditor', () => {
 		// Cleared on release: the committed text is what paints from then on.
 		expect(drafts[drafts.length - 1]).toBeUndefined();
 	});
+
+	it('freezes the bubble transitions on the frame while the gesture runs', async () => {
+		const {frame, view} = setup();
+		await measured();
+
+		const body = view.container.querySelector('.scene-bubble-editor-body')!;
+
+		expect(frame).not.toHaveClass('scene-bubble-dragging');
+		fireEvent(body, pointer('pointerdown', 400, 225));
+		fireEvent(window, pointer('pointermove', 480, 260));
+		expect(frame).toHaveClass('scene-bubble-dragging');
+		fireEvent(window, pointer('pointerup', 480, 260));
+		expect(frame).not.toHaveClass('scene-bubble-dragging');
+	});
 });
 
 describe('BubbleEditor and the beat panel', () => {

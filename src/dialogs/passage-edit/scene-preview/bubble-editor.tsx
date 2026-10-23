@@ -122,6 +122,9 @@ const MIN_WIDTH_FRACTION = 0.08;
 /** Below this there is no room for a line of type, whatever the width. */
 const MIN_HEIGHT_FRACTION = 0.05;
 
+/** On the stage frame while a bubble gesture is live; bubble-editor.css hangs off it. */
+const DRAGGING_CLASS = 'scene-bubble-dragging';
+
 /** How far the pointer travels before a click becomes a drag. */
 const DRAG_THRESHOLD_PX = 3;
 
@@ -301,9 +304,26 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 		};
 	}, [selected]);
 
+	/**
+	 * The stage frame carries DRAGGING_CLASS for as long as a gesture is live.
+	 *
+	 * The dialogue layer eases every reposition (a speaker sliding across the stage), so
+	 * each draft frame chased the pointer a quarter second behind. Worse, the anchor it
+	 * publishes is relative to where the bubble is GOING while the rect measured here is
+	 * where it is mid-ease, so the cross orbited the point it stands for. The class turns
+	 * the easing off, and the bubble is where the pointer says on every frame.
+	 */
+	const setDragging = React.useCallback((on: boolean) => {
+		ref.current?.parentElement?.classList.toggle(DRAGGING_CLASS, on);
+	}, []);
+
 	const endGesture = React.useCallback(() => {
 		gestureRef.current = undefined;
-	}, []);
+		setDragging(false);
+	}, [setDragging]);
+
+	// Unmounted mid-drag: the frame outlives this, and must not stay frozen.
+	React.useEffect(() => () => setDragging(false), [setDragging]);
 
 	const geometryFor = React.useCallback(
 		(gesture: Gesture, event: PointerEvent): BubbleGeometry => {
@@ -478,6 +498,7 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 			startHeight: bubble.height,
 			startWidth: bubble.width
 		};
+		setDragging(true);
 	};
 
 	const bubble = measured?.bubble;

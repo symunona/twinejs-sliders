@@ -132,3 +132,10 @@ blue for the same reason the gesture readout is orange — one colour per kind o
 	border: 2px solid var(--sliders-bubble-anchor, #ffb020);
 	border-radius: 50%;
 }
+
+/* Mid-gesture the bubble follows the pointer, not an ease. See `setDragging`. */
+.scene-bubble-dragging .sliders-bubble,
+.scene-bubble-dragging .sliders-box {
+	transition: none !important;
+	animation: none !important;
+}
