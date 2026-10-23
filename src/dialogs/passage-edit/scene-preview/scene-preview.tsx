@@ -1474,6 +1474,14 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[selection, stage]
 	);
 
+	// Above every early return: a hook.
+	const emitter = useEmitterSpec(
+		assets,
+		selectedEntities.length === 1 && selectedEntities[0].kind !== 'cast'
+			? selectedEntities[0].ref
+			: undefined
+	);
+
 	/**
 	 * The selection tab follows the selection: selecting shows it, deselecting goes back to
 	 * whichever tab the author was on. Never opens a collapsed sidebar -- collapsing it was
@@ -2504,10 +2512,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		.sort((a, b) => a.localeCompare(b));
 	const singleSelected =
 		selectedEntities.length === 1 ? selectedEntities[0] : undefined;
-	const emitter = useEmitterSpec(
-		assets,
-		singleSelected && singleSelected.kind !== 'cast' ? singleSelected.ref : undefined
-	);
 
 	/** Settings tab: how this preview behaves for me, then what the scene says. */
 	const sceneTab = (
