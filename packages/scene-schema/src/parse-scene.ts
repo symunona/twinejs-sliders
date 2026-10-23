@@ -2410,6 +2410,16 @@ function parseEmit(ctx: Ctx, node: unknown): EmitPatch | undefined {
 			continue;
 		}
 
+		if (key === 'sprite') {
+			const raw = asString(ctx, pair.value, 'emit sprite');
+
+			if (raw) {
+				emit.sprite = raw;
+			}
+
+			continue;
+		}
+
 		if (key === 'blend') {
 			const raw = asString(ctx, pair.value, 'emit blend');
 

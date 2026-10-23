@@ -40,7 +40,13 @@ export const EMIT_NUMBER_KEYS = [
 export type EmitNumberKey = (typeof EMIT_NUMBER_KEYS)[number];
 
 /** Every key `emit:` accepts. */
-export const EMIT_KEYS = [...EMIT_NUMBER_KEYS, 'color', 'colorEnd', 'blend'] as const;
+export const EMIT_KEYS = [
+	...EMIT_NUMBER_KEYS,
+	'color',
+	'colorEnd',
+	'blend',
+	'sprite'
+] as const;
 
 export type EmitKey = (typeof EMIT_KEYS)[number];
 
@@ -74,6 +80,12 @@ export interface EmitParams {
 	colorEnd: string;
 	/** `add` glows (fire, sparks, magic). `normal` paints (smoke, snow, leaves). */
 	blend: EmitBlend;
+	/**
+	 * The particle picture: ANY static image asset, by name (same namespace scene YAML
+	 * uses everywhere). Absent = the built-in soft dot. The emitter asset itself is a
+	 * preset, not a picture.
+	 */
+	sprite?: string;
 }
 
 /** What `emit:` writes and what the asset carries: any subset. Absent = default. */
@@ -286,6 +298,10 @@ export function normalizeEmit(
 
 	if (patch.blend && (EMIT_BLENDS as readonly string[]).includes(patch.blend)) {
 		out.blend = patch.blend;
+	}
+
+	if (typeof patch.sprite === 'string' && patch.sprite.trim()) {
+		out.sprite = patch.sprite.trim();
 	}
 
 	return Object.keys(out).length ? out : undefined;
