@@ -178,6 +178,20 @@ export const HotkeysProvider: React.FC = props => {
 				return;
 			}
 
+			// Shift in a text field is typing: capitals, symbols, extending the
+			// selection. Nothing runs on it there unless a real modifier joins it--
+			// `mod+shift+s` is still a chord.
+
+			if (
+				inTextEntry &&
+				event.shiftKey &&
+				!event.ctrlKey &&
+				!event.altKey &&
+				!event.metaKey
+			) {
+				return;
+			}
+
 			const chain = scopeChain(target);
 
 			// Inside the keyboard shortcuts list, scopeChain() returns that scope

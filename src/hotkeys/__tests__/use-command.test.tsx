@@ -138,6 +138,38 @@ describe('useCommand()', () => {
 		expect(run).toHaveBeenCalledTimes(1);
 	});
 
+	// Shift in a text field types capitals and extends the selection. Only a
+	// chord with a real modifier on top may reach a command.
+
+	it('does not run shift+key in a text field, even if the command opted in', () => {
+		const runLayers = jest.fn();
+		const runTest = jest.fn();
+
+		render(
+			<FakeStateProvider hotkeyScope="story-map">
+				<TestCommand allowInInput id="scene.layersPanel" run={runLayers} />
+				<TestCommand allowInInput id="build.test" run={runTest} />
+				<textarea />
+			</FakeStateProvider>
+		);
+
+		const textarea = screen.getByRole('textbox');
+
+		textarea.focus();
+		press('L', textarea, {shiftKey: true});
+		press('Enter', textarea, {ctrlKey: true, shiftKey: true});
+		expect(runLayers).not.toHaveBeenCalled();
+		expect(runTest).toHaveBeenCalledTimes(1);
+
+		// Outside the field, shift+key runs.
+
+		textarea.blur();
+		press('L', document.querySelector('[data-hotkey-scope="story-map"]')!, {
+			shiftKey: true
+		});
+		expect(runLayers).toHaveBeenCalledTimes(1);
+	});
+
 	it('respects a user override of the key', () => {
 		const run = jest.fn();
 
