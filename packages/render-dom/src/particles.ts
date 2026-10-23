@@ -90,29 +90,37 @@ export class ParticleSim {
 	/**
 	 * Pack every live particle for drawing: `PARTICLE_STRIDE` floats each, positions and
 	 * size already in PIXELS (`unit` px per box width, `ox`/`oy` = the origin in px),
-	 * colour premultiplied by alpha. Returns the array (reused when big enough).
+	 * colour premultiplied by alpha. `place.matrix` turns/mirrors the field about the
+	 * origin, `place.alpha` fades all of it. Returns the array (reused when big enough).
 	 */
 	fill(
 		p: EmitParams,
 		unit: number,
 		ox: number,
 		oy: number,
-		out?: Float32Array
+		out?: Float32Array,
+		place: {alpha?: number; matrix?: [number, number, number, number]} = {}
 	): Float32Array {
 		const need = this.count * PARTICLE_STRIDE;
 		const buf = out && out.length >= need ? out : new Float32Array(Math.max(need, 64));
 		const [r0, g0, b0] = hexRgb(p.color);
 		const [r1, g1, b1] = hexRgb(p.colorEnd);
+		const [ma, mb, mc, md] = place.matrix ?? [1, 0, 0, 1];
+		const fade = place.alpha ?? 1;
 
 		for (let i = 0; i < this.count; i++) {
 			const t = Math.min(1, this.age[i] / this.life[i]);
 			const fadeIn = Math.min(1, t / FADE_IN);
-			const a = Math.max(0, fadeIn * (1 - p.fade * t));
+			const a = Math.max(0, fadeIn * (1 - p.fade * t)) * fade;
 			const size = p.size * (1 + (p.grow - 1) * t) * unit;
 			const o = i * PARTICLE_STRIDE;
 
-			buf[o] = ox + this.x[i] * unit;
-			buf[o + 1] = oy + this.y[i] * unit;
+			const x = this.x[i] * unit;
+			const y = this.y[i] * unit;
+
+			// Emitter space onto the surface: [a c; b d] times (x, y).
+			buf[o] = ox + ma * x + mc * y;
+			buf[o + 1] = oy + mb * x + md * y;
 			buf[o + 2] = Math.max(0, size);
 			buf[o + 3] = this.rot[i];
 			buf[o + 4] = (r0 + (r1 - r0) * t) * a;

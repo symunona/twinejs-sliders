@@ -137,5 +137,5 @@ export {
 	hexRgb,
 	mulberry32
 } from './particles';
-export {PARTICLE_PAD, ParticleHost} from './particle-host';
-export type {ParticleHostOptions} from './particle-host';
+export {ParticleHost} from './particle-host';
+export type {ParticleAnchor, ParticleHostOptions} from './particle-host';

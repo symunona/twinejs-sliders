@@ -39,8 +39,24 @@ Source of truth: `packages/scene-types/src/particles.ts` (`EMIT_RANGES`, `EMIT_D
 | `blend` | `add` glows (fire, magic). `normal` paints (smoke, snow) |
 
 Asset only: `box: {w, h}` px at scale 1 — the entity's size, what the editor selects and
-drags. Emission point = the asset's `origin` (default bottom centre). Particles may leave
-the box: canvas = box + half a box each side (`PARTICLE_PAD`), beyond that clipped.
+drags. Emission point = the asset's `origin` (default bottom centre). Particles leave the
+box freely: see Drawing surface.
+
+`sprite`: ANY static image asset, by name. Absent = built-in soft dot. The emitter
+asset's own bytes are never drawn.
+
+## Drawing surface
+
+| | |
+|---|---|
+| Canvas | one per emitter, the size of the WHOLE entity layer (`inset 0`, 100%). Never clipped by the box. |
+| z | canvas sits right after its entity box in the layer, `z-index` copied every frame → sorts with the cast like the sprite would. |
+| Position | read off the entity box every frame: computed `transform` matrix + `offsetWidth`. A glide, drag or camera move carries the particles. |
+| Unit | box width as drawn → `scale:` and `stretch:` x grow the effect. |
+| Turn / mirror | `rot:` turns the whole field about the origin, `flip:` mirrors it. Single particle sprites are not turned by `rot:`. |
+| Fade | box's computed opacity multiplies every particle: enter/exit fades, `opacity:`. |
+| Space | particles live in EMITTER space: move the emitter, the cloud moves with it (no trails). |
+| Not applied | `grade:` (lives on the art wrapper; the canvas is outside it). |
 
 No pixels in the numbers: distances are box fractions, so `scale:` is the only size knob.
 
@@ -90,12 +106,12 @@ to look, re-run without `--dry-run` to push. Idempotent: only changed bytes / nu
 | `packages/scene-types/src/particles.ts` | params, ranges, presets, merge |
 | `packages/render-dom/src/particles.ts` | PURE sim, seeded. Tested. |
 | `packages/render-dom/src/particle-host.ts` | WebGL / 2D draw, one shared rAF loop |
-| `dom-renderer.ts` `applyParticles` | canvas into the entity art, `<img>` hidden |
+| `dom-renderer.ts` `applyParticles` / `particleAnchor` | canvas after the entity box, `<img>` hidden, anchor per frame |
 | `src/dialogs/sliders-particles/` | dialog, `EmitControls` (shared with scene editor) |
 
 ## Limits (v1)
 
-- One WebGL context per emitter. Browsers cap ~16; a lost context falls back to 2D (no tint).
+- One WebGL context per emitter, each a full-layer canvas. Browsers cap ~16; a lost context falls back to 2D (no tint). Many emitters = many full-size canvases (fill cost).
 - One sprite per emitter. No sprite sheets, no colour/size curves beyond start→end.
 - Editor stage "still" mode does not freeze particles (rAF, not CSS).
 - `twine-cli` lint knows `emit:` (shared parser), not whether the ref is an emitter.

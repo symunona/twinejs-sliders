@@ -2,18 +2,18 @@
  * Draws a `ParticleSim` into a canvas. WebGL point sprites (GPU, one draw call per
  * emitter); a 2D canvas when WebGL is not there or its context was taken away.
  *
- * The canvas covers the emitter box plus `PAD` box sizes on every side: particles leave
- * the box (smoke rises out of the top of its own box), and the box is what the editor
- * selects and drags, so it cannot simply be made bigger.
+ * The canvas is the WHOLE drawing surface (the stage's entity layer, or the editor's
+ * preview), never the emitter's box: particles leave the box, and a canvas sized to it
+ * clipped every plume taller than half a box. Where the emitter sits on that surface is
+ * asked every frame (`ParticleAnchor`), so a glide, a camera move or a drag carries the
+ * particles with it.
  *
  * One `requestAnimationFrame` loop for every host on the page.
  */
 
-import type {EmitParams, Frac2} from '@sliders/scene-types';
+import type {EmitParams} from '@sliders/scene-types';
 import {PARTICLE_STRIDE, ParticleSim} from './particles';
 
-/** Canvas margin around the box, in box sizes per side. */
-export const PARTICLE_PAD = 0.5;
 
 const VERT = `
 attribute vec2 a_pos;
@@ -263,28 +263,40 @@ function start() {
 }
 
 /**
- * Inline, not in the renderer's stylesheet: the particle editor hosts one with no
- * renderer on the page. Box + PARTICLE_PAD each side.
+ * Where the emitter is on the canvas this frame, in the canvas's CSS pixels (before any
+ * transform its parent has — the camera's zoom scales canvas and sprites alike).
  */
-function place(el: HTMLCanvasElement): void {
-	const pad = `${-PARTICLE_PAD * 100}%`;
-	const span = `${(1 + PARTICLE_PAD * 2) * 100}%`;
+export interface ParticleAnchor {
+	/** The emission point. */
+	x: number;
+	y: number;
+	/** CSS px per emitter box width: what `scale:` grows. */
+	unit: number;
+	/** Turn, radians, clockwise. Applied to the whole field (emitter space). */
+	rot?: number;
+	/** Mirrored: `angle: 30` leans the other way. */
+	flip?: boolean;
+	/** Multiplies every particle: the entity's fade in, out and `opacity:`. */
+	alpha?: number;
+}
 
+/** Inline, not in a stylesheet: the particle editor hosts one with no renderer around. */
+function place(el: HTMLCanvasElement): void {
 	el.className = 'sliders-particles';
 	el.setAttribute('aria-hidden', 'true');
 	Object.assign(el.style, {
-		height: span,
-		left: pad,
+		height: '100%',
+		left: '0',
 		pointerEvents: 'none',
 		position: 'absolute',
-		top: pad,
-		width: span
+		top: '0',
+		width: '100%'
 	});
 }
 
 export interface ParticleHostOptions {
-	/** Emission point inside the box, fraction. Default bottom centre. */
-	origin?: Frac2;
+	/** Where the emitter is, asked each frame. Undefined skips drawing that frame. */
+	anchor: () => ParticleAnchor | undefined;
 	/** Seed for the simulation. */
 	seed?: number;
 	/** Skip WebGL (tests, or a page that already holds too many contexts). */
@@ -292,7 +304,7 @@ export interface ParticleHostOptions {
 }
 
 export class ParticleHost {
-	/** Put this inside the element sized to the emitter box. */
+	/** Put this in the element that is the drawing surface; it fills it. */
 	readonly el: HTMLCanvasElement;
 	private painter?: Painter;
 	private sim: ParticleSim;
@@ -300,40 +312,43 @@ export class ParticleHost {
 	private url?: string;
 	private img?: HTMLImageElement;
 	private data?: Float32Array;
-	private origin: Frac2;
+	private anchor: () => ParticleAnchor | undefined;
 	private warmed = false;
 
 	constructor(
 		private doc: Document,
-		options: ParticleHostOptions = {}
+		options: ParticleHostOptions
 	) {
-		this.origin = options.origin ?? {x: 0.5, y: 1};
+		this.anchor = options.anchor;
 		this.sim = new ParticleSim(options.seed ?? 1);
 		this.el = doc.createElement('canvas');
 		place(this.el);
 		this.painter = this.makePainter(!!options.noGl);
 	}
 
-	/** New numbers, sprite or origin. Particles in flight keep going. */
-	set(params: EmitParams, url: string | undefined, origin?: Frac2): void {
+	/** New numbers. Particles in flight keep going. */
+	set(params: EmitParams): void {
 		this.params = params;
-
-		if (origin) {
-			this.origin = origin;
-		}
 
 		if (!this.warmed) {
 			this.warmed = true;
 			this.sim.prewarm(params);
 		}
 
+		live.add(this);
+		start();
+	}
+
+	/** The particle picture's url; undefined = the built-in soft dot. */
+	sprite(url: string | undefined): void {
 		if (url !== this.url) {
 			this.url = url;
 			this.loadTexture(url);
 		}
+	}
 
-		live.add(this);
-		start();
+	get spriteUrl(): string | undefined {
+		return this.url;
 	}
 
 	/** Start over from an empty field, prewarmed. */
@@ -342,7 +357,7 @@ export class ParticleHost {
 		this.warmed = false;
 
 		if (this.params) {
-			this.set(this.params, this.url);
+			this.set(this.params);
 		}
 	}
 
@@ -388,14 +403,23 @@ export class ParticleHost {
 			this.el.height = h;
 		}
 
-		// The canvas is the box plus PAD per side, so the box is its middle part.
-		const span = 1 + PARTICLE_PAD * 2;
-		const boxW = w / span;
-		const boxH = h / span;
-		const ox = boxW * (PARTICLE_PAD + this.origin.x);
-		const oy = boxH * (PARTICLE_PAD + this.origin.y);
+		const at = this.anchor();
 
-		this.data = this.sim.fill(params, boxW, ox, oy, this.data);
+		if (!at || !(at.unit > 0)) {
+			this.painter.draw(this.data ?? new Float32Array(0), 0, w, h, params.blend);
+			return;
+		}
+
+		const rot = at.rot ?? 0;
+		const cos = Math.cos(rot);
+		const sin = Math.sin(rot);
+		const fx = at.flip ? -1 : 1;
+
+		this.data = this.sim.fill(params, at.unit * dpr, at.x * dpr, at.y * dpr, this.data, {
+			alpha: Math.max(0, Math.min(1, at.alpha ?? 1)),
+			// Mirror first, then turn: the same order the sprite box uses.
+			matrix: [cos * fx, sin * fx, -sin, cos]
+		});
 		this.painter.draw(this.data, this.sim.count, w, h, params.blend);
 	}
 

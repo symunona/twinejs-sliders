@@ -1,6 +1,9 @@
 /**
  * A live emitter on a dark stage, its box outlined and its origin crossed. Draws through
  * the renderer's own `ParticleHost`, so what the editor shows is what a scene shows.
+ *
+ * The canvas is the whole preview, not the box: a plume taller than its box is drawn,
+ * not clipped. The emitter's place on it is read off the box element each frame.
  */
 
 import {ParticleHost} from '@sliders/render-dom';
@@ -22,20 +25,38 @@ const STAGE = 360;
 
 export const ParticlePreview: React.FC<ParticlePreviewProps> = props => {
 	const {box, origin, params, restart, url} = props;
+	const stageRef = React.useRef<HTMLDivElement>(null);
 	const boxRef = React.useRef<HTMLDivElement>(null);
 	const hostRef = React.useRef<ParticleHost>();
+	const originRef = React.useRef(origin);
+
+	originRef.current = origin;
 
 	React.useEffect(() => {
-		const el = boxRef.current;
+		const stage = stageRef.current;
 
-		if (!el) {
+		if (!stage) {
 			return;
 		}
 
-		const host = new ParticleHost(document);
+		const host = new ParticleHost(document, {
+			anchor: () => {
+				const el = boxRef.current;
+
+				if (!el) {
+					return undefined;
+				}
+
+				return {
+					unit: el.offsetWidth,
+					x: el.offsetLeft + originRef.current.x * el.offsetWidth,
+					y: el.offsetTop + originRef.current.y * el.offsetHeight
+				};
+			}
+		});
 
 		hostRef.current = host;
-		el.appendChild(host.el);
+		stage.appendChild(host.el);
 
 		return () => {
 			host.destroy();
@@ -44,8 +65,12 @@ export const ParticlePreview: React.FC<ParticlePreviewProps> = props => {
 	}, []);
 
 	React.useEffect(() => {
-		hostRef.current?.set(params, url, origin);
-	}, [origin, params, url]);
+		hostRef.current?.set(params);
+	}, [params]);
+
+	React.useEffect(() => {
+		hostRef.current?.sprite(url);
+	}, [url]);
 
 	React.useEffect(() => {
 		if (restart) {
@@ -59,7 +84,7 @@ export const ParticlePreview: React.FC<ParticlePreviewProps> = props => {
 	const h = box.h * scale;
 
 	return (
-		<div className="particle-preview" style={{height: STAGE}}>
+		<div className="particle-preview" ref={stageRef} style={{height: STAGE}}>
 			<div
 				className="particle-preview-box"
 				ref={boxRef}

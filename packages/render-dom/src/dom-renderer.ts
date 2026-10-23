@@ -64,7 +64,7 @@ import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 import {injectEffectSupport, syncEffect} from './effect-host';
 import {effectIsIdle} from './effects';
-import {ParticleHost} from './particle-host';
+import {ParticleHost, type ParticleAnchor} from './particle-host';
 import {GRADE_PX_VAR, holdGrade, type GradeHandle} from './grade';
 
 /** How far, as a fraction of stage height, an entering entity rises into place. */
@@ -157,6 +157,8 @@ interface EntityRecord {
 	fx?: HTMLElement;
 	/** The particle canvas, when this entity's asset is an emitter. */
 	particles?: ParticleHost;
+	/** The sprite name the particles were last asked to draw, so a late url is dropped. */
+	particleSprite?: string;
 	/** Asset currently shown, so we only touch `src` when it actually changes. */
 	assetId?: string;
 	url?: string;
@@ -1141,11 +1143,12 @@ export class DomRenderer implements Renderer {
 		this.setContent(rec, res);
 		this.applyPoseFit(rec, res);
 		this.applyEffect(rec, res);
-		this.applyParticles(rec, res);
 		// Snapped: the enter fade is the arrival, and a grade fading in under it would read
 		// as the sprite changing colour on its way in.
 		this.syncGrade(rec, res.entity, 0);
 		this.entityLayerEl?.appendChild(el);
+		// After the box is in the layer: the particle canvas goes right after it.
+		this.applyParticles(rec, res);
 
 		// Enter: fade + slight rise. Snap into the start pose with transitions off, force a
 		// reflow so the browser has something to animate FROM, then transition to the target.
@@ -1635,17 +1638,23 @@ export class DomRenderer implements Renderer {
 	}
 
 	/**
-	 * A particle emitter (`meta.particles`): a canvas over the art, the art's own <img>
-	 * hidden — its bytes are the particle sprite, not a picture of the thing.
+	 * A particle emitter (`meta.particles`): the art's own <img> hidden (an emitter asset
+	 * is a preset, not a picture), and a canvas the size of the whole entity layer in the
+	 * entity's z slot, so a plume is never clipped by the emitter's box and still sorts
+	 * with the cast like any sprite.
+	 *
+	 * Where to draw is read off the entity box every frame (`particleAnchor`), not off
+	 * `rec.rect`: the box GLIDES to a new `at:` on a CSS transition, and particles drawn
+	 * at the destination would jump while the box is still on its way.
 	 *
 	 * The host is kept across applies: the editor re-applies on every keystroke, and a
-	 * restarted field would flicker back to its prewarm each time. New numbers just change
-	 * what the next particles do.
+	 * restarted field would flicker back to its prewarm each time.
 	 */
 	private applyParticles(rec: EntityRecord, res: ResolvedEntity): void {
 		const spec = res.meta?.particles;
+		const layer = this.entityLayerEl;
 
-		if (!spec || !this.doc) {
+		if (!spec || !this.doc || !layer) {
 			if (rec.particles) {
 				this.dropParticles(rec);
 			}
@@ -1654,20 +1663,98 @@ export class DomRenderer implements Renderer {
 		}
 
 		if (!rec.particles) {
-			rec.particles = new ParticleHost(this.doc, {seed: hashSeedOf(rec.id)});
+			rec.particles = new ParticleHost(this.doc, {
+				anchor: () => this.particleAnchor(rec),
+				seed: hashSeedOf(rec.id)
+			});
 		}
 
 		rec.art.dataset.particles = '';
-		// After the <img>: setContent clears the art on an asset change.
-		if (rec.particles.el.parentElement !== rec.art) {
-			rec.art.appendChild(rec.particles.el);
+
+		const host = rec.particles;
+		const params = resolveEmit(spec, res.entity.emit);
+
+		// Right after the entity box: same z-index (copied each frame), and DOM order breaks
+		// the tie the right way. Before the box is placed, the layer's end will do.
+		if (host.el.parentElement !== layer) {
+			if (rec.el.parentElement === layer) {
+				rec.el.after(host.el);
+			} else {
+				layer.appendChild(host.el);
+			}
 		}
 
-		rec.particles.set(
-			resolveEmit(spec, res.entity.emit),
-			res.url,
-			res.meta?.origin ?? DEFAULT_ORIGIN
-		);
+		host.set(params);
+
+		// The sprite is any image asset, by name. Absent = the built-in dot.
+		const sprite = params.sprite;
+
+		rec.particleSprite = sprite;
+
+		if (!sprite) {
+			host.sprite(undefined);
+			return;
+		}
+
+		void this.url(sprite).then(url => {
+			if (rec.particles === host && rec.particleSprite === sprite) {
+				host.sprite(url);
+			}
+		});
+	}
+
+	/**
+	 * The emitter on the layer this frame: its origin point, box width, turn, mirror and
+	 * opacity, as the browser has them mid-transition. The box's `transform-origin` IS the
+	 * entity origin, so the origin lands at the matrix's translation plus its own offset.
+	 */
+	private particleAnchor(rec: EntityRecord): ParticleAnchor | undefined {
+		const el = rec.el;
+		const view = this.doc?.defaultView;
+
+		if (!el.isConnected || !view) {
+			return undefined;
+		}
+
+		const style = view.getComputedStyle(el);
+		const width = el.offsetWidth || rec.metrics.width;
+		const height = el.offsetHeight || rec.metrics.height;
+		const origin = rec.metrics.origin;
+		let [a, b, c, d, e, f] = [1, 0, 0, 1, rec.rect.left, rec.rect.top];
+		const m = /matrix\(([^)]+)\)/.exec(style.transform);
+		const m3 = /matrix3d\(([^)]+)\)/.exec(style.transform);
+
+		if (m) {
+			[a, b, c, d, e, f] = m[1].split(',').map(Number);
+		} else if (m3) {
+			const v = m3[1].split(',').map(Number);
+
+			[a, b, c, d, e, f] = [v[0], v[1], v[4], v[5], v[12], v[13]];
+		}
+
+		const flip = a * d - b * c < 0;
+		// With the mirror taken out, what is left is the turn.
+		const rot = Math.atan2(b, flip ? -a : a) * (flip ? -1 : 1);
+		const opacity = parseFloat(style.opacity);
+
+		this.syncParticleZ(rec);
+
+		return {
+			alpha: Number.isFinite(opacity) ? opacity : 1,
+			flip,
+			rot,
+			unit: width,
+			x: e + origin.x * width,
+			y: f + origin.y * height
+		};
+	}
+
+	private syncParticleZ(rec: EntityRecord): void {
+		const canvas = rec.particles?.el;
+
+		if (canvas && canvas.style.zIndex !== rec.el.style.zIndex) {
+			canvas.style.zIndex = rec.el.style.zIndex;
+		}
 	}
 
 	private dropParticles(rec: EntityRecord): void {
