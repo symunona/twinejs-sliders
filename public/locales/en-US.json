@@ -909,7 +909,9 @@
 				"poseLoop": "Step loop",
 				"poseLoopDefault": "Default (all)",
 				"emit": "Particles",
+				"emitEdit": "Edit this emitter in the Particles dialog",
 				"emitReset": "Use the emitter's own settings",
+				"emitSpriteOwn": "The emitter's own sprite",
 				"fit": "Fit",
 				"fitSprite": "Sprite",
 				"condition": "Only if",
@@ -1257,6 +1259,8 @@
 			"reset": "Reset",
 			"restart": "Restart",
 			"sprite": "Sprite",
+			"spriteFilter": "Filter images",
+			"spriteNone": "Soft dot",
 			"title": "Particles"
 		},
 		"slidersCharacters": {

@@ -204,6 +204,22 @@ export async function resolveBundleRefs(
 		}
 	}
 
+	// An emitter's sprite is art by NAME, not the emitter's own bytes: without it the
+	// bundle ships a fire that draws soft dots.
+	for (const meta of [...assets.values()]) {
+		const sprite = meta.particles?.sprite;
+
+		if (sprite) {
+			const found = await byKey(sprite);
+
+			if (found) {
+				take(found);
+			} else {
+				unresolved.add(sprite);
+			}
+		}
+	}
+
 	// A pose image that got picked up on its own — a `bg:` naming one, say — drags its character
 	// along. Without this it arrives owned by a character that is not in the bundle, which
 	// leaves it filtered out of the asset grid and unreachable from the character editor:

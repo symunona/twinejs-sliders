@@ -43,6 +43,8 @@ export interface AssetMetaRow {
 	hash: string;
 	mime: string;
 	ownerCharacter?: string;
+	/** Present on a particle emitter. Only `sprite` is read here: art by name. */
+	particles?: {sprite?: string};
 }
 
 export interface Manifest {

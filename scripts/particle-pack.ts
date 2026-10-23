@@ -1,6 +1,7 @@
 /**
  * The particle pack: white sprites on transparent, plus one ready emitter per preset, as
- * the shared collection `particles` on a library server. Run via the .mjs next to it:
+ * the shared collection `particles` on a library server. An emitter's bytes are only its
+ * thumbnail; `particles.sprite` names the pack sprite it draws. Run via the .mjs next to it:
  *
  *   node scripts/particle-pack.mjs [--out <dir>] [--dry-run] [--server URL --token T | --profile P]
  *
@@ -359,7 +360,8 @@ async function main() {
 			tags: ['particle-sprite']
 		})),
 		...Object.entries(EMIT_PRESETS).map(([name, preset]) => ({
-			bytes: pngs[preset.texture],
+			// Thumbnail only: what draws is particles.sprite, a pack name.
+			bytes: pngs[preset.params.sprite ?? 'p-dot'],
 			kind: 'fx' as const,
 			name,
 			recipe: {

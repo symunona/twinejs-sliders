@@ -40,3 +40,30 @@ describe('EmitPanel', () => {
 		expect(onEmit).toHaveBeenCalledWith(null);
 	});
 });
+
+describe('EmitPanel edit button', () => {
+	it('opens the emitter when there is an opener, and only then', () => {
+		const onEdit = jest.fn();
+		const {rerender} = render(
+			<EmitPanel editable entity={fire} onEmit={jest.fn()} spec={{}} />
+		);
+
+		expect(
+			screen.queryByRole('button', {name: 'dialogs.passageEdit.scenePreview.emitEdit'})
+		).toBeNull();
+
+		rerender(
+			<EmitPanel
+				editable
+				entity={fire}
+				onEditEmitter={onEdit}
+				onEmit={jest.fn()}
+				spec={{}}
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole('button', {name: 'dialogs.passageEdit.scenePreview.emitEdit'})
+		);
+		expect(onEdit).toHaveBeenCalledTimes(1);
+	});
+});

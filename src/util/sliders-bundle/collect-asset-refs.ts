@@ -118,6 +118,8 @@ function addScene(sets: RefSets, scene: Scene): void {
 			entity.ref
 		);
 		addPoses(sets, id, entity);
+		// A particle sprite is art by name, like `bg:`.
+		add(sets.assetRefs, entity.emit?.sprite);
 	}
 
 	for (const fx of scene.fx ?? []) {
@@ -154,6 +156,7 @@ function addScene(sets: RefSets, scene: Scene): void {
 		// pose the character has to have. Every entity in the beat, not just its first.
 		for (const part of beatParts(beat)) {
 			addPoses(sets, part.who, part.patch);
+			add(sets.assetRefs, part.patch?.emit?.sprite);
 		}
 	}
 }

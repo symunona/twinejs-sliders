@@ -14,7 +14,6 @@ import {
 	EMIT_DEFAULTS,
 	EMIT_PRESETS,
 	emitBox,
-	isVisualKind,
 	resolveEmit,
 	type AssetMeta,
 	type EmitPatch,
@@ -34,16 +33,18 @@ import {IconButton} from '../../components/control/icon-button';
 import {MenuButton} from '../../components/control/menu-button';
 import {AdjustSlider} from '../asset-editor/adjust-slider';
 import {DialogComponentProps} from '../dialogs.types';
-import {useAssetLibrary} from '../sliders-assets/asset-store-context';
+import {AssetPreview} from '../sliders-assets/asset-preview';
+import {useAssetLibrary, useAssetUrl} from '../sliders-assets/asset-store-context';
 import {EmitControls} from './emit-controls';
+import {onParticleFocus, takePendingParticleFocus} from './particle-focus';
 import {ParticlePreview} from './particle-preview';
+import {spriteCandidates} from './sprite-candidates';
+import {SpritePicker} from './sprite-picker';
 import './sliders-particles.css';
 
 /** How long a change sits before it is written to the asset store. */
 const SAVE_DELAY = 400;
 
-/** The pack's sprites carry this tag (`scripts/particle-pack.ts`). */
-export const PARTICLE_SPRITE_TAG = 'particle-sprite';
 
 /** A soft white dot, for a library with no sprite at all yet. */
 async function dotFile(): Promise<File> {
@@ -66,18 +67,35 @@ async function dotFile(): Promise<File> {
 	return new File([blob ?? new Blob()], 'p-dot.png', {type: 'image/png'});
 }
 
-export type SlidersParticlesDialogProps = DialogComponentProps;
+export interface SlidersParticlesDialogProps extends DialogComponentProps {
+	/** Emitter to open on, by asset id or name. The scene editor uses the focus bus. */
+	emitter?: string;
+}
 
 export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = props => {
+	const {emitter: openOn, ...dialogProps} = props;
 	const library = useAssetLibrary();
 	const {store, refresh} = library;
 	const {t} = useTranslation();
 	const [selectedId, setSelectedId] = React.useState<string>();
 	const [draft, setDraft] = React.useState<{id: string; spec: ParticleSpec; origin?: Frac2}>();
-	const [urls, setUrls] = React.useState<Record<string, string | undefined>>({});
 	const [restart, setRestart] = React.useState(0);
 	const [deleteOpen, setDeleteOpen] = React.useState(false);
 	const [error, setError] = React.useState<string>();
+	/** An emitter asked for (prop or focus bus), by id or name, until it is found. */
+	const [wanted, setWanted] = React.useState<{ref: string; serial: number} | undefined>(
+		openOn ? {ref: openOn, serial: 0} : undefined
+	);
+
+	React.useEffect(() => {
+		const pending = takePendingParticleFocus();
+
+		if (pending) {
+			setWanted(pending);
+		}
+
+		return onParticleFocus(setWanted);
+	}, []);
 
 	const emitters = React.useMemo(
 		() =>
@@ -86,38 +104,9 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 				.sort((a, b) => a.name.localeCompare(b.name)),
 		[library.all]
 	);
-	const sprites = React.useMemo(() => {
-		const visual = library.all.filter(
-			asset => isVisualKind(asset.kind) && !asset.particles && !asset.ownerCharacter
-		);
-		const tagged = visual.filter(asset => asset.tags.includes(PARTICLE_SPRITE_TAG));
-
-		return (tagged.length ? tagged : visual).sort((a, b) =>
-			a.name.localeCompare(b.name)
-		);
-	}, [library.all]);
+	const sprites = React.useMemo(() => spriteCandidates(library.all), [library.all]);
 	const active: AssetMeta | undefined =
 		emitters.find(asset => asset.id === selectedId) ?? emitters[0];
-
-	// Urls for every thumbnail and the preview. Re-read when the library changes: a
-	// sprite swap gives the emitter new bytes and a new url.
-	React.useEffect(() => {
-		let current = true;
-
-		void Promise.all(
-			[...emitters, ...sprites].map(
-				async asset => [asset.id, await store.url(asset.id)] as const
-			)
-		).then(pairs => {
-			if (current) {
-				setUrls(Object.fromEntries(pairs));
-			}
-		});
-
-		return () => {
-			current = false;
-		};
-	}, [emitters, sprites, store]);
 
 	// The draft follows the selection; edits happen on it and are written on a debounce.
 	React.useEffect(() => {
@@ -169,6 +158,26 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 	commitRef.current = commit;
 	React.useEffect(() => () => void commitRef.current(), []);
 
+	// Resolved once the library lists it: the dialog may open before the list loads.
+	React.useEffect(() => {
+		if (!wanted) {
+			return;
+		}
+
+		const found = emitters.find(
+			asset =>
+				asset.id === wanted.ref ||
+				// `coll/name` names it qualified; the list holds bare names.
+				asset.name === wanted.ref.split('/').pop()
+		);
+
+		if (found) {
+			void commitRef.current();
+			setSelectedId(found.id);
+			setWanted(undefined);
+		}
+	}, [emitters, wanted]);
+
 	function edit(change: {spec?: EmitPatch & Pick<ParticleSpec, 'box'>; origin?: Frac2}) {
 		setDraft(prev => {
 			if (!prev) {
@@ -193,9 +202,15 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 			: dotFile();
 	}
 
+	/**
+	 * The emitter asset's BYTES are only its thumbnail: the preset's sprite when this story
+	 * has it, else the soft dot. What draws is `particles.sprite`.
+	 */
 	async function handleCreate(preset: string) {
-		const {box, origin, params, texture} = EMIT_PRESETS[preset];
-		const sprite = sprites.find(asset => asset.name === texture) ?? sprites[0];
+		const {box, origin, params} = EMIT_PRESETS[preset];
+		const sprite = params.sprite
+			? sprites.find(asset => asset.name === params.sprite)
+			: undefined;
 
 		setError(undefined);
 
@@ -213,22 +228,6 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 			});
 
 			setSelectedId(created.id);
-			refresh();
-		} catch (caught) {
-			setError((caught as Error).message);
-		}
-	}
-
-	async function handleSprite(sprite: AssetMeta) {
-		if (!active) {
-			return;
-		}
-
-		setError(undefined);
-
-		try {
-			await commit();
-			await store.replace(active.id, await spriteFile(sprite));
 			refresh();
 		} catch (caught) {
 			setError((caught as Error).message);
@@ -258,6 +257,13 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 	const box = emitBox(spec);
 	const origin = (draft?.id === active?.id ? draft?.origin : active?.origin) ??
 		DEFAULT_ORIGIN;
+	// The sprite is a NAME, resolved against what this story sees. Unknown draws the soft
+	// dot, as the renderer does.
+	const spriteName = spec?.sprite;
+	const spriteAsset = spriteName
+		? library.all.find(asset => asset.name === spriteName && !asset.particles)
+		: undefined;
+	const spriteUrl = useAssetUrl(spriteAsset?.id);
 
 	const presetMenu = (
 		<MenuButton
@@ -272,7 +278,7 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 
 	return (
 		<DialogCard
-			{...props}
+			{...dialogProps}
 			className="sliders-particles-dialog"
 			headerLabel={t('dialogs.slidersParticles.title')}
 			maximizable
@@ -333,7 +339,7 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 								}}
 								role="option"
 							>
-								{urls[asset.id] && <img alt="" src={urls[asset.id]} />}
+								<AssetPreview alt="" assetId={asset.id} />
 								<span>{asset.name}</span>
 							</li>
 						))}
@@ -346,27 +352,16 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 									origin={origin}
 									params={params}
 									restart={restart}
-									url={urls[active.id]}
+									url={spriteUrl}
 								/>
 								<p className="sliders-particles-hint">
 									{t('dialogs.slidersParticles.hint', {name: active.name})}
 								</p>
-								<div className="sliders-particles-sprites">
-									<span>{t('dialogs.slidersParticles.sprite')}</span>
-									{sprites.map(sprite => (
-										<button
-											className={
-												sprite.hash === active.hash ? 'selected' : undefined
-											}
-											key={sprite.id}
-											onClick={() => void handleSprite(sprite)}
-											title={sprite.name}
-											type="button"
-										>
-											{urls[sprite.id] && <img alt={sprite.name} src={urls[sprite.id]} />}
-										</button>
-									))}
-								</div>
+								<SpritePicker
+									assets={library.all}
+									onPick={sprite => edit({spec: {sprite}})}
+									value={spriteName}
+								/>
 							</div>
 							<div className="sliders-particles-knobs">
 								<EmitControls

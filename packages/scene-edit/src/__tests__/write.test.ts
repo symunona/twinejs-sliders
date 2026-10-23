@@ -571,7 +571,7 @@ describe('half-typed and malformed input', () => {
 			fit: 'cover',
 			flip: true,
 			grade: {warmth: 30, brightness: -15},
-			emit: {rate: 80, color: '#ff8800'},
+			emit: {rate: 80, color: '#ff8800', sprite: 'p-star'},
 			pose: 'idle',
 			poseLoop: 'once',
 			highlight: 'gold',

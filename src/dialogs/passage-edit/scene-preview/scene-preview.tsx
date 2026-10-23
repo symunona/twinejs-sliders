@@ -129,7 +129,7 @@ import {ScrubChannel, scrubStage, TimingScrub} from './timing-scrub';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
-import {EmitPanel, useEmitterSpec} from './emit-panel';
+import {EmitTab, useEmitterSpec} from './emit-panel';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage, sceneTimeline} from '@sliders/scene-core';
@@ -2816,7 +2816,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					{
 						accent: 'selection' as const,
 						content: (
-							<EmitPanel
+							<EmitTab
 								editable={editable}
 								entity={singleSelected}
 								note={beatNote}
