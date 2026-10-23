@@ -731,6 +731,7 @@
 						"links": "Links",
 						"objectLink": "Object link (selected object's own link:)",
 						"problems": "Problems",
+						"particles": "Particles: this scene's settings for the selected emitter",
 						"transform": "Transform: exact position, scale, rotation, z"
 					}
 				},

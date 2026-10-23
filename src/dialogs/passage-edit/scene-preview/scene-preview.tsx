@@ -24,6 +24,7 @@ import {
 	IconUser,
 	IconVolume,
 	IconVolumeOff,
+	IconStars,
 	IconWalk,
 	IconZoomIn,
 	IconZoomOut
@@ -128,6 +129,7 @@ import {ScrubChannel, scrubStage, TimingScrub} from './timing-scrub';
 import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
+import {EmitPanel, useEmitterSpec} from './emit-panel';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {parentOffsets, resolveStage, sceneTimeline} from '@sliders/scene-core';
@@ -1492,7 +1494,11 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				tabBeforeSelection.current = active;
 				setSidebarTab('selection');
 			}
-		} else if (active === 'selection' || active === 'transform') {
+		} else if (
+			active === 'selection' ||
+			active === 'transform' ||
+			active === 'particles'
+		) {
 			// Both tabs go with the selection they were about.
 			setSidebarTab(tabBeforeSelection.current);
 		}
@@ -2498,6 +2504,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		.sort((a, b) => a.localeCompare(b));
 	const singleSelected =
 		selectedEntities.length === 1 ? selectedEntities[0] : undefined;
+	const emitter = useEmitterSpec(
+		assets,
+		singleSelected && singleSelected.kind !== 'cast' ? singleSelected.ref : undefined
+	);
 
 	/** Settings tab: how this preview behaves for me, then what the scene says. */
 	const sceneTab = (
@@ -2666,7 +2676,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				}
 				onGradeCommit={gradeEdit.commit}
 				onGradeOpenChange={gradeEdit.openChange}
-				onEmit={setEmit}
 			/>
 		</div>
 	);
@@ -2795,6 +2804,25 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						icon: <IconArrowsMove />,
 						id: 'transform' as const,
 						label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.transform')
+					}
+			  ]
+			: []),
+		...(singleSelected && emitter
+			? [
+					{
+						accent: 'selection' as const,
+						content: (
+							<EmitPanel
+								editable={editable}
+								entity={singleSelected}
+								note={beatNote}
+								onEmit={setEmit}
+								spec={emitter}
+							/>
+						),
+						icon: <IconStars />,
+						id: 'particles' as const,
+						label: t('dialogs.passageEdit.scenePreview.sidebar.tabs.particles')
 					}
 			  ]
 			: []),

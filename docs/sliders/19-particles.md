@@ -65,7 +65,7 @@ beats:
 | Where | What |
 |---|---|
 | Particles dialog | list of emitters · live preview (same `ParticleHost` as the stage) · knobs · box · origin · sprite strip · presets |
-| Scene editor, selection tab | one emitter selected → same knobs, write `emit:`. Highlighted = overridden. Reset = `emit: ~`. Slider bursts = one undo step (`+sliders-emit`). |
+| Scene editor, Particles tab (stars) | own sidebar tab, only while ONE emitter is selected, orange like Transform → same knobs, write `emit:`. Highlighted = overridden. Reset = `emit: ~`. Slider bursts = one undo step (`+sliders-emit`). |
 
 New Emitter = preset + its pack sprite (`EMIT_PRESETS[*].texture`), copied as the new
 asset's bytes. Sprite swap = `replace` (keeps `particles`).

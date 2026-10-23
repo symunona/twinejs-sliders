@@ -34,6 +34,7 @@ export type SceneSidebarTabId =
 	| 'beat'
 	| 'selection'
 	| 'transform'
+	| 'particles'
 	| 'walk'
 	| 'links'
 	| 'problems';
