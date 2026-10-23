@@ -172,6 +172,26 @@ describe('SceneStage play stop', () => {
 	});
 });
 
+describe('SceneStage still', () => {
+	it('holds everything still unless playing', async () => {
+		const {container, rerender} = render(
+			<SceneStage animate={false} assets={assets} stage={stage} />
+		);
+		const host = () => container.querySelector('.scene-stage');
+
+		await mounted();
+		expect(host()).toHaveClass('still');
+
+		rerender(<SceneStage animate assets={assets} stage={stage} />);
+		await mounted();
+		expect(host()).not.toHaveClass('still');
+
+		rerender(<SceneStage animate={false} assets={assets} stage={stage} />);
+		await mounted();
+		expect(host()).toHaveClass('still');
+	});
+});
+
 describe('SceneStage wait cue', () => {
 	it('hands the wait to the renderer', async () => {
 		const {rerender} = render(<SceneStage assets={assets} stage={stage} />);

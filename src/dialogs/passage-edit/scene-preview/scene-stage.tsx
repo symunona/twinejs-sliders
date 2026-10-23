@@ -16,6 +16,7 @@ import {
 } from '@sliders/scene-types';
 import {diffStages, timeBeat} from '@sliders/scene-core';
 import type {ScrubChannel} from './timing-scrub';
+import './scene-stage.css';
 
 export interface SceneStageProps {
 	assets: AssetResolver;
@@ -477,5 +478,50 @@ export const SceneStage: React.FC<SceneStageProps> = ({
 		};
 	}, [ready, scrub]);
 
-	return <div className="scene-stage" ref={hostRef} />;
+	/**
+	 * Stopped is STILL: no CSS transition or animation anywhere on the stage.
+	 *
+	 * The editor redraws on every drag frame and every keystroke, and each redraw that
+	 * eased toward its value left the picture trailing the pointer. Durations are already
+	 * zeroed per apply, but the stylesheet's own easings (the bubble follow, enter
+	 * animations, backdrop loops) are not the renderer's to zero.
+	 *
+	 * On a stop the class waits for the transitions already running: the last beat of a
+	 * playback glides to rest instead of snapping (see the apply effect above).
+	 */
+	const [still, setStill] = React.useState(!animate);
+
+	React.useEffect(() => {
+		if (animate) {
+			setStill(false);
+
+			return;
+		}
+
+		const host = hostRef.current;
+		let cancelled = false;
+		const running =
+			host && typeof host.getAnimations === 'function'
+				? host
+						.getAnimations({subtree: true})
+						.filter(
+							a =>
+								typeof CSSTransition !== 'undefined' && a instanceof CSSTransition
+						)
+				: [];
+
+		void Promise.allSettled(running.map(a => a.finished)).then(() => {
+			if (!cancelled) {
+				setStill(true);
+			}
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [animate]);
+
+	return (
+		<div className={`scene-stage${still ? ' still' : ''}`} ref={hostRef} />
+	);
 };
