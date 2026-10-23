@@ -683,6 +683,7 @@ export const StageSelectionControls: React.FC<
 						<IconButton
 							disabled={!single.emit}
 							icon={<IconArrowBackUp />}
+							iconOnly
 							label={t('dialogs.passageEdit.scenePreview.emitReset')}
 							onClick={() => onEmit(null)}
 						/>

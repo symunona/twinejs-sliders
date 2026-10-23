@@ -47,6 +47,9 @@
 }
 
 .particle-preview {
+	/* Fixed height in a flex column: without this it shrinks to nothing, its children are
+	   all absolutely placed. */
+	flex: 0 0 auto;
 	background: radial-gradient(circle at 50% 70%, #2a2a33, #0d0d12);
 	border-radius: var(--border-radius);
 	overflow: hidden;
