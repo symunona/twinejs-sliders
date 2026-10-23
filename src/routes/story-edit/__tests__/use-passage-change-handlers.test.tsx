@@ -5,6 +5,7 @@ import {fakeStory, FakeStateProvider, StoryInspector} from '../../../test-util';
 import {usePassageChangeHandlers} from '../use-passage-change-handlers';
 
 jest.mock('../../../dialogs/passage-edit/passage-edit-stack');
+jest.mock('../../../dialogs/scene-preview/scene-preview-dialog');
 
 function TestComponent() {
 	const {stories} = useStoriesContext();
@@ -137,6 +138,31 @@ describe('usePassageChangeHandlers', () => {
 		expect(editDialog.dataset.passageIds).toBe(
 			JSON.stringify([story.passages[0].id])
 		);
+	});
+
+	it('opens a scene passage in the scene editor, maximized, beside its passage editor', () => {
+		const story = fakeStory(1);
+
+		story.passages[0].text = '[scene]\nbg: forest\n\n[continue]\n';
+		renderHook(story);
+		fireEvent.click(screen.getByText('handleEditPassage'));
+
+		expect(screen.getByTestId('mock-passage-edit-stack')).toBeInTheDocument();
+		expect(
+			screen.getByTestId('mock-scene-preview-dialog').dataset.maximized
+		).toBe('true');
+	});
+
+	it('leaves the scene editor shut for a passage without a scene', () => {
+		const story = fakeStory(1);
+
+		story.passages[0].text = 'Just prose.';
+		renderHook(story);
+		fireEvent.click(screen.getByText('handleEditPassage'));
+
+		expect(
+			screen.queryByTestId('mock-scene-preview-dialog')
+		).not.toBeInTheDocument();
 	});
 
 	describe('The handleSelectPassage function it returns', () => {

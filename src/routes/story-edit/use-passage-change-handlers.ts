@@ -1,5 +1,7 @@
+import {extractSceneBlock} from '@sliders/scene-index';
 import * as React from 'react';
 import {addPassageEditors, useDialogsContext} from '../../dialogs';
+import {ScenePreviewDialog} from '../../dialogs/scene-preview';
 import {
 	deselectPassage,
 	movePassages,
@@ -54,9 +56,37 @@ export function usePassageChangeHandlers(story: Story) {
 		[selectedPassages.length, story, undoableStoriesDispatch]
 	);
 
+	/**
+	 * A scene passage opens on its stage, large: the scene editor maximized, the `</>`
+	 * editor beside it in the column. The `</>` editor still opens because it is what tells
+	 * the preview which passage to show (see `usePublishScenePreview`); without it, an
+	 * editor already open on another passage would keep the stage.
+	 */
 	const handleEditPassage = React.useCallback(
 		(passage: Passage) =>
-			dialogsDispatch(addPassageEditors(story.id, [passage.id])),
+			dialogsDispatch((dispatch, state) => {
+				addPassageEditors(story.id, [passage.id])(dispatch, state);
+
+				if (!extractSceneBlock(passage.text)) {
+					return;
+				}
+
+				const index = state().findIndex(
+					dialog => dialog.component === ScenePreviewDialog
+				);
+
+				if (index === -1) {
+					dispatch({
+						type: 'addDialog',
+						component: ScenePreviewDialog,
+						maximized: true,
+						props: {storyId: story.id}
+					});
+				} else {
+					dispatch({type: 'setDialogCollapsed', collapsed: false, index});
+					dispatch({type: 'setDialogMaximized', maximized: true, index});
+				}
+			}),
 		[dialogsDispatch, story.id]
 	);
 

@@ -476,7 +476,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	/** Delete hit entities that have beats: the menu asking whether the beats go too. */
 	const [deleteRequest, setDeleteRequest] = React.useState<{
 		ids: EntityId[];
-		point: Vec2;
 		/** The whole selection at the press. A click in the menu may have cleared it. */
 		selection: EntityId[];
 	}>();
@@ -1369,18 +1368,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			return;
 		}
 
-		// Near the selection row, where the Delete button is; the clamp keeps it on screen.
-		const anchor = document
-			.querySelector('.scene-preview-selection')
-			?.getBoundingClientRect();
-
-		setDeleteRequest({
-			ids,
-			point: anchor
-				? {x: anchor.left, y: anchor.bottom + 4}
-				: {x: window.innerWidth / 2 - 120, y: window.innerHeight / 3},
-			selection: [...selection]
-		});
+		setDeleteRequest({ids, selection: [...selection]});
 	}, [
 		beat,
 		bubbleSelected,
@@ -2481,14 +2469,6 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selected={bubbleSelected}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
-			{deleteRequest && (
-				<SceneDeleteMenu
-					ids={deleteRequest.ids}
-					onCancel={cancelDelete}
-					onChoose={confirmDelete}
-					point={deleteRequest.point}
-				/>
-			)}
 			{/* A dropped file is not a background, an object, a cast member or a pose until
 			    the author says which, so the drop stops here and asks. */}
 			{dropRequest && (
@@ -2938,6 +2918,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		>
 			{bar}
 			{stageBody}
+			{deleteRequest && (
+				<SceneDeleteMenu
+					ids={deleteRequest.ids}
+					onCancel={cancelDelete}
+					onChoose={confirmDelete}
+				/>
+			)}
 		</div>
 	);
 };
