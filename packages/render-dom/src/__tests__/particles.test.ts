@@ -82,6 +82,10 @@ describe('ParticleSim', () => {
 		const out = sim.fill(params, 200, 50, 60);
 
 		expect(out[0]).toBeCloseTo(50);
+		// A mirror and a fade, applied on the way out.
+		const mirrored = sim.fill(params, 200, 50, 60, undefined, {alpha: 0.5, matrix: [-1, 0, 0, 1]});
+
+		expect(mirrored[7]).toBeCloseTo(out[7] * 0.5);
 		expect(out[1]).toBeCloseTo(60);
 		expect(out[2]).toBeGreaterThan(0);
 		// red, premultiplied by alpha; green and blue nothing.
@@ -126,7 +130,7 @@ describe('DomRenderer with an emitter', () => {
 		document.body.innerHTML = '';
 	});
 
-	it('draws a canvas over the art, sized by the emitter box', async () => {
+	it('draws on a layer-wide canvas in the entity z slot, sized by the emitter box', async () => {
 		const mount = makeMount();
 		const renderer = new DomRenderer();
 
@@ -140,17 +144,40 @@ describe('DomRenderer with an emitter', () => {
 
 		const box = mount.querySelector<HTMLElement>(".sliders-entity[data-entity-id='fire']")!;
 		const art = box.querySelector<HTMLElement>('.sliders-entity-art')!;
-		const canvas = art.querySelector('canvas.sliders-particles');
+		const canvas = mount.querySelector<HTMLCanvasElement>('canvas.sliders-particles')!;
 
 		expect(canvas).not.toBeNull();
+		// NOT inside the box: a box-sized canvas clipped every tall plume.
+		expect(box.contains(canvas)).toBe(false);
+		expect(canvas.parentElement).toBe(box.parentElement);
+		expect(canvas.previousElementSibling).toBe(box);
+		expect(canvas.style.width).toBe('100%');
+		expect(canvas.style.height).toBe('100%');
 		expect(art.dataset.particles).toBe('');
 		// The box, not the 64px sprite: 4:1 tall.
 		expect(parseFloat(box.style.height) / parseFloat(box.style.width)).toBeCloseTo(4);
 
 		// A scene override keeps the same canvas: the field is not restarted.
 		await renderer.apply(stage({rate: 0}), []);
-		expect(art.querySelector('canvas.sliders-particles')).toBe(canvas);
+		expect(mount.querySelector('canvas.sliders-particles')).toBe(canvas);
 
+		renderer.destroy();
+		expect(canvas.isConnected).toBe(false);
+	});
+
+	it('resolves the sprite by asset name, not from the emitter bytes', async () => {
+		const mount = makeMount();
+		const renderer = new DomRenderer();
+		const resolver = createStubResolver({
+			assets: {fire: {particles: {rate: 10, sprite: 'p-star'}}, 'p-star': {w: 64, h: 64}}
+		});
+		const url = jest.spyOn(resolver, 'url');
+
+		await renderer.mount(mount, resolver);
+		await renderer.apply(stage(), []);
+		await new Promise(resolve => setTimeout(resolve, 0));
+
+		expect(url).toHaveBeenCalledWith('p-star');
 		renderer.destroy();
 	});
 
