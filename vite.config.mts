@@ -83,7 +83,11 @@ export default defineConfig({
 				]
 			},
 			registerType: 'autoUpdate',
-			includeAssets: ['locales/**', 'pwa/**'],
+			// Locales are NOT precached: the HTML comes off the network first, so right after
+			// a deploy the new bundle ran against the old worker's locale file and every new
+			// string showed as its raw key until the new worker took over. Network first
+			// below instead, cached for offline.
+			includeAssets: ['pwa/**'],
 			workbox: {
 				globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
 				// Story formats are 3.8MB of a 5.7MB build, and precaching them meant
@@ -126,6 +130,11 @@ export default defineConfig({
 							networkTimeoutSeconds: 3,
 							expiration: {maxEntries: 8}
 						}
+					},
+					{
+						urlPattern: /\/locales\//,
+						handler: 'NetworkFirst',
+						options: {cacheName: 'locales', networkTimeoutSeconds: 3}
 					},
 					{
 						urlPattern: /\/story-formats\//,
