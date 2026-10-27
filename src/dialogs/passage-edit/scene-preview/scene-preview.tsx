@@ -57,7 +57,7 @@ import {
 	withBeatStyleDefaults,
 	writeStoryBubbleVars
 } from '../../../util/story-bubble';
-import {updatePassage} from '../../../store/stories';
+import {passageMatchingName, updatePassage} from '../../../store/stories';
 import {useUndoableStoriesContext} from '../../../store/undoable-stories';
 import {storyColors} from '../../../util/story-colors';
 import type {DomRenderer} from '@sliders/render-dom';
@@ -136,7 +136,8 @@ import {parentOffsets, resolveStage, sceneTimeline} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
 import {useActiveBeatMark} from './use-active-beat-mark';
 import type {SceneDoc} from '../../../store/passage-docs';
-import {useRequestedBeat} from './preview-beat-request';
+import {requestPreviewBeat, useRequestedBeat} from './preview-beat-request';
+import {hopInto, popSceneHop, pushSceneHop} from './scene-trail';
 import {useArrivalBeat} from './use-arrival-beat';
 import {useStageSelection} from './use-stage-selection';
 import {
@@ -734,6 +735,42 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[]
 	);
 
+	/** Read at the moment of a hop, so `openScene` keeps one identity while the author scrubs. */
+	const beatRef = React.useRef(beat);
+
+	beatRef.current = beat;
+
+	/**
+	 * Every passage the preview opens itself goes through here, so "previous" on the
+	 * arrival state can walk it back to the beat the author left (`scene-trail`).
+	 */
+	const openScene = React.useCallback(
+		(name: string) => {
+			if (!onOpenPassage) {
+				return;
+			}
+
+			// By id, from the store: `passages` carries names only, and a hop has to know the
+			// passage the preview is standing on.
+			const storyPassages =
+				stories.find(candidate => candidate.id === storyId)?.passages ?? [];
+			const from = storyPassages.find(passage => passage.id === passageId);
+			const to = passageMatchingName(storyPassages, name);
+
+			if (from && to && to.id !== from.id) {
+				pushSceneHop({
+					fromId: from.id,
+					fromName: from.name,
+					fromState: beatRef.current,
+					toId: to.id
+				});
+			}
+
+			onOpenPassage(name);
+		},
+		[onOpenPassage, passageId, stories, storyId]
+	);
+
 	/**
 	 * A `[[link]]` in a bubble, clicked in the preview.
 	 *
@@ -744,10 +781,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const handleLink = React.useCallback(
 		(name: string, target?: string, event?: MouseEvent) => {
 			if (event?.ctrlKey || event?.metaKey) {
-				onOpenPassage?.(target ?? name);
+				openScene(target ?? name);
 			}
 		},
-		[onOpenPassage]
+		[openScene]
 	);
 
 	const handleRenderer = React.useCallback((next?: DomRenderer) => {
@@ -1465,6 +1502,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	/** The single way out, if there is exactly one and we can open it. */
 	const nextScene = onOpenPassage && forward.length === 1 ? forward[0] : undefined;
+	/** The scene a hop brought the preview here from, while it stands where it arrived. */
+	const previousScene = onOpenPassage
+		? hopInto(passageId)?.fromName
+		: undefined;
 
 	const selectedEntities = React.useMemo(
 		() =>
@@ -1883,6 +1924,23 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	function goToPreviousBeat() {
 		setPlaying(false);
+
+		// On the state the preview arrived at, "previous" is the scene it came from, on the
+		// beat it left.
+		if (beat <= 0) {
+			const hop = popSceneHop(passageId);
+
+			if (hop && onOpenPassage) {
+				if (hop.fromState > 0) {
+					requestPreviewBeat(hop.fromId, hop.fromState - 1);
+				}
+
+				onOpenPassage(hop.fromName);
+			}
+
+			return;
+		}
+
 		setBeat(b => Math.max(0, b - 1));
 	}
 
@@ -1897,7 +1955,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		// the author has to say which, so the button stops here.
 		if (beat >= lastBeat) {
 			if (nextScene) {
-				onOpenPassage?.(nextScene);
+				openScene(nextScene);
 			}
 
 			return;
@@ -2029,7 +2087,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	useCommand({
 		allowRepeat: true,
-		enabled: beat > 0 && selection.length === 0,
+		enabled: (beat > 0 || !!previousScene) && selection.length === 0,
 		id: 'scene.previousBeat',
 		label: t('hotkeys.commands.scene.previousBeat'),
 		run: goToPreviousBeat,
@@ -2284,10 +2342,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		<div className="scene-preview-bar">
 			<IconButton
 				commandId="scene.previousBeat"
-				disabled={beat <= 0}
+				disabled={beat <= 0 && !previousScene}
 				icon={<IconChevronLeft />}
 				iconOnly
-				label={t('dialogs.passageEdit.scenePreview.previousBeat')}
+				label={
+					beat <= 0 && previousScene
+						? t('dialogs.passageEdit.scenePreview.previousScene', {
+								name: previousScene
+						  })
+						: t('dialogs.passageEdit.scenePreview.previousBeat')
+				}
 				onClick={goToPreviousBeat}
 			/>
 			<span className="scene-preview-beat" data-testid="scene-preview-beat">
@@ -2658,7 +2722,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onCondition={setCondition}
 				onOpacity={changeOpacity}
 				onOpacityCommit={commitOpacity}
-				onOpenLink={onOpenPassage}
+				onOpenLink={onOpenPassage && openScene}
 				onPreviewPose={setPosePreview}
 				onStepZ={stepZ}
 				matchBg={
@@ -2848,7 +2912,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 							editable={editable}
 							entities={selectedEntities}
 							onCreatePassage={editable ? onCreatePassage : undefined}
-							onOpenPassage={onOpenPassage}
+							onOpenPassage={onOpenPassage && openScene}
 							onShowSceneLinks={clear}
 							onWrite={writes => commit(writes, EDIT_ORIGIN)}
 							passageNames={passageNames}
@@ -2859,7 +2923,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 						<SceneLinksPanel
 							editable={editable}
 							onCreatePassage={editable ? onCreatePassage : undefined}
-							onOpenPassage={onOpenPassage}
+							onOpenPassage={onOpenPassage && openScene}
 							onWrite={writes => commit(writes, EDIT_ORIGIN)}
 							passageNames={passageNames}
 							scene={parse.result?.scene}

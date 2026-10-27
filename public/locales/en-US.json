@@ -845,6 +845,7 @@
 				"previousBeat": "Previous beat",
 				"nextBeat": "Next beat",
 				"nextScene": "Next scene: {{name}}",
+				"previousScene": "Previous scene: {{name}}",
 				"play": "Play beats",
 				"grid": "Show the stage grid: centre point, thirds, the floor line and every entity's box, anchor and past positions",
 				"soundOff": "Sound is off. Turn it on to hear this scene's music: and sfx: as you step through it",
