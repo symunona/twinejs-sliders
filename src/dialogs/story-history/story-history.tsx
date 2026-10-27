@@ -5,6 +5,9 @@
  * is an ordinary server-side write, so the version being replaced becomes a snapshot of
  * its own and nothing here can destroy anything.
  *
+ * That is why Restore asks nothing and the dialog stays open: a bad restore is undone by
+ * restoring the row just below `now`, which is the version it replaced.
+ *
  * # What a row says, and in what order
  *
  * `10:12  mira  Tavern Night +2 more   14 passages  82 KB`. The middle of that is the only
@@ -132,7 +135,6 @@ export const StoryHistoryDialog: React.FC<StoryHistoryDialogProps> = props => {
 	const {storyId, ...other} = props;
 	const {client} = useServerSyncContext();
 	const {t} = useTranslation();
-	const [confirming, setConfirming] = React.useState<number | null>(null);
 	const [draft, setDraft] = React.useState('');
 	const [editing, setEditing] = React.useState<number | null>(null);
 	const [error, setError] = React.useState<Message | null>(null);
@@ -193,7 +195,6 @@ export const StoryHistoryDialog: React.FC<StoryHistoryDialogProps> = props => {
 			return;
 		}
 
-		setConfirming(null);
 		setRestoring(true);
 
 		// Before the call, not after: the restore lands as an ordinary server write, and
@@ -208,13 +209,6 @@ export const StoryHistoryDialog: React.FC<StoryHistoryDialogProps> = props => {
 			setError(null);
 			setMissingAssets(result.missingAssets ?? []);
 			await load();
-
-			// A story that came back without its art needs the user to read why, so the
-			// dialog only closes itself when there is nothing to say.
-
-			if ((result.missingAssets ?? []).length === 0) {
-				props.onClose();
-			}
 		} catch (restoreError) {
 			setError({
 				key: 'dialogs.storyHistory.restoreError',
@@ -272,7 +266,6 @@ export const StoryHistoryDialog: React.FC<StoryHistoryDialogProps> = props => {
 	}
 
 	function startEditing(revision: RevisionEntry) {
-		setConfirming(null);
 		setEditing(revision.rev);
 		setDraft(revision.label ?? '');
 	}
@@ -377,31 +370,6 @@ export const StoryHistoryDialog: React.FC<StoryHistoryDialogProps> = props => {
 							/>
 						</ButtonBar>
 					</div>
-				) : confirming === revision.rev ? (
-					<div className="story-history-confirm">
-						<p>
-							{t('dialogs.storyHistory.restoreConfirm', {
-								client: revision.client,
-								date: when
-							})}
-						</p>
-						<ButtonBar>
-							<TestId testId="story-history-confirm">
-								<IconButton
-									disabled={restoring}
-									icon={<IconCheck />}
-									label={t('dialogs.storyHistory.restore')}
-									onClick={() => handleRestore(revision.rev)}
-									variant="primary"
-								/>
-							</TestId>
-							<IconButton
-								icon={<IconX />}
-								label={t('common.cancel')}
-								onClick={() => setConfirming(null)}
-							/>
-						</ButtonBar>
-					</div>
 				) : (
 					<ButtonBar>
 						<TestId testId="story-history-label">
@@ -437,7 +405,7 @@ export const StoryHistoryDialog: React.FC<StoryHistoryDialogProps> = props => {
 									disabled={restoring}
 									icon={<IconHistory />}
 									label={t('dialogs.storyHistory.restore')}
-									onClick={() => setConfirming(revision.rev)}
+									onClick={() => void handleRestore(revision.rev)}
 								/>
 							</TestId>
 						)}

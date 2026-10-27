@@ -85,16 +85,6 @@
 	font-size: 85%;
 }
 
-.story-history-confirm {
-	display: flex;
-	flex-direction: column;
-	gap: calc(var(--grid-size) / 2);
-}
-
-.story-history-confirm p {
-	margin: 0;
-}
-
 .story-history-error,
 .story-history-missing {
 	align-items: center;

@@ -125,23 +125,20 @@ describe('<StoryHistoryDialog>', () => {
 		expect(screen.getAllByTestId('story-history-restore').length).toBe(1);
 	});
 
-	it('restores a revision after confirmation', async () => {
+	it('restores on one click, and stays open on the new list', async () => {
 		const client = fakeClient();
 		const onClose = jest.fn();
 
 		renderComponent(client, {onClose});
 		await screen.findAllByTestId('story-history-row');
 		fireEvent.click(screen.getByTestId('story-history-restore'));
-		expect(client.restoreRevision).not.toHaveBeenCalled();
-		expect(
-			screen.getByText('dialogs.storyHistory.restoreConfirm')
-		).toBeInTheDocument();
-		fireEvent.click(screen.getByTestId('story-history-confirm'));
 		await waitFor(() =>
 			expect(client.restoreRevision).toHaveBeenCalledWith(story.id, 42)
 		);
-		await waitFor(() => expect(onClose).toHaveBeenCalled());
-		expect(client.listRevisions).toHaveBeenCalledTimes(2);
+		await waitFor(() =>
+			expect(client.listRevisions).toHaveBeenCalledTimes(2)
+		);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 
 	it('reports assets a restored version lost, and stays open', async () => {
@@ -158,7 +155,6 @@ describe('<StoryHistoryDialog>', () => {
 		renderComponent(client, {onClose});
 		await screen.findAllByTestId('story-history-row');
 		fireEvent.click(screen.getByTestId('story-history-restore'));
-		fireEvent.click(screen.getByTestId('story-history-confirm'));
 		expect(
 			await screen.findByTestId('story-history-missing-assets')
 		).toBeInTheDocument();
@@ -424,7 +420,6 @@ describe('<StoryHistoryDialog>', () => {
 		await screen.findAllByTestId('story-history-row');
 		expect(peekSyncReason(story.id)).toBeUndefined();
 		fireEvent.click(screen.getByTestId('story-history-restore'));
-		fireEvent.click(screen.getByTestId('story-history-confirm'));
 
 		await waitFor(() => expect(client.restoreRevision).toHaveBeenCalled());
 		expect(peekSyncReason(story.id)).toBe('restore');

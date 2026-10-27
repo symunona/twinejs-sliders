@@ -120,7 +120,6 @@ test.describe('Library: history, delete, copies', () => {
 		const oldest = rows.last();
 
 		await oldest.getByTestId('story-history-restore').click();
-		await oldest.getByTestId('story-history-confirm').click();
 
 		await expect
 			.poll(() => serverPassageText(server, storyId, PASSAGE), {timeout: 30000})
@@ -164,7 +163,6 @@ test.describe('Library: history, delete, copies', () => {
 		const oldest = rows.last();
 
 		await oldest.getByTestId('story-history-restore').click();
-		await oldest.getByTestId('story-history-confirm').click();
 
 		await expect
 			.poll(() => serverPassageText(server, storyId, PASSAGE), {
