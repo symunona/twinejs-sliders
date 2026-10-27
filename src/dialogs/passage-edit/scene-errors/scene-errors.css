@@ -1,11 +1,13 @@
+@import '../../../styles/colors.css';
+
 /*
 Sits between the passage text and the preview, so the error list grows downward into the
 preview rather than pushing the text the author is typing in.
 */
 
 .scene-errors {
-	background: var(--dialog-background-color, #fff);
-	border-top: 1px solid var(--dialog-border-color, rgba(0, 0, 0, 0.15));
+	background: var(--white);
+	border-top: 1px solid var(--light-gray);
 	flex-shrink: 0;
 }
 
@@ -30,7 +32,7 @@ preview rather than pushing the text the author is typing in.
 }
 
 .scene-errors:not(.clean) .scene-errors-header {
-	color: #b00020;
+	color: var(--dark-red);
 }
 
 .scene-errors-header svg {
@@ -39,7 +41,7 @@ preview rather than pushing the text the author is typing in.
 }
 
 .scene-errors .scene-preview-errors {
-	border-top: 1px solid var(--dialog-border-color, rgba(0, 0, 0, 0.15));
+	border-top: 1px solid var(--light-gray);
 	font-family: var(--font-monospaced, monospace);
 	font-size: 12px;
 	list-style: none;
@@ -57,20 +59,20 @@ preview rather than pushing the text the author is typing in.
 }
 
 .scene-errors .scene-preview-errors li:hover {
-	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+	background: var(--faint-blue);
 }
 
 .scene-errors .scene-preview-errors li.error .line {
-	color: #b00020;
+	color: var(--dark-red);
 }
 
 .scene-errors .scene-preview-errors li.warning .line {
-	color: #96700a;
+	color: var(--dark-yellow);
 }
 
 /* Advice, not a problem: an old spelling that still works. Quiet on purpose. */
 .scene-errors .scene-preview-errors li.info .line {
-	color: #3b6ea8;
+	color: var(--dark-blue);
 }
 
 .scene-errors .scene-preview-errors .line {
@@ -98,7 +100,7 @@ preview rather than pushing the text the author is typing in.
 }
 
 .scene-errors .scene-preview-errors .scene-errors-create:hover {
-	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+	background: var(--faint-blue);
 }
 
 /*

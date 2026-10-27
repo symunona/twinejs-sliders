@@ -19,6 +19,7 @@ import {
 	IconPlus,
 	IconSettings,
 	IconStack2,
+	IconTrash,
 	IconClockPlay,
 	IconTimeline,
 	IconUser,
@@ -2596,6 +2597,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	/** Settings tab: how this preview behaves for me, then what the scene says. */
 	const sceneTab = (
 		<div className="scene-sidebar-section">
+			<div className="scene-sidebar-row">
+				<IconButton
+					disabled={!editable || beat === 0}
+					icon={<IconTrash />}
+					label={t('dialogs.passageEdit.scenePreview.sidebar.deleteBeat', {beat})}
+					onClick={() => commit([{removeBeat: beat - 1}], EDIT_ORIGIN)}
+					tooltipLabel={
+						beat === 0
+							? t('dialogs.passageEdit.scenePreview.sidebar.deleteBeatNone')
+							: undefined
+					}
+					tooltipPosition="bottom"
+					variant="danger"
+				/>
+			</div>
 			<SceneSettingsTab
 				assets={assets}
 				editable={editable}

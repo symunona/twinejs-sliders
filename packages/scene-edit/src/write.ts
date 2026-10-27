@@ -1205,6 +1205,52 @@ export function insertBeatLine(
 }
 
 /**
+ * Delete `beats[index]` whole, every line of it — the scene settings' "delete beat".
+ *
+ * Any kind of beat: a spoken one, a command (`- wait: 1`), an entity's move. Its trailing
+ * `# note` goes with it; a comment on a line of its own above it stays, since it may as
+ * well be about the beat before. The last beat takes `beats:` with it rather than leaving
+ * an empty key behind.
+ *
+ * Block sequences only, like `insertBeatEntity`.
+ */
+export function removeBeat(text: string, index: number): TextEdit | undefined {
+	const parsed = parseBlock(text);
+	const beats = parsed && beatsSeqOf(parsed);
+	const item = beats?.items[index];
+
+	if (!parsed || !beats || beats.flow || item === undefined) {
+		return undefined;
+	}
+
+	if (beats.items.length === 1) {
+		const pair = findPair(parsed.root, 'beats');
+
+		return pair ? removePairEdit(parsed, parsed.root, pair) : undefined;
+	}
+
+	const range = rangeOf(item);
+
+	if (!range) {
+		return undefined;
+	}
+
+	let from = lineStartAt(text, range[0]);
+	const to = Math.min(
+		text.length,
+		lineEndAt(text, trimEnd(text, range[1], range[0])) + 1
+	);
+
+	// The block's last line has no newline of its own to take: take the one before it, or
+	// the beat above is left with an empty line under it.
+	if (to === text.length && !text.endsWith('\n') && from > 0) {
+		from--;
+	}
+
+	return {from, insert: '', to};
+}
+
+/**
  * Does this entity's own entry declare an `of:` parent? What a new beat needs to know, since
  * the beat it is writing has no entry of its own to read it off.
  */

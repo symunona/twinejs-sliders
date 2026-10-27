@@ -21,6 +21,7 @@ export {
 	insertBeatPart,
 	insertBeatLine,
 	mergeEdits,
+	removeBeat,
 	removeEntities,
 	removeEntity,
 	removeEntityBeats,

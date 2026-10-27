@@ -720,6 +720,8 @@
 					"collapse": "Collapse the sidebar",
 					"expand": "Expand the sidebar",
 					"readOnly": "This stage cannot be edited right now.",
+					"deleteBeat": "Delete beat {{beat}}",
+					"deleteBeatNone": "Step 0 is the scene itself: scrub to a beat to delete it",
 					"editWalkArea": "Edit walk area",
 					"editWalkAreaHint": "Open {{bg}} in the asset editor, on its walk area tool",
 					"noBg": "This beat has no background, so there is no walk area to edit",

@@ -20,6 +20,7 @@ import {
 	insertBeatPart,
 	insertBeatLine,
 	mergeEdits,
+	removeBeat,
 	removeEntities,
 	removeEntityBeats,
 	removeEntityKey,
@@ -360,9 +361,15 @@ export interface BeatInsertWrite {
 	who: string;
 }
 
+/** One beat gone, `beats[removeBeat]`, every line of it — the scene settings' "delete beat". */
+export interface BeatRemoveWrite {
+	removeBeat: number;
+}
+
 export type SceneWrite =
 	| BeatInsertWrite
 	| BeatKeyWrite
+	| BeatRemoveWrite
 	| BeatSpeakerWrite
 	| BeatTextWrite
 	| BubbleWrite
@@ -384,6 +391,10 @@ export function isBeatKeyWrite(write: SceneWrite): write is BeatKeyWrite {
 
 export function isBeatInsertWrite(write: SceneWrite): write is BeatInsertWrite {
 	return 'insertBeat' in write;
+}
+
+export function isBeatRemoveWrite(write: SceneWrite): write is BeatRemoveWrite {
+	return 'removeBeat' in write;
 }
 
 export function isBeatTextWrite(write: SceneWrite): write is BeatTextWrite {
@@ -547,6 +558,10 @@ export function buildWriteEdit(
 		return insertBeatLine(context.blockText, write.insertBeat, write.who);
 	}
 
+	if (isBeatRemoveWrite(write)) {
+		return removeBeat(context.blockText, write.removeBeat);
+	}
+
 	if (isBeatTextWrite(write)) {
 		return setBeatText(context.blockText, write.beat, write.beatText);
 	}
@@ -630,6 +645,7 @@ export function buildWriteEdits(
 		if (
 			!isBeatInsertWrite(write) &&
 			!isBeatKeyWrite(write) &&
+			!isBeatRemoveWrite(write) &&
 			!isBeatTextWrite(write) &&
 			!isBeatSpeakerWrite(write) &&
 			!isBubbleWrite(write) &&
@@ -711,6 +727,7 @@ export function insertedBeatCount(
 
 		if (
 			isBeatKeyWrite(write) ||
+			isBeatRemoveWrite(write) ||
 			isBeatTextWrite(write) ||
 			isBeatSpeakerWrite(write) ||
 			isBubbleWrite(write) ||
