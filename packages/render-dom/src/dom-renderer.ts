@@ -60,6 +60,7 @@ import {
 	spriteRect
 } from './coords';
 import type {LinkHandler} from './dialogue';
+import {LAYER_BASELINE} from '@sliders/scene-types';
 import {SoundDeck} from './sound-deck';
 import {injectStyles} from './styles';
 import {injectEffectSupport, syncEffect} from './effect-host';
@@ -91,7 +92,10 @@ const DEFAULT_POSE_NAME = 'idle';
 const MIN_STEP_SECONDS = 1 / 60;
 
 export interface DomRendererOptions {
-	/** Draw the centre + floor guides. Makes `at: 0` and the feet origin legible (spec 06). */
+	/**
+	 * Draw the measuring grid: sixths, the thirds, the centre axes and the floor. Moves with
+	 * the camera. Makes `at:` values and the feet origin legible (spec 06).
+	 */
 	guides?: boolean;
 	/** Stage aspect ratio. 16:9 unless you have a very good reason. */
 	aspect?: number;
@@ -282,6 +286,8 @@ export class DomRenderer implements Renderer {
 	private rootEl?: HTMLDivElement;
 	private boxEl?: HTMLDivElement;
 	private cameraEl?: HTMLDivElement;
+	/** Over the fx, so a `dark` or `flash` cannot hide it; follows the camera by hand. */
+	private guidesEl?: HTMLDivElement;
 	private fxStackEl?: HTMLDivElement;
 	/** The "click to go on" cue — see `setWaitingForClick`. Laid over the stage box. */
 	private waitCueEl?: HTMLDivElement;
@@ -385,6 +391,8 @@ export class DomRenderer implements Renderer {
 		const fxStack = this.el('div', 'sliders-fx-stack');
 		const guides = this.el('div', 'sliders-guides');
 
+		guides.setAttribute('aria-hidden', 'true');
+		guides.append(...this.gridLines());
 		box.append(camera, fxStack, guides);
 		root.appendChild(box);
 
@@ -410,6 +418,7 @@ export class DomRenderer implements Renderer {
 		root.dataset.muted = String(this.mutedWanted);
 		this.boxEl = box;
 		this.cameraEl = camera;
+		this.guidesEl = guides;
 		this.fxStackEl = fxStack;
 
 		// One delegated listener on the root, the way the dialogue layer has one on its own
@@ -609,6 +618,7 @@ export class DomRenderer implements Renderer {
 		this.rootEl = undefined;
 		this.boxEl = undefined;
 		this.cameraEl = undefined;
+		this.guidesEl = undefined;
 		this.fxStackEl = undefined;
 		this.waitCueEl = undefined;
 		this.bgFxEl?.remove();
@@ -2491,9 +2501,43 @@ export class DomRenderer implements Renderer {
 		const offset = cameraOffsetPx(this.box, this.camera);
 		const zoom = safeZoom(this.camera.zoom);
 
-		this.cameraEl.style.transitionDuration = `${Math.max(0, duration)}s`;
-		this.cameraEl.style.transitionTimingFunction = ease;
-		this.cameraEl.style.transform = `scale(${zoom}) translate(${-offset.x}px, ${-offset.y}px)`;
+		// The grid gets the camera's exact transition, so it rides a pan instead of jumping
+		// to the end of it.
+		for (const el of [this.cameraEl, this.guidesEl]) {
+			if (el) {
+				el.style.transitionDuration = `${Math.max(0, duration)}s`;
+				el.style.transitionTimingFunction = ease;
+				el.style.transform = `scale(${zoom}) translate(${-offset.x}px, ${-offset.y}px)`;
+			}
+		}
+	}
+
+	/**
+	 * The grid's lines, in percent of the box, so a resize needs nothing redrawn. Scene
+	 * units, as `sceneToBox` lays them: `x` = 50 + 50x %, `y` = 50 - 50y %. Same spacing and
+	 * kinds as the editor's grid (`stage-geometry.ts` `gridLines`): sixths, so the thirds a
+	 * drag snaps to are lines and not gaps.
+	 */
+	private gridLines(): HTMLDivElement[] {
+		const lines: HTMLDivElement[] = [];
+		const line = (axis: 'x' | 'y', at: number, kind: string) => {
+			const el = this.el('div', `sliders-grid-line ${axis}`);
+
+			el.dataset.kind = kind;
+			el.dataset.scene = String(Math.round(at * 1000) / 1000);
+			el.style[axis === 'x' ? 'left' : 'top'] = `${
+				axis === 'x' ? 50 + at * 50 : 50 - at * 50
+			}%`;
+			lines.push(el);
+		};
+
+		for (let i = -6; i <= 6; i++) {
+			line('x', i / 6, i === 0 ? 'centre' : Math.abs(i) === 2 ? 'third' : 'minor');
+			line('y', i / 6, i === 0 ? 'centre' : 'minor');
+		}
+
+		line('y', LAYER_BASELINE, 'baseline');
+		return lines;
 	}
 
 	// -----------------------------------------------------------------------

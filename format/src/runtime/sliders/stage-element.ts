@@ -29,7 +29,7 @@ import {beatLines} from '@sliders/scene-types';
 import type {Beat, Scene, SceneError, Stage} from '@sliders/scene-types';
 import {go} from '../actions';
 import {createLoggers} from '../logger';
-import {get, set} from '../state';
+import {set} from '../state';
 import {passageNamed} from '../story';
 import {CustomElement} from '../util/custom-element';
 import {manifestResolver} from './assets';
@@ -48,6 +48,7 @@ import {
 	muted,
 	storyBubbleDefaults
 } from './config';
+import {GRID_EVENT, gridOn} from './grid';
 import {currentPassage, resumeAtEnd} from './history';
 import {holdLinkList, holdLinkListAgain, releaseLinkList} from './link-list';
 import {claimDeck, releaseDeck} from './player-deck';
@@ -240,6 +241,11 @@ export class SlidersStage extends CustomElement {
 	 * through `followLink`. They announce themselves with `passage-navigate` just before
 	 * `go()`, so the transition is picked up here, by link name and target.
 	 */
+	/** The backstage Grid switch (`grid.ts`). */
+	private handleGrid = () => {
+		this.renderer?.setGuides(gridOn());
+	};
+
 	private handleNavigate = (event: Event) => {
 		const link = event.target as HTMLElement | null;
 		const to = link?.getAttribute('to');
@@ -334,7 +340,7 @@ export class SlidersStage extends CustomElement {
 			// The player's deck, shared by every passage (`player-deck.ts`), so music carries
 			// across a page turn instead of dying with this renderer.
 			deck,
-			guides: Boolean(get('config.testing')),
+			guides: gridOn(),
 			onLink: this.followLink
 		});
 		await this.renderer.mount(this, manifestResolver);
@@ -377,6 +383,7 @@ export class SlidersStage extends CustomElement {
 		publishStage(entry);
 		this.addEventListener('click', this.handleClick);
 		window.addEventListener('passage-navigate', this.handleNavigate);
+		window.addEventListener(GRID_EVENT, this.handleGrid);
 		this.listenForGesture();
 
 		// Alt+T in the editor: open on the beat the author was staging. Asked before the
@@ -454,6 +461,7 @@ export class SlidersStage extends CustomElement {
 		this.linkList = undefined;
 		this.removeEventListener('click', this.handleClick);
 		window.removeEventListener('passage-navigate', this.handleNavigate);
+		window.removeEventListener(GRID_EVENT, this.handleGrid);
 		// `once` removes it on the way in, never on the way out — a stage that left before
 		// the reader touched anything would otherwise unmute the NEXT stage's renderer
 		// through a closure over a destroyed one.

@@ -342,3 +342,15 @@ html.sliders-nav-wait passage-link:not(.sliders-link-loading) {
 	opacity: 0.5;
 	cursor: progress;
 }
+
+/* Backstage Grid switch (`grid.ts`), above the sidebar's tabs. */
+.sliders-backstage-tools {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+.sliders-grid-toggle[aria-pressed='true'] {
+	border-color: var(--color-cyan-3, #4ad4ff);
+	color: var(--color-cyan-4, #0b6b87);
+}

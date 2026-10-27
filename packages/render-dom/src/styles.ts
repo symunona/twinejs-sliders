@@ -573,28 +573,24 @@ ${Object.entries(HIGHLIGHT_PRESETS)
 	}
 }
 
-.sliders-guides::before,
-.sliders-guides::after {
-	content: '';
+.sliders-guides {
+	transform-origin: 50% 50%;
+	transition-property: transform;
+	transition-duration: 0s;
+}
+
+/* The measuring grid, same colours as the editor's (stage-editor-overlay.css). */
+.sliders-grid-line {
 	position: absolute;
-	background: rgba(120, 220, 255, 0.45);
+	background: rgba(255, 255, 255, 0.16);
 }
 
-/* Vertical centre line. */
-.sliders-guides::before {
-	left: 50%;
-	top: 0;
-	bottom: 0;
-	width: 1px;
-}
-
-/* Horizontal centre line = the y = 0 floor. */
-.sliders-guides::after {
-	top: 50%;
-	left: 0;
-	right: 0;
-	height: 1px;
-}
+.sliders-grid-line.x { top: 0; bottom: 0; width: 1px; }
+.sliders-grid-line.y { left: 0; right: 0; height: 1px; }
+.sliders-grid-line[data-kind='third'] { background: rgba(255, 255, 255, 0.34); }
+.sliders-grid-line[data-kind='centre'] { background: rgba(74, 212, 255, 0.4); }
+/* The floor. Warm, so it is never confused with a centre axis. */
+.sliders-grid-line[data-kind='baseline'] { background: rgba(255, 216, 74, 0.45); }
 `;
 
 export const DIALOGUE_CSS = `
