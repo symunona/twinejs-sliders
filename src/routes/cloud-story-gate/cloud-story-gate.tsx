@@ -101,10 +101,10 @@ export const CloudStoryGate: React.FC = ({children}) => {
 			return;
 		}
 
-		// Boot fresh rather than let `isLocal` flip in place. Play, proof and test
-		// `document.write` over the app, and doing that while the checkout's refresh and
-		// library sync are still settling left the player blank. The story is in
-		// localStorage now, so the reload opens it like any local one.
+		// Boot fresh rather than flip `isLocal` in place: play, proof and test
+		// `document.write` over the app, and should not do it while the checkout's
+		// refresh is still settling. The story is in localStorage now, so the reload
+		// opens it like any local one.
 		window.location.reload();
 	}
 
