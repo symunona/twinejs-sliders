@@ -1,4 +1,5 @@
 import {
+	ArtProgress,
 	browserDecoder,
 	createBrowserBlobCache,
 	HttpTransport,
@@ -438,6 +439,11 @@ export function useLibraryStatus(): StatusEvent & {online: boolean} {
 	}, [engine]);
 
 	return {...status, online: libraryOnline()};
+}
+
+/** An open story's art still being fetched, live. `undefined` once it is all local. */
+export function useArtLoading(storyId: string): ArtProgress | undefined {
+	return useLibraryStatus().loadingArt?.[storyId];
 }
 
 /** Engine notices (renamed-on-clash, conflict, delete-refused …). */

@@ -627,6 +627,7 @@
 				"makeDefaultPrompt": "Write this beat's bubble style (style, font, colours, sizing, alignment, enter animation, anchor, size) into the start passage as the story's defaults? No beat or passage is changed."
 			},
 			"scenePreview": {
+				"loadingArt": "Loading art… {{done}} of {{total}}",
 				"title": "Scene Editor",
 				"timing": {
 					"toggle": "Timing: every beat on the player's clock, over the stage",

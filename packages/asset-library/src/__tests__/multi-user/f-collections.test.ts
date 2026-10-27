@@ -71,6 +71,28 @@ describe('F. collections and sharing', () => {
 		expect(await bo.blobs.has(await shaOf('gold'))).toBe(true);
 	});
 
+	it('F2c: an open story reports its art prefetch as done of total, then nothing', async () => {
+		const {world, ana, bo, tavern} = await team();
+
+		await upload(ana, tavern.id, 'night', 'night');
+		await upload(ana, tavern.id, 'door', 'gold');
+		bo.engine.createStory('S', {name: 'S'});
+		await world.settle();
+
+		const seen: unknown[] = [];
+
+		bo.engine.onStatus(status => seen.push(status.loadingArt?.S));
+		bo.engine.bind('S', [tavern.id]);
+		await bo.engine.openStory('S');
+		await world.settle();
+
+		expect(seen).toContainEqual({done: 0, total: 2});
+		expect(seen).toContainEqual({done: 2, total: 2});
+		expect(seen[seen.length - 1]).toBeUndefined();
+		expect(bo.engine.status().loadingArt).toBeUndefined();
+		expect(await bo.blobs.has(await shaOf('gold'))).toBe(true);
+	});
+
 	it('F3: both create collection `props` offline → second becomes props-2, reported', async () => {
 		const [world, ana, bo] = await World.create(['ana', 'bo']);
 

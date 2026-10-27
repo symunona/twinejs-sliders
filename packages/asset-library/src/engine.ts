@@ -82,6 +82,14 @@ export interface StatusEvent {
 	offline: boolean;
 	/** Blobs being fetched right now. Left out when none. */
 	downloading?: number;
+	/** Open stories still fetching their art, by story id. Left out when none. */
+	loadingArt?: Record<string, ArtProgress>;
+}
+
+/** One open story's prefetch: blobs it was missing, and how many have settled. */
+export interface ArtProgress {
+	done: number;
+	total: number;
 }
 
 export type Notice =
@@ -294,6 +302,8 @@ const MAX_ATTEMPTS_PER_DRAIN = 4;
 const RETRY_FIRST_MS = 2000;
 const RETRY_MAX_MS = 60_000;
 const MAX_NAME_CLASHES = 20;
+/** Blob fetches one prefetch keeps in flight. */
+const PREFETCH_PARALLEL = 4;
 
 type Listener<T> = (event: T) => void;
 
@@ -374,6 +384,11 @@ export class LibraryEngine {
 	private missedBlobs = new Set<string>();
 	private openStories = new Set<string>();
 	private blobFetches = new Map<string, Promise<CachedBlob>>();
+	/** Running prefetch per story. `again` = asked while running: one more pass after. */
+	private prefetches = new Map<
+		string,
+		{progress: ArtProgress; again: boolean; run: Promise<void>}
+	>();
 	private objectUrls = new Map<string, string>();
 
 	private changeListeners = new Set<Listener<ChangeEvent>>();
@@ -521,6 +536,12 @@ export class LibraryEngine {
 
 		if (this.blobFetches.size) {
 			status.downloading = this.blobFetches.size;
+		}
+
+		for (const [storyId, {progress}] of this.prefetches) {
+			if (progress.total > 0) {
+				status.loadingArt = {...status.loadingArt, [storyId]: {...progress}};
+			}
 		}
 
 		return status;
@@ -2470,8 +2491,45 @@ export class LibraryEngine {
 		this.openStories.delete(storyId);
 	}
 
-	/** Fetches every missing blob (not sidecars) of the story's collections. */
-	async prefetch(storyId: string): Promise<void> {
+	/**
+	 * Fetches every missing blob (not sidecars) of the story's collections, a few at a
+	 * time. Progress is in `status().loadingArt`. A call while one runs for the same story
+	 * joins it, and that run makes one more pass for records that landed meanwhile.
+	 */
+	prefetch(storyId: string): Promise<void> {
+		const running = this.prefetches.get(storyId);
+
+		if (running) {
+			running.again = true;
+			return running.run;
+		}
+
+		const entry = {
+			progress: {done: 0, total: 0},
+			again: false,
+			run: Promise.resolve()
+		};
+
+		entry.run = (async () => {
+			try {
+				do {
+					entry.again = false;
+					await this.prefetchPass(storyId, entry.progress);
+				} while (entry.again);
+			} finally {
+				this.prefetches.delete(storyId);
+				this.emitStatus();
+			}
+		})();
+		this.prefetches.set(storyId, entry);
+
+		return entry.run;
+	}
+
+	private async prefetchPass(
+		storyId: string,
+		progress: ArtProgress
+	): Promise<void> {
 		const binding = this.binding(storyId);
 
 		if (!binding) {
@@ -2479,14 +2537,46 @@ export class LibraryEngine {
 		}
 
 		const collections = new Set([binding.own, ...(binding.collections ?? [])]);
+		const missing = new Set<string>();
 
 		for (const asset of this.assets()) {
 			if (
 				collections.has(asset.collection) &&
+				!missing.has(asset.blob) &&
 				!(await this.blobs.has(asset.blob))
 			) {
-				await this.blobBytes(asset.blob);
+				missing.add(asset.blob);
 			}
+		}
+
+		if (!missing.size) {
+			return;
+		}
+
+		progress.total += missing.size;
+		this.emitStatus();
+
+		const queue = [...missing];
+		let failure: unknown;
+		const worker = async () => {
+			for (let sha = queue.shift(); sha; sha = queue.shift()) {
+				try {
+					await this.blobBytes(sha);
+				} catch (error) {
+					failure ??= error;
+				}
+
+				progress.done++;
+				this.emitStatus();
+			}
+		};
+
+		await Promise.all(
+			Array.from({length: Math.min(PREFETCH_PARALLEL, queue.length)}, worker)
+		);
+
+		if (failure !== undefined) {
+			throw failure;
 		}
 	}
 

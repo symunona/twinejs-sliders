@@ -69,6 +69,7 @@ import {AUTO_ADVANCE_MS, sceneAutoAdvanceMs, sceneHoldMs} from './beat-hold';
 import {BeatPanel} from './beat-panel';
 import {applySceneFix} from '../scene-errors/apply-scene-fix';
 import {SceneErrorBadge, SceneErrorPanel} from './scene-error-badge';
+import {ArtLoadingBar} from './art-loading-bar';
 import {effectiveLocks, lockReason} from './scene-lock';
 import {useStageViewZoom} from './use-stage-view-zoom';
 import {BeatTimeline} from './beat-timeline';
@@ -3088,6 +3089,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				</div>
 			</div>
 			{stageTools}
+			<ArtLoadingBar />
 			<SceneErrorBadge
 				errors={parse.errors}
 				onToggle={() => toggleTab('problems')}
