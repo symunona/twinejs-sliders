@@ -1729,6 +1729,14 @@
 		}
 	},
 	"routes": {
+		"cloudStoryGate": {
+			"backToLibrary": "Back to Library",
+			"missing": "This story is not in this browser, and the server does not have it either.",
+			"notLocal": "This story is on the server but not in this browser. Pull it down?",
+			"pull": "Pull Down",
+			"retry": "Retry",
+			"unreachable": "This story is not in this browser, and the server could not be reached to look for it."
+		},
 		"navConfirm": {
 			"leave": "Go Back to Stories",
 			"stay": "Keep Editing"

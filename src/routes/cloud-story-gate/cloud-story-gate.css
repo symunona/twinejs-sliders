@@ -1,0 +1,16 @@
+.cloud-story-gate {
+	align-items: center;
+	display: flex;
+	height: 100vh;
+	justify-content: center;
+	padding: var(--grid-size);
+}
+
+.cloud-story-gate .card {
+	max-width: 30em;
+	width: 100%;
+}
+
+.cloud-story-gate .error {
+	color: var(--red);
+}

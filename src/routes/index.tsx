@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {HashRouter, Route, Switch} from 'react-router-dom';
 import {usePrefsContext} from '../store/prefs';
+import {CloudStoryGate} from './cloud-story-gate';
 import {NavConfirm, useNavConfirm} from './nav-confirm';
 import {StoryEditRoute} from './story-edit';
 import {StoryListRoute} from './story-list';
@@ -30,19 +31,29 @@ export const Routes: React.FC = () => {
 						<WelcomeRoute />
 					</Route>
 					<Route path="/stories/:storyId/play">
-						<StoryPlayRoute />
+						<CloudStoryGate>
+							<StoryPlayRoute />
+						</CloudStoryGate>
 					</Route>
 					<Route path="/stories/:storyId/proof">
-						<StoryProofRoute />
+						<CloudStoryGate>
+							<StoryProofRoute />
+						</CloudStoryGate>
 					</Route>
 					<Route path="/stories/:storyId/test/:passageId">
-						<StoryTestRoute />
+						<CloudStoryGate>
+							<StoryTestRoute />
+						</CloudStoryGate>
 					</Route>
 					<Route path="/stories/:storyId/test">
-						<StoryTestRoute />
+						<CloudStoryGate>
+							<StoryTestRoute />
+						</CloudStoryGate>
 					</Route>
 					<Route path="/stories/:storyId">
-						<StoryEditRoute />
+						<CloudStoryGate>
+							<StoryEditRoute />
+						</CloudStoryGate>
 					</Route>
 					<Route
 						path="*"
