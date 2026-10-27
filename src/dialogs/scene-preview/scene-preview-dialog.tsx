@@ -4,7 +4,10 @@ import {useTranslation} from 'react-i18next';
 import {DialogCard} from '../../components/container/dialog-card';
 import {IconButton} from '../../components/control/icon-button';
 import {useCommand} from '../../hotkeys';
-import {useScenePreviewSource} from '../../routes/story-edit/scene-preview-source-context';
+import {
+	useScenePreviewMapPick,
+	useScenePreviewSource
+} from '../../routes/story-edit/scene-preview-source-context';
 import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {
 	newPassagePositions,
@@ -78,6 +81,7 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const assets = usePreviewResolver();
 	const {lock, stealPassage} = useServerSyncContext();
 	const published = useScenePreviewSource();
+	const mapPick = useScenePreviewMapPick();
 	/**
 	 * Walk-here: preview only, never written. Off by default, and not remembered -- it is
 	 * a question asked of one backdrop, not a way of working.
@@ -98,11 +102,15 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const selected = story.passages.filter(passage => passage.selected);
 	/**
 	 * The map's answer to "which passage", used when no editor is open or the map was
-	 * clicked since one was last worked in (`pickFromMap`). Solo selection
-	 * only: with two selected there is no one scene to show, the same rule the passage
-	 * toolbar's actions follow.
+	 * clicked since one was last worked in. The passage clicked there (`pickFromMap`) first:
+	 * a double click on one of several selected passages means that one. Else the solo
+	 * selection -- with two selected there is no one scene to show, the same rule the
+	 * passage toolbar's actions follow.
 	 */
-	const fallback = !source && selected.length === 1 ? selected[0] : undefined;
+	const fallback = source
+		? undefined
+		: story.passages.find(passage => passage.id === mapPick) ??
+		  (selected.length === 1 ? selected[0] : undefined);
 	const passageId = source?.passageId ?? fallback?.id;
 	const handle = usePassageDoc(story.id, passageId);
 	const view = usePassageDocView(handle);

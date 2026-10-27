@@ -28,11 +28,13 @@ interface ScenePreviewSourceContextProps {
 	active: () => RegisteredSource | undefined;
 	activate: (passageId: string) => void;
 	/**
-	 * The map took the stage: a passage clicked there. Editors activated before this stop
-	 * driving the preview, which falls back to the map's selection, until one is activated
+	 * The map took the stage: this passage was clicked there. Editors activated before this
+	 * stop driving the preview, which shows this passage instead, until one is activated
 	 * again.
 	 */
-	pickFromMap: () => void;
+	pickFromMap: (passageId: string) => void;
+	/** The passage last picked on the map, unless an editor was activated since. */
+	picked: () => string | undefined;
 	publish: (source: ScenePreviewSource) => void;
 	subscribe: (listener: () => void) => () => void;
 	unpublish: (passageId: string) => void;
@@ -45,6 +47,7 @@ export const ScenePreviewSourceContext =
 		active: () => undefined,
 		activate: noop,
 		pickFromMap: noop,
+		picked: () => undefined,
 		publish: noop,
 		subscribe: () => noop,
 		unpublish: noop
@@ -64,22 +67,27 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 	const entries = React.useRef(new Map<string, RegisteredSource>());
 	const listeners = React.useRef(new Set<() => void>());
 	const clock = React.useRef(0);
-	const mapPickedAt = React.useRef(0);
+	const mapPick = React.useRef<{at: number; passageId?: string}>({at: 0});
 
 	const value = React.useMemo<ScenePreviewSourceContextProps>(() => {
 		const notify = () => listeners.current.forEach(listener => listener());
+		const newestEditor = () => {
+			let best: RegisteredSource | undefined;
+
+			entries.current.forEach(entry => {
+				if (!entry.disabled && (!best || entry.activatedAt > best.activatedAt)) {
+					best = entry;
+				}
+			});
+
+			return best;
+		};
 
 		return {
 			active() {
-				let best: RegisteredSource | undefined;
+				const best = newestEditor();
 
-				entries.current.forEach(entry => {
-					if (!entry.disabled && (!best || entry.activatedAt > best.activatedAt)) {
-						best = entry;
-					}
-				});
-
-				return best && best.activatedAt > mapPickedAt.current ? best : undefined;
+				return best && best.activatedAt > mapPick.current.at ? best : undefined;
 			},
 			activate(passageId) {
 				const entry = entries.current.get(passageId);
@@ -95,10 +103,17 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 				});
 				notify();
 			},
-			pickFromMap() {
+			pickFromMap(passageId) {
 				clock.current++;
-				mapPickedAt.current = clock.current;
+				mapPick.current = {at: clock.current, passageId};
 				notify();
+			},
+			picked() {
+				const best = newestEditor();
+
+				return best && best.activatedAt > mapPick.current.at
+					? undefined
+					: mapPick.current.passageId;
 			},
 			publish(source) {
 				const previous = entries.current.get(source.passageId);
@@ -190,4 +205,17 @@ export function useScenePreviewSource(): ScenePreviewSource | undefined {
 	);
 
 	return source;
+}
+
+/** The passage last clicked on the map, while no editor activated since outranks it. */
+export function useScenePreviewMapPick(): string | undefined {
+	const {picked, subscribe} = React.useContext(ScenePreviewSourceContext);
+	const [passageId, setPassageId] = React.useState(picked);
+
+	React.useEffect(
+		() => subscribe(() => setPassageId(picked())),
+		[picked, subscribe]
+	);
+
+	return passageId;
 }

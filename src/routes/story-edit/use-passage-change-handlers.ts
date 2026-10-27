@@ -63,8 +63,8 @@ export function usePassageChangeHandlers(story: Story) {
 	/**
 	 * A passage opens on its stage, large: the scene editor maximized, whether or not the
 	 * passage has a scene yet. The `</>` editor stays shut -- it is one click away in the
-	 * preview's header. The preview follows the map's selection after `pickFromMap`, so an
-	 * editor already open on another passage does not keep the stage.
+	 * preview's header. `pickFromMap` names this passage to the preview, so neither an
+	 * editor open on another passage nor a wider selection keeps it off the stage.
 	 */
 	const handleEditPassage = React.useCallback(
 		(passage: Passage) => {
@@ -72,7 +72,7 @@ export function usePassageChangeHandlers(story: Story) {
 				undoableStoriesDispatch(selectPassage(story, passage, true));
 			}
 
-			pickFromMap();
+			pickFromMap(passage.id);
 			setScenePreviewDismissed(false);
 			dialogsDispatch((dispatch, state) => {
 				const index = state().findIndex(
@@ -109,7 +109,7 @@ export function usePassageChangeHandlers(story: Story) {
 		(passage: Passage, exclusive: boolean) => {
 			undoableStoriesDispatch(selectPassage(story, passage, exclusive));
 			// A click on the map means "this passage" to the preview too.
-			pickFromMap();
+			pickFromMap(passage.id);
 		},
 		[pickFromMap, story, undoableStoriesDispatch]
 	);
