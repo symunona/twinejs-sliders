@@ -321,6 +321,12 @@ export interface StageEditorOverlayProps {
 	/** Double click landed on this entity: show it in the asset manager. */
 	onOpenEntity?: (id: EntityId) => void;
 	/**
+	 * Ctrl/Cmd-click landed on this entity: follow its `link:`, the same "go to the
+	 * definition" gesture a bubble link answers. True when it had one to follow -- then the
+	 * press is spent, and does not also extend the selection.
+	 */
+	onFollowLink?: (id: EntityId) => boolean;
+	/**
 	 * The view is zoomed out and the renderer draws the stage smaller than the frame, with
 	 * the sprites off it still showing. The frame of the shot is then drawn ON TOP of
 	 * everything, and the room around it dimmed, so what the reader will see stays obvious.
@@ -464,6 +470,7 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		onJumpTo,
 		onTracePreview,
 		onOpenEntity,
+		onFollowLink,
 		onPatch,
 		onSelect,
 		origStage,
@@ -1134,8 +1141,13 @@ export const StageEditorOverlay: React.FC<StageEditorOverlayProps> = props => {
 		}
 
 		// Ctrl/Cmd-click extends the selection. Shift is not free here: it already means
-		// axis lock for the drag this same press may turn into.
+		// axis lock for the drag this same press may turn into. On a clickable object the
+		// chord follows its link instead.
 		const extend = event.ctrlKey || event.metaKey;
+
+		if (extend && onFollowLink?.(hit)) {
+			return;
+		}
 		let next = selection;
 
 		if (extend) {

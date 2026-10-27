@@ -134,6 +134,7 @@ import {StageSelectionControls} from './stage-selection-controls';
 import {EmitTab, useEmitterSpec} from './emit-panel';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
+import {passageLinks} from '../../../util/passage-links';
 import {parentOffsets, resolveStage, sceneTimeline} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
 import {useActiveBeatMark} from './use-active-beat-mark';
@@ -1465,8 +1466,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 
 	/**
-	 * The passages this scene can reach: every `links:` target, plus any `[[link]]` written
-	 * outside the block — prose under the scene is a way out too.
+	 * The passages this scene can reach: every `links:` target, every clickable object's
+	 * `link:`, plus any `[[link]]` written outside the block — prose under the scene is a way
+	 * out too.
 	 *
 	 * A `[[stay]]` inside bubble text is NOT one of them: it is a link NAME that `links:`
 	 * routes to a passage, and counting it as well would make a one-way scene look like two.
@@ -1489,24 +1491,78 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			}
 		}
 
+		// A door the reader clicks is as much a way out as a link in the list. Already
+		// resolved through `links:`, so a door naming an entry adds its passage, once.
+		for (const span of parse.result?.entityLinkSpans ?? []) {
+			names.add(span.to);
+		}
+
 		// Only passages that exist can be opened. `passages` is absent in a bare preview, and
 		// then the name is taken on trust. `matchPassageName`, not an exact compare: a way
 		// out the reader can take must show as a way out here (`onOpenPassage` resolves the
 		// same rule, so the name stays as the author wrote it).
 		const existing = passages?.map(passage => passage.name);
 
-		return existing
-			? [...names].filter(
-					name => matchPassageName(existing, name) !== undefined
-			  )
-			: [...names];
+		if (!existing) {
+			return [...names];
+		}
+
+		// Counted by the passage they land on: `Cellar` in the list and `cellar` on the door
+		// are one way out, not two.
+		const out = new Map<string, string>();
+
+		for (const name of names) {
+			const matched = matchPassageName(existing, name);
+
+			if (matched !== undefined && !out.has(matched)) {
+				out.set(matched, name);
+			}
+		}
+
+		return [...out.values()];
 	}, [parse.result, passages, text]);
 
 	/** The single way out, if there is exactly one and we can open it. */
 	const nextScene = onOpenPassage && forward.length === 1 ? forward[0] : undefined;
-	/** The scene a hop brought the preview here from, while it stands where it arrived. */
-	const previousScene = onOpenPassage
-		? hopInto(passageId)?.fromName
+	/**
+	 * The passages with a way into this one, the mirror of `forward`: links, doors and
+	 * `[[links]]` alike. By id, from the store, because "previous" has to name a beat in it.
+	 */
+	const backward = React.useMemo(() => {
+		const storyPassages =
+			stories.find(candidate => candidate.id === storyId)?.passages ?? [];
+		const self = storyPassages.find(passage => passage.id === passageId);
+
+		if (!self) {
+			return [];
+		}
+
+		return storyPassages.filter(
+			passage =>
+				passage.id !== self.id &&
+				passageLinks(passage.text, true).some(
+					name => matchPassageName([self.name], name) !== undefined
+				)
+		);
+	}, [passageId, stories, storyId]);
+
+	/**
+	 * Where "previous" goes from the arrival state. The hop that brought the preview here
+	 * first -- it knows the beat the author left. Else the single passage with a way in,
+	 * on its last state, the place its reader takes the link from. Two or more ways in and
+	 * the author has to say which, the same rule `nextScene` follows.
+	 */
+	const hop = hopInto(passageId);
+	const previousScene = !onOpenPassage
+		? undefined
+		: hop
+		? {id: hop.fromId, name: hop.fromName, state: hop.fromState}
+		: backward.length === 1
+		? {
+				id: backward[0].id,
+				name: backward[0].name,
+				state: extractSceneBlock(backward[0].text) ? Infinity : 0
+		  }
 		: undefined;
 
 	const selectedEntities = React.useMemo(
@@ -1896,6 +1952,24 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * is raised rather than duplicated (the reducer dedupes on `props`), and the target
 	 * rides alongside on the focus channel.
 	 */
+	/** Ctrl/Cmd-click on a clickable object: go where its `link:` goes, on this beat. */
+	function handleFollowLink(id: EntityId) {
+		const link = stage.entities?.[id]?.link;
+		const to =
+			link?.to ??
+			(link?.name !== undefined
+				? parse.result?.scene.links[link.name]?.to
+				: undefined);
+
+		if (!to) {
+			return false;
+		}
+
+		openScene(to);
+
+		return true;
+	}
+
 	function handleOpenEntity(id: EntityId) {
 		const ref = stage.entities?.[id]?.ref?.trim();
 
@@ -1945,14 +2019,15 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		// On the state the preview arrived at, "previous" is the scene it came from, on the
 		// beat it left.
 		if (beat <= 0) {
-			const hop = popSceneHop(passageId);
+			if (previousScene && onOpenPassage) {
+				popSceneHop(passageId);
 
-			if (hop && onOpenPassage) {
-				if (hop.fromState > 0) {
-					requestPreviewBeat(hop.fromId, hop.fromState - 1);
+				// `requestPreviewBeat` clamps, so Infinity is "the last state".
+				if (previousScene.state > 0) {
+					requestPreviewBeat(previousScene.id, previousScene.state - 1);
 				}
 
-				onOpenPassage(hop.fromName);
+				onOpenPassage(previousScene.name);
 			}
 
 			return;
@@ -2365,7 +2440,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				label={
 					beat <= 0 && previousScene
 						? t('dialogs.passageEdit.scenePreview.previousScene', {
-								name: previousScene
+								name: previousScene.name
 						  })
 						: t('dialogs.passageEdit.scenePreview.previousBeat')
 				}
@@ -2524,6 +2599,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			onJumpTo={editable ? jumpTo : undefined}
 			onTracePreview={setTracePreview}
 			onOpenEntity={handleOpenEntity}
+			onFollowLink={onOpenPassage && handleFollowLink}
 			onPatch={setPatch}
 			parentOffsets={offsets}
 			onSelect={select}

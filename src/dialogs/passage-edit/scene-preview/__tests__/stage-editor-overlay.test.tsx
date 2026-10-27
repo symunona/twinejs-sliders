@@ -222,6 +222,26 @@ describe('<StageEditorOverlay>', () => {
 		expect(onSelect).toHaveBeenCalledWith(['mira']);
 	});
 
+	it('follows the link of a clickable object on ctrl-click', () => {
+		const onFollowLink = jest.fn(() => true);
+		const {frame, onSelect} = renderOverlay({onFollowLink});
+
+		fireEvent(frame, pointer('pointerdown', 120, 120, {ctrlKey: true}));
+		expect(onFollowLink).toHaveBeenCalledWith('candle');
+		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	it('extends the selection on ctrl-click when the object has no link', () => {
+		const onFollowLink = jest.fn(() => false);
+		const {frame, onSelect} = renderOverlay({
+			onFollowLink,
+			selection: ['mira']
+		});
+
+		fireEvent(frame, pointer('pointerdown', 120, 120, {metaKey: true}));
+		expect(onSelect).toHaveBeenCalledWith(['mira', 'candle']);
+	});
+
 	it('clears the selection on empty stage', () => {
 		const {frame, onSelect} = renderOverlay({selection: ['mira']});
 
