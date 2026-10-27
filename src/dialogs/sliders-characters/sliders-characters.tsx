@@ -513,6 +513,11 @@ export const SlidersCharactersDialog: React.FC<SlidersCharactersDialogProps> = p
 						{t('dialogs.slidersCharacters.title')}:{' '}
 						<EditableTitle
 							editable
+							editRequest={
+								focus?.rename && focus.characterId === draft.id
+									? focus.serial
+									: undefined
+							}
 							nameTaken={idTaken}
 							onRename={value => void handleRenameId(value)}
 							title={t('dialogs.slidersCharacters.renameIdTitle')}

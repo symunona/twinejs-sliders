@@ -36,7 +36,7 @@ import {
 import {PromptButton} from '../../components/control/prompt-button';
 import {TextInput} from '../../components/control/text-input';
 import {TagCardButton} from '../../components/tag/tag-card-button';
-import {useCommand} from '../../hotkeys';
+import {scopeChain, useCommand} from '../../hotkeys';
 import {
 	useLibraryEngine,
 	useLibraryStatus
@@ -58,6 +58,7 @@ import {AssetGeneratorDialog} from '../asset-generator/asset-generator';
 import {useDialogsContext} from '../context';
 import {DialogComponentProps} from '../dialogs.types';
 import {SlidersCharactersDialog} from '../sliders-characters';
+import {requestCharacterFocus} from '../sliders-characters/character-focus';
 import {AssetTile} from './asset-tile';
 import {useAttachOnDrop} from './attach-on-drop';
 import {
@@ -67,7 +68,11 @@ import {
 } from './asset-store-context';
 import {characterFromFile, posesFromFiles} from './character-poses';
 import {CharacterTile} from './character-tile';
-import {onAssetFocus, takePendingAssetFocus} from './focus-request';
+import {
+	onAssetFocus,
+	requestAssetFocus,
+	takePendingAssetFocus
+} from './focus-request';
 import type {AssetFocusRequest} from './focus-request';
 import {CollectionHeader} from './library/collection-header';
 import {ConflictPanel} from './library/conflict-panel';
@@ -95,6 +100,7 @@ import {
 } from './library/library-model';
 import type {MergeRewrite} from './library/merge-plan';
 import {TileBadges} from './library/tile-badges';
+import {PasteImageModal, PasteKind, useImagePaste} from './paste-image';
 import {SharedPrompt, sharedStoriesText} from './shared-prompt';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
@@ -195,6 +201,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	const [panel, setPanel] = React.useState<Panel>();
 	const [ask, setAsk] = React.useState<Ask>();
 	const [dupeAsk, setDupeAsk] = React.useState<DupeAsk>();
+	const [pasted, setPasted] = React.useState<File[]>();
 	const searchField = React.useRef<HTMLInputElement>(null);
 	const {kind} = TABS[tabIndex] ?? {};
 	const searchText = search.trim().toLowerCase();
@@ -448,16 +455,21 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 
 	/**
 	 * File onto the grid → the shown collection. Exact / pixel / perceptual matches ask
-	 * (plan 1, "Upload dupe dialog"); everything else just lands.
+	 * (plan 1, "Upload dupe dialog"); everything else just lands. Returns the names of
+	 * the assets it added.
 	 */
-	async function handleUpload(files: File[]) {
+	async function handleUpload(
+		files: File[],
+		uploadKind: AssetKind | undefined = kind
+	): Promise<string[]> {
 		if (!engine) {
-			return;
+			return [];
 		}
 
 		setError(undefined);
 
 		const failed: string[] = [];
+		const added: string[] = [];
 		const collection = await uploadTarget();
 		const own = collection === snapshot.own?.id || !snapshot.own;
 
@@ -465,7 +477,9 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			try {
 				const prepared = await prepareUpload(file);
 				const bytes = new Uint8Array(await blobBytes(prepared.blob));
-				const assetKind: AssetKind = prepared.audio ? 'sound' : kind ?? 'bg';
+				const assetKind: AssetKind = prepared.audio
+					? 'sound'
+					: uploadKind ?? 'bg';
 				// Own collection: the story's whole view is one namespace. Elsewhere, the
 				// collection's own names.
 				const taken = own
@@ -498,10 +512,11 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						]);
 					}
 
+					added.push(choice.asset.name);
 					continue;
 				}
 
-				await engine.addAsset(bytes, prepared.mime, {
+				const result = await engine.addAsset(bytes, prepared.mime, {
 					allowDuplicate: true,
 					animated: prepared.animated,
 					collection,
@@ -517,6 +532,10 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						? {duration: prepared.duration}
 						: {})
 				});
+
+				if (result.asset) {
+					added.push(result.asset.name);
+				}
 			} catch (uploadError) {
 				console.error(`Could not upload ${file.name}`, uploadError);
 				failed.push(file.name);
@@ -528,6 +547,8 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 				t('dialogs.slidersAssets.uploadError', {names: failed.join(', ')})
 			);
 		}
+
+		return added;
 	}
 
 	/**
@@ -544,6 +565,48 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 			} catch (dropError) {
 				console.error(`Could not add ${file.name} as a character`, dropError);
 			}
+		}
+	}
+
+	/**
+	 * Ctrl+V with a picture: asked what it is, uploaded as that, then shown with its
+	 * rename open -- the clipboard gave it no name, only `pasted`.
+	 */
+	useImagePaste(
+		target => scopeChain(target).includes('sliders-assets'),
+		setPasted
+	);
+
+	async function handlePasteChoice(files: File[], choice: PasteKind) {
+		setPasted(undefined);
+
+		if (choice === 'character') {
+			const takenIds = await library.store.takenNames();
+			let id: string | undefined;
+
+			for (const file of files) {
+				try {
+					id = await characterFromFile(library.store, file, takenIds);
+				} catch (pasteError) {
+					console.error(`Could not add ${file.name} as a character`, pasteError);
+				}
+			}
+
+			if (id) {
+				// A character's only name is its id, renamed in the character editor's
+				// title bar.
+				requestAssetFocus(id);
+				openCharacterEditor(id);
+				requestCharacterFocus(id, undefined, {rename: true});
+			}
+			return;
+		}
+
+		const names = await handleUpload(files, choice);
+		const last = names[names.length - 1];
+
+		if (last) {
+			requestAssetFocus(last, {rename: true});
 		}
 	}
 
@@ -1056,6 +1119,11 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						}
 						focused={focusedAsset?.id === meta.id}
 						key={meta.id}
+						renameRequest={
+							focus?.rename && focusedAsset?.id === meta.id
+								? focus.serial
+								: undefined
+						}
 						menuItems={menuFor(record)}
 						meta={meta}
 						nameTaken={name => nameTaken(record, name)}
@@ -1263,6 +1331,20 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 							</button>
 						</span>
 					</div>
+					{pasted && (
+						<PasteImageModal
+							files={pasted}
+							onCancel={() => setPasted(undefined)}
+							onChoose={choice => void handlePasteChoice(pasted, choice)}
+							preferred={
+								kind === 'bg' || kind === 'object'
+									? kind
+									: !kind
+									? 'character'
+									: undefined
+							}
+						/>
+					)}
 					{dupeAsk && engine && (
 						<DupeDialog
 							collectionName={labelOf}

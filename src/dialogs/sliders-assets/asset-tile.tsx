@@ -42,6 +42,11 @@ export interface AssetTileProps {
 	menuItems?: (LabeledMenuItem | MenuSeparator)[];
 	/** Highlighted and scrolled to--something asked for this tile by name. */
 	focused?: boolean;
+	/**
+	 * Opens the rename prompt, name selected, each time this changes to a new number. Set
+	 * for art that was just pasted under a stand-in name.
+	 */
+	renameRequest?: number;
 	meta: AssetMeta;
 	onChangeTags: (tags: string[]) => void;
 	onDelete: () => void;
@@ -86,6 +91,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		onDragOut,
 		onEdit,
 		onRename,
+		renameRequest,
 		unreferenced,
 		usedIn
 	} = props;
@@ -118,6 +124,26 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			tileRef.current?.scrollIntoView({block: 'nearest'});
 		}
 	}, [focused]);
+
+	React.useEffect(() => {
+		if (renameRequest === undefined) {
+			return;
+		}
+
+		setDraftName(meta.name);
+		setRenameOpen(true);
+
+		// The prompt's focus trap focuses the field once the card mounts; selecting it
+		// makes the stand-in name one keystroke to replace.
+		const frame = window.requestAnimationFrame(() =>
+			tileRef.current
+				?.querySelector<HTMLInputElement>('.card-button-card input')
+				?.select()
+		);
+
+		return () => window.cancelAnimationFrame(frame);
+		// Keyed on the request alone.
+	}, [renameRequest]);
 
 	// Something else renamed this--a sync pull, the image editor's own title. The draft
 	// is stale at that point, so it follows rather than overwriting.

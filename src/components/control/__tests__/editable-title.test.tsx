@@ -121,4 +121,29 @@ describe('<EditableTitle>', () => {
 
 		expect(await axe(container)).toHaveNoViolations();
 	});
+
+	it('opens the field, text selected, when an edit is requested', () => {
+		const {rerender} = renderComponent();
+
+		expect(field()).not.toBeInTheDocument();
+		rerender(
+			<EditableTitle
+				editable
+				editRequest={1}
+				onRename={jest.fn()}
+				value="pasted"
+			/>
+		);
+
+		const input = field() as HTMLInputElement;
+
+		expect(input).toHaveValue('pasted');
+		expect(input.selectionStart).toBe(0);
+		expect(input.selectionEnd).toBe('pasted'.length);
+	});
+
+	it('ignores an edit request while not editable', () => {
+		renderComponent({editRequest: 1, editable: false});
+		expect(field()).not.toBeInTheDocument();
+	});
 });

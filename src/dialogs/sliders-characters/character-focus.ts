@@ -16,6 +16,8 @@ export interface CharacterFocusRequest {
 	characterId: string;
 	/** Absent when the author clicked the character rather than one of its poses. */
 	pose?: string;
+	/** Open the title bar's id rename too: the character was just pasted under a stand-in id. */
+	rename?: boolean;
 	/** Bumped per request, so asking for the same pose twice still counts as twice. */
 	serial: number;
 }
@@ -30,9 +32,15 @@ const listeners = new Set<(request: CharacterFocusRequest) => void>();
 
 export function requestCharacterFocus(
 	characterId: string,
-	pose?: string
+	pose?: string,
+	options: {rename?: boolean} = {}
 ): void {
-	current = {characterId, pose, serial: ++serial};
+	current = {
+		characterId,
+		pose,
+		serial: ++serial,
+		...(options.rename ? {rename: true} : {})
+	};
 	madeAt = Date.now();
 
 	for (const listener of [...listeners]) {

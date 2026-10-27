@@ -15,6 +15,8 @@
 /** What a scene entity's `ref` is: a character id or an asset name, the caller cannot say. */
 export interface AssetFocusRequest {
 	ref: string;
+	/** Open the tile's rename prompt too: the art was just pasted under a stand-in name. */
+	rename?: boolean;
 	/** Bumped per request, so asking for the same ref twice still counts as twice. */
 	serial: number;
 }
@@ -27,8 +29,11 @@ let madeAt = 0;
 let serial = 0;
 const listeners = new Set<(request: AssetFocusRequest) => void>();
 
-export function requestAssetFocus(ref: string): void {
-	current = {ref, serial: ++serial};
+export function requestAssetFocus(
+	ref: string,
+	options: {rename?: boolean} = {}
+): void {
+	current = {ref, serial: ++serial, ...(options.rename ? {rename: true} : {})};
 	madeAt = Date.now();
 
 	for (const listener of [...listeners]) {

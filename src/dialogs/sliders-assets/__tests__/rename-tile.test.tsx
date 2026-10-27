@@ -160,4 +160,36 @@ describe('double-clicking a tile picture', () => {
 		fireEvent.doubleClick(document.querySelector('.sliders-tile-art')!);
 		expect(onEdit).not.toHaveBeenCalled();
 	});
+
+	it('opens the prompt, stand-in name in it, when a rename is requested', () => {
+		const {rerender} = render(
+			<FakeStateProvider>
+				<AssetTile
+					allTags={[]}
+					meta={meta({name: 'pasted'})}
+					onChangeTags={jest.fn()}
+					onDelete={jest.fn()}
+					onEdit={jest.fn()}
+					onRename={jest.fn()}
+				/>
+			</FakeStateProvider>
+		);
+
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+		rerender(
+			<FakeStateProvider>
+				<AssetTile
+					allTags={[]}
+					meta={meta({name: 'pasted'})}
+					onChangeTags={jest.fn()}
+					onDelete={jest.fn()}
+					onEdit={jest.fn()}
+					onRename={jest.fn()}
+					renameRequest={1}
+				/>
+			</FakeStateProvider>
+		);
+		expect(renameField()).toHaveValue('pasted');
+	});
 });

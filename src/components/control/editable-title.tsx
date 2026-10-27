@@ -15,6 +15,11 @@ export interface EditableTitleProps {
 	 * card be selected by clicking its name.
 	 */
 	editable?: boolean;
+	/**
+	 * Opens the rename field, text selected, each time this changes to a new number. For a
+	 * thing that was just made under a stand-in name, so the author can type over it.
+	 */
+	editRequest?: number;
 	/** Is another thing already called this? Checked as the author types. */
 	nameTaken?: (name: string) => boolean;
 	onRename: (name: string) => void;
@@ -46,6 +51,7 @@ export const EditableTitle: React.FC<EditableTitleProps> = props => {
 	const {
 		children,
 		editable,
+		editRequest,
 		nameTaken,
 		onRename,
 		title,
@@ -57,6 +63,7 @@ export const EditableTitle: React.FC<EditableTitleProps> = props => {
 	// Set by Escape and by a submit, both of which have already decided what happens to
 	// the draft--without it, the blur that follows either one would decide again.
 	const handled = React.useRef(false);
+	const input = React.useRef<HTMLInputElement>(null);
 	const {t} = useTranslation();
 	const draftValid =
 		draft.trim() !== '' && (draft === value || !nameTaken?.(draft));
@@ -77,6 +84,21 @@ export const EditableTitle: React.FC<EditableTitleProps> = props => {
 		setDraft(value);
 		setEditing(true);
 	}, [value]);
+
+	// Declared after the `[value]` effect above, so a request that arrives with a new value
+	// (the title just switched to the thing being asked about) is not undone by it.
+	React.useEffect(() => {
+		if (editRequest !== undefined && editable) {
+			start();
+		}
+		// Keyed on the request alone: `start` changes with every value.
+	}, [editRequest]);
+
+	React.useEffect(() => {
+		if (editing && editRequest !== undefined) {
+			input.current?.select();
+		}
+	}, [editing]);
 
 	const handleClick = React.useCallback(
 		(event: React.MouseEvent) => {
@@ -177,6 +199,7 @@ export const EditableTitle: React.FC<EditableTitleProps> = props => {
 					onBlur={handleBlur}
 					onChange={event => setDraft(event.target.value)}
 					onKeyDown={handleKeyDown}
+					ref={input}
 					size={1}
 					value={draft}
 				/>

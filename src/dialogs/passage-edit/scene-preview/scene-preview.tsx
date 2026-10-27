@@ -105,6 +105,13 @@ import {
 	posesFromFiles
 } from '../../sliders-assets/character-poses';
 import {requestAssetFocus} from '../../sliders-assets/focus-request';
+import {
+	PasteImageModal,
+	PasteKind,
+	useImagePaste
+} from '../../sliders-assets/paste-image';
+import {SlidersCharactersDialog} from '../../sliders-characters';
+import {requestCharacterFocus} from '../../sliders-characters/character-focus';
 import {SlidersAssetsDialog} from '../../sliders-assets/sliders-assets';
 import {AssetEditorDialog} from '../../asset-editor';
 import {useDialogsContext} from '../../context';
@@ -140,6 +147,7 @@ import {passageLinks} from '../../../util/passage-links';
 import {parentOffsets, resolveStage, sceneTimeline} from '@sliders/scene-core';
 import type {SceneParse} from './use-scene-parse';
 import {useActiveBeatMark} from './use-active-beat-mark';
+import {PassageDocsContext} from '../../../store/passage-docs';
 import type {SceneDoc} from '../../../store/passage-docs';
 import {requestPreviewBeat, useRequestedBeat} from './preview-beat-request';
 import {hopInto, popSceneHop, pushSceneHop} from './scene-trail';
@@ -481,6 +489,10 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	);
 	const [beat, setBeat] = React.useState(0);
 	const [dropRequest, setDropRequest] = React.useState<DropRequest>();
+	/** Images off a Ctrl+V, waiting on "object, character or background?". */
+	const [pasted, setPasted] = React.useState<File[]>();
+	// Optional: previews rendered outside the story route (tests) have no registry.
+	const passageDocs = React.useContext(PassageDocsContext);
 	/** Delete hit entities that have beats: the menu asking whether the beats go too. */
 	const [deleteRequest, setDeleteRequest] = React.useState<{
 		ids: EntityId[];
@@ -1167,10 +1179,17 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	 * spliced from the same snapshot would both claim the same offset. The first lands where
 	 * it was dropped and the rest stack to its right, so a five-file drop is five sprites the
 	 * author can pull apart rather than one pile to dig through.
+	 *
+	 * Resolves to the scene ref of the last thing placed (the backdrop, for `bg`), so a paste
+	 * can show it in the Library next.
 	 */
 	const runDropChoice = React.useCallback(
-		async (request: DropRequest, choice: DropChoice) => {
+		async (
+			request: Pick<DropRequest, 'at' | 'files'>,
+			choice: DropChoice
+		): Promise<string | undefined> => {
 			const {at, files} = request;
+			let lastRef: string | undefined;
 
 			setDropRequest(undefined);
 
@@ -1191,6 +1210,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					);
 
 					if (uploaded[0]) {
+						lastRef = uploaded[0].meta.name;
 						dropAssetRef.current(
 							{
 								label: uploaded[0].meta.name,
@@ -1222,6 +1242,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 								},
 								{x: roundCoord(at.x + placed * DROP_STACK_STEP), y: at.y}
 							);
+							lastRef = ref;
 							placed++;
 
 							if (placed < files.length) {
@@ -1240,6 +1261,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			// were built before this file existed.
 			assets.invalidate?.();
 			refreshAssetLibrary();
+
+			return lastRef;
 		},
 		[assets, store]
 	);
@@ -2000,6 +2023,47 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 		dispatch({component: SlidersAssetsDialog, maximized: true, type: 'addDialog'});
 		requestAssetFocus(ref);
+	}
+
+	/**
+	 * Ctrl+V with a picture, while focus is anywhere in the dialog this preview sits in:
+	 * asked what it is, then placed like a drop at the stage centre, and shown in the
+	 * Library with its rename open -- the clipboard gave it no name, only `pasted`.
+	 */
+	useImagePaste(target => {
+		const card =
+			root.current?.closest('[data-hotkey-scope~="dialog"]') ?? root.current;
+
+		return editable && !!card?.contains(target);
+	}, setPasted);
+
+	async function handlePasteChoice(files: File[], kind: PasteKind) {
+		setPasted(undefined);
+
+		const ref = await runDropChoice({at: {x: 0, y: 0}, files}, {kind});
+
+		if (!ref) {
+			return;
+		}
+
+		// The rename that opens next rewrites scenes from the STORE, and the entry just
+		// placed sits in the Doc for its commit delay. Renamed inside that second, the
+		// scene kept `pasted` and pointed at nothing.
+		passageDocs?.flushAll();
+		dispatch({component: SlidersAssetsDialog, maximized: true, type: 'addDialog'});
+
+		if (kind === 'character') {
+			// A character's only name is its id, renamed in the character editor's title bar.
+			requestAssetFocus(ref);
+			dispatch({
+				component: SlidersCharactersDialog,
+				props: {characterId: ref},
+				type: 'addDialog'
+			});
+			requestCharacterFocus(ref, undefined, {rename: true});
+		} else {
+			requestAssetFocus(ref, {rename: true});
+		}
 	}
 
 	/**
@@ -3149,6 +3213,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		>
 			{bar}
 			{stageBody}
+			{pasted && (
+				<PasteImageModal
+					files={pasted}
+					onCancel={() => setPasted(undefined)}
+					onChoose={kind => void handlePasteChoice(pasted, kind)}
+				/>
+			)}
 			{deleteRequest && (
 				<SceneDeleteMenu
 					ids={deleteRequest.ids}

@@ -1,0 +1,83 @@
+@import '../../styles/colors.css';
+@import '../../styles/depth.css';
+
+/* Over everything, the stage and the Library alike: the paste came from the keyboard, so
+   there is no pointer position to hang a menu off. */
+.paste-image-modal {
+	align-items: center;
+	background: rgba(0, 0, 0, 0.45);
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	position: fixed;
+	z-index: 1000;
+}
+
+.paste-image-menu {
+	background: var(--white);
+	border-radius: 4px;
+	box-shadow: var(--shadow-large);
+	color: var(--black);
+	display: flex;
+	flex-direction: column;
+	max-width: 320px;
+	min-width: 240px;
+	padding: 8px;
+}
+
+.paste-image-title {
+	font-weight: bold;
+	padding: 4px 8px 8px;
+}
+
+.paste-image-preview {
+	align-self: center;
+	background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+	margin: 0 8px 8px;
+	max-height: 160px;
+	max-width: calc(100% - 16px);
+	object-fit: contain;
+}
+
+.paste-image-menu button {
+	align-items: center;
+	background: none;
+	border: none;
+	border-radius: 3px;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	font: inherit;
+	gap: 8px;
+	padding: 6px 8px;
+	text-align: left;
+	width: 100%;
+}
+
+.paste-image-menu button span {
+	flex: 1;
+}
+
+.paste-image-menu button:hover,
+.paste-image-menu button:focus-visible {
+	background: var(--hover-background-color, rgba(0, 0, 0, 0.06));
+}
+
+.paste-image-menu button:focus-visible {
+	outline: 2px solid var(--blue, #2a6fdb);
+}
+
+.paste-image-menu button svg {
+	flex-shrink: 0;
+	height: 1em;
+	width: 1em;
+}
+
+.paste-image-menu kbd {
+	font-size: 0.8em;
+	opacity: 0.6;
+}
+
+.paste-image-cancel {
+	margin-top: 4px;
+}
