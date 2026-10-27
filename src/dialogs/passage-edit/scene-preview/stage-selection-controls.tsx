@@ -8,7 +8,7 @@
  * alone never is.
  *
  * Order, top down: the two one-click grade fixes (match bg, reset), the gesture buttons,
- * pose and its step loop, motion, fit and opacity, then the grade sliders — the long part goes last so the buttons never move. Hovering one
+ * pose and its step loop, highlight, motion, fit and opacity, then the grade sliders — the long part goes last so the buttons never move. Hovering one
  * slider shows the sprite at that slider's two ends (`GradeExtremesOverlay`). The entity's
  * `if:` sits below everything: whether it is there at all, read once its look is known.
  *
@@ -38,6 +38,7 @@ import {
 	IconLockOpen,
 	IconFlipHorizontal,
 	IconExternalLink,
+	IconHighlight,
 	IconMoodSmile,
 	IconTrash
 } from '@tabler/icons';
@@ -46,6 +47,7 @@ import {useTranslation} from 'react-i18next';
 import {
 	BG_MOTIONS,
 	ENTITY_FITS,
+	HIGHLIGHT_PRESETS,
 	POSE_LOOPS,
 	normalizeGrade
 } from '@sliders/scene-types';
@@ -122,6 +124,16 @@ export interface StageSelectionControlsProps {
 	 * the same word until you see them. See `onPreviewPose` in `scene-preview`.
 	 */
 	onPreviewPose: (pose: string | null) => void;
+	/**
+	 * Set `highlight:` on the whole selection, `undefined` for the default glow. Absent
+	 * hides the menu.
+	 */
+	onHighlight?: (highlight: string | undefined) => void;
+	/**
+	 * Glow the selection with a token without writing it, `null` to stop. Same bargain as
+	 * `onPreviewPose`: the names `cold` and `warm` say little until the sprite is lit.
+	 */
+	onPreviewHighlight?: (highlight: string | null) => void;
 	/** One z step. -1 sends backward, +1 brings forward — same as `[` and `]`. */
 	onStepZ: (delta: number) => void;
 	/**
@@ -339,6 +351,8 @@ export const StageSelectionControls: React.FC<
 		onToggleLock,
 		onOpenLink,
 		onPreviewPose,
+		onHighlight,
+		onPreviewHighlight,
 		onStepZ,
 		gradeNote,
 		matchBg,
@@ -407,6 +421,24 @@ export const StageSelectionControls: React.FC<
 	const looping = entities.filter(entity => entity.kind !== 'prop' && entity.steps);
 	const poseLoop = sharedToken(looping.map(entity => entity.poseLoop));
 	const condition = sharedToken(entities.map(entity => entityIfs?.[entity.id]));
+	const highlight = sharedToken(entities.map(entity => entity.highlight));
+	const highlightName = (token: string) =>
+		token === UNSET
+			? t('dialogs.passageEdit.scenePreview.highlightDefault')
+			: token === MIXED
+			? t('dialogs.passageEdit.scenePreview.motionMixed')
+			: token;
+	// The presets, plus a token the scene already says that is not one of them — a story
+	// stylesheet's own word, or a CSS colour — offered back rather than dropped.
+	const highlightTokens = [
+		UNSET,
+		...Object.keys(HIGHLIGHT_PRESETS),
+		...(highlight !== UNSET &&
+		highlight !== MIXED &&
+		!(highlight in HIGHLIGHT_PRESETS)
+			? [highlight]
+			: [])
+	];
 
 	return (
 		<div
@@ -542,6 +574,37 @@ export const StageSelectionControls: React.FC<
 					// menu that opens leftward covers the sidebar, not the sprite.
 					placement="bottom-end"
 					tooltipLabel={t('dialogs.passageEdit.scenePreview.poseHint')}
+				/>
+			)}
+			{onHighlight && (
+				<MenuButton
+					icon={<IconHighlight />}
+					items={highlightTokens.map(token => ({
+						checkable: true as const,
+						checked: token === highlight,
+						label: highlightName(token),
+						onClick: () => {
+							onPreviewHighlight?.(null);
+							onHighlight(token || undefined);
+						},
+						onHover: (hovering: boolean) =>
+							onPreviewHighlight?.(hovering ? token : null)
+					}))}
+					label={t('dialogs.passageEdit.scenePreview.highlightNamed', {
+						highlight: highlightName(highlight)
+					})}
+					// Closing can skip the leave event — see the pose menu above.
+					onChangeOpen={open => {
+						if (!open) {
+							onPreviewHighlight?.(null);
+						}
+					}}
+					placement="bottom-end"
+					tooltipLabel={t(
+						entities.some(entity => entity.link)
+							? 'dialogs.passageEdit.scenePreview.highlightHint'
+							: 'dialogs.passageEdit.scenePreview.highlightHintUnlinked'
+					)}
 				/>
 			)}
 			{onPoseLoop && looping.length > 0 && (

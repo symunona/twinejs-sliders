@@ -429,6 +429,25 @@ export interface Camera {
 }
 
 /**
+ * `highlight:` tokens the renderer ships a glow colour for, and the colour each draws.
+ *
+ * PRESETS, like `BG_MOTIONS`: any CSS colour works too, and any other token reaches the DOM
+ * as `data-highlight` for a story stylesheet. One table so the renderer's CSS and the
+ * editor's menu cannot offer a token the other does not know.
+ */
+export const HIGHLIGHT_PRESETS = {
+	gold: '#ffd257',
+	danger: '#ff6b5e',
+	cold: '#6fd2ff',
+	warm: '#ff9a3c'
+} as const;
+
+export type HighlightPreset = keyof typeof HIGHLIGHT_PRESETS;
+
+/** The glow a linked entity draws with no `highlight:`, or with a token nobody painted. */
+export const DEFAULT_HIGHLIGHT = HIGHLIGHT_PRESETS.gold;
+
+/**
  * Motions a backdrop can be given, as `bg: {id: …, fx: parallax_left}`.
  *
  * A list of PRESETS, not a closed set: the token is handed to the renderer as a data

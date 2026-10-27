@@ -1077,6 +1077,9 @@ construct of its own. There is no beat-level `link:` key, and none is needed.
 `highlight:` tunes the glow. `gold`, `danger`, `cold` and `warm` are built in, any CSS
 colour works, and any other token reaches the DOM as `data-highlight` for the story's own
 stylesheet — the same extension point `bubble: {as:}` and `bg: {fx:}` have.
+Presets: `HIGHLIGHT_PRESETS`, `packages/scene-types`. Editor: selection tab **Highlight** menu
+(default + presets + the scene's own token), whole selection; hovering an item glows the
+sprite on the stage, writes nothing.
 
 Hovering a clickable entity glows along the sprite's own **alpha edge**, not around its
 box: the renderer uses stacked `drop-shadow()` filters, which follow transparency. The

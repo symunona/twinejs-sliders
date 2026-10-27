@@ -5,7 +5,11 @@
  * jest and a plain <script type="module"> harness with no bundler plugin in the way.
  */
 
-import {bubbleFontHref} from '@sliders/scene-types';
+import {
+	DEFAULT_HIGHLIGHT,
+	HIGHLIGHT_PRESETS,
+	bubbleFontHref
+} from '@sliders/scene-types';
 
 const STYLE_ID = 'sliders-render-dom-styles';
 
@@ -339,9 +343,9 @@ export const RENDER_DOM_CSS = `
 .sliders-entity[data-sliders-link]:focus,
 .sliders-entity[data-sliders-link]:focus-visible {
 	filter:
-		drop-shadow(0 0 2px var(--sliders-highlight, #ffd257))
-		drop-shadow(0 0 6px var(--sliders-highlight, #ffd257))
-		drop-shadow(0 0 14px var(--sliders-highlight, #ffd257));
+		drop-shadow(0 0 2px var(--sliders-highlight, ${DEFAULT_HIGHLIGHT}))
+		drop-shadow(0 0 6px var(--sliders-highlight, ${DEFAULT_HIGHLIGHT}))
+		drop-shadow(0 0 14px var(--sliders-highlight, ${DEFAULT_HIGHLIGHT}));
 }
 
 /* The box is the tab stop, so the browser's own focus ring would draw a rectangle around a
@@ -354,10 +358,12 @@ export const RENDER_DOM_CSS = `
 /* Tokens the renderer ships a colour for. Any other token still reaches the DOM as
    data-highlight and is the story stylesheet's to paint — the same extension point
    bubble: {as:} and bg: {fx:} have. */
-.sliders-entity[data-highlight='gold'] { --sliders-highlight: #ffd257; }
-.sliders-entity[data-highlight='danger'] { --sliders-highlight: #ff6b5e; }
-.sliders-entity[data-highlight='cold'] { --sliders-highlight: #6fd2ff; }
-.sliders-entity[data-highlight='warm'] { --sliders-highlight: #ff9a3c; }
+${Object.entries(HIGHLIGHT_PRESETS)
+	.map(
+		([token, colour]) =>
+			`.sliders-entity[data-highlight='${token}'] { --sliders-highlight: ${colour}; }`
+	)
+	.join('\n')}
 
 /* Everything that DRAWS the sprite, and the one element a grade: filters. The renderer
    writes the filter and its duration inline; a native grade fades on this transition. A

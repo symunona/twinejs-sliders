@@ -109,6 +109,7 @@ import {useStoryLaunch} from '../../../store/use-story-launch';
 import {zResetBlocks} from './layer-order';
 import {LayersPanel} from './layers-panel';
 import {ObjectLinkPanel} from './object-link-panel';
+import {highlightWrites, useHighlightPreview} from './highlight-preview';
 import {SceneLinksPanel} from './scene-links-panel';
 import {
 	SceneSettingsTab,
@@ -1569,6 +1570,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 
 	React.useEffect(() => setPosePreview(null), [previewId]);
 
+	const setHighlight = React.useCallback(
+		(highlight: string | undefined) =>
+			commit(highlightWrites(selectedEntities, highlight), EDIT_ORIGIN),
+		[commit, selectedEntities]
+	);
+
+	/** The highlight menu's hover: a glow on the selection, never written. */
+	const [highlightPreview, setHighlightPreview] = React.useState<string | null>(
+		null
+	);
+	const selectionKey = selection.join('\u0000');
+
+	React.useEffect(() => setHighlightPreview(null), [selectionKey]);
+	useHighlightPreview(root.current, selection, highlightPreview);
+
 	/**
 	 * The past position the trace panel is hovering: drawn as a second sprite, never
 	 * written. `null` is not hovering.
@@ -2724,6 +2740,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onOpacityCommit={commitOpacity}
 				onOpenLink={onOpenPassage && openScene}
 				onPreviewPose={setPosePreview}
+				onHighlight={setHighlight}
+				onPreviewHighlight={setHighlightPreview}
 				onStepZ={stepZ}
 				matchBg={
 					selection.length === 1 && (

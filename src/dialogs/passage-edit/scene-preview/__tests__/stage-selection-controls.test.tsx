@@ -526,4 +526,71 @@ describe('condition box', () => {
 		fireEvent.blur(box());
 		expect(onCondition).toHaveBeenCalledWith(undefined);
 	});
+
+	describe('highlight menu', () => {
+		const DEFAULT_LABEL = 'dialogs.passageEdit.scenePreview.highlightDefault';
+
+		/** The highlight button: the row's only menu for a prop, which has no poses. */
+		async function openHighlightMenu() {
+			await waitFor(() => expect(poseButton()).toBeDefined());
+			fireEvent.click(poseButton() as HTMLButtonElement);
+			await waitFor(() => expect(poseItems().length).toBeGreaterThan(0));
+		}
+
+		it('is hidden without a handler', () => {
+			renderControls(['candle']);
+
+			expect(poseButton()).toBeUndefined();
+		});
+
+		it('offers the default glow and the renderer presets', async () => {
+			renderControls(['candle'], {onHighlight: jest.fn()});
+			await openHighlightMenu();
+
+			expect(poseItems().map(item => item.textContent)).toEqual([
+				DEFAULT_LABEL,
+				'gold',
+				'danger',
+				'cold',
+				'warm'
+			]);
+		});
+
+		it('offers back a token the scene already says', async () => {
+			renderControls(['candle'], {
+				entities: [{...stage.entities.candle, highlight: 'moonlight'}],
+				onHighlight: jest.fn()
+			});
+			await openHighlightMenu();
+
+			expect(poseItems().map(item => item.textContent)).toContain('moonlight');
+		});
+
+		it('writes the chosen token, and drops the key for the default', async () => {
+			const onHighlight = jest.fn();
+
+			renderControls(['candle'], {onHighlight});
+			await openHighlightMenu();
+			fireEvent.click(itemNamed('cold'));
+			expect(onHighlight).toHaveBeenLastCalledWith('cold');
+
+			await openHighlightMenu();
+			fireEvent.click(itemNamed(DEFAULT_LABEL));
+			expect(onHighlight).toHaveBeenLastCalledWith(undefined);
+		});
+
+		it('previews the hovered glow without writing it', async () => {
+			const onHighlight = jest.fn();
+			const onPreviewHighlight = jest.fn();
+
+			renderControls(['candle'], {onHighlight, onPreviewHighlight});
+			await openHighlightMenu();
+			hover(itemNamed('danger'));
+			expect(onPreviewHighlight).toHaveBeenLastCalledWith('danger');
+
+			unhover(itemNamed('danger'));
+			expect(onPreviewHighlight).toHaveBeenLastCalledWith(null);
+			expect(onHighlight).not.toHaveBeenCalled();
+		});
+	});
 });

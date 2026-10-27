@@ -8,3 +8,13 @@
 	transition: none !important;
 	animation: none !important;
 }
+
+/* `highlight:` previewed from the selection tab's menu (`highlight-preview.ts`). The
+   player's own glow — same three drop-shadows as render-dom `styles.ts` — forced on, since
+   the editor overlay means a sprite here is never hovered. */
+.scene-stage .sliders-entity[data-highlight-preview] {
+	filter:
+		drop-shadow(0 0 2px var(--scene-highlight-preview))
+		drop-shadow(0 0 6px var(--scene-highlight-preview))
+		drop-shadow(0 0 14px var(--scene-highlight-preview));
+}
