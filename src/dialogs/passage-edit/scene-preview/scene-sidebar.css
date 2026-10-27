@@ -140,3 +140,152 @@
 	background: var(--light-purple);
 	box-shadow: inset 0 -2px 0 var(--purple);
 }
+
+/*
+ * Control alignment, one rule for every tab: the label reads from the left edge, the
+ * control ends at the right edge. Dropdowns and text boxes fill the space between, so their
+ * right edges line up down the panel; a number box keeps its width and sits at the right,
+ * its unit after it. Checkboxes and icon strips sit at the right too.
+ *
+ * Prop grid rows (`.beat-prop-row`: label | control | X) get it through the control column.
+ * The free rows (transform, selection) get it from the controls' own labels, stretched to
+ * the row: `label ……… [control]`.
+ */
+.scene-sidebar-body .beat-prop-control {
+	justify-content: flex-end;
+}
+
+/* The stock controls step off their label by a margin; in a grid column that is only a
+   gap at the left that the selects have and the number boxes lose. */
+.scene-sidebar-body .text-select-control select,
+.scene-sidebar-body .text-input > label > input,
+.scene-sidebar-body .preview-select-button {
+	margin-left: 0;
+}
+
+/* Text boxes fill like the dropdowns; a number box keeps 5em and is pushed to the right
+   inside whatever wraps it, so the unit after it stays at the edge. */
+.scene-sidebar-body .beat-prop-control .text-input,
+.scene-sidebar-body .beat-prop-control .text-input > label,
+.scene-sidebar-body .beat-prop-control .scene-settings-number,
+.scene-sidebar-body .beat-prop-control .scene-links-number {
+	flex: 1 1 auto;
+	justify-content: flex-end;
+	min-width: 0;
+	width: auto;
+}
+
+.scene-sidebar-body .beat-prop-control .text-input > label {
+	display: flex;
+}
+
+.scene-sidebar-body .beat-prop-control .text-input input {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+}
+
+.scene-sidebar-body .text-input input[type='number'] {
+	flex: 0 0 5em;
+	width: 5em;
+}
+
+/* Free rows: the control's label spans the row, words left, box right. */
+.scene-sidebar-section > .text-select,
+.scene-sidebar-section > .text-input,
+.scene-preview-selection > .text-select,
+.scene-preview-selection > .text-input,
+.scene-sidebar-row > .text-select,
+.scene-sidebar-row > .scene-settings-number,
+.scene-preview-selection-motion-speed > .scene-settings-number {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.scene-sidebar-section > .text-select > label,
+.scene-sidebar-section > .text-input > label,
+.scene-preview-selection > .text-select > label,
+.scene-preview-selection > .text-input > label,
+.scene-sidebar-row > .text-select > label,
+.scene-sidebar-row > .scene-settings-number .text-input > label,
+.scene-preview-selection-motion-speed .text-input > label {
+	display: flex;
+	gap: 6px;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.scene-sidebar-row > .scene-settings-number .text-input {
+	display: block;
+	width: 100%;
+}
+
+.scene-preview-selection-motion-speed .text-input {
+	display: block;
+	width: 100%;
+}
+
+/* A free row's label: never wrapped under its box ("Only / if"). */
+.scene-sidebar-body .text-select-label,
+.scene-sidebar-body .text-input-label {
+	white-space: nowrap;
+}
+
+/* A dropdown in a free row: fills what its label leaves, like the grid's do. */
+.scene-sidebar-section > .text-select .text-select-control,
+.scene-preview-selection > .text-select .text-select-control,
+.scene-sidebar-row > .text-select .text-select-control,
+.scene-sidebar-section > .text-input input,
+.scene-preview-selection > .text-input input {
+	flex: 1 1 auto;
+	max-width: 12em;
+	min-width: 0;
+}
+
+.scene-sidebar-section > .text-select select,
+.scene-preview-selection > .text-select select,
+.scene-sidebar-row > .text-select select {
+	width: 100%;
+}
+
+.scene-sidebar-row > .scene-settings-number + .scene-settings-number {
+	margin-left: 8px;
+}
+
+/* A unit is a fixed slot after its number, and a row of numbers without one keeps the slot
+   empty, so every number box ends on the same line whether it says "s" or nothing. The
+   empty slot is the unit's 10px plus the row's gap: 4px in the grid, 2px in a free row. */
+.scene-sidebar-body .beat-prop-unit {
+	flex: 0 0 10px;
+}
+
+.scene-sidebar-body
+	.beat-prop-control:has(input[type='number']):not(:has(.beat-prop-unit)) {
+	padding-right: 14px;
+}
+
+.scene-sidebar-row:has(input[type='number']):not(:has(.beat-prop-unit)) {
+	padding-right: 12px;
+}
+
+/* A preview dropdown's sample gives way before its caret does: the caret is the edge every
+   other dropdown in the column ends on. */
+.scene-sidebar-body .preview-select-button .preview-select-preview {
+	flex: 0 1 auto;
+	justify-content: flex-start;
+	min-width: 0;
+	overflow: hidden;
+}
+
+/* The font sample's 6em is the list's column width; on the button it is a cap. */
+.scene-sidebar-body .preview-select-button .bubble-font-preview {
+	flex: 0 1 auto;
+	min-width: 0;
+	width: auto;
+	max-width: 6em;
+}
+
+/* The value's words go first, the sample after: the sample is what the author picks by. */
+.scene-sidebar-body .preview-select-button .preview-select-value {
+	flex: 0 1000 auto;
+}
