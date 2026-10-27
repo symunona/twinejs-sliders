@@ -94,13 +94,18 @@ export const CloudStoryGate: React.FC = ({children}) => {
 		setPullError(undefined);
 
 		try {
-			// Lands the story in `stories`; `isLocal` flips and the route renders.
 			await actions.checkout(storyId);
 		} catch (error) {
 			setPullError(error instanceof Error ? error.message : String(error));
-		} finally {
 			setPulling(false);
+			return;
 		}
+
+		// Boot fresh rather than let `isLocal` flip in place. Play, proof and test
+		// `document.write` over the app, and doing that while the checkout's refresh and
+		// library sync are still settling left the player blank. The story is in
+		// localStorage now, so the reload opens it like any local one.
+		window.location.reload();
 	}
 
 	const back = (

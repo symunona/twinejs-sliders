@@ -75,8 +75,19 @@ describe('<CloudStoryGate>', () => {
 		expect(checkout).not.toHaveBeenCalled();
 		expect(screen.queryByTestId('route')).not.toBeInTheDocument();
 
-		fireEvent.click(screen.getByText('routes.cloudStoryGate.pull'));
-		await waitFor(() => expect(checkout).toHaveBeenCalledWith('cloud-id'));
+		const reload = jest.fn();
+		const location = window.location;
+
+		delete (window as {location?: Location}).location;
+		window.location = {...location, reload};
+
+		try {
+			fireEvent.click(screen.getByText('routes.cloudStoryGate.pull'));
+			await waitFor(() => expect(checkout).toHaveBeenCalledWith('cloud-id'));
+			await waitFor(() => expect(reload).toHaveBeenCalled());
+		} finally {
+			window.location = location;
+		}
 	});
 
 	it('says so when the server does not have it either', async () => {
