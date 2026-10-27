@@ -19,6 +19,7 @@ import {
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
 	BUBBLE_SIZINGS,
+	BUBBLE_TAILS,
 	BUBBLE_VALIGNS,
 	EASE_KINDS,
 	EASE_NAMES,
@@ -51,6 +52,7 @@ import {
 	type BubbleEnter,
 	type BubblePlace,
 	type BubbleSizing,
+	type BubbleTailMode,
 	type BubbleAlign,
 	type BubbleValign,
 	type BubbleStyle,
@@ -1132,6 +1134,31 @@ function parseBubbleStyle(
 			}
 
 			case 'tail': {
+				// A word (`mouth`, `nearest`, `none`) or a free stage point. A bare number is
+				// a point gone wrong, so it goes on to be told it needs two.
+				if (
+					isScalar(pair.value) &&
+					typeof (pair.value as Scalar).value === 'string'
+				) {
+					const mode = asString(ctx, pair.value, 'tail');
+
+					if (mode === undefined) {
+						break;
+					}
+
+					if (!(BUBBLE_TAILS as readonly string[]).includes(mode)) {
+						addError(ctx, 'bad-value', `Unknown tail '${mode}'.`, pair.value, {
+							hint: `tail: is one of ${BUBBLE_TAILS.join(
+								', '
+							)}, or a stage point [x, y].`
+						});
+						break;
+					}
+
+					style.tail = mode as BubbleTailMode;
+					break;
+				}
+
 				const tail = parseFrac2(ctx, pair.value, 'bubble tail');
 
 				if (tail) {

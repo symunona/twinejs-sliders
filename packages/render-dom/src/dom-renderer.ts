@@ -549,10 +549,40 @@ export class DomRenderer implements Renderer {
 
 		const frac = this.anchorFraction(rec, anchor);
 
-		if (!frac) {
+		return frac ? this.pointOf(rec, frac) : null;
+	}
+
+	/**
+	 * The entity's box as the eye sees it — four corners in MOUNT px, turned, flipped and
+	 * through the camera exactly like `measure()` — and whether it is a character.
+	 *
+	 * For a tail that reaches for the NEAREST part of an object rather than for an anchor,
+	 * and for the default that tells the two apart: a character grows a tail, an object
+	 * does not. `cast` is the same test `metricsFor` sizes the sprite by.
+	 */
+	outline(
+		entityId: EntityId
+	): {corners: Vec2[]; centre: Vec2; cast: boolean} | null {
+		const rec = this.entities.get(entityId);
+
+		if (!rec) {
 			return null;
 		}
 
+		return {
+			cast: !!rec.character || rec.entity.kind === 'cast',
+			centre: this.pointOf(rec, {x: 0.5, y: 0.5}),
+			corners: [
+				{x: 0, y: 0},
+				{x: 1, y: 0},
+				{x: 1, y: 1},
+				{x: 0, y: 1}
+			].map(frac => this.pointOf(rec, frac))
+		};
+	}
+
+	/** A fraction of an entity's sprite box, in MOUNT px. */
+	private pointOf(rec: EntityRecord, frac: Frac2): Vec2 {
 		// Sprite box -> BOX px, mirrored about the origin when flipped...
 		const inBox = anchorPointInRect(
 			rec.rect,

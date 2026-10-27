@@ -6,6 +6,7 @@ import {
 	BeatProps,
 	anchorDisabledKey,
 	sizeNoteKey,
+	tailChoice,
 	valignNoteKey
 } from '../beat-props';
 import type {SceneGlobals} from '../beat-props';
@@ -37,6 +38,8 @@ function renderProps(
 		beatCount?: number;
 		beatNumber?: number;
 		inherited?: BubbleStyle;
+		readTail?: () => {x: number; y: number} | undefined;
+		speakerIsObject?: boolean;
 		stageIds?: string[];
 	} = {}
 ) {
@@ -54,6 +57,8 @@ function renderProps(
 			inherited={options.inherited}
 			onSetBubble={onSetBubble}
 			onSetKey={onSetKey}
+			readTail={options.readTail}
+			speakerIsObject={options.speakerIsObject}
 			stageIds={options.stageIds}
 		/>
 	);
@@ -65,11 +70,16 @@ function hold() {
 	return screen.getAllByRole('spinbutton')[0] as HTMLInputElement;
 }
 
+/** The Auto checkbox. Not the only one: the Tail row has its own. */
+function autoBox() {
+	return within(screen.getByTestId('beat-prop-auto')).getByRole('checkbox');
+}
+
 describe('<BeatProps> auto-advance', () => {
 	// The checkbox is a reading of `dur`, not a fourth state stored beside it.
 	it('is checked exactly when the beat names no duration', () => {
 		renderProps(say());
-		expect(screen.getByRole('checkbox')).toHaveAttribute(
+		expect(autoBox()).toHaveAttribute(
 			'aria-checked',
 			'true'
 		);
@@ -77,7 +87,7 @@ describe('<BeatProps> auto-advance', () => {
 
 	it('is unchecked once the beat is timed', () => {
 		renderProps(say(0.8));
-		expect(screen.getByRole('checkbox')).toHaveAttribute(
+		expect(autoBox()).toHaveAttribute(
 			'aria-checked',
 			'false'
 		);
@@ -87,7 +97,7 @@ describe('<BeatProps> auto-advance', () => {
 	it('removes the duration when it is checked', () => {
 		const {onSetKey} = renderProps(say(0.8));
 
-		fireEvent.click(screen.getByRole('checkbox'));
+		fireEvent.click(autoBox());
 		expect(onSetKey).toHaveBeenCalledWith('dur', null);
 	});
 
@@ -96,7 +106,7 @@ describe('<BeatProps> auto-advance', () => {
 	it('writes the reader default when it is unchecked with an empty box', () => {
 		const {onSetKey} = renderProps(say());
 
-		fireEvent.click(screen.getByRole('checkbox'));
+		fireEvent.click(autoBox());
 		expect(onSetKey).toHaveBeenCalledWith('dur', AUTO_ADVANCE_MS / 1000);
 	});
 
@@ -104,7 +114,7 @@ describe('<BeatProps> auto-advance', () => {
 		const {onSetKey} = renderProps(say());
 
 		fireEvent.change(hold(), {target: {value: '1.5'}});
-		fireEvent.click(screen.getByRole('checkbox'));
+		fireEvent.click(autoBox());
 		expect(onSetKey).toHaveBeenCalledWith('dur', 1.5);
 	});
 
@@ -144,7 +154,7 @@ describe('<BeatProps> auto-advance', () => {
 	it('is absent on a stage-only beat, which still keeps its duration', () => {
 		renderProps({index: 0, kind: 'set', patch: {flip: true}, who: 'mira'});
 
-		expect(screen.queryByRole('checkbox')).toBeNull();
+		expect(screen.queryByTestId('beat-prop-auto')).toBeNull();
 		expect(hold()).not.toBeDisabled();
 	});
 });
@@ -910,5 +920,92 @@ describe('<BeatProps> scene scope (Step 0)', () => {
 		expect(screen.getByTestId('beat-prop-anchor')).not.toHaveAttribute(
 			'data-disabled'
 		);
+	});
+});
+
+describe('<BeatProps> tail', () => {
+	function row() {
+		return screen.getByTestId('beat-prop-tail');
+	}
+
+	function box() {
+		return within(row()).getByRole('checkbox');
+	}
+
+	function aim() {
+		return within(row()).getByRole('combobox') as HTMLSelectElement;
+	}
+
+	function options() {
+		return Array.from(aim().options).map(option => option.value);
+	}
+
+	it('is on for a character, aimed at the mouth', () => {
+		renderProps(say());
+		expect(box()).toHaveAttribute('aria-checked', 'true');
+		expect(aim()).toBeEnabled();
+		expect(aim().value).toBe('mouth');
+		expect(options()).toEqual(['mouth', 'free']);
+	});
+
+	it('is off for an object, and turning it on aims at the nearest edge', () => {
+		const {onSetBubble} = renderProps(say(), true, {speakerIsObject: true});
+
+		expect(box()).toHaveAttribute('aria-checked', 'false');
+		expect(aim()).toBeDisabled();
+		expect(options()).toEqual(['nearest', 'free']);
+		fireEvent.click(box());
+		expect(onSetBubble).toHaveBeenCalledWith('tail', 'nearest');
+	});
+
+	it('writes none to turn a character off, and clears it to turn back on', () => {
+		const first = renderProps(say());
+
+		fireEvent.click(box());
+		expect(first.onSetBubble).toHaveBeenCalledWith('tail', 'none');
+		first.container.remove();
+
+		const {onSetBubble} = renderProps(sayStyled({tail: 'none'}));
+
+		expect(box()).toHaveAttribute('aria-checked', 'false');
+		fireEvent.click(box());
+		expect(onSetBubble).toHaveBeenCalledWith('tail', null);
+	});
+
+	it('cuts the tail loose where it points now', () => {
+		const {onSetBubble} = renderProps(say(), true, {
+			readTail: () => ({x: 0.3, y: 0.6})
+		});
+
+		fireEvent.change(aim(), {target: {value: 'free'}});
+		expect(onSetBubble).toHaveBeenCalledWith('tail', {x: 0.3, y: 0.6});
+	});
+
+	it('shows a stated point as free', () => {
+		renderProps(sayStyled({tail: {x: 0.8, y: 0.2}}));
+		expect(aim().value).toBe('free');
+	});
+
+	it('greys out on a detached bubble', () => {
+		renderProps(sayStyled({anchor: 'scene'}));
+		expect(aim()).toBeDisabled();
+		expect(row()).toHaveTextContent('dialogs.passageEdit.beatProps.tailDetached');
+	});
+
+	it('is not offered on a narration box', () => {
+		renderProps({index: 0, kind: 'box', text: 'The candle gutters.'});
+		expect(screen.queryByTestId('beat-prop-tail')).not.toBeInTheDocument();
+	});
+});
+
+describe('tailChoice', () => {
+	it('defaults by speaker kind', () => {
+		expect(tailChoice(undefined, false)).toBe('mouth');
+		expect(tailChoice(undefined, true)).toBe('none');
+	});
+
+	it('names a point free and a word itself', () => {
+		expect(tailChoice({x: 0, y: 0}, true)).toBe('free');
+		expect(tailChoice('nearest', false)).toBe('nearest');
 	});
 });

@@ -774,6 +774,26 @@ export const BUBBLE_ANCHORS = ['speaker', 'scene'] as const;
 export type BubbleAnchor = (typeof BUBBLE_ANCHORS)[number];
 
 /**
+ * What a bubble's tail reaches for, when it is not an `[x, y]` stage point.
+ *
+ * `mouth` follows the speaker: the tail points back at the anchor the bubble hangs off.
+ * The default for a character.
+ *
+ * `nearest` points at the closest part of the speaker's own box: the point on its edge
+ * nearest the bubble's centre, or its centre when the bubble sits over it. What an object
+ * that talks wants — a radio, a door, a sign has no mouth, and a tail aimed at an
+ * arbitrary point over its top right reads as aimed at nothing.
+ *
+ * `none` grows no tail. The default for an object. Unlike `anchor: scene` the bubble still
+ * hangs off its speaker.
+ *
+ * `[x, y]` — any stage point — is the fourth, free, form: see `BubbleStyle.tail`.
+ */
+export const BUBBLE_TAILS = ['mouth', 'nearest', 'none'] as const;
+
+export type BubbleTailMode = (typeof BUBBLE_TAILS)[number];
+
+/**
  * Where the words sit across the bubble: `text-align`. Unset = the renderer's own default
  * (left, except presets like `narrator` that centre themselves).
  *
@@ -889,8 +909,11 @@ export interface BubbleStyle {
 	 * Ignored by `anchor: scene`, which is the author saying the bubble hangs off nothing
 	 * and grows no tail at all. Dragging the anchor cross in the scene editor is what
 	 * writes this.
+	 *
+	 * Or a `BUBBLE_TAILS` word instead of a point. Unset = `mouth` for a character,
+	 * `none` for an object.
 	 */
-	tail?: Frac2;
+	tail?: Frac2 | BubbleTailMode;
 	/**
 	 * Width as a fraction of the stage box's width.
 	 *

@@ -30,6 +30,7 @@ import {
 	BG_MOTIONS,
 	BUBBLE_KEYS,
 	BUBBLE_ANCHORS,
+	BUBBLE_TAILS,
 	BUBBLE_ALIGNS,
 	BUBBLE_ENTERS,
 	BUBBLE_VALIGNS,
@@ -245,8 +246,9 @@ const BUBBLE_HELP: KeyHelp<typeof BUBBLE_KEYS> = {
 		', '
 	)}. auto hangs it off the speaker.`,
 	h: 'Height, as a fraction of the stage height. Only sizing: absolute and sizing: manual read it — an auto bubble is as tall as its words. Dragging a bubble’s top or bottom edge in the preview writes this.',
-	tail:
-		'[x, y] — where the tail points, as fractions of the stage box, instead of at the speaker. Good for a door, a window or somebody off the side of the frame. anchor: scene ignores it, having no tail at all. Dragging the anchor cross in the preview writes this.',
+	tail: `What the tail points at: ${BUBBLE_TAILS.join(
+		', '
+	)}, or [x, y]. mouth (default for a character) follows the speaker. nearest aims at the closest edge of the speaker's box, or its centre when the bubble sits over it — for an object that talks. none grows no tail (default for an object). [x, y] is a free stage point, as fractions of the stage box: a door, a window, somebody off the side of the frame. anchor: scene ignores it, having no tail at all. Dragging the anchor cross in the preview writes [x, y]; the beat panel's Tail row sets the rest.`,
 	size: 'Text size multiplier. 1 is the stage default.',
 	sizing: `How the box is decided: ${BUBBLE_SIZINGS.join(
 		', '

@@ -10,7 +10,13 @@
  * screen readers come for free.
  */
 
-import type {BubblePlace, BubbleStyle, EntityId, Vec2} from '@sliders/scene-types';
+import type {
+	BubblePlace,
+	BubbleStyle,
+	BubbleTailMode,
+	EntityId,
+	Vec2
+} from '@sliders/scene-types';
 import {bubbleFontStack, DEFAULT_BUBBLE_ENTER_DUR} from '@sliders/scene-types';
 import type {BubblePadding, BubbleSide} from './bubble-shapes';
 import {bubbleShape, hashSeed, isBubbleShape} from './bubble-shapes';
@@ -21,9 +27,24 @@ import {injectStyles} from './styles';
 
 export type {BubbleSide};
 
+/** What `MeasuringRenderer.outline` reports. */
+export interface SpeakerOutline {
+	/** The sprite box's four corners, in order round it, in MOUNT px. */
+	corners: Vec2[];
+	centre: Vec2;
+	/** A character, rather than an object. Decides the default tail. */
+	cast: boolean;
+}
+
 /** The slice of a renderer a dialogue layer needs. Any renderer can satisfy it. */
 export interface MeasuringRenderer {
 	measure(entityId: EntityId, anchor: string): Vec2 | null;
+	/**
+	 * The entity's box as drawn, corners in mount px, and whether it is a character.
+	 * Optional: without it every speaker is treated as a character, and `tail: nearest`
+	 * reaches for nothing.
+	 */
+	outline?(entityId: EntityId): SpeakerOutline | null;
 	stageBox(): StageBox;
 	subscribe?(fn: () => void): () => void;
 }
@@ -347,12 +368,16 @@ export class DialogueLayer {
 		// A detached bubble belongs to the stage: it never asks where its speaker is, so it
 		// keeps its place when they walk off, and it grows no tail back to them.
 		const detached = style?.anchor === 'scene';
-		// `tail:` names the point the tail reaches for, in stage fractions — a door, a
-		// window, somebody off the side of the frame. It stands in for the speaker's own
+		const outline = detached
+			? null
+			: this.renderer?.outline?.(rec.spec.who) ?? null;
+		const mode = tailMode(style, outline);
+		// `tail: [x, y]` names the point the tail reaches for, in stage fractions — a door,
+		// a window, somebody off the side of the frame. It stands in for the speaker's own
 		// anchor everywhere the anchor is used, so an un-pinned bubble also hangs off it.
 		const anchor = detached
 			? null
-			: tailPoint(style, box) ??
+			: (mode === 'free' ? tailPoint(style, box) : undefined) ??
 			  this.renderer?.measure(rec.spec.who, anchorName) ??
 			  null;
 		const el = rec.el;
@@ -364,72 +389,83 @@ export class DialogueLayer {
 			pinnedRect(style, box, w, h, margin) ??
 			(detached ? centreRect(box, w, h, margin) : undefined);
 
-		if (pinned) {
-			// The author said where this goes. The tail still points home when the speaker is
-			// on stage — a bubble parked on the left with a tail reaching right reads as
-			// theirs — and simply disappears for a narrator with nobody to point at.
-			el.dataset.anchored = anchor ? 'true' : 'false';
-			el.style.transform = `translate(${pinned.left}px, ${pinned.top}px)`;
-
-			const tail = anchor ? tailToward(anchor, pinned, w, h) : undefined;
-
-			setAnchorData(el, anchor ? localPoint(anchor, pinned) : null);
-
-			if (!tail) {
-				el.dataset.side = 'above';
-				rec.tail.style.display = 'none';
-				this.paintShape(rec, {w, h, side: 'above', anchor: null});
-
-				return;
-			}
-
-			el.dataset.side = tail.side;
-			rec.tail.style.display = '';
-			this.placeTail(rec, tail.side, tail.offset);
-			this.paintShape(rec, {
-				w,
-				h,
-				side: tail.side,
-				anchor: localPoint(anchor!, pinned)
-			});
-
-			return;
-		}
-
-		if (!anchor) {
+		if (!pinned && !anchor) {
 			// Speaker is not on stage (bad `who`, or an exit already finished). Still show the
 			// line — losing dialogue is worse than a mispositioned bubble.
-			el.dataset.anchored = 'false';
-			el.dataset.side = 'above';
-			rec.tail.style.display = 'none';
-			setAnchorData(el, null);
 			el.style.transform = `translate(${box.left + (box.width - w) / 2}px, ${
 				box.top + margin
 			}px)`;
-			this.paintShape(rec, {w, h, side: 'above', anchor: null});
+			this.hideTail(rec, w, h);
 
 			return;
 		}
-
-		el.dataset.anchored = 'true';
-		rec.tail.style.display = '';
 
 		// The mouth is what the tail points back at, so the mouth -> anchor vector is the
 		// author's statement of which way the bubble leans. A flipped character mirrors both
 		// anchors, so it leans the other way for free.
-		const mouth = this.renderer?.measure(rec.spec.who, MOUTH_ANCHOR) ?? null;
-		const place = placeBubble({anchor, mouth, box, w, h, gap, margin});
+		const placed = pinned
+			? undefined
+			: mode === 'nearest' && outline
+			? placeOffOutline(outline, {box, w, h, gap, margin})
+			: placeBubble({
+					anchor: anchor!,
+					mouth: this.renderer?.measure(rec.spec.who, MOUTH_ANCHOR) ?? null,
+					box,
+					w,
+					h,
+					gap,
+					margin
+			  });
+		const rect = pinned ?? placed!;
 
-		el.dataset.side = place.side;
-		el.style.transform = `translate(${place.left}px, ${place.top}px)`;
-		setAnchorData(el, localPoint(anchor, place));
-		this.placeTail(rec, place.side, place.tail);
-		this.paintShape(rec, {
-			w,
-			h,
-			side: place.side,
-			anchor: localPoint(anchor, place)
-		});
+		el.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+
+		// What the tail reaches for. A pinned bubble's tail still points home when the
+		// speaker is on stage — a bubble parked on the left with a tail reaching right reads
+		// as theirs — and simply disappears for a narrator with nobody to point at.
+		const tip =
+			mode === 'none'
+				? null
+				: mode === 'nearest'
+				? outline && nearestOnOutline(outline, rect, w, h)
+				: anchor;
+
+		if (!tip) {
+			this.hideTail(rec, w, h);
+
+			return;
+		}
+
+		// A bubble hung off its anchor already knows its side and where along it the tail
+		// goes. Anything else — pinned, or reaching for a point it was not hung from — asks.
+		const tail =
+			placed && tip === anchor
+				? {side: placed.side, offset: placed.tail}
+				: tailToward(tip, rect, w, h);
+
+		if (!tail) {
+			this.hideTail(rec, w, h);
+
+			return;
+		}
+
+		const local = localPoint(tip, rect);
+
+		el.dataset.anchored = 'true';
+		el.dataset.side = tail.side;
+		rec.tail.style.display = '';
+		setAnchorData(el, local);
+		this.placeTail(rec, tail.side, tail.offset);
+		this.paintShape(rec, {w, h, side: tail.side, anchor: local});
+	}
+
+	/** A bubble with nothing to point at: no tail, no anchor cross, drawn as if above. */
+	private hideTail(rec: BubbleRecord, w: number, h: number): void {
+		rec.el.dataset.anchored = 'false';
+		rec.el.dataset.side = 'above';
+		rec.tail.style.display = 'none';
+		setAnchorData(rec.el, null);
+		this.paintShape(rec, {w, h, side: 'above', anchor: null});
 	}
 
 	// -----------------------------------------------------------------------
@@ -1056,7 +1092,7 @@ export function tailPoint(
 	style: BubbleStyle | undefined,
 	box: StageBox
 ): Vec2 | undefined {
-	if (!style?.tail) {
+	if (!style?.tail || typeof style.tail !== 'object') {
 		return undefined;
 	}
 
@@ -1067,6 +1103,124 @@ export function tailPoint(
 }
 
 /** A point in mount px, expressed from a bubble's own top left. */
+/**
+ * Which tail this bubble grows. `free` is an authored `[x, y]` point; unset is `mouth` for
+ * a character and `none` for an object. No outline (renderer cannot say, or speaker not on
+ * stage) counts as a character, which is what every bubble did before objects had a say.
+ */
+export function tailMode(
+	style: BubbleStyle | undefined,
+	outline: SpeakerOutline | null
+): BubbleTailMode | 'free' {
+	const tail = style?.tail;
+
+	if (tail && typeof tail === 'object') {
+		return 'free';
+	}
+
+	return tail ?? (outline && !outline.cast ? 'none' : 'mouth');
+}
+
+/**
+ * Where `tail: nearest` reaches: the point on the speaker's outline closest to the
+ * bubble's centre — an edge, wherever along it the bubble sits — or the speaker's centre
+ * when the bubble's centre is over it, where every edge is the wrong answer.
+ */
+export function nearestOnOutline(
+	outline: SpeakerOutline,
+	rect: {left: number; top: number},
+	w: number,
+	h: number
+): Vec2 {
+	const c = {x: rect.left + w / 2, y: rect.top + h / 2};
+	const {corners} = outline;
+
+	if (insidePolygon(c, corners)) {
+		return outline.centre;
+	}
+
+	let best = corners[0];
+	let bestDist = Infinity;
+
+	corners.forEach((a, i) => {
+		const b = corners[(i + 1) % corners.length];
+		const abx = b.x - a.x;
+		const aby = b.y - a.y;
+		const len = abx * abx + aby * aby;
+		const t =
+			len === 0
+				? 0
+				: clamp(((c.x - a.x) * abx + (c.y - a.y) * aby) / len, 0, 1);
+		const p = {x: a.x + abx * t, y: a.y + aby * t};
+		const d = (p.x - c.x) ** 2 + (p.y - c.y) ** 2;
+
+		if (d < bestDist) {
+			best = p;
+			bestDist = d;
+		}
+	});
+
+	return best;
+}
+
+/** Which edge of an object a `tail: nearest` bubble tries first. */
+const EDGE_ORDER: readonly BubbleSide[] = ['above', 'right', 'left', 'below'];
+
+/**
+ * An un-pinned `tail: nearest` bubble, hung off the middle of one of the speaker's EDGES
+ * rather than off its `bubble` anchor — that point is inside the sprite box, so a bubble
+ * hung from it covers the very edge its tail would reach for. Above first, then the sides,
+ * then below: the first edge the bubble fits beside without being pushed round the corner.
+ */
+export function placeOffOutline(
+	outline: SpeakerOutline,
+	fit: Omit<PlaceBubbleInput, 'anchor' | 'mouth'>
+): BubblePlacement {
+	const {centre, corners} = outline;
+	// The centre -> edge vector IS the side asked for, the way mouth -> anchor is. Read
+	// off the geometry rather than off corner order, which a flip or a turn reshuffles.
+	const edges = corners
+		.map((p, i) => {
+			const q = corners[(i + 1) % corners.length];
+			const edge = {x: (p.x + q.x) / 2, y: (p.y + q.y) / 2};
+
+			return {edge, side: preferredSide(centre, edge)};
+		})
+		.sort((x, y) => EDGE_ORDER.indexOf(x.side) - EDGE_ORDER.indexOf(y.side));
+	let first: BubblePlacement | undefined;
+
+	for (const {edge, side} of edges) {
+		const placed = placeBubble({...fit, anchor: edge, mouth: centre});
+
+		if (placed.side === side) {
+			return placed;
+		}
+
+		first ??= placed;
+	}
+
+	return first!;
+}
+
+/** Even-odd test. The outline is a turned rectangle, so convex, but this does not care. */
+function insidePolygon(p: Vec2, poly: Vec2[]): boolean {
+	let inside = false;
+
+	for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+		const a = poly[i];
+		const b = poly[j];
+
+		if (
+			a.y > p.y !== b.y > p.y &&
+			p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x
+		) {
+			inside = !inside;
+		}
+	}
+
+	return inside;
+}
+
 function localPoint(point: Vec2, rect: {left: number; top: number}): Vec2 {
 	return {x: point.x - rect.left, y: point.y - rect.top};
 }

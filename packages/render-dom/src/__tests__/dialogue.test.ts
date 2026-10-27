@@ -1,5 +1,13 @@
-import {DialogueLayer, parseLinkText, placeBubble, preferredSide} from '../dialogue';
-import type {MeasuringRenderer} from '../dialogue';
+import {
+	DialogueLayer,
+	nearestOnOutline,
+	parseLinkText,
+	placeOffOutline,
+	placeBubble,
+	preferredSide,
+	tailMode
+} from '../dialogue';
+import type {MeasuringRenderer, SpeakerOutline} from '../dialogue';
 
 describe('preferredSide', () => {
 	const box = {left: 0, top: 0, width: 1600, height: 900};
@@ -328,5 +336,125 @@ describe('DialogueLayer', () => {
 
 		expect(bubble.style.transform).not.toBe(before);
 		expect(bubble.style.transform).toContain('1200px');
+	});
+});
+
+describe('tail modes', () => {
+	/** A 200 x 200 object, its top left at (600, 500). */
+	const crate: SpeakerOutline = {
+		cast: false,
+		centre: {x: 700, y: 600},
+		corners: [
+			{x: 600, y: 500},
+			{x: 800, y: 500},
+			{x: 800, y: 700},
+			{x: 600, y: 700}
+		]
+	};
+
+	it('defaults to mouth for a character, none for an object', () => {
+		expect(tailMode(undefined, {...crate, cast: true})).toBe('mouth');
+		expect(tailMode(undefined, crate)).toBe('none');
+		// Nothing to ask: what every bubble did before objects had a say.
+		expect(tailMode(undefined, null)).toBe('mouth');
+		expect(tailMode({tail: {x: 0.1, y: 0.1}}, crate)).toBe('free');
+		expect(tailMode({tail: 'nearest'}, crate)).toBe('nearest');
+	});
+
+	it('nearest lands on the edge facing the bubble, level with its centre', () => {
+		// Bubble centred at (750, 300): straight above the top edge.
+		expect(nearestOnOutline(crate, {left: 700, top: 250}, 100, 100)).toEqual({
+			x: 750,
+			y: 500
+		});
+		// Off to the left and below: the left edge, clamped to its bottom corner.
+		expect(nearestOnOutline(crate, {left: 300, top: 850}, 100, 100)).toEqual({
+			x: 600,
+			y: 700
+		});
+	});
+
+	it('nearest is the centre when the bubble sits over the object', () => {
+		expect(nearestOnOutline(crate, {left: 650, top: 550}, 40, 40)).toEqual(
+			crate.centre
+		);
+	});
+
+	it('hangs a nearest bubble above the object, or beside it with no room above', () => {
+		const fit = {
+			box: {left: 0, top: 0, width: 1600, height: 900},
+			w: 200,
+			h: 100,
+			gap: 12,
+			margin: 12
+		};
+
+		const above = placeOffOutline(crate, fit);
+
+		expect(above.side).toBe('above');
+		expect(above.top + 100).toBe(488);
+
+		// Flush with the stage top: no room above, so the right edge — even flipped,
+		// which mirrors the corner order.
+		const high: SpeakerOutline = {
+			...crate,
+			centre: {x: 700, y: 100},
+			corners: [
+				{x: 800, y: 0},
+				{x: 600, y: 0},
+				{x: 600, y: 200},
+				{x: 800, y: 200}
+			]
+		};
+		const beside = placeOffOutline(high, fit);
+
+		expect(beside.side).toBe('right');
+		expect(beside.left).toBe(812);
+	});
+
+	function setup(outline: SpeakerOutline) {
+		const mount = document.createElement('div');
+
+		document.body.appendChild(mount);
+
+		const dialogue = new DialogueLayer();
+
+		dialogue.mount(mount, {
+			measure: () => ({x: 700, y: 500}),
+			outline: () => outline,
+			stageBox: () => ({left: 0, top: 0, width: 1600, height: 900})
+		});
+
+		return {dialogue, mount};
+	}
+
+	afterEach(() => document.body.replaceChildren());
+
+	function bubble(mount: HTMLElement) {
+		return mount.querySelector('.sliders-bubble') as HTMLElement;
+	}
+
+	it('grows no tail on a talking object unless asked', () => {
+		const {dialogue, mount} = setup(crate);
+
+		dialogue.say('crate', 'Creak.');
+		expect(bubble(mount).dataset.anchored).toBe('false');
+		expect(bubble(mount).dataset.anchorX).toBeUndefined();
+
+		dialogue.say('crate', 'Creak.', {style: {tail: 'nearest'}});
+		expect(bubble(mount).dataset.anchored).toBe('true');
+	});
+
+	it('tail: none takes a character\'s tail away, and keeps the bubble on them', () => {
+		const {dialogue, mount} = setup({...crate, cast: true});
+
+		dialogue.say('mira', 'Hm.');
+		expect(bubble(mount).dataset.anchored).toBe('true');
+
+		const hung = bubble(mount).style.transform;
+
+		dialogue.say('mira', 'Hm.', {style: {tail: 'none'}});
+		expect(bubble(mount).dataset.anchored).toBe('false');
+		expect(bubble(mount).style.transform).toBe(hung);
 	});
 });

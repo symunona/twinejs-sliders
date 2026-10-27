@@ -26,7 +26,7 @@
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {BubbleGeometry} from '@sliders/scene-edit';
-import type {BubbleStyle} from '@sliders/scene-types';
+import type {BubbleStyle, Frac2} from '@sliders/scene-types';
 import './bubble-editor.css';
 
 export interface BubbleEditorProps {
@@ -45,6 +45,12 @@ export interface BubbleEditorProps {
 	/** Controlled selection, so Delete can reach the bubble. Own state when absent. */
 	selected?: boolean;
 	onSelectedChange?: (selected: boolean) => void;
+	/**
+	 * Filled with a reader of where the tail points now, in stage fractions — or, with no
+	 * tail, a point just under the bubble. What the beat panel's Free writes, so cutting
+	 * the tail loose leaves it where it was.
+	 */
+	tailReader?: React.MutableRefObject<(() => Frac2 | undefined) | undefined>;
 }
 
 interface Rect {
@@ -207,6 +213,20 @@ function measure(frameEl: HTMLElement): Measured | undefined {
 	};
 }
 
+/** Where the tail points in `measured`, as stage fractions. See `tailReader`. */
+function tailFraction(measured: Measured): Frac2 {
+	const {anchor, box, bubble} = measured;
+	const point = anchor ?? {
+		x: bubble.left + bubble.width / 2,
+		y: bubble.top + bubble.height + box.height * 0.1
+	};
+
+	return {
+		x: clamp01((point.x - box.left) / box.width),
+		y: clamp01((point.y - box.top) / box.height)
+	};
+}
+
 export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 	beat,
 	editable,
@@ -216,10 +236,28 @@ export const BubbleEditor: React.FC<BubbleEditorProps> = ({
 	onSelectBeat,
 	onSelectedChange,
 	selected: selectedProp,
-	style
+	style,
+	tailReader
 }) => {
 	const {t} = useTranslation();
 	const ref = React.useRef<HTMLDivElement>(null);
+
+	React.useEffect(() => {
+		if (!tailReader) {
+			return;
+		}
+
+		tailReader.current = () => {
+			const el = ref.current?.parentElement;
+			const now = el ? measure(el) : undefined;
+
+			return now ? tailFraction(now) : undefined;
+		};
+
+		return () => {
+			tailReader.current = undefined;
+		};
+	}, [tailReader]);
 	const gestureRef = React.useRef<Gesture>();
 	const [ownSelected, setOwnSelected] = React.useState(false);
 	const selected = selectedProp ?? ownSelected;

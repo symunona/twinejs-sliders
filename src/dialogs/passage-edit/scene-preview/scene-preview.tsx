@@ -47,6 +47,7 @@ import {
 	EntityFit,
 	EntityId,
 	EntityKind,
+	Frac2,
 	matchPassageName,
 	PoseLoop,
 	Vec2
@@ -622,6 +623,25 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 	const beats = parse.result?.scene.beats ?? EMPTY_BEATS;
 	// State N is produced by beat N-1; S0 has no beat.
 	const shownBeat = beat > 0 ? beats[beat - 1] : undefined;
+	/**
+	 * Whether the line's speaker is an object, which grows no tail by default. Asked of the
+	 * renderer first — `kind: auto` is only settled once the cast has resolved — then of the
+	 * authored kind, for a speaker the renderer has not drawn.
+	 */
+	const speakerIsObject =
+		shownBeat?.kind === 'say'
+			? (() => {
+					const cast = renderer?.outline(shownBeat.who)?.cast;
+
+					return cast === undefined
+						? assignable.find(entry => entry.id === shownBeat.who)?.kind ===
+								'prop'
+						: !cast;
+			  })()
+			: undefined;
+	/** Set by `BubbleEditor`: where the tail points now, for the Tail row's Free. */
+	const tailReader = React.useRef<() => Frac2 | undefined>();
+	const readTail = React.useCallback(() => tailReader.current?.(), []);
 	/**
 	 * The scene on the player's clock (`sceneTimeline`): per beat, what animates, for how
 	 * long, and how it hands over. Play, the strip and the timing overlay all read this one.
@@ -2639,6 +2659,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				onSelectBeat={handleSelectBeat}
 				onSelectedChange={setBubbleSelected}
 				selected={bubbleSelected}
+				tailReader={tailReader}
 				style={shownBeat?.kind === 'say' || shownBeat?.kind === 'box' ? shownBeat.style : undefined}
 			/>
 			{/* A dropped file is not a background, an object, a cast member or a pose until
@@ -2939,7 +2960,9 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 					onSetKey={handleBeatKey}
 					onSetSpeaker={handleBeatSpeaker}
 					onSetText={handleBeatText}
+					readTail={readTail}
 					scope={beat > 0 ? 'beat' : 'scene'}
+					speakerIsObject={speakerIsObject}
 					speakers={assignable}
 					stageIds={stageIds}
 					storyColors={swatches}

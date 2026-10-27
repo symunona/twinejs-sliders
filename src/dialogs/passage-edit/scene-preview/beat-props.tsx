@@ -34,7 +34,7 @@ import {
 	EASE_NAMES,
 	bubbleFontStack
 } from '@sliders/scene-types';
-import type {Beat, BeatEase, BubbleStyle} from '@sliders/scene-types';
+import type {Beat, BeatEase, BubbleStyle, Frac2} from '@sliders/scene-types';
 import {CheckboxButton} from '../../../components/control/checkbox-button';
 import {IconButton} from '../../../components/control/icon-button';
 import {AUTO_ADVANCE_MS} from './beat-hold';
@@ -126,6 +126,17 @@ export interface BeatPropsProps {
 	 * which leaves the row enabled rather than guessing.
 	 */
 	stageIds?: readonly string[];
+	/**
+	 * The speaker is an object, not a character: its tail is off unless stated, and aims
+	 * at the nearest part of it rather than at a mouth it does not have.
+	 */
+	speakerIsObject?: boolean;
+	/**
+	 * Where the tail points right now, in stage fractions. Picking Free writes it, so the
+	 * tail stays where it was and the cross on stage is there to drag. Absent = a point
+	 * under the bubble.
+	 */
+	readTail?: () => Frac2 | undefined;
 }
 
 /** The empty option: "whatever the character or the renderer already says". */
@@ -253,13 +264,35 @@ export function anchorDisabledKey(
 		return 'dialogs.passageEdit.beatProps.anchorNarration';
 	}
 
-	if (beat?.kind !== 'say' || tail || !stageIds) {
+	if (beat?.kind !== 'say' || typeof tail === 'object' || !stageIds) {
 		return undefined;
 	}
 
 	return stageIds.includes(beat.who)
 		? undefined
 		: 'dialogs.passageEdit.beatProps.anchorOffStage';
+}
+
+/** The Tail dropdown's value for an `[x, y]` tail. */
+const FREE_TAIL = 'free';
+
+/** Where Free puts the tail when nothing says where it points now: under the stage centre. */
+const FREE_TAIL_FALLBACK: Frac2 = {x: 0.5, y: 0.85};
+
+/**
+ * What a `tail:` value means, as one word: `free` for a point, the default for the speaker
+ * when unset — `mouth` for a character, `none` for an object. Mirrors `tailMode` in
+ * render-dom's `dialogue.ts`.
+ */
+export function tailChoice(
+	tail: BubbleStyle['tail'],
+	object: boolean | undefined
+): string {
+	if (tail && typeof tail === 'object') {
+		return FREE_TAIL;
+	}
+
+	return tail ?? (object ? 'none' : 'mouth');
 }
 
 /**
@@ -404,6 +437,8 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 	onSetBubble,
 	onShowTiming,
 	scope = 'beat',
+	readTail,
+	speakerIsObject,
 	stageIds,
 	storyColors
 }) => {
@@ -485,6 +520,37 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 		? undefined
 		: anchorDisabledKey(beat, merged.tail, stageIds);
 	const enterOff = merged.enter === 'none';
+	/**
+	 * The Tail row: a checkbox for "has one", a dropdown for what it aims at. A character
+	 * aims at its mouth by default, an object grows none until asked and then aims at its
+	 * nearest edge; either can be cut loose to a free point. Each write that lands on what
+	 * the layers above already say removes the key instead.
+	 */
+	const tailShown = !isScene && beat?.kind === 'say';
+	const tailNow = tailChoice(merged.tail, speakerIsObject);
+	const tailAbove = tailChoice(inherited?.tail, speakerIsObject);
+	const tailOn = tailNow !== 'none';
+	const tailAim = speakerIsObject ? 'nearest' : 'mouth';
+	const tailOptions = [tailAim, FREE_TAIL];
+
+	if (tailOn && !tailOptions.includes(tailNow)) {
+		tailOptions.push(tailNow);
+	}
+
+	const tailOff =
+		merged.anchor === 'scene'
+			? 'dialogs.passageEdit.beatProps.tailDetached'
+			: undefined;
+
+	function setTail(choice: string) {
+		if (choice === FREE_TAIL) {
+			onSetBubble('tail', readTail?.() ?? FREE_TAIL_FALLBACK);
+			return;
+		}
+
+		onSetBubble('tail', choice === tailAbove ? null : choice);
+	}
+
 	const size =
 		sizeDraft ?? (style?.size === undefined ? '' : String(style.size));
 	const emptyKey = isScene ? undefined : emptyReasonKey(beat, beatNumber);
@@ -936,6 +1002,37 @@ export const BeatProps: React.FC<BeatPropsProps> = ({
 									</TextSelect>
 								</span>
 							</PropRow>
+							{tailShown && (
+								<PropRow
+									{...bubbleRow('tail', label(`tail_${tailAbove}`))}
+									disabledReason={tailOff && t(tailOff)}
+									testId="beat-prop-tail"
+								>
+									<span
+										className="beat-prop-disabled-wrap beat-prop-tail"
+										title={tailOff && t(tailOff)}
+									>
+										<CheckboxButton
+											disabled={!!tailOff}
+											iconOnly
+											label={label('tail')}
+											onChange={next => setTail(next ? tailAim : 'none')}
+											value={tailOn}
+										/>
+										<TextSelect
+											disabled={!!tailOff || !tailOn}
+											onChange={event => setTail(event.target.value)}
+											options={tailOptions.map(choice => ({
+												label: label(`tail_${choice}`),
+												value: choice
+											}))}
+											value={tailOn ? tailNow : tailAim}
+										>
+											{label('tailAim')}
+										</TextSelect>
+									</span>
+								</PropRow>
+							)}
 							<PropRow
 								{...bubbleRow('enter', inherited?.enter ?? 'fade')}
 								testId="beat-prop-enter"

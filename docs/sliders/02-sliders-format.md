@@ -720,7 +720,7 @@ Two keys on a say beat, and the same two inside a `box:` map:
 | `anchor` | `speaker` (default) · `scene` — detach from the speaker: no tail, `at:` alone places it |
 | `sizing` | `auto` (default, snap to the words) · `absolute` (box is `w` x `h` of the slide, TEXT is fitted to it) · `manual` (same box, text stays normal size) |
 | `at` | `[x, y]`, the bubble's centre as fractions of the stage box. Beats `place`. |
-| `tail` | `[x, y]`, where the tail points, as fractions of the stage box — instead of at the speaker. `anchor: scene` ignores it. |
+| `tail` | `mouth` (character default) · `nearest` (closest edge of the speaker's box, centre if the bubble is over it) · `none` (object default) · `[x, y]` free stage point. `anchor: scene` ignores it. |
 | `w` | width, fraction of the stage width. Wrap cap under `auto`, exact width under `absolute` / `manual`. |
 | `h` | height, fraction of the stage height. `absolute` / `manual` only. |
 | `align` | words across the box: `left` · `centre` · `right`. Unset = left (`narrator` box centres). |
@@ -852,6 +852,23 @@ speaker's anchor everywhere, so an unpinned bubble also hangs off the named poin
 detached bubble (`anchor: scene`) grows no tail at all and ignores it.
 
 Dragging the amber cross in the scene editor writes it.
+
+Word forms:
+
+| `tail:` | Tail |
+|---|---|
+| unset | character → `mouth`, object → `none` |
+| `mouth` | back at the speaker's `bubble` anchor (the old default) |
+| `nearest` | closest point on the speaker's box edge to the bubble centre; box centre when the bubble centre is inside it. Follows `rot`, `flip`, camera. |
+| `none` | no tail. Bubble still hangs off the speaker (unlike `anchor: scene`). |
+
+```yaml
+- radio: {say: "…static…", bubble: {tail: nearest}}
+- mira: {say: "(thinks)", bubble: {tail: none}}
+```
+
+Editor: beat panel BUBBLE ▸ Tail — checkbox (on/off) + dropdown. Character: Mouth · Free.
+Object: Nearest · Free. Free writes the current tail point as `[x, y]`; drag the cross.
 
 ### Detached
 

@@ -241,3 +241,14 @@
 	background: var(--blue);
 	color: var(--white);
 }
+
+/* Tail: the checkbox in front, the aim taking the rest of the row. */
+.beat-prop-control .beat-prop-tail {
+	align-items: center;
+	display: flex;
+	gap: 4px;
+}
+
+.beat-prop-control .beat-prop-tail > .icon-button {
+	flex: 0 0 auto;
+}

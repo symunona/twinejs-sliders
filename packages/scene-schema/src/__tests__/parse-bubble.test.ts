@@ -165,6 +165,25 @@ describe('manual sizing and tail:', () => {
 		});
 	});
 
+	it('takes a tail word', () => {
+		for (const word of ['mouth', 'nearest', 'none']) {
+			const {scene, errors} = parseScene(
+				BEAT(`{say: "Hi.", bubble: {tail: ${word}}}`)
+			);
+
+			expect(errors).toEqual([]);
+			expect(scene.beats[0]).toMatchObject({style: {tail: word}});
+		}
+	});
+
+	it('refuses an unknown tail word, naming the right ones', () => {
+		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {tail: nose}}'));
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0].code).toBe('bad-value');
+		expect(errors[0].hint).toContain('nearest');
+	});
+
 	it('refuses a tail that is not a pair', () => {
 		const {errors} = parseScene(BEAT('{say: "Hi.", bubble: {tail: 0.8}}'));
 

@@ -39,6 +39,7 @@ import {
 	BG_MOTIONS,
 	BUBBLE_ALIGNS,
 	BUBBLE_ANCHORS,
+	BUBBLE_TAILS,
 	BUBBLE_ENTERS,
 	BUBBLE_KEYS,
 	BUBBLE_PLACES,
@@ -150,6 +151,7 @@ export type HintSlot =
 	/** `place:` — where the bubble sits. */
 	| {kind: 'place'}
 	| {kind: 'bubbleAnchor'}
+	| {kind: 'bubbleTail'}
 	| {kind: 'sizing'}
 	| {kind: 'align'}
 	| {kind: 'valign'}
@@ -940,6 +942,10 @@ export function sceneHintContext(
 				case 'sizing':
 					return found({kind: 'sizing'});
 
+				// Bubble-only. The free `[x, y]` form has nothing to complete.
+				case 'tail':
+					return found({kind: 'bubbleTail'});
+
 				// Bubble-only too.
 				case 'align':
 					return found({kind: 'align'});
@@ -1155,6 +1161,9 @@ function namesForSlot(
 
 		case 'bubbleAnchor':
 			return [...BUBBLE_ANCHORS];
+
+		case 'bubbleTail':
+			return [...BUBBLE_TAILS];
 
 		case 'sizing':
 			return [...BUBBLE_SIZINGS];
