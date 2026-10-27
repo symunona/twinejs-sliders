@@ -32,6 +32,8 @@ export interface StoryCardsProps {
 	checkingOut?: Record<string, CheckoutProgress | undefined>;
 	/** Art landing in a story that is already open for business. */
 	downloadingAssets?: Record<string, {done: number; total: number} | undefined>;
+	/** The server index, for who created and last edited each story. */
+	index?: StoryIndexEntry[];
 	/** Stories on the server with no local copy. Drawn last, dimmed. */
 	ghosts?: StoryIndexEntry[];
 	onCheckOutGhost?: (entry: StoryIndexEntry) => Promise<unknown> | unknown;
@@ -52,6 +54,7 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 		downloadingAssets,
 		checkoutProgress,
 		ghosts,
+		index,
 		onCheckOutGhost,
 		onSelectStory,
 		presence,
@@ -81,6 +84,10 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 		);
 	}
 
+	const indexById = React.useMemo(
+		() => new Map((index ?? []).map(entry => [entry.id, entry])),
+		[index]
+	);
 	const synced = syncedStories ?? [];
 	const ghostEntries = ghosts ?? [];
 
@@ -99,7 +106,9 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 					{list.map(story => (
 						<CSSTransition classNames="pop" key={story.id} timeout={200}>
 							<StoryCard
+								createdBy={indexById.get(story.id)?.createdBy}
 								downloading={downloadingAssets?.[story.id]}
+								lastEditedBy={indexById.get(story.id)?.lastClient}
 								loading={checkingOut?.[story.id]}
 								onChangeTagColor={handleChangeTagColor}
 								onEdit={() => history.push(`/stories/${story.id}`)}

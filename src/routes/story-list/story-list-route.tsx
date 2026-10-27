@@ -31,7 +31,7 @@ export const InnerStoryListRoute: React.FC = () => {
 	const {dispatch: dialogsDispatch} = useDialogsContext();
 	const {dispatch: storiesDispatch, stories} = useStoriesContext();
 	const {prefs} = usePrefsContext();
-	const {actions, connected, ghosts, presence, progress, records} =
+	const {actions, connected, ghosts, index, presence, progress, records} =
 		useServerSyncContext();
 	const {shouldShowDonationPrompt} = useDonationCheck();
 	const {t} = useTranslation();
@@ -176,6 +176,7 @@ export const InnerStoryListRoute: React.FC = () => {
 								checkingOut={checkingOut}
 								checkoutProgress={checkoutProgress}
 								ghosts={visibleGhosts}
+								index={index}
 								onCheckOutGhost={entry => actions.checkout(entry.id)}
 								onSelectStory={story => {
 									if (!checkingOut[story.id]) {

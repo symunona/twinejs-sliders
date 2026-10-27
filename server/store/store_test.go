@@ -248,6 +248,47 @@ func TestListIncludesTombstonesFlagged(t *testing.T) {
 	}
 }
 
+func TestCreatedByStaysWithTheFirstWriter(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+	if _, err := s.PutStory("story-1", storyBody("Lighthouse", "two"), Client{Name: "bob"}, PutOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	e := listEntry(t, s, "story-1")
+	if e.CreatedBy != "mira" || e.LastClient != "bob" {
+		t.Fatalf("createdBy %q lastClient %q, want mira and bob", e.CreatedBy, e.LastClient)
+	}
+}
+
+// A story written before createdBy existed takes it from its oldest revision, in the
+// index straight away and on meta.json at its next write.
+func TestCreatedByBackfillsFromOldestRevision(t *testing.T) {
+	s := testStore(t, nil)
+	mustPut(t, s, "story-1", storyBody("Lighthouse", "one"))
+	if _, err := s.PutStory("story-1", storyBody("Lighthouse", "two"), Client{Name: "bob"}, PutOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.Meta("story-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.CreatedBy = ""
+	if err := writeJSONAtomic(s.metaPath("story-1"), m); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := listEntry(t, s, "story-1").CreatedBy; got != "mira" {
+		t.Fatalf("backfilled createdBy %q, want mira", got)
+	}
+	if _, err := s.PutStory("story-1", storyBody("Lighthouse", "three"), Client{Name: "bob"}, PutOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.Meta("story-1"); m.CreatedBy != "mira" {
+		t.Fatalf("stored createdBy %q, want mira", m.CreatedBy)
+	}
+}
+
 // listEntry pulls one story's row out of the index.
 func listEntry(t *testing.T, s *Store, id string) IndexEntry {
 	t.Helper()

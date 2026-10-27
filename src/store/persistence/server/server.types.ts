@@ -59,6 +59,11 @@ export interface StoryIndexEntry {
 	rev: number;
 	updatedAt: string;
 	lastClient: string;
+	/**
+	 * Client label on the story's first write. OPTIONAL: an older server does not send it,
+	 * and a server that does backfills legacy stories from their oldest kept revision.
+	 */
+	createdBy?: string;
 	passageCount: number;
 	bytes: number;
 	assetCount: number;

@@ -10,12 +10,15 @@ import (
 // Meta is meta.json: everything about a story that is not the story. The counts are
 // cached here so `GET /stories` can draw every card without opening a single body.
 type Meta struct {
-	ID           string `json:"id"`
-	IFID         string `json:"ifid"`
-	Name         string `json:"name"`
-	Rev          int    `json:"rev"`
-	UpdatedAt    string `json:"updatedAt"`
-	LastClient   string `json:"lastClient"`
+	ID         string `json:"id"`
+	IFID       string `json:"ifid"`
+	Name       string `json:"name"`
+	Rev        int    `json:"rev"`
+	UpdatedAt  string `json:"updatedAt"`
+	LastClient string `json:"lastClient"`
+	// CreatedBy is the client label on the story's first write. Stories older than the
+	// field have none until backfillCreatedBy finds one; see there.
+	CreatedBy    string `json:"createdBy,omitempty"`
 	Deleted      bool   `json:"deleted"`
 	DeletedAt    string `json:"deletedAt,omitempty"`
 	PassageCount int    `json:"passageCount"`
@@ -51,6 +54,7 @@ type IndexEntry struct {
 	Rev          int    `json:"rev"`
 	UpdatedAt    string `json:"updatedAt"`
 	LastClient   string `json:"lastClient"`
+	CreatedBy    string `json:"createdBy,omitempty"`
 	PassageCount int    `json:"passageCount"`
 	Bytes        int64  `json:"bytes"`
 	// AssetRev is what a polling client watches to decide it has to re-pull the art.
@@ -178,6 +182,7 @@ func (s *Store) List() ([]IndexEntry, error) {
 			Rev:          m.Rev,
 			UpdatedAt:    m.UpdatedAt,
 			LastClient:   m.LastClient,
+			CreatedBy:    s.backfillCreatedBy(m),
 			PassageCount: m.PassageCount,
 			Bytes:        m.Bytes,
 			AssetRev:     m.AssetRev,
@@ -193,6 +198,23 @@ func (s *Store) List() ([]IndexEntry, error) {
 		return out[i].ID < out[j].ID
 	})
 	return out, nil
+}
+
+// backfillCreatedBy is m.CreatedBy, or for a story written before the field existed, the
+// client on its oldest kept revision — the creator unless REV_KEEP has pruned the first
+// one, which is the best this store still knows. A story with no revisions at all has
+// had one write, so its last client is its creator. Empty only for a story never written.
+//
+// List calls this without persisting the answer: it costs one small read per legacy
+// story per poll, until that story's next write stores it for good.
+func (s *Store) backfillCreatedBy(m Meta) string {
+	if m.CreatedBy != "" || m.Rev == 0 {
+		return m.CreatedBy
+	}
+	if index, err := s.readRevIndex(m.ID); err == nil && len(index) > 0 {
+		return index[0].Client
+	}
+	return m.LastClient
 }
 
 // GetStory returns the current body and its meta.
@@ -323,6 +345,9 @@ func (s *Store) writeStoryLocked(m Meta, body []byte, sum storySummary, c Client
 	m.IFID = sum.ifid
 	m.PassageCount = sum.passages
 	m.UpdatedAt = nowISO()
+	if m.CreatedBy = s.backfillCreatedBy(m); m.CreatedBy == "" {
+		m.CreatedBy = c.label()
+	}
 	m.LastClient = c.label()
 	m.Deleted = false
 	m.DeletedAt = ""

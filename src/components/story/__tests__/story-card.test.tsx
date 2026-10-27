@@ -53,6 +53,26 @@ describe('<StoryCard>', () => {
 		).toBeInTheDocument();
 	});
 
+	it('renders who created and who last edited the story', () => {
+		renderComponent({createdBy: 'mira', lastEditedBy: 'bob'});
+		expect(screen.getByTestId('story-card-created-by')).toHaveTextContent(
+			'components.storyCard.createdBy'
+		);
+		expect(
+			screen.getByTestId('story-card-last-edited-by')
+		).toHaveTextContent('components.storyCard.lastEditedBy');
+	});
+
+	it('renders no authors for a story the server does not have', () => {
+		renderComponent();
+		expect(
+			screen.queryByTestId('story-card-created-by')
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByTestId('story-card-last-edited-by')
+		).not.toBeInTheDocument();
+	});
+
 	it('renders a tag button for every tag the story has', () => {
 		const story = fakeStory();
 

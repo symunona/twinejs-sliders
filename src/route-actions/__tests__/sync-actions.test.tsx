@@ -3,15 +3,19 @@ import {axe} from 'jest-axe';
 import * as React from 'react';
 import {FakeStateProvider} from '../../test-util';
 import {fakeStory} from '../../test-util/fakes';
+import type {StoryIndexEntry} from '../../store/persistence/server/server.types';
 import {ServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import {emptyPresence} from '../../store/persistence/server/presence';
 import {Story} from '../../store/stories';
 import {SyncActions} from '../sync-actions';
 
 describe('<SyncActions>', () => {
-	function renderComponent(story?: Story) {
+	function renderComponent(story?: Story, index: StoryIndexEntry[] = []) {
 		return render(
-			<FakeStateProvider stories={story ? [story] : []}>
+			<FakeStateProvider
+				prefs={{backendUrl: 'https://store.example'}}
+				stories={story ? [story] : []}
+			>
 				<ServerSyncContext.Provider
 					value={{
 						actions: {} as never,
@@ -21,7 +25,7 @@ describe('<SyncActions>', () => {
 						connected: true,
 						focusPassage: () => undefined,
 						ghosts: [],
-						index: [],
+						index,
 						lock: () => undefined,
 						presence: emptyPresence(),
 						progress: {},
@@ -61,6 +65,26 @@ describe('<SyncActions>', () => {
 		expect(
 			screen.queryByRole('button', {name: 'routeActions.app.syncPublish'})
 		).not.toBeInTheDocument();
+	});
+
+	it('offers to copy the public URL of a story the server has', () => {
+		const story = fakeStory();
+
+		renderComponent(story, [{id: story.id} as StoryIndexEntry]);
+		expect(
+			screen.getByRole('button', {
+				name: 'routes.storyList.server.copyPublicUrl'
+			})
+		).toBeEnabled();
+	});
+
+	it('disables the public URL for a story the server does not have', () => {
+		renderComponent(fakeStory());
+		expect(
+			screen.getByRole('button', {
+				name: 'routes.storyList.server.copyPublicUrl'
+			})
+		).toBeDisabled();
 	});
 
 	it('is accessible', async () => {

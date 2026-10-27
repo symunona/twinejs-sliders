@@ -6,6 +6,7 @@ import {ButtonBar} from '../container/button-bar';
 import {Card, CardContent} from '../container/card';
 import {IconButton} from '../control/icon-button';
 import './ghost-story-card.css';
+import {StoryCardAuthors} from './story-card-authors';
 
 export interface GhostStoryCardProps {
 	entry: StoryIndexEntry;
@@ -107,6 +108,10 @@ export const GhostStoryCard: React.FC<GhostStoryCardProps> = props => {
 							{t('routes.storyList.server.ghostUpdated', {
 								time: formatRelativeTime(entry.updatedAt)
 							})}
+							<StoryCardAuthors
+								createdBy={entry.createdBy}
+								lastEditedBy={entry.lastClient}
+							/>
 						</p>
 					</div>
 					<ButtonBar>

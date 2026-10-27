@@ -9,12 +9,15 @@ import {CardContent, CardProps} from '../container/card';
 import {SelectableCard} from '../container/card/selectable-card';
 import {TagButton} from '../tag';
 import './story-card.css';
+import {StoryCardAuthors} from './story-card-authors';
 import {StoryPreview} from './story-preview';
 import {StoryCardPresence, StoryCardSyncBadge} from './story-card-sync-badge';
 
 const dateFormatter = new Intl.DateTimeFormat([]);
 
 export interface StoryCardProps extends CardProps {
+	/** Who first wrote the story to the server, if it is there. */
+	createdBy?: string;
 	/**
 	 * Set while the story is here but its art is still coming down. The card says so and
 	 * refuses to be selected: opening it now shows placeholders where the backgrounds
@@ -27,6 +30,8 @@ export interface StoryCardProps extends CardProps {
 	 * it, which is nothing like a checkout that has not finished.
 	 */
 	downloading?: {done: number; total: number};
+	/** Who last wrote the story to the server, if it is there. */
+	lastEditedBy?: string;
 	onChangeTagColor: (name: string, color: Color) => void;
 	onRemoveTag: (name: string) => void;
 	onEdit: () => void;
@@ -41,7 +46,9 @@ export interface StoryCardProps extends CardProps {
 
 export const StoryCard: React.FC<StoryCardProps> = props => {
 	const {
+		createdBy,
 		downloading,
+		lastEditedBy,
 		loading,
 		onChangeTagColor,
 		onEdit,
@@ -80,6 +87,10 @@ export const StoryCard: React.FC<StoryCardProps> = props => {
 								{t('components.storyCard.passageCount', {
 									count: story.passages.length
 								})}
+								<StoryCardAuthors
+									createdBy={createdBy}
+									lastEditedBy={lastEditedBy}
+								/>
 							</p>
 						</div>
 					</div>

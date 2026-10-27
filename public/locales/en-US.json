@@ -144,6 +144,8 @@
 			"freeSpace": "{{percent}}% space available"
 		},
 		"storyCard": {
+			"createdBy": "Created by {{name}}",
+			"lastEditedBy": "Last edited by {{name}}",
 			"lastUpdated": "Last edited on {{date}}",
 			"loadingAssets": "Getting artwork…",
 			"loadingAssetsCount": "Getting artwork… {{done}} of {{total}}",
