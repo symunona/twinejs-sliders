@@ -97,7 +97,8 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	const source = published?.storyId === story.id ? published : undefined;
 	const selected = story.passages.filter(passage => passage.selected);
 	/**
-	 * The map's answer to "which passage", used only when no editor is open. Solo selection
+	 * The map's answer to "which passage", used when no editor is open or the map was
+	 * clicked since one was last worked in (`pickFromMap`). Solo selection
 	 * only: with two selected there is no one scene to show, the same rule the passage
 	 * toolbar's actions follow.
 	 */

@@ -126,34 +126,22 @@ describe('usePassageChangeHandlers', () => {
 		});
 	});
 
-	it('returns a handleEditPassage function which opens a passage editor', () => {
-		const story = fakeStory(1);
-
-		renderHook(story);
-		fireEvent.click(screen.getByText('handleEditPassage'));
-
-		const editDialog = screen.getByTestId('mock-passage-edit-stack');
-
-		expect(editDialog).toBeInTheDocument();
-		expect(editDialog.dataset.passageIds).toBe(
-			JSON.stringify([story.passages[0].id])
-		);
-	});
-
-	it('opens a scene passage in the scene editor, maximized, beside its passage editor', () => {
+	it('returns a handleEditPassage function which opens the scene editor maximized, not a passage editor', () => {
 		const story = fakeStory(1);
 
 		story.passages[0].text = '[scene]\nbg: forest\n\n[continue]\n';
 		renderHook(story);
 		fireEvent.click(screen.getByText('handleEditPassage'));
 
-		expect(screen.getByTestId('mock-passage-edit-stack')).toBeInTheDocument();
 		expect(
 			screen.getByTestId('mock-scene-preview-dialog').dataset.maximized
 		).toBe('true');
+		expect(
+			screen.queryByTestId('mock-passage-edit-stack')
+		).not.toBeInTheDocument();
 	});
 
-	it('leaves the scene editor shut for a passage without a scene', () => {
+	it('opens a passage without a scene in the scene editor too', () => {
 		const story = fakeStory(1);
 
 		story.passages[0].text = 'Just prose.';
@@ -161,7 +149,10 @@ describe('usePassageChangeHandlers', () => {
 		fireEvent.click(screen.getByText('handleEditPassage'));
 
 		expect(
-			screen.queryByTestId('mock-scene-preview-dialog')
+			screen.getByTestId('mock-scene-preview-dialog')
+		).toBeInTheDocument();
+		expect(
+			screen.queryByTestId('mock-passage-edit-stack')
 		).not.toBeInTheDocument();
 	});
 

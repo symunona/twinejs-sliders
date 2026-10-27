@@ -27,6 +27,12 @@ interface RegisteredSource extends ScenePreviewSource {
 interface ScenePreviewSourceContextProps {
 	active: () => RegisteredSource | undefined;
 	activate: (passageId: string) => void;
+	/**
+	 * The map took the stage: a passage clicked there. Editors activated before this stop
+	 * driving the preview, which falls back to the map's selection, until one is activated
+	 * again.
+	 */
+	pickFromMap: () => void;
 	publish: (source: ScenePreviewSource) => void;
 	subscribe: (listener: () => void) => () => void;
 	unpublish: (passageId: string) => void;
@@ -38,6 +44,7 @@ export const ScenePreviewSourceContext =
 	React.createContext<ScenePreviewSourceContextProps>({
 		active: () => undefined,
 		activate: noop,
+		pickFromMap: noop,
 		publish: noop,
 		subscribe: () => noop,
 		unpublish: noop
@@ -57,6 +64,7 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 	const entries = React.useRef(new Map<string, RegisteredSource>());
 	const listeners = React.useRef(new Set<() => void>());
 	const clock = React.useRef(0);
+	const mapPickedAt = React.useRef(0);
 
 	const value = React.useMemo<ScenePreviewSourceContextProps>(() => {
 		const notify = () => listeners.current.forEach(listener => listener());
@@ -71,7 +79,7 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 					}
 				});
 
-				return best;
+				return best && best.activatedAt > mapPickedAt.current ? best : undefined;
 			},
 			activate(passageId) {
 				const entry = entries.current.get(passageId);
@@ -85,6 +93,11 @@ export const ScenePreviewSourceProvider: React.FC = props => {
 					...entry,
 					activatedAt: clock.current
 				});
+				notify();
+			},
+			pickFromMap() {
+				clock.current++;
+				mapPickedAt.current = clock.current;
 				notify();
 			},
 			publish(source) {
@@ -163,7 +176,10 @@ export function usePublishScenePreview(
 	React.useEffect(() => () => unpublish(passageId), [passageId, unpublish]);
 }
 
-/** The passage the preview should be showing, or undefined when no editor is open. */
+/**
+ * The passage the preview should be showing, or undefined when no editor is open or the
+ * map was clicked since one was last activated.
+ */
 export function useScenePreviewSource(): ScenePreviewSource | undefined {
 	const {active, subscribe} = React.useContext(ScenePreviewSourceContext);
 	const [source, setSource] = React.useState(active);

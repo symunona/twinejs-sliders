@@ -1,7 +1,9 @@
-import {extractSceneBlock} from '@sliders/scene-index';
 import * as React from 'react';
-import {addPassageEditors, useDialogsContext} from '../../dialogs';
-import {ScenePreviewDialog} from '../../dialogs/scene-preview';
+import {useDialogsContext} from '../../dialogs';
+import {
+	ScenePreviewDialog,
+	setScenePreviewDismissed
+} from '../../dialogs/scene-preview';
 import {
 	deselectPassage,
 	movePassages,
@@ -13,6 +15,7 @@ import {
 } from '../../store/stories';
 import {useUndoableStoriesContext} from '../../store/undoable-stories';
 import {Point, Rect} from '../../util/geometry';
+import {ScenePreviewSourceContext} from './scene-preview-source-context';
 
 export function usePassageChangeHandlers(story: Story) {
 	const selectedPassages = React.useMemo(
@@ -21,6 +24,7 @@ export function usePassageChangeHandlers(story: Story) {
 	);
 	const {dispatch: undoableStoriesDispatch} = useUndoableStoriesContext();
 	const {dispatch: dialogsDispatch} = useDialogsContext();
+	const {pickFromMap} = React.useContext(ScenePreviewSourceContext);
 
 	const handleDeselectPassage = React.useCallback(
 		(passage: Passage) =>
@@ -57,20 +61,20 @@ export function usePassageChangeHandlers(story: Story) {
 	);
 
 	/**
-	 * A scene passage opens on its stage, large: the scene editor maximized, the `</>`
-	 * editor beside it in the column. The `</>` editor still opens because it is what tells
-	 * the preview which passage to show (see `usePublishScenePreview`); without it, an
-	 * editor already open on another passage would keep the stage.
+	 * A passage opens on its stage, large: the scene editor maximized, whether or not the
+	 * passage has a scene yet. The `</>` editor stays shut -- it is one click away in the
+	 * preview's header. The preview follows the map's selection after `pickFromMap`, so an
+	 * editor already open on another passage does not keep the stage.
 	 */
 	const handleEditPassage = React.useCallback(
-		(passage: Passage) =>
+		(passage: Passage) => {
+			if (!passage.selected) {
+				undoableStoriesDispatch(selectPassage(story, passage, true));
+			}
+
+			pickFromMap();
+			setScenePreviewDismissed(false);
 			dialogsDispatch((dispatch, state) => {
-				addPassageEditors(story.id, [passage.id])(dispatch, state);
-
-				if (!extractSceneBlock(passage.text)) {
-					return;
-				}
-
 				const index = state().findIndex(
 					dialog => dialog.component === ScenePreviewDialog
 				);
@@ -86,8 +90,9 @@ export function usePassageChangeHandlers(story: Story) {
 					dispatch({type: 'setDialogCollapsed', collapsed: false, index});
 					dispatch({type: 'setDialogMaximized', maximized: true, index});
 				}
-			}),
-		[dialogsDispatch, story.id]
+			});
+		},
+		[dialogsDispatch, pickFromMap, story, undoableStoriesDispatch]
 	);
 
 	const handleRenamePassage = React.useCallback(
@@ -101,9 +106,12 @@ export function usePassageChangeHandlers(story: Story) {
 	);
 
 	const handleSelectPassage = React.useCallback(
-		(passage: Passage, exclusive: boolean) =>
-			undoableStoriesDispatch(selectPassage(story, passage, exclusive)),
-		[story, undoableStoriesDispatch]
+		(passage: Passage, exclusive: boolean) => {
+			undoableStoriesDispatch(selectPassage(story, passage, exclusive));
+			// A click on the map means "this passage" to the preview too.
+			pickFromMap();
+		},
+		[pickFromMap, story, undoableStoriesDispatch]
 	);
 
 	const handleSelectRect = React.useCallback(
