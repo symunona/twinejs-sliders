@@ -25,15 +25,15 @@ const SELECTION_KEY = 'sliders-library-selection:';
 
 /**
  * The rail selection last shown for a story, this tab. Survives the dialog remounting
- * (maximize, reopen). Storage can throw (private mode, blocked): then Mine.
+ * (maximize, reopen). Nothing saved, or storage throws (private mode, blocked): All.
  */
 export function savedSelection(storyId: string | undefined): RailSelection {
 	try {
 		return (
-			(storyId && window.sessionStorage.getItem(SELECTION_KEY + storyId)) || MINE
+			(storyId && window.sessionStorage.getItem(SELECTION_KEY + storyId)) || ALL
 		);
 	} catch {
-		return MINE;
+		return ALL;
 	}
 }
 

@@ -281,6 +281,21 @@ export const LibraryRail: React.FC<LibraryRailProps> = props => {
 		<nav aria-label={t('dialogs.library.collections')} className="library-rail">
 			<h3>{t('dialogs.library.collections')}</h3>
 			<ul>
+				{/* First and the default: every asset the library holds, any collection. */}
+				<li
+					className={classNames('library-rail-item', 'all', {
+						selected: selection === ALL
+					})}
+				>
+					<IconSearch className="library-rail-icon" />
+					<button
+						className="library-rail-name"
+						onClick={() => onSelect(ALL)}
+						type="button"
+					>
+						{t('dialogs.library.allAssets')}
+					</button>
+				</li>
 				<li
 					className={classNames('library-rail-item', 'mine', {
 						'drop-target': !!snapshot.own && dropTarget === snapshot.own.id,
@@ -351,13 +366,6 @@ export const LibraryRail: React.FC<LibraryRailProps> = props => {
 					validate={validateNew}
 					value={newName}
 					variant="create"
-				/>
-				<IconButton
-					icon={<IconSearch />}
-					label={t('dialogs.library.allAssets')}
-					onClick={() => onSelect(ALL)}
-					selectable
-					selected={selection === ALL}
 				/>
 			</ButtonBar>
 		</nav>

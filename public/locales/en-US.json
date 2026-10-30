@@ -1225,7 +1225,7 @@
 			"emptyCharacters": "No characters yet. Drop an image here or use New Character.",
 			"poseCount": "{{count}} pose",
 			"poseCount_plural": "{{count}} poses",
-			"fx": "FX",
+			"fx": "Particles",
 			"objects": "Objects",
 			"sounds": "Sounds",
 			"emptySounds": "No sounds yet. Drop mp3, ogg, wav or m4a files onto this tab.",

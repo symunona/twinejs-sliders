@@ -88,6 +88,14 @@
 	white-space: nowrap;
 }
 
+.library-rail-icon {
+	color: var(--gray);
+	flex: none;
+	height: 14px;
+	width: 14px;
+}
+
+.library-rail-item.all .library-rail-name,
 .library-rail-item.mine .library-rail-name {
 	font-weight: bold;
 }

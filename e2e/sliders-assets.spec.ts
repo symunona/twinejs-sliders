@@ -146,7 +146,7 @@ test.describe('Sliders asset manager', () => {
 	test('uploads files dropped onto a tab', async ({page}) => {
 		await createStory(page, 'Drop upload test');
 		await openAssetManager(page);
-		await page.getByRole('tab', {name: 'FX'}).click();
+		await page.getByRole('tab', {name: 'Particles'}).click();
 
 		const dropZone = page
 			.getByRole('dialog', {name: 'Library'})
