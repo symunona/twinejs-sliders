@@ -920,7 +920,7 @@
 				"poseNamed": "Pose: {{pose}}",
 				"poseAuto": "Automatic",
 				"poseLoop": "Step loop",
-				"highlightNamed": "Highlight: {{highlight}}",
+				"highlight": "Highlight",
 				"highlightDefault": "Default glow",
 				"highlightHint": "The glow a reader sees on hover. Hovering a choice shows it on the stage.",
 				"highlightHintUnlinked": "The glow a reader sees on hover once this object has a link (Links tab). Hovering a choice shows it on the stage.",

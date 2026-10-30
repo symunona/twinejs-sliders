@@ -527,27 +527,58 @@ describe('condition box', () => {
 		expect(onCondition).toHaveBeenCalledWith(undefined);
 	});
 
-	describe('highlight menu', () => {
+	describe('highlight dropdown', () => {
 		const DEFAULT_LABEL = 'dialogs.passageEdit.scenePreview.highlightDefault';
 
-		/** The highlight button: the row's only menu for a prop, which has no poses. */
-		async function openHighlightMenu() {
-			await waitFor(() => expect(poseButton()).toBeDefined());
-			fireEvent.click(poseButton() as HTMLButtonElement);
-			await waitFor(() => expect(poseItems().length).toBeGreaterThan(0));
+		/** The highlight dropdown's button: the row's only `PreviewSelect`. */
+		function highlightButton(): HTMLButtonElement | null {
+			return document.querySelector<HTMLButtonElement>(
+				'.scene-preview-selection .preview-select-button'
+			);
+		}
+
+		/** The open list's options. Portalled to the body. */
+		function highlightOptions(): HTMLElement[] {
+			return Array.from(
+				document.querySelectorAll<HTMLElement>('.preview-select-list [role="option"]')
+			);
+		}
+
+		function optionNamed(label: string): HTMLElement {
+			const option = highlightOptions().find(o => o.textContent === label);
+
+			if (!option) {
+				throw new Error(`no option "${label}"`);
+			}
+
+			return option;
+		}
+
+		function openHighlight() {
+			fireEvent.click(highlightButton() as HTMLButtonElement);
+			expect(highlightOptions().length).toBeGreaterThan(0);
 		}
 
 		it('is hidden without a handler', () => {
 			renderControls(['candle']);
 
-			expect(poseButton()).toBeUndefined();
+			expect(highlightButton()).toBeNull();
 		});
 
-		it('offers the default glow and the renderer presets', async () => {
+		it('is a dropdown, not a menu button', () => {
 			renderControls(['candle'], {onHighlight: jest.fn()});
-			await openHighlightMenu();
 
-			expect(poseItems().map(item => item.textContent)).toEqual([
+			expect(highlightButton()).not.toBeNull();
+			expect(highlightButton()?.getAttribute('aria-haspopup')).toBe('listbox');
+			expect(poseButton()).toBeUndefined();
+			expect(highlightButton()?.textContent).toBe(DEFAULT_LABEL);
+		});
+
+		it('offers the default glow and the renderer presets', () => {
+			renderControls(['candle'], {onHighlight: jest.fn()});
+			openHighlight();
+
+			expect(highlightOptions().map(o => o.textContent)).toEqual([
 				DEFAULT_LABEL,
 				'gold',
 				'danger',
@@ -556,39 +587,43 @@ describe('condition box', () => {
 			]);
 		});
 
-		it('offers back a token the scene already says', async () => {
+		it('offers back a token the scene already says', () => {
 			renderControls(['candle'], {
 				entities: [{...stage.entities.candle, highlight: 'moonlight'}],
 				onHighlight: jest.fn()
 			});
-			await openHighlightMenu();
 
-			expect(poseItems().map(item => item.textContent)).toContain('moonlight');
+			expect(highlightButton()?.textContent).toBe('moonlight');
+			openHighlight();
+			expect(highlightOptions().map(o => o.textContent)).toContain('moonlight');
 		});
 
-		it('writes the chosen token, and drops the key for the default', async () => {
+		it('writes the chosen token, and drops the key for the default', () => {
 			const onHighlight = jest.fn();
 
-			renderControls(['candle'], {onHighlight});
-			await openHighlightMenu();
-			fireEvent.click(itemNamed('cold'));
+			renderControls(['candle'], {
+				entities: [{...stage.entities.candle, highlight: 'gold'}],
+				onHighlight
+			});
+			openHighlight();
+			fireEvent.pointerDown(optionNamed('cold'));
 			expect(onHighlight).toHaveBeenLastCalledWith('cold');
 
-			await openHighlightMenu();
-			fireEvent.click(itemNamed(DEFAULT_LABEL));
+			openHighlight();
+			fireEvent.pointerDown(optionNamed(DEFAULT_LABEL));
 			expect(onHighlight).toHaveBeenLastCalledWith(undefined);
 		});
 
-		it('previews the hovered glow without writing it', async () => {
+		it('previews the hovered glow without writing it, and stops on close', () => {
 			const onHighlight = jest.fn();
 			const onPreviewHighlight = jest.fn();
 
 			renderControls(['candle'], {onHighlight, onPreviewHighlight});
-			await openHighlightMenu();
-			hover(itemNamed('danger'));
+			openHighlight();
+			fireEvent.pointerEnter(optionNamed('danger'));
 			expect(onPreviewHighlight).toHaveBeenLastCalledWith('danger');
 
-			unhover(itemNamed('danger'));
+			fireEvent.keyDown(highlightButton() as HTMLButtonElement, {key: 'Escape'});
 			expect(onPreviewHighlight).toHaveBeenLastCalledWith(null);
 			expect(onHighlight).not.toHaveBeenCalled();
 		});

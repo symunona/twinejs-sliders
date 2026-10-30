@@ -66,6 +66,12 @@ export interface PreviewSelectProps {
 	/** The control's own name, rendered as its label. */
 	children: React.ReactNode;
 	disabled?: boolean;
+	/**
+	 * The option the list's highlight is on while it is open (hover or arrows), `null` once
+	 * it closes. For a caller that shows the choice somewhere else before it is made — the
+	 * selection tab glows the sprite on the stage. Fires on change only.
+	 */
+	onActiveChange?: (value: string | null) => void;
 	/** Where the list hangs, if not below the button. */
 	placement?: Placement;
 	onChange: (value: string) => void;
@@ -77,6 +83,8 @@ export interface PreviewSelectProps {
 	 * font list, which is long enough that scanning it beats reading it.
 	 */
 	searchable?: boolean;
+	/** Hover text on the closed button. */
+	title?: string;
 	value: string;
 }
 
@@ -117,10 +125,12 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 	const {
 		children,
 		disabled,
+		onActiveChange,
 		onChange,
 		options,
 		placement = 'bottom-start',
 		searchable,
+		title,
 		value
 	} = props;
 	const {t} = useTranslation();
@@ -144,6 +154,31 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 	);
 	const explained = options.some(option => option.explanation !== undefined);
 	const explanation = shown[active]?.explanation;
+	const activeValue = open ? shown[active]?.value ?? null : null;
+	const onActiveChangeRef = React.useRef(onActiveChange);
+	const reported = React.useRef<string | null>(null);
+
+	onActiveChangeRef.current = onActiveChange;
+
+	// Keyed on the value string, not on `shown`: callers build options inline, so the array
+	// is new every render and would report the same option over and over. Nothing is
+	// reported on mount — a closed list has nothing to say.
+	React.useEffect(() => {
+		if (activeValue !== reported.current) {
+			reported.current = activeValue;
+			onActiveChangeRef.current?.(activeValue);
+		}
+	}, [activeValue]);
+
+	// Unmounted while open — the selection went away under the list — leaves nothing lit.
+	React.useEffect(
+		() => () => {
+			if (reported.current !== null) {
+				onActiveChangeRef.current?.(null);
+			}
+		},
+		[]
+	);
 
 	/**
 	 * Opening lands the highlight on what is already chosen, so Enter is a no-op and the
@@ -310,6 +345,7 @@ export const PreviewSelect: React.FC<PreviewSelectProps> = props => {
 				onClick={() => setOpen(current => !current)}
 				onKeyDown={handleKeyDown}
 				ref={setButtonEl}
+				title={title}
 				type="button"
 			>
 				{selected?.preview && (

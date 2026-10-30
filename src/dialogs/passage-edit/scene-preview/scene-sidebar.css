@@ -289,3 +289,16 @@
 .scene-sidebar-body .preview-select-button .preview-select-value {
 	flex: 0 1000 auto;
 }
+
+/* A preview dropdown in the selection tab (Highlight): the same free row as the selects
+   around it — words left, box right, as wide as theirs. */
+.scene-preview-selection > .preview-select {
+	gap: 6px;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.scene-preview-selection > .preview-select .preview-select-button {
+	flex: 1 1 auto;
+	max-width: 12em;
+}

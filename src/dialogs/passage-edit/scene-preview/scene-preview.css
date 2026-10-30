@@ -134,6 +134,17 @@
 	gap: 4px;
 }
 
+/* The Highlight dropdown's sample: a dot lit in the token's glow. Room for the glow, so it
+   is not clipped by the button's preview slot. */
+.scene-preview-highlight-swatch {
+	border-radius: 50%;
+	display: inline-block;
+	flex: none;
+	height: 8px;
+	margin: 0 5px;
+	width: 8px;
+}
+
 .scene-preview-selection-name {
 	font-weight: bold;
 	min-width: 0;

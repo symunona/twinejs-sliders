@@ -27,6 +27,9 @@
  * pointer events from, and there is no way to ask which one the pointer is over. Pose
  * names are the case that needs it most; `shock` and `surprise` are the same word until
  * you have seen both.
+ *
+ * Highlight wants the same preview but sits among the dropdowns, so it is a `PreviewSelect`:
+ * a dropdown whose list is our own elements, which reports the option under the pointer.
  */
 
 import {
@@ -38,7 +41,6 @@ import {
 	IconLockOpen,
 	IconFlipHorizontal,
 	IconExternalLink,
-	IconHighlight,
 	IconMoodSmile,
 	IconTrash
 } from '@tabler/icons';
@@ -46,6 +48,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {
 	BG_MOTIONS,
+	DEFAULT_HIGHLIGHT,
 	ENTITY_FITS,
 	HIGHLIGHT_PRESETS,
 	POSE_LOOPS,
@@ -61,6 +64,7 @@ import type {
 } from '@sliders/scene-types';
 import {IconButton} from '../../../components/control/icon-button';
 import {MenuButton} from '../../../components/control/menu-button';
+import {PreviewSelect} from '../../../components/control/preview-select';
 import {AdjustSlider} from '../../asset-editor/adjust-slider';
 import {NumberField} from './number-field';
 import {TextField} from './text-field';
@@ -216,6 +220,26 @@ function tokenOptions(
 		...tokens.map(token => ({label: token, value: token}))
 	];
 }
+
+/**
+ * A dot lit the way the token glows. Unset is the default glow; a preset is its colour; any
+ * other token is tried as a CSS colour — a story stylesheet's own word is not one, and its
+ * dot stays unlit rather than guessing.
+ */
+const HighlightSwatch: React.FC<{token: string}> = ({token}) => {
+	const colour =
+		token === UNSET
+			? DEFAULT_HIGHLIGHT
+			: (HIGHLIGHT_PRESETS as Record<string, string>)[token] ?? token;
+
+	return (
+		<span
+			aria-hidden
+			className="scene-preview-highlight-swatch"
+			style={{background: colour, boxShadow: `0 0 6px 2px ${colour}`}}
+		/>
+	);
+};
 
 /** The speed every moving sprite in the selection shares, else undefined (box empty). */
 function sharedSpeed(entities: StageEntity[]): number | undefined {
@@ -577,35 +601,42 @@ export const StageSelectionControls: React.FC<
 				/>
 			)}
 			{onHighlight && (
-				<MenuButton
-					icon={<IconHighlight />}
-					items={highlightTokens.map(token => ({
-						checkable: true as const,
-						checked: token === highlight,
-						label: highlightName(token),
-						onClick: () => {
-							onPreviewHighlight?.(null);
-							onHighlight(token || undefined);
-						},
-						onHover: (hovering: boolean) =>
-							onPreviewHighlight?.(hovering ? token : null)
-					}))}
-					label={t('dialogs.passageEdit.scenePreview.highlightNamed', {
-						highlight: highlightName(highlight)
-					})}
-					// Closing can skip the leave event — see the pose menu above.
-					onChangeOpen={open => {
-						if (!open) {
-							onPreviewHighlight?.(null);
+				// A dropdown like Motion and Fit below it, and still a hover preview: a
+				// `PreviewSelect`'s list is ours, so the option under the pointer (or the
+				// arrows) is known and glows on the stage until the list closes.
+				<PreviewSelect
+					onActiveChange={token =>
+						onPreviewHighlight?.(token === null || token === MIXED ? null : token)
+					}
+					onChange={token => {
+						if (token === MIXED) {
+							return;
 						}
+
+						onPreviewHighlight?.(null);
+						onHighlight(token || undefined);
 					}}
+					options={[
+						...(highlight === MIXED
+							? [{label: highlightName(MIXED), value: MIXED}]
+							: []),
+						...highlightTokens.map(token => ({
+							label: highlightName(token),
+							preview: <HighlightSwatch token={token} />,
+							value: token
+						}))
+					]}
+					// Down and to the stage's side — see the pose menu above.
 					placement="bottom-end"
-					tooltipLabel={t(
+					title={t(
 						entities.some(entity => entity.link)
 							? 'dialogs.passageEdit.scenePreview.highlightHint'
 							: 'dialogs.passageEdit.scenePreview.highlightHintUnlinked'
 					)}
-				/>
+					value={highlight}
+				>
+					{t('dialogs.passageEdit.scenePreview.highlight')}
+				</PreviewSelect>
 			)}
 			{onPoseLoop && looping.length > 0 && (
 				<TextSelect
