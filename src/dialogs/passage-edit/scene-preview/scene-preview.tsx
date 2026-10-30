@@ -141,6 +141,7 @@ import {StageEditorOverlay} from './stage-editor-overlay';
 import type {TracePreview} from './stage-trace-layer';
 import {StageSelectionControls} from './stage-selection-controls';
 import {EmitTab, useEmitterSpec} from './emit-panel';
+import {useParticleTab} from './use-particle-tab';
 import {roundCoord} from './stage-geometry';
 import {parseLinks} from '../../../util/parse-links';
 import {passageLinks} from '../../../util/passage-links';
@@ -1654,6 +1655,12 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			setSidebarTab(tabBeforeSelection.current);
 		}
 	}, [hasSelection, setSidebarTab]);
+	useParticleTab(
+		emitter && selectedEntities.length === 1 ? selection[0] : undefined,
+		hasSelection,
+		sidebar.active,
+		setSidebarTab
+	);
 
 	/**
 	 * The pose the pose menu is hovering: drawn, never written. `null` is not hovering,
