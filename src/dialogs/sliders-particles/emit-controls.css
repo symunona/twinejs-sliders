@@ -21,3 +21,28 @@
 	font-weight: bold;
 	justify-content: space-between;
 }
+
+/* Particle system dropdown + Edit, one row. */
+.scene-preview-emit-system {
+	align-items: center;
+	display: flex;
+	gap: calc(var(--grid-size) / 2);
+	padding-top: calc(var(--grid-size) / 2);
+}
+
+.scene-preview-emit-system label {
+	align-items: center;
+	display: flex;
+	flex: 1;
+	gap: 4px;
+	min-width: 0;
+}
+
+.scene-preview-emit-system select {
+	flex: 1;
+	min-width: 0;
+}
+
+.scene-preview-emit-reset {
+	padding: calc(var(--grid-size) / 2) 0;
+}

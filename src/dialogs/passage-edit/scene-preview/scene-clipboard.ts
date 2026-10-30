@@ -14,6 +14,7 @@
  */
 
 import {addEntities, applyEdit} from '@sliders/scene-edit';
+import {LAYER_BASELINE} from '@sliders/scene-types';
 import type {
 	EntityId,
 	EntityKind,
@@ -212,6 +213,25 @@ export function pasteWrites(
 	}
 
 	return {ids, writes};
+}
+
+/**
+ * A fresh emitter as a clip: a prop placing asset `ref` at centre, on the floor (`at: 0`).
+ * The id is the bare name; `pasteWrites` numbers it when taken (`fire-2`).
+ */
+export function emitterClip(ref: string): SceneClip {
+	const name = ref.split('/').pop() || ref;
+
+	return {
+		entities: [
+			{
+				id: name,
+				kind: 'prop',
+				patch: {at: {x: 0, y: LAYER_BASELINE}, kind: 'prop', ref} as EntityPatch
+			}
+		],
+		v: 1
+	};
 }
 
 /** The clip as scene YAML (`cast:` / `props:` maps), for a paste into the passage text. */

@@ -88,6 +88,7 @@ import {
 	unstretchWrites,
 	motionSpeedWrites,
 	motionWrites,
+	emitterRefWrites,
 	emitWrites,
 	fitWrites,
 	poseLoopWrites,
@@ -156,7 +157,13 @@ import {hopInto, popSceneHop, pushSceneHop} from './scene-trail';
 import {useArrivalBeat} from './use-arrival-beat';
 import {useStageSelection} from './use-stage-selection';
 import {useSceneClipboard} from './use-scene-clipboard';
-import {copyClip, nextPasteOffset, pasteWrites} from './scene-clipboard';
+import {
+	copyClip,
+	emitterClip,
+	nextPasteOffset,
+	pasteWrites
+} from './scene-clipboard';
+import {registerParticleSceneTarget} from '../../sliders-particles/particle-scene-target';
 import {
 	applyCameraPatch,
 	applyStagePatch,
@@ -1407,6 +1414,13 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		[commit, selection, stage]
 	);
 
+	/** Swap the selected emitter's particle system: its entry's `ref:`. */
+	const setEmitterRef = React.useCallback(
+		(name: string) =>
+			commit(emitterRefWrites(stage, selection, name), EDIT_ORIGIN),
+		[commit, selection, stage]
+	);
+
 	const setPoseLoop = React.useCallback(
 		(poseLoop: PoseLoop | undefined) =>
 			commit(poseLoopWrites(stage, selection, poseLoop), EDIT_ORIGIN),
@@ -1626,7 +1640,8 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		assets,
 		selectedEntities.length === 1 && selectedEntities[0].kind !== 'cast'
 			? selectedEntities[0].ref
-			: undefined
+			: undefined,
+		libraryVersion
 	);
 
 	/**
@@ -2084,6 +2099,21 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			  }
 			: undefined
 	});
+
+	/**
+	 * "Add to Current Scene" in the Particles dialog: the emitter as a one-entity clip, so
+	 * it goes the paste way -- fresh id, one edit, one undo, selected once parsed.
+	 */
+	const pasteRef = React.useRef(clipboard.pasteClip);
+
+	pasteRef.current = clipboard.pasteClip;
+	React.useEffect(() => {
+		if (!editable) {
+			return;
+		}
+
+		return registerParticleSceneTarget(ref => pasteRef.current?.(emitterClip(ref)));
+	}, [editable]);
 
 	React.useEffect(() => {
 		const ids = pastedIds.current;
@@ -3152,6 +3182,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 								entity={singleSelected}
 								note={beatNote}
 								onEmit={setEmit}
+								onRef={setEmitterRef}
 								spec={emitter}
 							/>
 						),

@@ -22,7 +22,13 @@ import {
 } from '@sliders/scene-types';
 import {uniqueName} from '@sliders/asset-store';
 import {DEFAULT_ORIGIN} from '@sliders/render-dom';
-import {IconPlayerPlay, IconPlus, IconTrash, IconWand} from '@tabler/icons';
+import {
+	IconPlayerPlay,
+	IconPlus,
+	IconSquarePlus,
+	IconTrash,
+	IconWand
+} from '@tabler/icons';
 import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import {ButtonBar} from '../../components/container/button-bar';
@@ -37,6 +43,9 @@ import {AssetPreview} from '../sliders-assets/asset-preview';
 import {useAssetLibrary, useAssetUrl} from '../sliders-assets/asset-store-context';
 import {EmitControls} from './emit-controls';
 import {onParticleFocus, takePendingParticleFocus} from './particle-focus';
+import {addParticleToScene, useParticleSceneTarget} from './particle-scene-target';
+import {saveEmitterDefaults} from './save-emitter';
+import type {SharedInfo} from '../../store/asset-library/story-asset-store';
 import {ParticlePreview} from './particle-preview';
 import {spriteCandidates} from './sprite-candidates';
 import {SpritePicker} from './sprite-picker';
@@ -110,12 +119,17 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 
 	// The draft follows the selection; edits happen on it and are written on a debounce.
 	React.useEffect(() => {
+		// A fork just landed: the draft already carries its id, the list has yet to.
+		if (draft && draft.id === selectedId && !emitters.some(a => a.id === selectedId)) {
+			return;
+		}
+
 		if (active && draft?.id !== active.id) {
 			setDraft({id: active.id, origin: active.origin, spec: active.particles ?? {}});
 		} else if (!active && draft) {
 			setDraft(undefined);
 		}
-	}, [active, draft]);
+	}, [active, draft, emitters, selectedId]);
 
 	const latest = React.useRef(draft);
 	const dirty = React.useRef(false);
@@ -132,10 +146,18 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 		dirty.current = false;
 
 		try {
-			await store.update(now.id, {
+			const saved = await saveEmitterDefaults(store, now.id, {
 				particles: now.spec,
 				...(now.origin ? {origin: now.origin} : {})
 			});
+
+			// Locked collection: the edit made this story's own copy. Follow it.
+			if (saved.id !== now.id) {
+				setSelectedId(saved.id);
+				setDraft(prev => (prev?.id === now.id ? {...prev, id: saved.id} : prev));
+			}
+
+			setError(undefined);
 			refresh();
 		} catch (caught) {
 			setError((caught as Error).message);
@@ -252,6 +274,28 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 		refresh();
 	}
 
+	const sceneOpen = useParticleSceneTarget();
+	const [shared, setShared] = React.useState<SharedInfo>();
+	const activeId = active?.id;
+
+	// Where an edit lands: a shared emitter's defaults reach other stories too.
+	React.useEffect(() => {
+		let current = true;
+
+		setShared(undefined);
+
+		if (activeId) {
+			store
+				.sharedInfo(activeId)
+				.then(info => current && setShared(info?.shared ? info : undefined))
+				.catch(() => undefined);
+		}
+
+		return () => {
+			current = false;
+		};
+	}, [activeId, library.all, store]);
+
 	const spec = draft?.id === active?.id ? draft?.spec : active?.particles;
 	const params = resolveEmit(spec, undefined);
 	const box = emitBox(spec);
@@ -292,6 +336,30 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 							label={t('dialogs.slidersParticles.restart')}
 							onClick={() => setRestart(n => n + 1)}
 						/>
+						{/* Native title too: a disabled button gets no pointer events in
+						    every browser, so the Tooltip may never open on it. */}
+						<span
+							title={
+								sceneOpen
+									? undefined
+									: t('dialogs.slidersParticles.addToSceneNone')
+							}
+						>
+							<IconButton
+								disabled={!sceneOpen}
+								icon={<IconSquarePlus />}
+								label={t('dialogs.slidersParticles.addToScene')}
+								onClick={async () => {
+									await commit();
+									addParticleToScene(active.name);
+								}}
+								tooltipLabel={
+									sceneOpen
+										? t('dialogs.slidersParticles.addToSceneHint')
+										: t('dialogs.slidersParticles.addToSceneNone')
+								}
+							/>
+						</span>
 						<MenuButton
 							icon={<IconWand />}
 							items={Object.keys(EMIT_PRESETS).map(preset => ({
@@ -357,6 +425,22 @@ export const SlidersParticlesDialog: React.FC<SlidersParticlesDialogProps> = pro
 								<p className="sliders-particles-hint">
 									{t('dialogs.slidersParticles.hint', {name: active.name})}
 								</p>
+								{shared && (
+									<p
+										className="sliders-particles-hint"
+										data-testid="sliders-particles-shared"
+									>
+										{t(
+											shared.canUpdateAll
+												? 'dialogs.slidersParticles.sharedAll'
+												: 'dialogs.slidersParticles.sharedLocked',
+											{
+												collection: shared.collection.name,
+												count: shared.stories.length
+											}
+										)}
+									</p>
+								)}
 								<SpritePicker
 									assets={library.all}
 									onPick={sprite => edit({spec: {sprite}})}

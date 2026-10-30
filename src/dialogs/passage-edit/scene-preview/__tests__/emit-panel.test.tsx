@@ -1,6 +1,6 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import * as React from 'react';
-import type {StageEntity} from '@sliders/scene-types';
+import type {AssetMeta, StageEntity} from '@sliders/scene-types';
 import {EmitPanel} from '../emit-panel';
 
 const fire: StageEntity = {
@@ -65,5 +65,87 @@ describe('EmitPanel edit button', () => {
 			screen.getByRole('button', {name: 'dialogs.passageEdit.scenePreview.emitEdit'})
 		);
 		expect(onEdit).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('EmitPanel particle system dropdown', () => {
+	const emitters = [
+		{id: 'a1', kind: 'fx', name: 'fire', particles: {}},
+		{id: 'a2', kind: 'fx', name: 'smoke', particles: {}}
+	] as unknown as AssetMeta[];
+
+	it('lists the emitters, shows the entity one, swaps by name', () => {
+		const onRef = jest.fn();
+
+		render(
+			<EmitPanel
+				editable
+				emitters={emitters}
+				entity={fire}
+				onEmit={jest.fn()}
+				onRef={onRef}
+				spec={{}}
+			/>
+		);
+
+		const select = screen.getByTestId('scene-preview-emit-system') as HTMLSelectElement;
+
+		expect([...select.options].map(option => option.value)).toEqual(['fire', 'smoke']);
+		expect(select.value).toBe('fire');
+		fireEvent.change(select, {target: {value: 'smoke'}});
+		expect(onRef).toHaveBeenCalledWith('smoke');
+	});
+
+	it('a qualified ref matches its bare name; an unknown one stays shown', () => {
+		const {rerender} = render(
+			<EmitPanel
+				editable
+				emitters={emitters}
+				entity={{...fire, ref: 'particles/smoke'}}
+				onEmit={jest.fn()}
+				spec={{}}
+			/>
+		);
+
+		expect(
+			(screen.getByTestId('scene-preview-emit-system') as HTMLSelectElement).value
+		).toBe('smoke');
+
+		rerender(
+			<EmitPanel
+				editable
+				emitters={emitters}
+				entity={{...fire, ref: 'gone'}}
+				onEmit={jest.fn()}
+				spec={{}}
+			/>
+		);
+
+		const select = screen.getByTestId('scene-preview-emit-system') as HTMLSelectElement;
+
+		expect(select.value).toBe('gone');
+		// No writer: read only.
+		expect(select).toBeDisabled();
+	});
+
+	it('Edit sits next to the dropdown; reset all is its own button', () => {
+		const {container} = render(
+			<EmitPanel
+				editable
+				emitters={emitters}
+				entity={{...fire, emit: {speed: 2}}}
+				onEditEmitter={jest.fn()}
+				onEmit={jest.fn()}
+				onRef={jest.fn()}
+				spec={{}}
+			/>
+		);
+		const row = container.querySelector('.scene-preview-emit-system')!;
+
+		expect(row.querySelector('select')).not.toBeNull();
+		expect(row.textContent).toContain('dialogs.passageEdit.scenePreview.emitEditLabel');
+		expect(
+			container.querySelector('.scene-preview-emit-reset')!.textContent
+		).toContain('dialogs.passageEdit.scenePreview.emitResetAll');
 	});
 });

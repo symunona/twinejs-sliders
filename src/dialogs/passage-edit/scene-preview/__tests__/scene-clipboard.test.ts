@@ -7,6 +7,7 @@ import {buildWriteEdits, previewEdits} from '../use-scene-writer';
 import {
 	clipText,
 	copyClip,
+	emitterClip,
 	heldClip,
 	heldClipFor,
 	holdClip,
@@ -19,6 +20,7 @@ import {
 	SceneClip
 } from '../scene-clipboard';
 import {useSceneClipboard} from '../use-scene-clipboard';
+import {emitterRefWrites} from '../scene-gestures';
 
 const source = [
 	'[scene]',
@@ -187,6 +189,55 @@ describe('pasteWrites', () => {
 		expect(parsed(result.text).result!.errors).toEqual([]);
 		expect(mira.steps?.map(step => step.name)).toEqual(['a', 'b']);
 		expect(mira.steps?.[1].at).toEqual({x: 0.1, y: -0.5});
+	});
+});
+
+describe('emitterClip (Particles dialog: Add to Current Scene)', () => {
+	it('one edit: a prop at the centre floor, bare name as id', () => {
+		const result = paste(empty, emitterClip('particles/smoke'));
+		const smoke = stageAt(result.text, 0).entities.smoke;
+
+		expect(result.ids).toEqual(['smoke']);
+		expect(parsed(result.text).result!.errors).toEqual([]);
+		expect(result.text).toContain('smoke: {ref: particles/smoke, at: 0}');
+		expect(smoke).toMatchObject({kind: 'prop', ref: 'particles/smoke'});
+		expect(smoke.at.x).toBe(0);
+	});
+
+	it('numbers the id when the scene already has one', () => {
+		const result = paste(source, emitterClip('fire'));
+
+		expect(result.ids).toEqual(['fire-2']);
+		expect(stageAt(result.text, 0).entities['fire-2'].ref).toBe('fire');
+		// The original keeps its overrides.
+		expect(stageAt(result.text, 0).entities.fire.emit).toEqual({rate: 5});
+	});
+});
+
+describe('emitterRefWrites (Particles tab: particle system dropdown)', () => {
+	it('swaps the entry ref; the scene overrides stay', () => {
+		const block = extractSceneBlock(source)!;
+		const parse = parsed(source);
+		const edits = buildWriteEdits(
+			{
+				beat: 2,
+				blockOffset: block.offset,
+				blockText: block.text,
+				scene: parse.result!.scene
+			},
+			emitterRefWrites(stageAt(source, 2), ['fire'], 'smoke')
+		);
+		const text =
+			source.slice(0, block.offset) +
+			previewEdits(block.text, edits) +
+			source.slice(block.offset + block.text.length);
+
+		expect(text).toMatch(/fire: \{.*ref: smoke.*\}/);
+		expect(text).toMatch(/fire: \{.*emit: \{rate: 5\}.*\}/);
+		expect(stageAt(text, 0).entities.fire).toMatchObject({
+			emit: {rate: 5},
+			ref: 'smoke'
+		});
 	});
 });
 

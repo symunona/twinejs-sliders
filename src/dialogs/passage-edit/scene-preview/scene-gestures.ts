@@ -578,6 +578,25 @@ export function wheelZoomFactor(deltaY: number, deltaMode = 0): number {
  * it merges over the one before, so restating inherited keys changes nothing. `null` (or a
  * patch that leaves every key at the asset's own value) removes the key.
  */
+/**
+ * Swap the particle system: the entry's `ref:`. Entry, not beat -- which emitter it is
+ * belongs to the whole scene; `emit:` overrides stay and now sit over the new defaults.
+ */
+export function emitterRefWrites(
+	stage: Stage,
+	ids: EntityId[],
+	name: string
+): EntityKeyWrite[] {
+	return entitiesOf(stage, ids).map(entity => ({
+		entry: true,
+		id: entity.id,
+		key: 'ref',
+		kind: entity.kind,
+		ref: name,
+		value: name
+	}));
+}
+
 export function emitWrites(
 	stage: Stage,
 	ids: EntityId[],

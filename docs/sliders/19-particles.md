@@ -83,8 +83,17 @@ beats:
 
 | Where | What |
 |---|---|
-| Particles dialog | list of emitters · live preview (same `ParticleHost` as the stage) · knobs · box · origin · sprite strip · presets |
-| Scene editor, Particles tab (stars) | own sidebar tab, only while ONE emitter is selected, orange like Transform → same knobs, write `emit:`. Highlighted = overridden. Reset = `emit: ~`. Slider bursts = one undo step (`+sliders-emit`). |
+| Particles dialog | list of emitters · live preview (same `ParticleHost` as the stage) · knobs · box · origin · sprite strip · presets · Add to Current Scene |
+| Scene editor, Particles tab (stars) | own sidebar tab, only while ONE emitter is selected, orange like Transform → particle system dropdown (`ref:`) + Edit · Reset all to defaults (`emit: ~`) · same knobs, write `emit:`. Highlighted = overridden. Slider bursts = one undo step (`+sliders-emit`). |
+
+Defaults vs overrides:
+
+| | |
+|---|---|
+| Dialog | edits the ASSET = the system's defaults. Every scene placing it follows live (stage + Particles tab base). |
+| Shared emitter (pack) | dialog writes it in place (`scope: 'all'`): every story attaching the pack follows. Note under the preview says so. Locked collection → `fork`: this story's own copy, shadows by name. `save-emitter.ts`. |
+| Scene `emit:` | per-key overrides, survive any default edit and a system swap. |
+| Add to Current Scene | prop `<name>: {at: 0}` (numbered when taken) into the scene editor open last, the paste path: one edit, one undo, selected. Disabled with a hint when no editable scene editor is open. `particle-scene-target.ts`. |
 
 New Emitter = preset numbers + `sprite:` = the preset's pack sprite. Bytes = that sprite
 (or a dot) as thumbnail. Sprite pick = `particles.sprite = name`, bytes untouched.

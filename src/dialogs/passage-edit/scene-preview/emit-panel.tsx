@@ -4,7 +4,9 @@
  * are long, and under the Object tab they pushed the grade sliders out of sight.
  *
  * Same `EmitControls` as the Particles dialog, so a knob means the same in both. Base =
- * the asset's numbers: a highlighted knob is one this scene overrides.
+ * the asset's numbers (the particle system's DEFAULTS): a highlighted knob is one this
+ * scene overrides. Edit = those defaults, in the dialog; every scene follows except where
+ * it overrides. Reset all = drop this scene's overrides (`emit: ~`).
  */
 
 import {IconArrowBackUp, IconPencil} from '@tabler/icons';
@@ -26,10 +28,15 @@ import {useDialogsContext} from '../../context';
 import {requestParticleFocus} from '../../sliders-particles/particle-focus';
 import {SlidersParticlesDialog} from '../../sliders-particles/sliders-particles';
 
-/** The emitter behind an asset name, or undefined when it is not one. */
+/**
+ * The emitter behind an asset name, or undefined when it is not one. `revision` = the
+ * library version: an edit to the emitter's defaults (Particles dialog) re-reads it, so
+ * the knobs' base and the override highlights follow live.
+ */
 export function useEmitterSpec(
 	assets: AssetResolver,
-	ref: string | undefined
+	ref: string | undefined,
+	revision?: number
 ): ParticleSpec | undefined {
 	const [spec, setSpec] = React.useState<{ref: string; spec?: ParticleSpec}>();
 
@@ -48,7 +55,7 @@ export function useEmitterSpec(
 		return () => {
 			cancelled = true;
 		};
-	}, [assets, ref]);
+	}, [assets, ref, revision]);
 
 	return spec && spec.ref === ref ? spec.spec : undefined;
 }
@@ -65,11 +72,23 @@ export interface EmitPanelProps {
 	assets?: AssetMeta[];
 	/** Open this emitter's asset in the Particles dialog. Absent hides the button. */
 	onEditEmitter?: () => void;
+	/** Every emitter the story sees: the particle system dropdown. Absent hides it. */
+	emitters?: AssetMeta[];
+	/** Swap the particle system (`ref:`), by asset name. Absent = dropdown read only. */
+	onRef?: (name: string) => void;
+}
+
+/** `coll/name` and `name` both name an asset; the list holds bare names. */
+function bareName(ref: string): string {
+	return ref.split('/').pop() ?? ref;
 }
 
 export const EmitPanel: React.FC<EmitPanelProps> = props => {
-	const {assets, editable, entity, note, onEditEmitter, onEmit, spec} = props;
+	const {assets, editable, emitters, entity, note, onEditEmitter, onEmit, onRef, spec} =
+		props;
 	const {t} = useTranslation();
+	const ref = entity.ref;
+	const current = emitters?.find(asset => asset.name === bareName(ref));
 
 	return (
 		<div className="scene-sidebar-section scene-preview-emit" data-testid="scene-preview-emit">
@@ -77,20 +96,43 @@ export const EmitPanel: React.FC<EmitPanelProps> = props => {
 				<span>
 					{t('dialogs.passageEdit.scenePreview.emit')}: {entity.id}
 				</span>
+			</div>
+			<div className="scene-preview-emit-system">
+				{emitters && (
+					<label>
+						<span>{t('dialogs.passageEdit.scenePreview.emitPick')}</span>
+						<select
+							data-testid="scene-preview-emit-system"
+							disabled={!editable || !onRef}
+							onChange={event => onRef?.(event.target.value)}
+							value={current ? current.name : ref}
+						>
+							{/* Not in the list (unknown name, still loading): keep it shown. */}
+							{!current && <option value={ref}>{ref}</option>}
+							{emitters.map(asset => (
+								<option key={asset.id} value={asset.name}>
+									{asset.name}
+								</option>
+							))}
+						</select>
+					</label>
+				)}
 				{onEditEmitter && (
 					<IconButton
 						icon={<IconPencil />}
-						iconOnly
-						label={t('dialogs.passageEdit.scenePreview.emitEdit')}
+						label={t('dialogs.passageEdit.scenePreview.emitEditLabel')}
 						onClick={onEditEmitter}
+						tooltipLabel={t('dialogs.passageEdit.scenePreview.emitEdit')}
 					/>
 				)}
+			</div>
+			<div className="scene-preview-emit-reset">
 				<IconButton
 					disabled={!editable || !entity.emit}
 					icon={<IconArrowBackUp />}
-					iconOnly
-					label={t('dialogs.passageEdit.scenePreview.emitReset')}
+					label={t('dialogs.passageEdit.scenePreview.emitResetAll')}
 					onClick={() => onEmit(null)}
+					tooltipLabel={t('dialogs.passageEdit.scenePreview.emitReset')}
 				/>
 			</div>
 			{note && <p className="scene-sidebar-empty">{note}</p>}
@@ -117,9 +159,16 @@ export const EmitPanel: React.FC<EmitPanelProps> = props => {
 
 /** The panel as the sidebar mounts it: the sprite list comes from the library here. */
 export const EmitTab: React.FC<
-	Omit<EmitPanelProps, 'assets' | 'onEditEmitter'>
+	Omit<EmitPanelProps, 'assets' | 'emitters' | 'onEditEmitter'>
 > = props => {
 	const {all} = useAssetLibrary();
+	const emitters = React.useMemo(
+		() =>
+			all
+				.filter(asset => asset.particles)
+				.sort((a, b) => a.name.localeCompare(b.name)),
+		[all]
+	);
 	const {dispatch} = useDialogsContext();
 	const ref = props.entity.ref;
 
@@ -130,5 +179,12 @@ export const EmitTab: React.FC<
 		dispatch({component: SlidersParticlesDialog, type: 'addDialog'});
 	}, [dispatch, ref]);
 
-	return <EmitPanel {...props} assets={all} onEditEmitter={editEmitter} />;
+	return (
+		<EmitPanel
+			{...props}
+			assets={all}
+			emitters={emitters}
+			onEditEmitter={editEmitter}
+		/>
+	);
 };

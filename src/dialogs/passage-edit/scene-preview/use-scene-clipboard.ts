@@ -128,5 +128,11 @@ export function useSceneClipboard(
 		}
 	}, []);
 
-	return {copyNow, held, pasteNow};
+	/** Any clip, the paste way. Undefined while the stage cannot be written. */
+	const pasteClip = React.useCallback(
+		(clip: SceneClip) => latest.current.paste?.(clip),
+		[]
+	);
+
+	return {copyNow, held, pasteClip, pasteNow};
 }
