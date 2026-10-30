@@ -40,6 +40,22 @@ export function emptySceneText(bg?: string): string {
 	return `\n[scene]\n${bg ? `bg: ${bg}\n` : ''}\n\n[continued]\n`;
 }
 
+/**
+ * Is this passage blank -- nothing but whitespace? Only a blank passage gets the template
+ * when the scene editor opens on it; anything else is the author's and is never touched.
+ */
+export function isBlankPassageText(text: string): boolean {
+	return text.trim() === '';
+}
+
+/**
+ * What the scene editor writes into a BLANK passage it is opened on: the Insert Empty
+ * Scene block without its leading newline, which only separates it from text before it.
+ */
+export function blankPassageScene(bg?: string): string {
+	return emptySceneText(bg).replace(/^\n/, '');
+}
+
 function sceneBg(text: string): string | undefined {
 	try {
 		const bg = parseScene(text).scene.bg;
@@ -207,6 +223,28 @@ export async function demoBg(
 }
 
 /**
+ * Steps 1-2 only: a backdrop the story already uses or already sees. Never creates,
+ * never attaches -- the scene editor's blank-passage template must not change the library
+ * just because a passage was opened.
+ */
+export function viewSceneBg(
+	engine: LibraryEngine | undefined,
+	story: {id: string; passages: {name: string; text: string}[]}
+): string | undefined {
+	const last = lastUsedBg(story.passages);
+
+	if (last || !engine) {
+		return last;
+	}
+
+	const poseImages = poseImageIds(engine);
+
+	return storyView(engine, story.id).assets.find(asset =>
+		isBg(asset, poseImages)
+	)?.name;
+}
+
+/**
  * The `bg:` an empty scene gets (steps 1-4), attaching whatever pack it came from.
  * Undefined only when the library itself failed: an empty scene with no backdrop is still
  * a scene.
@@ -216,21 +254,13 @@ export async function defaultSceneBg(
 	story: {id: string; name: string; passages: {name: string; text: string}[]},
 	makePng?: () => Promise<Uint8Array>
 ): Promise<string | undefined> {
-	const last = lastUsedBg(story.passages);
+	const known = viewSceneBg(engine, story);
 
-	if (last) {
-		return last;
+	if (known) {
+		return known;
 	}
 
 	const poseImages = poseImageIds(engine);
-	const inView = storyView(engine, story.id).assets.find(asset =>
-		isBg(asset, poseImages)
-	);
-
-	if (inView) {
-		return inView.name;
-	}
-
 	const shared = new Set(
 		engine
 			.collections()

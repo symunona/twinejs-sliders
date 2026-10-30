@@ -4,13 +4,18 @@
 import {png} from '../../../../../packages/asset-library/src/testing/fixtures';
 import {World} from '../../../../../packages/asset-library/src/testing/world';
 import type {LibraryEngine} from '@sliders/asset-library';
+import {extractSceneBlock} from '@sliders/scene-index';
+import {parseScene} from '@sliders/scene-schema';
 import {
+	blankPassageScene,
 	DEMO_BG_NAME,
 	DEMO_PACK_NAME,
 	defaultSceneBg,
 	emptySceneText,
+	isBlankPassageText,
 	isEmptySceneCommand,
-	lastUsedBg
+	lastUsedBg,
+	viewSceneBg
 } from '../empty-scene';
 import {LAST_SCENE_KEY} from '../use-last-scene';
 
@@ -71,6 +76,70 @@ describe('emptySceneText', () => {
 			'\n[scene]\nbg: dusk\n\n\n[continued]\n'
 		);
 		expect(emptySceneText()).toBe('\n[scene]\n\n\n[continued]\n');
+	});
+});
+
+describe('blankPassageScene', () => {
+	it('is the empty-scene block without the separating newline', () => {
+		expect(blankPassageScene('dusk')).toBe(
+			'[scene]\nbg: dusk\n\n\n[continued]\n'
+		);
+		expect(blankPassageScene()).toBe('[scene]\n\n\n[continued]\n');
+	});
+
+	it.each([undefined, 'dusk'])('parses clean (bg %s)', bg => {
+		const block = extractSceneBlock(blankPassageScene(bg));
+
+		expect(block).toBeDefined();
+		expect(parseScene(block!.text).errors).toEqual([]);
+	});
+});
+
+describe('isBlankPassageText', () => {
+	it('is true for empty and whitespace-only text', () => {
+		expect(isBlankPassageText('')).toBe(true);
+		expect(isBlankPassageText('  \n\t\n')).toBe(true);
+	});
+
+	it('is false for anything else', () => {
+		expect(isBlankPassageText('x')).toBe(false);
+		expect(isBlankPassageText('\n  Prose\n')).toBe(false);
+	});
+});
+
+describe('viewSceneBg', () => {
+	it('takes the last backdrop the story uses', () => {
+		expect(
+			viewSceneBg(undefined, {
+				id: 's',
+				passages: [{name: 'a', text: scene('dusk')}]
+			})
+		).toBe('dusk');
+	});
+
+	it('takes a backdrop the story sees', async () => {
+		const engine = await engineWith(async engine => {
+			const own = engine.createStory('S1', {name: 'Story'}).own;
+
+			await addBg(engine, own, 'cellar');
+		});
+
+		expect(viewSceneBg(engine, {id: 'S1', passages: []})).toBe('cellar');
+	});
+
+	it('never reaches outside the story: no attach, no DEMO pack', async () => {
+		const engine = await engineWith(async engine => {
+			await addBg(engine, engine.createCollection({name: 'pack'}).id, 'woods');
+		});
+		const before = engine.collections().length;
+
+		expect(viewSceneBg(engine, {id: 'S1', passages: []})).toBeUndefined();
+		expect(engine.binding('S1')?.collections ?? []).toEqual([]);
+		expect(engine.collections()).toHaveLength(before);
+	});
+
+	it('is undefined with no engine and no scenes, never creating the DEMO pack', () => {
+		expect(viewSceneBg(undefined, {id: 's', passages: []})).toBeUndefined();
 	});
 });
 

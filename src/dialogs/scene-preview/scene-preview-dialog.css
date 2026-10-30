@@ -30,3 +30,10 @@
 	flex-basis: 100%;
 	font-size: 85%;
 }
+
+/* The click-into target over a blank passage: the whole body, nothing drawn. */
+.scene-preview-blank {
+	cursor: text;
+	flex: 1 1 auto;
+	min-height: 180px;
+}

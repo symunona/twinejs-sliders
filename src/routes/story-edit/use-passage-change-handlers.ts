@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {useDialogsContext} from '../../dialogs';
 import {
+	requestBlankSceneTemplate,
 	ScenePreviewDialog,
 	setScenePreviewDismissed
 } from '../../dialogs/scene-preview';
@@ -73,6 +74,8 @@ export function usePassageChangeHandlers(story: Story) {
 			}
 
 			pickFromMap(passage.id);
+			// Opened to edit: a blank passage starts as an empty scene.
+			requestBlankSceneTemplate(passage.id);
 			setScenePreviewDismissed(false);
 			dialogsDispatch((dispatch, state) => {
 				const index = state().findIndex(

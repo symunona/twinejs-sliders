@@ -30,7 +30,9 @@ import {ScenePreview} from '../passage-edit/scene-preview/scene-preview';
 import {usePreviewResolver} from '../passage-edit/scene-preview/use-preview-resolver';
 import {useSceneParse} from '../passage-edit/scene-preview/use-scene-parse';
 import type {WalkHereInfo} from '../passage-edit/scene-preview/use-walk-here';
+import {isBlankPassageText} from '../passage-edit/scene-preview/empty-scene';
 import {setScenePreviewDismissed} from './preview-dismissal';
+import {useBlankSceneTemplate} from './use-blank-scene-template';
 import './scene-preview-dialog.css';
 
 /**
@@ -125,6 +127,9 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 	 */
 	const passageLock = passageId ? lock(story.id, passageId) : undefined;
 	const readOnly = !!passageLock && !passageLock.shared;
+	/** A blank passage starts as an empty scene. See the hook. */
+	const fillBlank = useBlankSceneTemplate({handle, passageId, readOnly, story});
+	const blank = !!handle && !readOnly && isBlankPassageText(text);
 
 	/**
 	 * Ctrl/cmd-click on a link inside a scene bubble, when the preview is showing a passage
@@ -334,6 +339,15 @@ export const ScenePreviewDialog: React.FC<ScenePreviewDialogProps> & {
 					text={text}
 					view={view}
 				/>
+				{/* Blank passage picked on the map while the dialog was up: clicking into
+				    the empty editor starts the scene. */}
+				{blank && (
+					<div
+						className="scene-preview-blank"
+						data-testid="scene-preview-blank"
+						onPointerDown={fillBlank}
+					/>
+				)}
 			</div>
 		</DialogCard>
 	);
