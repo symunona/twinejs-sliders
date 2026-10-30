@@ -170,6 +170,65 @@ describe('BubbleEditor', () => {
 		expect(commits).toEqual([{at: {x: 0.6, y: 0.6}}]);
 	});
 
+	describe('with a link under the press', () => {
+		afterEach(() => {
+			(document as unknown as {elementsFromPoint: unknown}).elementsFromPoint =
+				() => [];
+		});
+
+		function under(...els: Element[]) {
+			(document as unknown as {elementsFromPoint: unknown}).elementsFromPoint =
+				() => els;
+		}
+
+		it('moves a bubble sitting over a speaking object that has link:', async () => {
+			const {commits, frame, view} = setup();
+			await measured();
+
+			// The renderer's door: an entity box with `link:`, same attribute as a bubble link.
+			const door = document.createElement('div');
+
+			door.className = 'sliders-entity';
+			door.dataset.slidersLink = 'Elsewhere';
+			frame.appendChild(door);
+
+			const clicks = jest.fn();
+
+			door.addEventListener('click', clicks);
+
+			const body = view.container.querySelector('.scene-bubble-editor-body')!;
+
+			under(body, door);
+			drag(body, {x: 480, y: 260}, {x: 400, y: 225});
+
+			expect(clicks).not.toHaveBeenCalled();
+			expect(commits).toEqual([{at: {x: 0.6, y: 0.6}}]);
+			expect(view.container.querySelectorAll('[data-handle]')).toHaveLength(8);
+		});
+
+		it('still hands a press on a [[link]] in the words to the link', async () => {
+			const {commits, frame, view} = setup();
+			await measured();
+
+			const link = document.createElement('a');
+
+			link.dataset.slidersLink = 'Elsewhere';
+			frame.querySelector('.sliders-bubble')!.appendChild(link);
+
+			const clicks = jest.fn();
+
+			link.addEventListener('click', clicks);
+
+			const body = view.container.querySelector('.scene-bubble-editor-body')!;
+
+			under(body, link);
+			drag(body, {x: 480, y: 260}, {x: 400, y: 225});
+
+			expect(clicks).toHaveBeenCalledTimes(1);
+			expect(commits).toEqual([]);
+		});
+	});
+
 	it('an east handle writes the width alone, growing about the centre', async () => {
 		const {commits, view} = setup();
 		await measured();

@@ -142,14 +142,21 @@ function fixedSize(sizing: string): boolean {
 	return sizing === 'absolute' || sizing === 'manual';
 }
 
-/** The `[[link]]` under a point, if the pointer is over one. */
+/**
+ * The `[[link]]` in the bubble's words under a point, if the pointer is over one.
+ *
+ * Words only. An object with `link:` carries the same `data-sliders-link` (a door and a
+ * bubble link are one contract, `dom-renderer.ts` syncLink), and `elementsFromPoint` sees
+ * through the bubble to it. A bubble over its own speaking door handed every press to the
+ * door and could never be selected or moved.
+ */
 function linkAt(x: number, y: number): HTMLElement | undefined {
 	for (const el of document.elementsFromPoint(x, y)) {
 		const link = (el as HTMLElement).closest?.('[data-sliders-link]') as
 			| HTMLElement
 			| undefined;
 
-		if (link) {
+		if (link?.closest('.sliders-bubble, .sliders-box')) {
 			return link;
 		}
 	}
