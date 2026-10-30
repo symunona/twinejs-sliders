@@ -1,10 +1,54 @@
 @import '../../styles/animations.css';
+@import '../../styles/colors.css';
 
 .menu-button-menu .icon-button {
 	/* balancing the icon on the left */
 	padding-right: 32px;
 }
 
+/*
+	Dropdowns hang over the scene editor, its side panels and the story map. The stock
+	floating card (off-white on off-white, a 1px gray shadow) all but vanished there, so
+	the menu gets its own border and a real drop shadow.
+*/
 .menu-button-menu {
 	z-index: 2000;
+}
+
+.menu-button-menu .card {
+	/* Pure white, not --white: that is the page's own off-white. */
+	background: #fff;
+	border: 1px solid var(--gray);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.18);
+	min-width: 160px;
+	padding: 4px 0;
+}
+
+[data-app-theme='dark'] .menu-button-menu .card {
+	background: var(--white);
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.menu-button-menu .button-bar {
+	width: 100%;
+}
+
+.menu-button-menu .icon-button,
+.menu-button-menu .checkbox-button {
+	color: var(--black);
+	width: 100%;
+}
+
+.menu-button-menu .icon-button:hover:not(:disabled),
+.menu-button-menu .icon-button:focus-visible {
+	background: var(--light-blue);
+	color: var(--dark-blue);
+}
+
+.menu-button-menu .icon-button.variant-danger:not(:disabled) {
+	color: var(--dark-red);
+}
+
+.menu-button-menu .icon-button.variant-danger:hover:not(:disabled) {
+	background: var(--light-red);
 }
