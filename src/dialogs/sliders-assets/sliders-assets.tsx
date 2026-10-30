@@ -104,6 +104,7 @@ import {PasteImageModal, PasteKind, useImagePaste} from './paste-image';
 import {SharedPrompt, sharedStoriesText} from './shared-prompt';
 import {UploadButton} from './upload-button';
 import {UploadDropZone} from './upload-drop-zone';
+import {useOpenUsingPassage} from './open-using-passage';
 import {useAssetUsage} from './use-asset-usage';
 import {useSceneRefRename} from './use-scene-ref-rename';
 import {useSyncedRefs} from './use-synced-refs';
@@ -171,6 +172,7 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 	// Art no scene names. Badge it, don't change it.
 	const synced = useSyncedRefs();
 	const usage = useAssetUsage();
+	const openUsingPassage = useOpenUsingPassage();
 	const {t} = useTranslation();
 	const story = stories.find(candidate => candidate.id === storyId);
 	const attachOnDrop = useAttachOnDrop(engine, storyId, story?.name);
@@ -1131,6 +1133,10 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						onDelete={() => void handleDeleteAsset(record)}
 						onDragOut={() => attachOnDrop(record.collection)}
 						onEdit={() => openAssetEditor(meta.id)}
+						onModClick={openUsingPassage(
+							storyId,
+							inView ? usage.get(meta.name) : undefined
+						)}
 						onRename={name => void handleRenameAsset(meta.id, name)}
 						unreferenced={
 							inView && synced.ready ? !synced.assetIds.has(meta.id) : undefined
@@ -1167,6 +1173,10 @@ export const SlidersAssetsDialog: React.FC<SlidersAssetsDialogProps> = props => 
 						onEdit={() =>
 							inView ? openCharacterEditor(character.id) : outside()
 						}
+						onModClick={openUsingPassage(
+							storyId,
+							inView ? usage.get(character.id) : undefined
+						)}
 						unreferenced={
 							inView && synced.ready
 								? !synced.characterIds.has(character.id)

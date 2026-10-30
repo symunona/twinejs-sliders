@@ -53,6 +53,11 @@ export interface AssetTileProps {
 	/** The tile started a drag that may land outside the Library -- see `attach-on-drop`. */
 	onDragOut?: () => void;
 	onEdit: () => void;
+	/**
+	 * Click capture on the whole tile. Ctrl/Cmd-click brings up a scene that uses this in an
+	 * open passage editor -- see `open-using-passage`.
+	 */
+	onModClick?: (event: React.MouseEvent) => void;
 	/** The scenes that write the old name always follow -- see `rename-plan.ts`. */
 	onRename: (name: string) => void;
 	/** Does something else in this library already answer to this name? */
@@ -90,6 +95,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		onDelete,
 		onDragOut,
 		onEdit,
+		onModClick,
 		onRename,
 		renameRequest,
 		unreferenced,
@@ -188,6 +194,7 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 		<div
 			className={`sliders-tile${focused ? ' focused' : ''}`}
 			data-asset-id={meta.id}
+			onClickCapture={onModClick}
 			draggable={!!dragPayload || !!menuItems}
 			onDragStart={event => {
 				// Any tile can land on a collection in the Library rail (move, Alt = copy).

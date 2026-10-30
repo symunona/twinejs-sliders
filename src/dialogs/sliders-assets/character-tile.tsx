@@ -24,6 +24,11 @@ export interface CharacterTileProps {
 	/** The tile started a drag that may land outside the Library -- see `attach-on-drop`. */
 	onDragOut?: () => void;
 	onEdit: () => void;
+	/**
+	 * Click capture on the whole tile. Ctrl/Cmd-click brings up a scene that uses this in an
+	 * open passage editor -- see `open-using-passage`.
+	 */
+	onModClick?: (event: React.MouseEvent) => void;
 	/** Passage names whose scenes cast this character. */
 	usedIn?: string[];
 	/**
@@ -47,6 +52,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 		onDragOut,
 		onDropFiles,
 		onEdit,
+		onModClick,
 		unreferenced,
 		usedIn
 	} = props;
@@ -117,6 +123,7 @@ export const CharacterTile: React.FC<CharacterTileProps> = props => {
 				over ? ' drag-over' : ''
 			}`}
 			data-character-id={character.id}
+			onClickCapture={onModClick}
 			draggable
 			onDragLeave={handleDragLeave}
 			onDragOver={handleDragOver}
