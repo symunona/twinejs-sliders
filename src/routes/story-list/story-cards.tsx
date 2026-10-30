@@ -7,6 +7,8 @@ import {GhostStoryCard} from '../../components/story/ghost-story-card';
 import {StoryCard} from '../../components/story/story-card';
 import {StoryCardPresence} from '../../components/story/story-card-sync-badge';
 import type {CheckoutProgress} from '../../store/persistence/server/checkout-story';
+import {useStoryCreated} from '../../store/persistence/server/story-created';
+import {useServerSyncContext} from '../../store/persistence/server/use-server-sync';
 import type {
 	StoryIndexEntry,
 	SyncRecord
@@ -37,6 +39,8 @@ export interface StoryCardsProps {
 	/** Stories on the server with no local copy. Drawn last, dimmed. */
 	ghosts?: StoryIndexEntry[];
 	onCheckOutGhost?: (entry: StoryIndexEntry) => Promise<unknown> | unknown;
+	/** Deletes a ghost from the server. Ghosts only: a local story has its own toolbar. */
+	onDeleteGhost?: (entry: StoryIndexEntry) => Promise<unknown> | unknown;
 	onSelectStory: (story: Story) => void;
 	/** Other people in each story, keyed by story ID. */
 	presence?: Record<string, StoryCardPresence[]>;
@@ -56,6 +60,7 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 		ghosts,
 		index,
 		onCheckOutGhost,
+		onDeleteGhost,
 		onSelectStory,
 		presence,
 		stories,
@@ -66,6 +71,8 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 	const {dispatch: storiesDispatch} = useUndoableStoriesContext();
 	const history = useHistory();
 	const {t} = useTranslation();
+	const {client} = useServerSyncContext();
+	const {created, peek: peekCreated} = useStoryCreated(client, index);
 
 	function handleChangeTagColor(tagName: string, color: Color) {
 		prefsDispatch(
@@ -106,12 +113,18 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 					{list.map(story => (
 						<CSSTransition classNames="pop" key={story.id} timeout={200}>
 							<StoryCard
+								created={created[story.id]}
 								createdBy={indexById.get(story.id)?.createdBy}
 								downloading={downloadingAssets?.[story.id]}
 								lastEditedBy={indexById.get(story.id)?.lastClient}
 								loading={checkingOut?.[story.id]}
 								onChangeTagColor={handleChangeTagColor}
 								onEdit={() => history.push(`/stories/${story.id}`)}
+								onPeekCreated={
+									indexById.has(story.id)
+										? () => peekCreated(story.id)
+										: undefined
+								}
 								onRemoveTag={name => handleRemoveTag(story, name)}
 								onSelect={() => onSelectStory(story)}
 								presence={presence?.[story.id]}
@@ -158,9 +171,14 @@ export const StoryCards: React.FC<StoryCardsProps> = props => {
 					<CardGroup columnWidth={cardWidth}>
 						{ghostEntries.map(entry => (
 							<GhostStoryCard
+								created={created[entry.id]}
 								entry={entry}
 								key={entry.id}
 								onCheckOut={() => onCheckOutGhost?.(entry)}
+								onDelete={
+									onDeleteGhost ? () => onDeleteGhost(entry) : undefined
+								}
+								onPeekCreated={() => peekCreated(entry.id)}
 								progress={checkoutProgress?.[entry.id]}
 							/>
 						))}

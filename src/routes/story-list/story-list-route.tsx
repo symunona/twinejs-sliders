@@ -178,6 +178,7 @@ export const InnerStoryListRoute: React.FC = () => {
 								ghosts={visibleGhosts}
 								index={index}
 								onCheckOutGhost={entry => actions.checkout(entry.id)}
+								onDeleteGhost={entry => actions.removeFromServer(entry.id)}
 								onSelectStory={story => {
 									if (!checkingOut[story.id]) {
 										storiesDispatch(selectStory(story, true));

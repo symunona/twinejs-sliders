@@ -3,7 +3,10 @@ import {createMemoryHistory, MemoryHistory} from 'history';
 import {axe} from 'jest-axe';
 import * as React from 'react';
 import {Router} from 'react-router-dom';
+import type {ServerClient} from '../../../store/persistence/server/client';
 import type {StoryIndexEntry} from '../../../store/persistence/server/server.types';
+import {testSyncContext} from '../../../store/persistence/server/test-fixtures';
+import {ServerSyncContext} from '../../../store/persistence/server/use-server-sync';
 import {useStoryLaunch} from '../../../store/use-story-launch';
 import {
 	fakePrefs,
@@ -184,6 +187,57 @@ describe('<StoryCards>', () => {
 		await renderComponent({ghosts: [ghost], onCheckOutGhost});
 		fireEvent.click(screen.getByText('onCheckOut'));
 		expect(onCheckOutGhost).toHaveBeenCalledWith(ghost);
+	});
+
+	it('deletes a ghost when its card asks to', async () => {
+		const ghost = fakeGhost();
+		const onDeleteGhost = jest.fn();
+
+		await renderComponent({ghosts: [ghost], onDeleteGhost});
+		fireEvent.click(screen.getByText('onDelete'));
+		expect(onDeleteGhost).toHaveBeenCalledWith(ghost);
+	});
+
+	it('offers no ghost delete without a handler', async () => {
+		await renderComponent({ghosts: [fakeGhost()]});
+		expect(screen.queryByText('onDelete')).not.toBeInTheDocument();
+	});
+
+	it("fetches a ghost's creation date from its revisions on peek", async () => {
+		const ghost = fakeGhost({rev: 9});
+		const listRevisions = jest.fn().mockResolvedValue({
+			current: 9,
+			revisions: [
+				{at: '2026-08-02T00:00:00.000Z', rev: 4},
+				{at: '2026-08-01T00:00:00.000Z', rev: 1}
+			]
+		});
+
+		render(
+			<Router history={createMemoryHistory()}>
+				<FakeStateProvider>
+					<ServerSyncContext.Provider
+						value={testSyncContext({
+							client: {listRevisions} as unknown as ServerClient
+						})}
+					>
+						<StoryCards
+							ghosts={[ghost]}
+							index={[ghost]}
+							onSelectStory={jest.fn()}
+							stories={[]}
+						/>
+					</ServerSyncContext.Provider>
+				</FakeStateProvider>
+			</Router>
+		);
+		fireEvent.click(screen.getByText('onPeekCreated'));
+		fireEvent.click(screen.getByText('onPeekCreated'));
+		expect(
+			await screen.findByText('created 2026-08-01T00:00:00.000Z')
+		).toBeInTheDocument();
+		expect(listRevisions).toHaveBeenCalledTimes(1);
+		expect(listRevisions).toHaveBeenCalledWith(ghost.id);
 	});
 
 	it('renders no ghost group when there are no ghosts', async () => {

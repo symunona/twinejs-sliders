@@ -3,6 +3,7 @@ import * as React from 'react';
 import {useTranslation} from 'react-i18next';
 import type {CheckoutProgress} from '../../store/persistence/server/checkout-story';
 import type {SyncRecord} from '../../store/persistence/server/server.types';
+import type {StoryCreated} from '../../store/persistence/server/story-created';
 import {Story} from '../../store/stories';
 import {Color} from '../../util/color';
 import {CardContent, CardProps} from '../container/card';
@@ -10,12 +11,15 @@ import {SelectableCard} from '../container/card/selectable-card';
 import {TagButton} from '../tag';
 import './story-card.css';
 import {StoryCardAuthors} from './story-card-authors';
+import {StoryCardTitle} from './story-card-title';
 import {StoryPreview} from './story-preview';
 import {StoryCardPresence, StoryCardSyncBadge} from './story-card-sync-badge';
 
 const dateFormatter = new Intl.DateTimeFormat([]);
 
 export interface StoryCardProps extends CardProps {
+	/** For the title's tooltip. See `StoryCardTitle`. */
+	created?: StoryCreated;
 	/** Who first wrote the story to the server, if it is there. */
 	createdBy?: string;
 	/**
@@ -35,6 +39,8 @@ export interface StoryCardProps extends CardProps {
 	onChangeTagColor: (name: string, color: Color) => void;
 	onRemoveTag: (name: string) => void;
 	onEdit: () => void;
+	/** Asks for `created`. Omitted for stories the server does not have. */
+	onPeekCreated?: () => void;
 	onSelect: () => void;
 	/** Other people currently in this story, if presence is available. */
 	presence?: StoryCardPresence[];
@@ -46,12 +52,14 @@ export interface StoryCardProps extends CardProps {
 
 export const StoryCard: React.FC<StoryCardProps> = props => {
 	const {
+		created,
 		createdBy,
 		downloading,
 		lastEditedBy,
 		loading,
 		onChangeTagColor,
 		onEdit,
+		onPeekCreated,
 		onRemoveTag,
 		onSelect,
 		presence,
@@ -78,7 +86,11 @@ export const StoryCard: React.FC<StoryCardProps> = props => {
 							<StoryPreview story={story} />
 						</div>
 						<div className="story-card-summary-text">
-							<h2>{story.name}</h2>
+							<StoryCardTitle
+								created={created}
+								name={story.name}
+								onPeek={onPeekCreated}
+							/>
 							<p>
 								{t('components.storyCard.lastUpdated', {
 									date: dateFormatter.format(story.lastUpdate)

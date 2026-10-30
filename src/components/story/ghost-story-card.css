@@ -27,3 +27,8 @@
 	margin-top: var(--grid-size);
 	width: 100%;
 }
+
+.ghost-story-card .ghost-story-card-error {
+	color: var(--red);
+	margin: var(--grid-size) 0 0;
+}
