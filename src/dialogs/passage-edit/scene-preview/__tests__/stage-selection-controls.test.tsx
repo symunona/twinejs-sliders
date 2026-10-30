@@ -629,3 +629,38 @@ describe('condition box', () => {
 		});
 	});
 });
+
+describe('particle emitter selected', () => {
+	function gradeRows() {
+		return document.querySelectorAll('.scene-grade-sliders-row');
+	}
+
+	it('drops the grade sliders -- grade paints nothing on particles', () => {
+		const onGradeOpenChange = jest.fn();
+
+		renderControls(['candle'], {
+			emitter: true,
+			onGrade: jest.fn(),
+			onGradeOpenChange,
+			onOpacity: jest.fn()
+		});
+		expect(gradeRows()).toHaveLength(0);
+		expect(onGradeOpenChange).not.toHaveBeenCalled();
+	});
+
+	it('keeps opacity', () => {
+		renderControls(['candle'], {
+			emitter: true,
+			onGrade: jest.fn(),
+			onOpacity: jest.fn()
+		});
+		expect(
+			screen.getByTestId('scene-preview-selection-opacity')
+		).toBeInTheDocument();
+	});
+
+	it('keeps the grade sliders for any other object', () => {
+		renderControls(['candle'], {onGrade: jest.fn(), onOpacity: jest.fn()});
+		expect(gradeRows().length).toBeGreaterThan(0);
+	});
+});

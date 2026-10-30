@@ -2968,6 +2968,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 			<StageSelectionControls
 				assets={assets}
 				editable={editable}
+				emitter={!!emitter}
 				entities={selectedEntities}
 				note={beatNote}
 				onCopy={clipboard.copyNow}

@@ -88,6 +88,12 @@ export interface StageSelectionControlsProps {
 	 * rule. Saying it here means the author knows before they reach for the sprite.
 	 */
 	note?: string;
+	/**
+	 * The single selection is a particle emitter. Its art is hidden and the particles are
+	 * their own canvas, so `grade:` paints nothing: the grade sliders (and match bg, reset)
+	 * go. Opacity stays -- it fades every particle.
+	 */
+	emitter?: boolean;
 	onDelete: () => void;
 	/** Copy the selection (Ctrl/Cmd+C does the same). Absent: no button. */
 	onCopy?: () => void;
@@ -361,6 +367,7 @@ export const StageSelectionControls: React.FC<
 	const {
 		assets,
 		editable,
+		emitter,
 		entities,
 		note,
 		onCopy,
@@ -384,7 +391,6 @@ export const StageSelectionControls: React.FC<
 		onStepZ,
 		gradeNote,
 		matchBg,
-		onGrade,
 		onGradeCommit,
 		onGradeHover,
 		onGradeOpenChange
@@ -404,6 +410,7 @@ export const StageSelectionControls: React.FC<
 	// Single selection only: two sprites can lead two different places, and a button that
 	// silently picked one of them would be worse than no button.
 	const link = single?.link?.to;
+	const onGrade = emitter ? undefined : props.onGrade;
 	const gradeId = editable && onGrade ? single?.id : undefined;
 	const onGradeOpenChangeRef = React.useRef(onGradeOpenChange);
 	const onGradeCommitRef = React.useRef(onGradeCommit);
