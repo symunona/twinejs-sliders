@@ -45,8 +45,10 @@
 	cursor: default;
 	display: flex;
 	font-size: 85%;
-	gap: 4px;
-	padding: 1px 4px;
+	gap: 6px;
+	/* A comfortable click target: the row is what you press to select and drag. */
+	min-height: 36px;
+	padding: 2px 8px;
 	/* The drop line is drawn as this row's border, so it must not shift the row. */
 	position: relative;
 	user-select: none;
@@ -74,7 +76,7 @@
 /* Visual only: a child's z is its own, so nesting it would claim a grouping the stage does
    not have. One step in is enough to say "rides on the row above". */
 .layers-panel-row.child {
-	padding-left: 18px;
+	padding-left: 24px;
 }
 
 .layers-panel-row.hidden .layers-panel-kind,
@@ -167,7 +169,7 @@
 	flex-shrink: 0;
 	justify-content: center;
 	opacity: 0.45;
-	padding: 2px;
+	padding: 5px;
 }
 
 .layers-panel-row:hover .layers-panel-action,
