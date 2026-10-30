@@ -357,3 +357,22 @@
 	flex: 0 0 auto;
 	width: auto;
 }
+
+/* Hover preview of a particle emitter, over its static thumbnail. */
+.sliders-tile-particles {
+	inset: 0;
+	pointer-events: none;
+	position: absolute;
+}
+
+.sliders-tile-particles .particle-preview {
+	border-radius: 0;
+}
+
+.sliders-tile-particles .particle-preview-box {
+	outline: none;
+}
+
+.sliders-tile-particles .particle-preview-origin {
+	display: none;
+}

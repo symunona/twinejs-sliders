@@ -18,13 +18,15 @@ export interface ParticlePreviewProps {
 	url?: string;
 	/** Bumped to start the field over. */
 	restart?: number;
+	/** Preview height in CSS px. Default `STAGE`; a library tile passes its own. */
+	height?: number;
 }
 
 /** Preview height in CSS px. The box is fitted inside with room for what leaves it. */
 const STAGE = 360;
 
 export const ParticlePreview: React.FC<ParticlePreviewProps> = props => {
-	const {box, origin, params, restart, url} = props;
+	const {box, height = STAGE, origin, params, restart, url} = props;
 	const stageRef = React.useRef<HTMLDivElement>(null);
 	const boxRef = React.useRef<HTMLDivElement>(null);
 	const hostRef = React.useRef<ParticleHost>();
@@ -79,12 +81,12 @@ export const ParticlePreview: React.FC<ParticlePreviewProps> = props => {
 	}, [restart]);
 
 	// Half the stage height for the box, so a plume twice its box still fits.
-	const scale = Math.min((STAGE * 0.5) / box.h, (STAGE * 0.9) / box.w);
+	const scale = Math.min((height * 0.5) / box.h, (height * 0.9) / box.w);
 	const w = box.w * scale;
 	const h = box.h * scale;
 
 	return (
-		<div className="particle-preview" ref={stageRef} style={{height: STAGE}}>
+		<div className="particle-preview" ref={stageRef} style={{height}}>
 			<div
 				className="particle-preview-box"
 				ref={boxRef}

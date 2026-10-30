@@ -28,6 +28,7 @@ import type {AssetDragPayload} from '../passage-edit/scene-preview/asset-drag';
 import {copyText} from '../../util/copy-text';
 import {AssetPreview} from './asset-preview';
 import {LIBRARY_ASSET_MIME} from './library/library-model';
+import {ParticleTilePreview, useParticleHover} from './particle-tile-preview';
 import {SoundPreview} from './sound-preview';
 import {TileUses} from './tile-uses';
 
@@ -105,6 +106,9 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 	const tileRef = React.useRef<HTMLDivElement>(null);
 	const [renameOpen, setRenameOpen] = React.useState(false);
 	const [draftName, setDraftName] = React.useState(meta.name);
+	const artRef = React.useRef<HTMLDivElement>(null);
+	// A particle emitter animates while hovered, and only then -- see `particle-tile-preview`.
+	const particleHover = useParticleHover(!!meta.particles);
 
 	// A sound has no pixels, so the whole art half of a tile means something else for it:
 	// audition instead of thumbnail, length instead of dimensions, and no image editor.
@@ -231,6 +235,9 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 			)}
 			<div
 				className="sliders-tile-art"
+				onPointerEnter={particleHover.onPointerEnter}
+				onPointerLeave={particleHover.onPointerLeave}
+				ref={artRef}
 				// The button below says the same thing, but the picture is what an author
 				// points at. Animated art has no editor to open, and a sound has no pixels.
 				onDoubleClick={isSound || meta.animated ? undefined : onEdit}
@@ -251,6 +258,12 @@ export const AssetTile: React.FC<AssetTileProps> = props => {
 						{/* Only when the asset carries one: a cross on every default-anchored
 						    tile is nine crosses saying nothing. */}
 						<AssetPreview alt={meta.name} assetId={meta.id} origin={meta.origin} />
+						{particleHover.live && (
+							<ParticleTilePreview
+								height={artRef.current?.offsetHeight || 120}
+								meta={meta}
+							/>
+						)}
 						{/* Dimensions only. Bytes and format are in the tooltip: the pixel size
 						    is what an author checks against the stage, the rest is
 						    housekeeping. */}
