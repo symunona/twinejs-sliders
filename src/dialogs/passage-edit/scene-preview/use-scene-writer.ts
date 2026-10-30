@@ -13,6 +13,7 @@
 
 import * as React from 'react';
 import {
+	addEntities,
 	addEntity,
 	applyEdit,
 	entityHasParent,
@@ -624,7 +625,28 @@ export function buildWriteEdits(
 		{plan: NonNullable<WritePlan['insertBeat']>; writes: EntityKeyWrite[]}
 	>();
 
+	// Two or more new entries (a paste) go in as one run: each against the text the last
+	// produced, or two entries in a map that does not exist yet both write its key.
+	const adds = writes.filter(
+		(write): write is EntityStructWrite & {patch: EntityPatch} =>
+			isStructWrite(write) && write.struct === 'add' && !!write.patch
+	);
+
+	const pooled = new Set<SceneWrite>(adds.length > 1 ? adds : []);
+
+	if (pooled.size > 0) {
+		const edit = addEntities(context.blockText, adds);
+
+		if (edit) {
+			edits.push(edit);
+		}
+	}
+
 	for (const write of writes) {
+		if (pooled.has(write)) {
+			continue;
+		}
+
 		if (
 			!isBeatKeyWrite(write) &&
 			!isBeatTextWrite(write) &&

@@ -160,8 +160,10 @@ export function formatValue(
 		return formatScalar(value.to);
 	}
 
+	// Items flowed, not scalar'd: a step list (`pose: [{name: walk_1, dur: 0.1}]`) has maps
+	// in it, and `stringify` would hand those back in block style.
 	if (Array.isArray(value)) {
-		return `[${value.map(item => formatScalar(item)).join(', ')}]`;
+		return `[${value.map(formatFlowItem).join(', ')}]`;
 	}
 
 	// A grade is a flow map in the asset editor's slider order, whatever order the caller

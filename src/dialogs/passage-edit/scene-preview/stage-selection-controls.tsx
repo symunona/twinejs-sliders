@@ -39,6 +39,7 @@ import {
 	IconAspectRatio,
 	IconLock,
 	IconLockOpen,
+	IconCopy,
 	IconFlipHorizontal,
 	IconExternalLink,
 	IconMoodSmile,
@@ -88,6 +89,8 @@ export interface StageSelectionControlsProps {
 	 */
 	note?: string;
 	onDelete: () => void;
+	/** Copy the selection (Ctrl/Cmd+C does the same). Absent: no button. */
+	onCopy?: () => void;
 	onFlip: () => void;
 	/** Drop the squeeze. Shown only while something selected is stretched. */
 	onResetStretch?: () => void;
@@ -360,6 +363,7 @@ export const StageSelectionControls: React.FC<
 		editable,
 		entities,
 		note,
+		onCopy,
 		onDelete,
 		onFlip,
 		onPose,
@@ -550,6 +554,14 @@ export const StageSelectionControls: React.FC<
 					label={t('dialogs.passageEdit.scenePreview.zFront')}
 					onClick={() => onStepZ(1)}
 				/>
+				{onCopy && (
+					<IconButton
+						icon={<IconCopy />}
+						iconOnly
+						label={t('dialogs.passageEdit.scenePreview.copySelection')}
+						onClick={onCopy}
+					/>
+				)}
 				<IconButton
 					commandId="scene.delete"
 					icon={<IconTrash />}

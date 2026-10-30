@@ -15,6 +15,7 @@ export {removeSceneKey, setSceneKey} from './scene-key';
 export {entityAtLine, entityLines} from './select';
 export {
 	BUBBLE_KEY_ORDER,
+	addEntities,
 	addEntity,
 	entityHasParent,
 	insertBeatEntity,

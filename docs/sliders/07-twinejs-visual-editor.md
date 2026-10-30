@@ -53,6 +53,8 @@ sealed on mouse-up. A drag that produces 60 undo steps is unusable.
 | Delete, entity has beats | popup: delete with its beats (parts go, beat left empty goes) / keep beats, delete only entry / cancel. No beats = no popup. |
 | Delete, bubble selected | words → `""`. Beat stays, no bubble drawn. |
 | `F` / context menu | `flip:` |
+| Ctrl/Cmd+C, copy button | selection as seen at this beat → clipboard (YAML text + clip). `locked` dropped. Text field / CodeMirror / selected text: browser's own copy. `scene-clipboard.ts`. |
+| Ctrl/Cmd+V, paste button | new entries, fresh ids (`mira-2`), one edit = one undo, become the selection. Same scene: each paste +0.05 x. Other scene/passage: in place. Child keeps `of` only if parent came along. |
 | Send to back / front | `layer:` (D11 — `back` / `mid` / `front`) |
 | Bracket keys | `z:` nudge within a layer |
 | Pose dropdown on selection | `pose:` |

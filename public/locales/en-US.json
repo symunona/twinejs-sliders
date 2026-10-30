@@ -890,6 +890,8 @@
 				"rotate": "Rotate — drag to tilt, hold Shift for 15\u00b0 steps",
 				"openLink": "Open '{{passage}}' — where clicking this leads",
 				"remove": "Remove from scene",
+				"copySelection": "Copy",
+				"pasteSelection": "Paste copied objects",
 				"zBack": "Send backward",
 				"zFront": "Bring forward",
 				"errorBadge": {

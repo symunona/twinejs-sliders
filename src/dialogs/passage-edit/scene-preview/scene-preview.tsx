@@ -6,6 +6,7 @@ import {
 	IconCameraOff,
 	IconChevronLeft,
 	IconChevronRight,
+	IconClipboard,
 	IconGridDots,
 	IconHandFinger,
 	IconLink,
@@ -154,6 +155,8 @@ import {requestPreviewBeat, useRequestedBeat} from './preview-beat-request';
 import {hopInto, popSceneHop, pushSceneHop} from './scene-trail';
 import {useArrivalBeat} from './use-arrival-beat';
 import {useStageSelection} from './use-stage-selection';
+import {useSceneClipboard} from './use-scene-clipboard';
+import {copyClip, nextPasteOffset, pasteWrites} from './scene-clipboard';
 import {
 	applyCameraPatch,
 	applyStagePatch,
@@ -2044,6 +2047,53 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 		return editable && !!card?.contains(target);
 	}, setPasted);
 
+	/**
+	 * Copy / paste of the selection (`scene-clipboard.ts`). Same reach as the image paste:
+	 * anywhere in this dialog that is not a text field. A paste lands as one edit (one undo
+	 * step) and becomes the selection once the parse has the new ids.
+	 */
+	const pastedIds = React.useRef<EntityId[]>();
+	const clipboard = useSceneClipboard({
+		copy: () =>
+			copyClip(localStage, stage, selection, parse.result?.scene, {
+				passageId,
+				storyId
+			}),
+		owns: target => {
+			const card =
+				root.current?.closest('[data-hotkey-scope~="dialog"]') ?? root.current;
+
+			return !!card?.contains(target);
+		},
+		paste: editable
+			? clip => {
+					const taken = Array.from(
+						new Set([
+							...Object.keys(parse.result?.scene.entities ?? {}),
+							...Object.keys(stage.entities ?? {})
+						])
+					);
+					const {ids, writes} = pasteWrites(
+						clip,
+						taken,
+						nextPasteOffset(clip, passageId)
+					);
+
+					pastedIds.current = ids;
+					commit(writes, DROP_ORIGIN);
+			  }
+			: undefined
+	});
+
+	React.useEffect(() => {
+		const ids = pastedIds.current;
+
+		if (ids && ids.every(id => stageIds.includes(id))) {
+			pastedIds.current = undefined;
+			select(ids);
+		}
+	}, [select, stageIds]);
+
 	async function handlePasteChoice(files: File[], kind: PasteKind) {
 		setPasted(undefined);
 
@@ -2647,6 +2697,16 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				selected={grid}
 				tooltipPosition="bottom"
 			/>
+			{/* Only while something copied is held, so it is never a dead button. */}
+			{editable && clipboard.held && (
+				<IconButton
+					icon={<IconClipboard />}
+					iconOnly
+					label={t('dialogs.passageEdit.scenePreview.pasteSelection')}
+					onClick={clipboard.pasteNow}
+					tooltipPosition="bottom"
+				/>
+			)}
 			{/* Always here, selection or not: the lock is how the author stops
 			    the stage editing the file, so it cannot be a control that only
 			    appears once something has been grabbed. */}
@@ -2910,6 +2970,7 @@ export const ScenePreview: React.FC<ScenePreviewProps> = ({
 				editable={editable}
 				entities={selectedEntities}
 				note={beatNote}
+				onCopy={clipboard.copyNow}
 				onDelete={remove}
 				onFlip={flip}
 				onResetStretch={resetStretch}

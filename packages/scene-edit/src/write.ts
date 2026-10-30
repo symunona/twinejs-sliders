@@ -642,6 +642,52 @@ export function addEntity(
 }
 
 /**
+ * Several new entries in one edit: a paste of a multi-selection.
+ *
+ * `addEntity` per entry against ONE snapshot breaks as soon as two land in a map that is not
+ * there yet: both write `props:` and the block gets the key twice. So each entry is added to
+ * the text the one before it produced, and the whole run comes back as the one span that
+ * changed -- one edit, one undo step.
+ */
+export function addEntities(
+	text: string,
+	entries: {id: EntityId; kind: EntityKind; patch: EntityPatch}[]
+): TextEdit | undefined {
+	let next = text;
+
+	for (const entry of entries) {
+		const edit = addEntity(next, entry.kind, entry.id, entry.patch);
+
+		next = next.slice(0, edit.from) + edit.insert + next.slice(edit.to);
+	}
+
+	if (next === text) {
+		return undefined;
+	}
+
+	let start = 0;
+
+	while (start < text.length && text[start] === next[start]) {
+		start++;
+	}
+
+	let end = 0;
+
+	while (
+		end < text.length - start &&
+		text[text.length - 1 - end] === next[next.length - 1 - end]
+	) {
+		end++;
+	}
+
+	return {
+		from: start,
+		insert: next.slice(start, next.length - end),
+		to: text.length - end
+	};
+}
+
+/**
  * `mira: {…}` -> `mira: ~`.
  *
  * With `from:`, an absent key means INHERITED (spec 02) — deleting the entry would put the
